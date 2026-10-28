@@ -9947,6 +9947,11 @@ public partial class ArchitectureTests
     /// <para>Only culture-SENSITIVE specifiers are checked. <c>F0</c> is deliberately excluded: a whole
     /// number with no grouping renders identically on every culture, so requiring a wrapper there would
     /// be churn with no behaviour change. Hex (<c>X8</c>) consults no culture data either.</para>
+    /// <para>A CUSTOM pattern — any mix of <c>0</c>/<c>#</c> digit placeholders either side of a literal
+    /// <c>.</c> or <c>,</c>, such as <c>0.###</c> or <c>#.##</c> — is matched too, not only the fixed
+    /// <c>F</c>/<c>N</c>/<c>P</c> letters: three sites (<c>TimerResolutionStatus.FormatMs</c>'s
+    /// <c>0.###</c>, and <c>BandwidthMonitorViewModel</c>'s <c>0.#</c>) used one and went undetected
+    /// until #2795 widened this term.</para>
     /// <para>The fix is <c>string.Create(CultureInfo.InvariantCulture, $"…")</c>, which wraps the WHOLE
     /// string. That matters: a per-hole fix on a line with three holes can leave two of them behind,
     /// which is precisely how the first pass of the date migration missed eight sites.</para>
@@ -10004,8 +10009,11 @@ public partial class ArchitectureTests
     [GeneratedRegex(@"\$""(?:[^""\\\n]|\\.|""(?=[^""\n]*""))*""", RegexOptions.CultureInvariant)]
     private static partial Regex InterpolatedString();
 
-    // A decimal mark (F1+, N1+, P, 0.0) or a group separator (N0, #,#). F0 is absent on purpose.
-    [GeneratedRegex(@"\{[^{}]{1,120}?:(?:F[1-9]|N[1-9]|N0|P\d+|0\.0+|#,#)", RegexOptions.CultureInvariant)]
+    // A decimal mark (F1+, N1+, P, 0.0, or a custom pattern like 0.### / #.##) or a group separator
+    // (N0, #,#). F0 is absent on purpose. The custom-pattern term (the one with a literal . or ,)
+    // catches a format like "0.###" that the fixed F/N/P terms above do not: #2795 found three sites
+    // using one, invisible to the guard until this term was added.
+    [GeneratedRegex(@"\{[^{}]{1,120}?:(?:F[1-9]|N[1-9]|N0|P\d+|[0#]*[.,][0#]+|#,#)", RegexOptions.CultureInvariant)]
     private static partial Regex CultureSensitiveNumberHole();
 
     [GeneratedRegex(@"(?:string\.Create\(\s*(?:System\.Globalization\.)?CultureInfo\.InvariantCulture\s*,\s*"

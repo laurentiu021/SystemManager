@@ -401,7 +401,10 @@ public sealed partial class BandwidthMonitorViewModel : ViewModelBase
         if (!down && !up) { AlertMessage = ""; return; }
 
         var which = down && up ? "Download and upload" : down ? "Download" : "Upload";
-        AlertMessage = $"{which} exceeded {AlertThresholdMbps:0.#} Mbps (↓ {DownDisplay} · ↑ {UpDisplay}).";
+        // Invariant-wrapped so AlertThresholdMbps's decimal mark agrees with DownDisplay/UpDisplay's rather
+        // than reading through CurrentCulture and mixing "12,5 Mbps" with "13.1 Mbps" in one sentence (#2795).
+        AlertMessage = string.Create(CultureInfo.InvariantCulture,
+            $"{which} exceeded {AlertThresholdMbps:0.#} Mbps (↓ {DownDisplay} · ↑ {UpDisplay}).");
     }
 
     partial void OnSelectedRangeChanged(HistoryRange value)

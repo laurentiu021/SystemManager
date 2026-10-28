@@ -81,6 +81,31 @@ public sealed class NumberFormatAgreementTests
         WithCulture(culture, () => Assert.Contains("1,610", category.CountDisplay));
     }
 
+    [Theory]
+    [MemberData(nameof(CommaCultures))]
+    public void TimerResolutionStatus_FormatMs_UsesTheInvariantDecimalMark(string culture)
+    {
+        // A custom "0.###" pattern, not F1/N1/P — the shape #2795 found the guard could not see,
+        // because it has no fixed F/N/P letter to match on.
+        WithCulture(culture, () => Assert.Equal("0.5 ms", TimerResolutionStatus.FormatMs(0.5)));
+    }
+
+    [Theory]
+    [MemberData(nameof(CommaCultures))]
+    public void BatteryInfo_HealthAndWearDisplay_UseTheInvariantDecimalMark(string culture)
+    {
+        // HealthPercent/WearPercent are doubles interpolated with NO format specifier at all — the
+        // guard that catches F1/N1/0.### cannot see a bare hole either, so this is a behaviour test,
+        // not something the architecture guard also pins.
+        var battery = new BatteryInfo { DesignCapacityMWh = 1000, FullChargeCapacityMWh = 875 };
+
+        WithCulture(culture, () =>
+        {
+            Assert.Equal("87.5%", battery.HealthDisplay);
+            Assert.Equal("12.5%", battery.WearDisplay);
+        });
+    }
+
     [Fact]
     public void TheCommaCultures_ReallyDoDisagree_AboutTheseNumbers()
     {

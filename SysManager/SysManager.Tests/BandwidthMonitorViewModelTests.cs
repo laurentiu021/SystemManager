@@ -2,6 +2,7 @@
 // Author: laurentiu021 · https://github.com/laurentiu021/SystemManager
 // License: MIT
 
+using System.Globalization;
 using System.IO;
 using SysManager.Helpers;
 using SysManager.Models;
@@ -149,6 +150,33 @@ public class BandwidthMonitorViewModelTests : IDisposable
         Assert.True(vm.HasAlert);
         vm.AlertThresholdMbps = 0; // disable
         Assert.False(vm.HasAlert);
+    }
+
+    [Theory]
+    [InlineData("ro-RO")]
+    [InlineData("de-DE")]
+    [InlineData("fr-FR")]
+    public void AlertMessage_UsesTheInvariantDecimalMark_RegardlessOfCulture(string culture)
+    {
+        // The threshold number and DownDisplay/UpDisplay must agree on their decimal mark — mixing
+        // "12,5 Mbps" (CurrentCulture) with "13.1 Mbps" (already invariant) in one sentence is exactly
+        // what this guards against (#2795).
+        var previous = CultureInfo.CurrentCulture;
+        try
+        {
+            CultureInfo.CurrentCulture = new CultureInfo(culture);
+
+            var vm = NewVm();
+            vm.AlertThresholdMbps = 12.5;
+            vm.TotalDownBytesPerSec = 2_000_000; // 16 Mbps > 12.5
+
+            Assert.Contains("12.5 Mbps", vm.AlertMessage, StringComparison.Ordinal);
+            Assert.DoesNotContain("12,5 Mbps", vm.AlertMessage, StringComparison.Ordinal);
+        }
+        finally
+        {
+            CultureInfo.CurrentCulture = previous;
+        }
     }
 
     /// <summary>

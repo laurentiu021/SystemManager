@@ -83,12 +83,18 @@ public sealed partial class BatteryInfo : ObservableObject
     /// Formatted health. The -1 sentinel means "capacity could not be read", usually because
     /// the root\WMI query needs elevation — so it must not reach the screen as a number.
     /// Bound instead of HealthPercent, which rendered literally as "-1%" next to a "%" suffix
-    /// in the view and read as a nonsensical measurement rather than as missing data.
+    /// in the view and read as a nonsensical measurement rather than as missing data. Wrapped in
+    /// <see cref="CultureInfo.InvariantCulture"/> so its decimal mark agrees with the rest of the
+    /// screen rather than reading through <see cref="CultureInfo.CurrentCulture"/> (#2795).
     /// </summary>
-    public string HealthDisplay => HasCapacityData ? $"{HealthPercent}%" : "Not available";
+    public string HealthDisplay => HasCapacityData
+        ? string.Create(CultureInfo.InvariantCulture, $"{HealthPercent}%")
+        : "Not available";
 
     /// <summary>Formatted wear level. Same sentinel handling as <see cref="HealthDisplay"/>.</summary>
-    public string WearDisplay => HasCapacityData ? $"{WearPercent}%" : "Not available";
+    public string WearDisplay => HasCapacityData
+        ? string.Create(CultureInfo.InvariantCulture, $"{WearPercent}%")
+        : "Not available";
 
     /// <summary>The design capacity as the details card shows it, or "Not available" when Windows gave none.</summary>
     /// <remarks>

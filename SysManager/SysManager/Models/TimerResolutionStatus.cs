@@ -2,6 +2,8 @@
 // Author: laurentiu021 · https://github.com/laurentiu021/SystemManager
 // License: MIT
 
+using System.Globalization;
+
 namespace SysManager.Models;
 
 /// <summary>
@@ -45,6 +47,9 @@ public sealed record TimerResolutionStatus(
     /// </summary>
     public bool IsAtDefault => CurrentHundredNs + 500 >= CoarsestHundredNs;
 
-    /// <summary>Formats a millisecond value compactly, e.g. "0.5 ms" / "15.625 ms".</summary>
-    public static string FormatMs(double ms) => $"{ms:0.###} ms";
+    /// <summary>
+    /// Formats a millisecond value compactly, e.g. "0.5 ms" / "15.625 ms", with the invariant decimal
+    /// mark the rest of the app uses, not <see cref="CultureInfo.CurrentCulture"/>'s (#2795).
+    /// </summary>
+    public static string FormatMs(double ms) => string.Create(CultureInfo.InvariantCulture, $"{ms:0.###} ms");
 }

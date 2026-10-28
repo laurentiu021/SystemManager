@@ -281,6 +281,18 @@ public sealed partial class FileShredderViewModel : ViewModelBase
                     cancelled = true;
                     break;
                 }
+                catch (PartialShredException ex)
+                {
+                    // Ahead of the generic IOException arm below: a write-time fault (a full disk, a
+                    // removed drive) stopped the overwrite partway, but the service already finished the
+                    // truncate-and-delete before throwing this — the file IS gone, just with fewer passes
+                    // than the method asked for. "Failed" here would tell the user a destroyed file is
+                    // still on their disk (#2824).
+                    item.Status = "Done";
+                    destroyed.Add(item);
+                    completed++;
+                    notices.Add($"{item.Name}: {ex.Message}");
+                }
                 catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or System.Security.SecurityException)
                 {
                     item.Status = "Failed";

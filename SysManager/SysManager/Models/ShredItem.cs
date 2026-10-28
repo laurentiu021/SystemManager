@@ -64,6 +64,14 @@ public sealed record ShredFolderReport
     public IReadOnlyList<string> SkippedLinks { get; init; } = [];
 
     /// <summary>
+    /// Files a write-time fault (a full disk, a removed drive) stopped partway through, after the
+    /// overwrite had already begun. These ARE gone — counted in <see cref="FilesShredded"/> too — just
+    /// with fewer passes than the method asked for, so it is worth telling the user rather than letting
+    /// them believe every file got the full depth they picked.
+    /// </summary>
+    public int FilesPartiallyOverwritten { get; init; }
+
+    /// <summary>
     /// A plain-English sentence for the user, or null when there is nothing they need to know. Names the
     /// consequence (the folder is still there, these files are gone) rather than the mechanism (reparse
     /// points, passes), and says why a skip was the safe choice.
@@ -96,6 +104,13 @@ public sealed record ShredFolderReport
                           + $"{(SkippedLinks.Count == 1 ? "was" : "were")} left alone because "
                           + $"{(SkippedLinks.Count == 1 ? "it points" : "they point")} to files outside the folder, "
                           + "so the folder itself is still on the computer.");
+
+            if (FilesPartiallyOverwritten > 0)
+                parts.Add($"{FilesPartiallyOverwritten} file{(FilesPartiallyOverwritten == 1 ? "" : "s")} hit a "
+                          + "write error partway through and "
+                          + (FilesPartiallyOverwritten == 1 ? "was" : "were")
+                          + " destroyed with fewer passes than the method you picked, rather than left "
+                          + "half-overwritten.");
 
             return parts.Count == 0 ? null : string.Join(" ", parts);
         }

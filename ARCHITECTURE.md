@@ -815,7 +815,10 @@ Key services:
   `CultureInfo.CurrentCulture`, because Excel reads a CSV in Windows' regional settings (#2888). `Write` and
   `WriteAsync` save UTF-8 with the byte order mark Excel needs to read UTF-8 (#2794). `AppendRow` terminates
   with CRLF because this is a file format rather than console output. Nothing is trimmed or substituted — a
-  lossy export of a path is worse than a quoted one.
+  lossy export of a path is worse than a quoted one. `Field` also prefixes a value starting with `=`, `+`, `-`,
+  `@`, a tab or a carriage return with a single quote, so a file/folder/program name Excel would read as a
+  formula is shown as text instead (OWASP's CSV injection guidance) — except a genuine signed number in the
+  sheet's culture, which stays a number rather than losing its sort order (#2794).
   `ArchitectureTests.EveryCsvExport_IsWrittenThroughCsv_InTheUsersRegion` keeps every tab with a CSV export on it.
 - `Helpers/StorageLabels` — the one name for each `MSFT_PhysicalDisk` bus and media type, used by
   `SystemInfoService`, `DiskHealthService`, `FixedDriveService` and the System Report. Those three

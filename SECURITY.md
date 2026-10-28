@@ -268,6 +268,11 @@ What the app can and cannot do by design:
   [ROADMAP.md](ROADMAP.md#trust-and-distribution) for why the two are sequenced
   together, and the README for
   [why the app ships portable at all](README.md#why-portable-and-why-there-is-no-installer).
+- **CSV export and formula injection**: the eleven Export CSV buttons write file, folder, program, window
+  and publisher names SysManager does not control. A value starting with `=`, `+`, `-`, `@`, a tab or a
+  carriage return is prefixed with a single quote before it is written, per OWASP's CSV injection guidance,
+  so Excel or another spreadsheet shows it as text instead of evaluating it as a formula. A genuine signed
+  number is left untouched so numeric columns still sort.
 
 ## Privacy
 

@@ -43,6 +43,65 @@ public class CsvExportTests
     public void Field_QuotesOnlyWhatHasTo(string? input, string expected)
         => Assert.Equal(expected, Csv.Field(input, Invariant));
 
+    // ── Csv.Field: CSV/formula injection (#2794) ──
+    //
+    // A field starting with =, +, -, @, a tab or a carriage return is read by a spreadsheet as a formula.
+    // Several exports carry text SysManager does not control (file/folder/program names), so these are
+    // quoted into literal text with a leading single quote — except a genuine signed number, which must
+    // stay a number so the column still sorts and totals.
+
+    [Theory]
+    [InlineData("=1+2", "'=1+2")]
+    [InlineData("=cmd|' /C calc'!A0", "'=cmd|' /C calc'!A0")]
+    [InlineData("@SUM(1+1)", "'@SUM(1+1)")]
+    [InlineData("+1+1", "'+1+1")]
+    [InlineData("-cmd|' /C calc'!A0", "'-cmd|' /C calc'!A0")]
+    [InlineData("-shady.exe", "'-shady.exe")]
+    public void Field_QuotesAFormulaTriggerIntoLiteralText(string input, string expectedUnquoted)
+    {
+        // These do not themselves contain the separator/quote/CR/LF, so Field returns the guarded text bare —
+        // a spreadsheet still reads the leading apostrophe as "treat this as text", not as another column.
+        Assert.Equal(expectedUnquoted, Csv.Field(input, Invariant));
+    }
+
+    [Theory]
+    [InlineData("5")]
+    [InlineData("-5")]
+    [InlineData("+5")]
+    [InlineData("-5.5")]
+    [InlineData("-0")]
+    public void Field_LeavesAGenuineNumberUnguarded(string input)
+        => Assert.Equal(input, Csv.Field(input, Invariant));
+
+    [Fact]
+    public void Field_InARegionThatWritesDecimalsWithAComma_StillRecognisesANegativeNumber()
+        // "-5,5" is a genuine number in Romanian, not text starting with a hyphen — the number check has to
+        // use the sheet's own culture, or every negative number in a comma-decimal region would be quoted.
+        => Assert.Equal("-5,5", Csv.Field("-5,5", Romanian));
+
+    [Fact]
+    public void Field_FormulaTriggerThatAlsoNeedsQuoting_GetsBothGuards()
+    {
+        // The apostrophe guard runs first, then the normal CSV quoting still applies on top, because the
+        // guarded text itself contains the separator.
+        Assert.Equal("\"'=1,2\"", Csv.Field("=1,2", Invariant));
+    }
+
+    [Fact]
+    public void Field_LeadingTab_IsGuarded()
+        => Assert.Equal("'\tcalc.exe", Csv.Field("\tcalc.exe", Invariant));
+
+    [Fact]
+    public void Field_LeadingCarriageReturn_IsGuardedAndThenQuoted()
+        // The guard's apostrophe does not remove the \r itself, so the field also needs the ordinary
+        // CSV quoting a bare \r already requires — both guards apply, in order.
+        => Assert.Equal("\"'\rcalc.exe\"", Csv.Field("\rcalc.exe", Invariant));
+
+    [Fact]
+    public void Field_TabOrDashNotInTheLeadingPosition_IsNotGuarded()
+        // Only a LEADING trigger character is a formula risk — one later in the value is ordinary text.
+        => Assert.Equal("value-with-dash\tand-tab", Csv.Field("value-with-dash\tand-tab", Invariant));
+
     /// <summary>
     /// A folder name containing a comma must survive as ONE column. This is the whole reason the helper
     /// exists: without quoting the row silently gains a column and every value after it shifts left, which a

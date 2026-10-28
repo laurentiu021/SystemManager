@@ -321,7 +321,9 @@ region. The columns are split on Windows' list separator and the numbers carry y
 decimals are written with a comma, Romanian, German and French among them, the columns are split on semicolons
 and 3,7 is a number Excel can sort. Each file is UTF-8 with the mark Excel looks for, so accented names and dashes
 arrive intact. A value that holds the separator, a quote or a line break is quoted, so a folder named
-`Grieg, Peer Gynt` stays in one column.
+`Grieg, Peer Gynt` stays in one column. A file, folder or program name starting with `=`, `+`, `-` or `@` is
+written as literal text rather than left for Excel to read as a formula — a genuine negative or positive number
+is left alone so the column still sorts.
 
 ### Empty lists
 A list with nothing in it says why. When a search or a filter has hidden everything, it says that nothing matches

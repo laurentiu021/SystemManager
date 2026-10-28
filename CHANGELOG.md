@@ -10,6 +10,19 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.131.12] - 2026-10-28
+
+**CSV exports no longer let a file, folder or program name open as a formula when you double-click
+them in Excel.**
+
+### Fixed
+- `Csv.Field` quoted a value only for the separator, a quote, or a line break. A field starting with
+  `=`, `+`, `-` or `@` — which Windows allows in a file or folder name, and which several of the eleven
+  CSV exports write without controlling — is read by Excel as a formula rather than text when the file
+  is opened by double-click, per OWASP's CSV injection guidance. Such a field is now prefixed with a
+  single quote so it opens as literal text, unless it is a genuine signed number in the sheet's own
+  culture, which is left untouched so numeric columns still sort and total correctly. (#2794)
+
 ## [1.131.11] - 2026-10-28
 
 **Process Manager and Startup Manager now check where a "Windows" program actually runs from, not

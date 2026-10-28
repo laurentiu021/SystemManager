@@ -25,11 +25,20 @@ namespace SysManager.Helpers;
 /// quoted one.</para>
 /// <para>A file is written as UTF-8 with a byte order mark, which Excel needs to read it as UTF-8 rather than in the
 /// ANSI code page, where "é" came out as "Ã©" and an em dash as three characters (#2794).</para>
+/// <para>A field starting with <c>=</c>, <c>+</c>, <c>-</c>, <c>@</c>, a tab or a carriage return is read by a
+/// spreadsheet as a formula rather than text (OWASP's CSV injection guidance) — a risk several exports carry
+/// without controlling it: file and folder names (Windows allows one named <c>=1+2.txt</c>), and program, window
+/// and publisher names. Such a field is prefixed with a single quote, which a spreadsheet shows literally rather
+/// than evaluating, UNLESS the field is a genuine number in the sheet's culture (a legitimate <c>-5</c> or
+/// <c>+5</c>), which is left untouched so a numeric column still sorts and totals correctly (#2794).</para>
 /// </remarks>
 public static class Csv
 {
     /// <summary>The characters other than the separator that force a field to be quoted.</summary>
     private static readonly char[] QuoteOrLineBreak = ['"', '\r', '\n'];
+
+    /// <summary>The leading characters a spreadsheet reads as the start of a formula rather than text.</summary>
+    private static readonly char[] FormulaTriggers = ['=', '+', '-', '@', '\t', '\r'];
 
     /// <summary>UTF-8 with the byte order mark, the encoding every CSV is written in.</summary>
     private static readonly UTF8Encoding Utf8WithMark = new(encoderShouldEmitUTF8Identifier: true);
@@ -47,15 +56,36 @@ public static class Csv
 
     /// <summary>
     /// One CSV field for a sheet in <paramref name="culture"/>, quoted only when it has to be. A null becomes an empty
-    /// field.
+    /// field. A value a spreadsheet would read as a formula is prefixed with a single quote first, unless it is a
+    /// genuine number in <paramref name="culture"/>.
     /// </summary>
     public static string Field(string? value, CultureInfo culture)
     {
         var separator = SeparatorOf(culture);
         if (string.IsNullOrEmpty(value)) return "";
-        if (!value.Contains(separator, StringComparison.Ordinal) && value.IndexOfAny(QuoteOrLineBreak) < 0)
-            return value;
-        return string.Concat("\"", value.Replace("\"", "\"\"", StringComparison.Ordinal), "\"");
+
+        var text = NeedsFormulaGuard(value, culture) ? "'" + value : value;
+
+        if (!text.Contains(separator, StringComparison.Ordinal) && text.IndexOfAny(QuoteOrLineBreak) < 0)
+            return text;
+        return string.Concat("\"", text.Replace("\"", "\"\"", StringComparison.Ordinal), "\"");
+    }
+
+    /// <summary>
+    /// True when <paramref name="value"/> starts with a character a spreadsheet reads as the start of a formula,
+    /// and is not itself a genuine number in <paramref name="culture"/>.
+    /// </summary>
+    /// <remarks>
+    /// <c>=</c> and <c>@</c> never start a valid number, so those are always guarded. <c>+</c> and <c>-</c> do — a
+    /// column of signed totals or temperatures must not have its sign quoted away — so those two are guarded only
+    /// when the whole field fails to parse as a number in the sheet's own culture, meaning it is text that merely
+    /// starts with the sign, such as a filename or an actual formula.
+    /// </remarks>
+    private static bool NeedsFormulaGuard(string value, CultureInfo culture)
+    {
+        if (Array.IndexOf(FormulaTriggers, value[0]) < 0) return false;
+        if (value[0] != '+' && value[0] != '-') return true;
+        return !double.TryParse(value, NumberStyles.Float, culture, out _);
     }
 
     /// <summary>

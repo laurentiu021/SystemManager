@@ -98,7 +98,10 @@ What the app can and cannot do by design:
 - Securely overwrite and delete files and folders you pick (File Shredder). It refuses
   anything under Windows, System32 or Program Files, checks the real target of a link
   before writing a byte, refuses a file with more than one hard link, and never follows
-  a link inside a folder it shreds.
+  a link — whether you pick the link directly or it is found inside a folder you shred.
+  A write error partway through an overwrite (a full disk, a removed drive) still
+  truncates and removes the file rather than leaving it half-overwritten at its
+  original name.
 - Delete files in the cleanup categories you tick (Deep Cleanup, Quick Cleanup, Quick
   Tune-Up). Each category is a fixed list of folders; junctions and symlinks are never
   followed, the folders single-file .NET apps unpack into under TEMP are left alone, and

@@ -29,6 +29,19 @@ public enum ShredMethod
 }
 
 /// <summary>
+/// Thrown when a write or flush fails partway through an overwrite that had already begun — a full disk
+/// or a removed drive, not cancellation. The data already written is unrecoverable at that point exactly
+/// as it is after a cancellation past the first byte, so the file is still truncated and removed; this
+/// carries how many passes actually completed rather than letting a bare <see cref="IOException"/> read as
+/// "nothing happened" when the file was, in fact, already destroyed (#2824).
+/// </summary>
+internal sealed class PartialShredException(int passesRun, string message, Exception inner)
+    : IOException(message, inner)
+{
+    internal int PassesRun { get; } = passesRun;
+}
+
+/// <summary>
 /// Securely deletes files by overwriting their contents with specified patterns
 /// before removing them from the file system.
 /// </summary>
@@ -37,6 +50,29 @@ public sealed partial class FileShredderService
     private const int BufferSize = 65_536; // 64 KB
 
     private static readonly string[] ProtectedPrefixes = GetProtectedPrefixes();
+
+    private readonly Func<string, FileStream> _openExclusiveWrite;
+
+    public FileShredderService() : this(openExclusiveWrite: null) { }
+
+    /// <summary>
+    /// Test seam: opens the exclusive write handle through a supplied factory instead of a real
+    /// <see cref="FileStream"/>. A mid-pass write fault (a full disk, a removed drive) cannot be produced
+    /// on demand against a real file without touching real system state (a disk quota, a removed volume),
+    /// which is exactly what tests here must not do — a test instead supplies a <see cref="FileStream"/>
+    /// subclass that opens the real file but throws from an overridden <c>WriteAsync</c> after N calls
+    /// (#2824).
+    /// </summary>
+    internal FileShredderService(Func<string, FileStream>? openExclusiveWrite) =>
+        _openExclusiveWrite = openExclusiveWrite ?? DefaultOpenExclusiveWrite;
+
+    private static FileStream DefaultOpenExclusiveWrite(string path) => new(
+        path,
+        FileMode.Open,
+        FileAccess.Write,
+        FileShare.None,
+        BufferSize,
+        FileOptions.WriteThrough | FileOptions.SequentialScan);
 
     private static string[] GetProtectedPrefixes()
     {
@@ -71,6 +107,21 @@ public sealed partial class FileShredderService
             throw new FileNotFoundException("File not found.", filePath);
 
         var attrs = File.GetAttributes(filePath);
+
+        // Refuse a link outright, rather than following it: ShredFolderAsync already refuses a link
+        // folder as the ROOT it was given, but a link named directly here had no equivalent check and
+        // was followed straight through — the passes landed on the TARGET's bytes, and only the link
+        // itself was removed, leaving the real file at the target truncated to zero (#2824). ValidatePath
+        // above only blocks a link whose target sits under a protected system root; an ordinary target
+        // outside the user's selection is exactly what this refuses in addition.
+        if (attrs.HasFlag(FileAttributes.ReparsePoint))
+        {
+            var target = ResolveFinalPath(filePath) ?? "a location that could not be resolved";
+            throw new SecurityException(
+                $"\"{Path.GetFileName(filePath)}\" is a link; shredding it would overwrite and delete data "
+                + $"at its target, outside the selected location: {target}");
+        }
+
         if (attrs.HasFlag(FileAttributes.ReadOnly))
             File.SetAttributes(filePath, attrs & ~FileAttributes.ReadOnly);
 
@@ -83,6 +134,11 @@ public sealed partial class FileShredderService
         var passesRun = 0;
         var overwriteBegan = false;
 
+        // Set once a write-time fault (a full disk, a removed drive) hits after at least one byte of a
+        // pass was already written. Declared here, not inside the block below, so it is still visible at
+        // the throw site after the exclusive handle has been disposed and File.Delete has run.
+        IOException? writeFault = null;
+
         // Open the file ONCE with an exclusive (FileShare.None) write handle and keep it open
         // for every pass and the final truncate. This closes the validate-by-path/act-by-path
         // TOCTOU: ValidatePath above checks a path STRING, but the destructive writes must act
@@ -94,13 +150,7 @@ public sealed partial class FileShredderService
         // The explicit block scopes the `await using` so the exclusive handle is disposed
         // BEFORE the File.Delete below — deleting while we still hold FileShare.None would fail.
         {
-            await using var stream = new FileStream(
-                filePath,
-                FileMode.Open,
-                FileAccess.Write,
-                FileShare.None,
-                BufferSize,
-                FileOptions.WriteThrough | FileOptions.SequentialScan);
+            await using var stream = _openExclusiveWrite(filePath);
 
             // Re-validate the identity of the object we actually hold. If the resolved path
             // sits under a protected root (a reparse point swapped in between ValidatePath and
@@ -153,28 +203,41 @@ public sealed partial class FileShredderService
                 }
 
                 var bytesRemaining = fileLength;
-                while (bytesRemaining > 0)
+                try
                 {
-                    // Only while the file is still intact. Past the first chunk, a mid-pass abort is what
-                    // produced the silently-corrupted file: the leading chunks zeroed, the tail still the
-                    // user's plaintext, and the operation reported as cancelled.
-                    if (!overwriteBegan) ct.ThrowIfCancellationRequested();
+                    while (bytesRemaining > 0)
+                    {
+                        // Only while the file is still intact. Past the first chunk, a mid-pass abort is what
+                        // produced the silently-corrupted file: the leading chunks zeroed, the tail still the
+                        // user's plaintext, and the operation reported as cancelled.
+                        if (!overwriteBegan) ct.ThrowIfCancellationRequested();
 
-                    var writeSize = (int)Math.Min(BufferSize, bytesRemaining);
+                        var writeSize = (int)Math.Min(BufferSize, bytesRemaining);
 
-                    // Re-randomize buffer each chunk for random passes
-                    if (pattern is null)
-                        RandomNumberGenerator.Fill(buffer.AsSpan(0, writeSize));
+                        // Re-randomize buffer each chunk for random passes
+                        if (pattern is null)
+                            RandomNumberGenerator.Fill(buffer.AsSpan(0, writeSize));
 
-                    // CancellationToken.None, deliberately: the token governs whether a pass STARTS, never
-                    // whether it finishes. A cancelled WriteAsync would tear the pass exactly where the
-                    // check above refuses to.
-                    await stream.WriteAsync(buffer.AsMemory(0, writeSize), CancellationToken.None).ConfigureAwait(false);
-                    overwriteBegan = true;
-                    bytesRemaining -= writeSize;
+                        // CancellationToken.None, deliberately: the token governs whether a pass STARTS, never
+                        // whether it finishes. A cancelled WriteAsync would tear the pass exactly where the
+                        // check above refuses to.
+                        await stream.WriteAsync(buffer.AsMemory(0, writeSize), CancellationToken.None).ConfigureAwait(false);
+                        overwriteBegan = true;
+                        bytesRemaining -= writeSize;
+                    }
+
+                    await stream.FlushAsync(CancellationToken.None).ConfigureAwait(false);
+                }
+                catch (IOException ex) when (overwriteBegan)
+                {
+                    // Before the first byte, an IOException means the file is untouched — let it propagate
+                    // normally (the `when` filter above leaves that case uncaught here). Once overwriteBegan,
+                    // the only safe move left is the one cancellation already takes: stop, and let the
+                    // unconditional cleanup below still run.
+                    writeFault = ex;
+                    break;
                 }
 
-                await stream.FlushAsync(CancellationToken.None).ConfigureAwait(false);
                 passesRun++;
 
                 var overallProgress = (int)((pass + 1) * 100.0 / totalPasses);
@@ -183,7 +246,9 @@ public sealed partial class FileShredderService
 
             // Final truncate on the SAME held handle — no by-path reopen. Unconditional: a token cancelled
             // during the last pass used to throw out of this flush, leaving the file truncated to zero and
-            // never deleted, which is the worst of both outcomes.
+            // never deleted, which is the worst of both outcomes. Runs whether the loop above finished,
+            // stopped on cancellation, or stopped on writeFault — all three leave data that is already
+            // unrecoverable and must still be removed.
             stream.SetLength(0);
             await stream.FlushAsync(CancellationToken.None).ConfigureAwait(false);
         } // `await using` disposes the exclusive handle here, releasing FileShare.None for Delete.
@@ -205,6 +270,19 @@ public sealed partial class FileShredderService
         {
             throw new IOException(
                 $"File contents were securely overwritten, but removal was denied: {ex.Message}", ex);
+        }
+
+        if (writeFault is not null)
+        {
+            // Thrown only now, after the delete above has actually run: a caller catching this can trust
+            // the file is already gone, the same guarantee a normal return gives.
+            Log.Warning(writeFault,
+                "Write error partway through a pass after the overwrite had begun; truncated and removed with {PassesRun} of {Total} pass(es) completed: {Path}",
+                passesRun, totalPasses, filePath);
+            throw new PartialShredException(passesRun,
+                $"A write error stopped the overwrite after {passesRun} of {totalPasses} pass(es), but the data "
+                + "already written is unrecoverable — the file was removed rather than left half-overwritten.",
+                writeFault);
         }
 
         if (passesRun < totalPasses)
@@ -258,6 +336,12 @@ public sealed partial class FileShredderService
         var cancelled = false;
         var shredded = 0;
 
+        // Files a write-time fault stopped partway (fewer passes than the method asked for), not the
+        // files in failedFiles above: these ARE gone, counted in shredded too, just not with the full
+        // method. A separate tally so the report can say so rather than implying every file got the
+        // overwrite depth the user picked (#2824).
+        var partiallyOverwritten = 0;
+
         for (var i = 0; i < totalFiles; i++)
         {
             if (ct.IsCancellationRequested) { cancelled = true; break; }
@@ -278,6 +362,16 @@ public sealed partial class FileShredderService
                 // abandons one it has started, which is why this arm cannot leave a corrupt file behind.
                 cancelled = true;
                 break;
+            }
+            catch (PartialShredException ex)
+            {
+                // Caught ahead of the plain IOException arm below: this file IS gone — a write fault
+                // stopped the overwrite after it had begun, and ShredFileAsync already finished the
+                // truncate-and-delete before throwing. Counting it as failed would make a folder shred
+                // report the file as still on disk when it is not.
+                Log.Warning(ex, "Write error partway through, file destroyed with fewer passes: {Path}", files[i]);
+                shredded++;
+                partiallyOverwritten++;
             }
             catch (UnauthorizedAccessException ex)
             {
@@ -309,6 +403,7 @@ public sealed partial class FileShredderService
                 FilesShredded = shredded,
                 SkippedLinks = skippedLinks,
                 FilesLeftInPlace = failedFiles.Count,
+                FilesPartiallyOverwritten = partiallyOverwritten,
                 WasCancelled = true,
             };
         }
@@ -357,7 +452,12 @@ public sealed partial class FileShredderService
         // returned rather than thrown. It still has to reach the user: the folder was not emptied, and
         // they asked for it to be destroyed. Reporting "shredded successfully" while the folder is still
         // sitting there is the one mistake a shredder cannot make.
-        var report = new ShredFolderReport { FilesShredded = shredded, SkippedLinks = skippedLinks };
+        var report = new ShredFolderReport
+        {
+            FilesShredded = shredded,
+            SkippedLinks = skippedLinks,
+            FilesPartiallyOverwritten = partiallyOverwritten,
+        };
 
         if (skippedLinks.Count > 0)
             Log.Information("Folder shredded, {Skipped} link(s) left alone: {Path} ({Method})",

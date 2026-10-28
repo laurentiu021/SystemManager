@@ -10,6 +10,26 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.131.5] - 2026-10-28
+
+**File Shredder no longer follows a link given to it directly, and a write error partway through an
+overwrite no longer leaves a half-destroyed file behind.**
+
+### Fixed
+
+- **A link given directly to File Shredder was followed through to its target.** Shredding a folder
+  already refused a link at the folder's root, but a single file or shortcut selected directly had no
+  equivalent check: the overwrite passes landed on the link's target, the link itself was deleted, and
+  the real file was left behind truncated to zero bytes outside the location you actually selected. A
+  link is now refused outright, the same way a link folder already was.
+- **A write error partway through an overwrite (a full disk, a removed drive) left a half-overwritten
+  file under its original name.** Once the first byte of a pass was replaced, the original data was
+  already gone — but a write failure after that point used to escape before the file was truncated and
+  removed, so what remained on disk was neither the original file nor a securely erased one, and a
+  folder shred reported it as "left in place" when it was, in fact, partly destroyed. The file is now
+  truncated and removed the same way a cancellation after the first byte already was, and File Shredder
+  says plainly that a write error stopped it rather than reporting the file as untouched.
+
 ## [1.131.4] - 2026-10-28
 
 **Browser Cleaner and Deep Cleanup now see a link planted higher up in a folder's path, not just a link at

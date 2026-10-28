@@ -779,4 +779,153 @@ public class FileShredderServiceTests
             Symlinks.RemoveTree(outside);
         }
     }
+
+    // ---------- a link given directly to ShredFileAsync, not just a folder's root (#2824 point 5) ----------
+
+    [Fact]
+    public async Task ShredFileAsync_SymlinkToOrdinaryFile_Refuses_AndTargetSurvives()
+    {
+        // ShredFolderAsync already refuses a link folder as the ROOT it is given. This is the single-file
+        // equivalent, and it had NO check at all: ValidatePath only blocks a link whose TARGET sits under a
+        // protected system root, so a link to an ordinary file elsewhere passed validation and was followed
+        // straight through — the passes landed on the target's bytes, the link was deleted, and the real
+        // file was left behind truncated to zero. Asserts the target's contents survive, not just the
+        // exception type: a SecurityException raised after the data was already destroyed would satisfy a
+        // type-only assertion and be worthless.
+        var svc = NewService();
+        var target = Path.Combine(Path.GetTempPath(), "smtest_linktarget_" + Guid.NewGuid().ToString("N") + ".dat");
+        const string content = "data at the symlink's target";
+        await File.WriteAllTextAsync(target, content);
+
+        var link = Path.Combine(Path.GetTempPath(), "smtest_linkitself_" + Guid.NewGuid().ToString("N") + ".dat");
+
+        try
+        {
+            Symlinks.RequireFileLink(link, target);
+
+            await Assert.ThrowsAsync<SecurityException>(
+                () => svc.ShredFileAsync(link, ShredMethod.Quick, null, CancellationToken.None));
+
+            Assert.True(File.Exists(target), "the shred followed the link and destroyed its target");
+            Assert.Equal(content, await File.ReadAllTextAsync(target));
+        }
+        finally
+        {
+            if (File.Exists(link)) File.Delete(link); // the link only — File.Delete on a symlink removes the link itself
+            if (File.Exists(target)) File.Delete(target);
+        }
+    }
+
+    // ---------- a write error mid-pass, not just cancellation (#2824 point 4) ----------
+
+    /// <summary>
+    /// Opens the real file through the base <see cref="FileStream"/> constructor — so every other guard
+    /// (the exclusive handle, the handle-based protected-root re-check, the hard-link check) runs exactly as
+    /// it does in production — but throws <see cref="IOException"/> from the Nth call onward, standing in
+    /// for a write-time fault (a full disk, a removed drive) that cannot be produced on demand against a
+    /// real file without mutating real system state.
+    /// </summary>
+    private sealed class FaultingAfterNWritesStream(string path, int bufferSize, int failFromWriteNumber)
+        : FileStream(path, FileMode.Open, FileAccess.Write, FileShare.None, bufferSize,
+                      FileOptions.WriteThrough | FileOptions.SequentialScan)
+    {
+        private int _writes;
+
+        public override ValueTask WriteAsync(ReadOnlyMemory<byte> buffer, CancellationToken cancellationToken = default)
+        {
+            if (++_writes >= failFromWriteNumber)
+                throw new IOException("Simulated disk-full for #2824's regression test.");
+            return base.WriteAsync(buffer, cancellationToken);
+        }
+    }
+
+    [Fact]
+    public async Task ShredFileAsync_WriteFaultAfterOverwriteBegan_StillTruncatesAndRemoves_AndThrowsPartialShredException()
+    {
+        // Regression: before this fix, an IOException from WriteAsync/FlushAsync propagated straight out of
+        // ShredFileAsync, skipping the truncate-and-delete entirely — the file was left at its ORIGINAL name
+        // and length, with only its first chunk(s) overwritten and the rest still the user's plaintext. A
+        // folder shred then listed it among files "left in place (not deleted)", which reads as untouched
+        // when it is, in fact, a half-corrupted copy of the original.
+        var path = Path.Combine(Path.GetTempPath(), "smtest_writefault_" + Guid.NewGuid().ToString("N") + ".dat");
+        // Two buffers' worth, so pass 0 needs two WriteAsync calls and completes (overwriteBegan becomes
+        // true on the first), then pass 1's first write (the 3rd WriteAsync call overall) is made to fail.
+        await File.WriteAllBytesAsync(path, new byte[128 * 1024]);
+
+        // Standard = 3 passes, so there is a pass left over after the induced failure — proving the
+        // remaining passes are dropped rather than attempted against an already-faulted stream.
+        var svc = new FileShredderService(p => new FaultingAfterNWritesStream(p, 64 * 1024, failFromWriteNumber: 3));
+
+        try
+        {
+            var ex = await Assert.ThrowsAsync<PartialShredException>(
+                () => svc.ShredFileAsync(path, ShredMethod.Standard, null, CancellationToken.None));
+
+            Assert.Equal(1, ex.PassesRun); // only pass 0 fully completed
+            Assert.Contains("write error", ex.Message, StringComparison.OrdinalIgnoreCase);
+            Assert.Contains('1'.ToString(), ex.Message); // "1 of 3 pass(es)"
+            Assert.False(File.Exists(path), "a write fault after the overwrite began must still remove the file");
+        }
+        finally
+        {
+            if (File.Exists(path)) File.Delete(path);
+        }
+    }
+
+    [Fact]
+    public async Task ShredFileAsync_WriteFaultBeforeAnyByteWritten_LeavesTheFileIntact()
+    {
+        // The other half of the same guard: a fault on the VERY FIRST write (overwriteBegan still false)
+        // must behave like any other refusal before the overwrite starts — throw, and leave the original
+        // bytes exactly as they were, not truncated.
+        var path = Path.Combine(Path.GetTempPath(), "smtest_writefault0_" + Guid.NewGuid().ToString("N") + ".dat");
+        var original = new byte[8192];
+        Array.Fill(original, (byte)0x7A);
+        await File.WriteAllBytesAsync(path, original);
+
+        var svc = new FileShredderService(p => new FaultingAfterNWritesStream(p, 64 * 1024, failFromWriteNumber: 1));
+
+        try
+        {
+            await Assert.ThrowsAsync<IOException>(
+                () => svc.ShredFileAsync(path, ShredMethod.Quick, null, CancellationToken.None));
+
+            Assert.True(File.Exists(path));
+            Assert.Equal(original, await File.ReadAllBytesAsync(path));
+        }
+        finally
+        {
+            if (File.Exists(path)) File.Delete(path);
+        }
+    }
+
+    [Fact]
+    public async Task ShredFolderAsync_WithAWriteFaultFile_CountsItAsShredded_NotLeftInPlace()
+    {
+        // The folder-level half: ShredFileAsync now throws PartialShredException (an IOException subtype)
+        // instead of returning fewer passes for this cause, so ShredFolderAsync must catch THAT ahead of its
+        // generic IOException arm — otherwise a file that was actually destroyed would be reported as still
+        // on disk, the exact inversion of the truth this fix exists to prevent.
+        var dir = Path.Combine(Path.GetTempPath(), "smtest_folderwritefault_" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(dir);
+        var faulting = Path.Combine(dir, "faulting.dat");
+        var ordinary = Path.Combine(dir, "ordinary.dat");
+        await File.WriteAllBytesAsync(faulting, new byte[128 * 1024]);
+        await File.WriteAllTextAsync(ordinary, "shred me normally");
+
+        var svc = new FileShredderService(p =>
+            p.Equals(faulting, StringComparison.OrdinalIgnoreCase)
+                ? new FaultingAfterNWritesStream(p, 64 * 1024, failFromWriteNumber: 3)
+                : new FileStream(p, FileMode.Open, FileAccess.Write, FileShare.None, 64 * 1024,
+                                  FileOptions.WriteThrough | FileOptions.SequentialScan));
+
+        var report = await svc.ShredFolderAsync(dir, ShredMethod.Standard, null, CancellationToken.None);
+
+        Assert.Equal(2, report.FilesShredded);
+        Assert.Equal(1, report.FilesPartiallyOverwritten);
+        Assert.Equal(0, report.FilesLeftInPlace);
+        Assert.False(Directory.Exists(dir), "both files were destroyed, so the now-empty folder should be gone too");
+        Assert.NotNull(report.Notice);
+        Assert.Contains("write error", report.Notice, StringComparison.OrdinalIgnoreCase);
+    }
 }

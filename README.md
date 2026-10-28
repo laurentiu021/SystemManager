@@ -1426,10 +1426,14 @@ Answers "what is actually using my space?" by listing the biggest files in one p
   and removed, because once the first byte is replaced the original cannot come back — stopping
   there would leave a file at its original name holding nothing while telling you the operation
   was cancelled. The summary says how many items were destroyed before you stopped
-- Skips junction points and symbolic links (prevents symlink attacks)
+- Skips junction points and symbolic links (prevents symlink attacks) — whether the link is the item
+  you selected directly or one found inside a folder you shred
 - **Refuses Windows' own folders** — Windows, System32 and Program Files — even through a link or a
   short name, a file with more than one hard link, and a selected folder that is itself a link. A file
   it cannot overwrite is left where it is and named, never deleted the ordinary way
+- A write error partway through an overwrite (a full disk, a removed drive) still finishes the job —
+  the file is truncated and removed rather than left half-overwritten under its original name — and
+  says so plainly instead of reporting it as left untouched
 - Confirmation dialog before irreversible shred
 
 ### Ping

@@ -260,6 +260,25 @@ public class ProcessManagerViewModelTests
     }
 
     [Theory]
+    [InlineData("winlogon.exe")]
+    [InlineData("csrss.exe")]
+    [InlineData("svchost.exe")]
+    public void KillProcess_BootCriticalNameFromAProfileFolder_IsNotRefused(string name)
+    {
+        // A program merely NAMED like one of the boot-critical set, running from a user's profile
+        // folder instead of the System folder, is not the real one — the refusal must not be keyed on
+        // the name alone (#2792).
+        var profilePath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), name);
+        var entry = Named(name, nameof(ProcessSafety.Unknown));
+        entry.FilePath = profilePath;
+
+        var refused = WasRefused(entry, out var status);
+
+        Assert.False(refused);
+        Assert.DoesNotContain("cannot be ended", status);
+    }
+
+    [Theory]
     [InlineData("notepad.exe")]
     [InlineData("calc.exe")]
     [InlineData("mspaint.exe")]
@@ -360,7 +379,7 @@ public class ProcessManagerViewModelTests
 
     private static HashSet<string> PrivateNames(string fieldName)
     {
-        var field = typeof(ProcessManagerViewModel).GetField(fieldName,
+        var field = typeof(ProcessCriticality).GetField(fieldName,
             System.Reflection.BindingFlags.Static | System.Reflection.BindingFlags.NonPublic);
         Assert.NotNull(field);
         return (HashSet<string>)field.GetValue(null)!;

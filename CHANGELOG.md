@@ -10,6 +10,23 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.131.11] - 2026-10-28
+
+**Process Manager and Startup Manager now check where a "Windows" program actually runs from, not
+just what it is named, before trusting it or telling you ending it is safe.**
+
+### Fixed
+- Process Manager's kill rules and the safety chip's tooltip both checked a process's name alone. A
+  program merely named `svchost.exe`, `csrss.exe`, `MsMpEng.exe` or any other name in the boot-critical
+  or high-consequence lists, running from a user's profile folder instead of the System folder, could
+  inherit the real one's refusal or warning — and conversely the chip's tooltip told every "Windows"
+  row that ending it "will not crash your PC", which was never true for the names Process Manager
+  actually refuses to end. Both now verify the running image's path under `%SystemRoot%` as well as its
+  name, through one shared `ProcessCriticality` helper read by the kill tiers, the tooltip, and
+  `ProcessDescriptionService`'s database lookup, which now downgrades a "System" match to unrecognised
+  when the path disagrees. Startup Manager's enrichment passes the full path through the same check.
+  (#2792)
+
 ## [1.131.10] - 2026-10-28
 
 **Privacy & Telemetry, Camera/Mic/Location, Notification Blocker and Scheduled Maintenance now change

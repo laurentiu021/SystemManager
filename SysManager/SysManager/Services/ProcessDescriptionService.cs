@@ -6,6 +6,7 @@ using System.IO;
 using System.Reflection;
 using System.Text.Json;
 using Serilog;
+using SysManager.Helpers;
 
 namespace SysManager.Services;
 
@@ -83,6 +84,37 @@ public sealed class ProcessDescriptionService
             : processName;
 
         return _db.TryGetValue(name.ToLowerInvariant(), out var entry) ? entry : null;
+    }
+
+    /// <summary>
+    /// Looks up a process by name, then verifies a "System" database entry against where the image
+    /// actually runs from. A process named like a known Windows component but running outside
+    /// <c>%SystemRoot%</c> is not that component — the database match is downgraded to an unrecognised
+    /// entry naming the real folder, instead of handing out the Windows component's description and
+    /// "safe to end" reputation (see <see cref="Helpers.ProcessCriticality"/>, #2792).
+    /// </summary>
+    /// <remarks>
+    /// Only "System" entries are re-verified: "Trusted" third-party entries have no fixed install
+    /// folder to check against, and <see cref="ProcessSafety.Unknown"/> already carries no reputation
+    /// to misattribute. <paramref name="imagePath"/> null/blank/unreadable passes through unchanged,
+    /// the same fail-open rule <see cref="Helpers.ProcessCriticality.IsUnderSystemRoot"/> applies, since
+    /// most real system processes cannot be read without elevation.
+    /// </remarks>
+    public ProcessDescriptionEntry? Lookup(string processName, string? imagePath)
+    {
+        var entry = Lookup(processName);
+        if (entry is null || entry.Safety != ProcessSafety.System)
+            return entry;
+
+        if (ProcessCriticality.IsUnderSystemRoot(imagePath))
+            return entry;
+
+        var folder = Path.GetDirectoryName(imagePath) is { Length: > 0 } dir ? dir : "an unexpected location";
+        return entry with
+        {
+            Safety = ProcessSafety.Unknown,
+            Description = $"Not recognised — named like a Windows component, but running from {folder} instead of the System folder."
+        };
     }
 
     /// <summary>

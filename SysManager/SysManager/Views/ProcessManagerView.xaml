@@ -285,7 +285,7 @@
                                         helpers:ThemeBrush.Background="{Binding SafetyLevel, Converter={StaticResource ProcSafetyBgColor}}"
                                         helpers:ThemeBrush.BorderBrush="{Binding SafetyLevel, Converter={StaticResource ProcSafetyBgColor}}"
                                         BorderThickness="1" HorizontalAlignment="Left"
-                                        ToolTip="{Binding SafetyLevel, Converter={StaticResource ProcSafetyTip}}">
+                                        ToolTip="{Binding SafetyTooltip}">
                                     <StackPanel Orientation="Horizontal">
                                         <Ellipse Width="6" Height="6" VerticalAlignment="Center" Margin="0,0,4,0"
                                                  helpers:ThemeBrush.Fill="{Binding SafetyLevel, Converter={StaticResource ProcSafetyColor}}"/>

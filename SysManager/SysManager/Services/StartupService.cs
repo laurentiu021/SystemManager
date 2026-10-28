@@ -136,7 +136,7 @@ public sealed class StartupService
             var exe = ExecutableNameFromCommand(entry.Command);
             if (exe.Length == 0) continue;
 
-            var info = ProcessDescriptionService.Instance.Lookup(exe);
+            var info = ProcessDescriptionService.Instance.Lookup(exe, ExecutablePathFromCommand(entry.Command));
             if (info is null) continue;
 
             entry.Description = info.Description;
@@ -153,10 +153,34 @@ public sealed class StartupService
     /// <remarks>
     /// Pure and static so the parsing — which is the fiddly part — is unit-testable without touching the
     /// registry. Kept conservative: it returns the token the database is keyed on, and
-    /// <see cref="ProcessDescriptionService.Lookup"/> handles the case-insensitive match and the ".exe"
+    /// <see cref="ProcessDescriptionService.Lookup(string)"/> handles the case-insensitive match and the ".exe"
     /// strip, so a miss here costs only the enrichment, never a wrong description.
     /// </remarks>
     internal static string ExecutableNameFromCommand(string command)
+    {
+        var path = ExecutablePathFromCommand(command);
+        if (path.Length == 0) return "";
+
+        try
+        {
+            return System.IO.Path.GetFileNameWithoutExtension(path);
+        }
+        catch (ArgumentException)
+        {
+            // Illegal path characters (e.g. a rundll32 entry point spec) — not something the database
+            // keys on anyway.
+            return "";
+        }
+    }
+
+    /// <summary>
+    /// The full executable path (no arguments) from a startup command line, or an empty string when
+    /// none can be read. The same quoted/unquoted split <see cref="ExecutableNameFromCommand"/> uses,
+    /// stopping short of stripping the name — this is what lets a database "System" hit be re-verified
+    /// against where the file actually sits (<see cref="ProcessDescriptionService.Lookup(string, string?)"/>,
+    /// #2792), which the bare name alone cannot do.
+    /// </summary>
+    internal static string ExecutablePathFromCommand(string command)
     {
         if (string.IsNullOrWhiteSpace(command)) return "";
 
@@ -178,16 +202,7 @@ public sealed class StartupService
             path = SplitUnquotedExecutable(text);
         }
 
-        try
-        {
-            return System.IO.Path.GetFileNameWithoutExtension(path.Trim());
-        }
-        catch (ArgumentException)
-        {
-            // Illegal path characters (e.g. a rundll32 entry point spec) — not something the database
-            // keys on anyway.
-            return "";
-        }
+        return path.Trim();
     }
 
     // Executable extensions that can appear at the end of the path portion of an unquoted command.

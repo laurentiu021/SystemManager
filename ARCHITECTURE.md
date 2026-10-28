@@ -273,12 +273,17 @@ to scroll.
   name, and the loose files, merge into one grey "Other" block. The other blocks are the theme's accent, lighter
   for smaller ones, with `ThemeService.OnColor` choosing the text, and are rebuilt on a theme change.
 - `ProcessManagerViewModel` — running processes with kill, filter, sort. The kill path has three
-  tiers, because one message cannot be true for all of them: `BootCriticalProcesses` (13 names) is
-  refused outright, `HighConsequenceProcesses` (Defender's engine, Windows Installer and the servicing
-  processes) is confirmed with a prompt naming the real damage, and any other Windows component gets
-  the "a feature may look broken until you sign out" warning. Both sets are matched by process NAME,
-  not by the description database's `safety` field — that field is provenance, and treating it as
-  criticality is what made the app refuse to end Notepad while claiming a BSOD. Kill passes the listed
+  tiers, because one message cannot be true for all of them: `Helpers/ProcessCriticality.BootCriticalProcesses`
+  (13 names) is refused outright, `.HighConsequenceProcesses` (Defender's engine, Windows Installer and the
+  servicing processes) is confirmed with a prompt naming the real damage, and any other Windows component gets
+  the "a feature may look broken until you sign out" warning. Both sets are matched by process NAME AND the
+  image's actual path under `%SystemRoot%` — not by the description database's `safety` field alone, which is
+  provenance and which (keyed on name alone) is what made the app refuse to end Notepad while claiming a BSOD,
+  and which (matched by name with no path check) would let a process merely CALLED `svchost.exe` from a profile
+  folder inherit the refusal or warning meant for the real one. `ProcessCriticality` is the one copy of both
+  sets and the path check, read by this view model's tiers, `ProcessDescriptionService.Lookup(name, path)`
+  (downgrades a database "System" hit the same way when the path disagrees), and `ProcessEntry.SafetyTooltip`
+  (so the chip's tooltip never promises something the tiers above contradict). Kill passes the listed
   start time with the PID, so a process that closed while the confirmation was open, and whose ID Windows
   gave to another program, is reported as already closed and left alone; SysManager's own process is
   refused.
@@ -714,7 +719,9 @@ Key services:
   `ScanAsync` returns a `StartupScan` that says whether the tasks could be listed, rather
   than a list that silently has none. Enriches each entry from `ProcessDescriptionService`
   (plain-language description + `ProcessSafety`) keyed on the executable's base
-  name; unrecognised programs are left blank so the UI never guesses a safety. A second
+  name AND its full path (`ExecutablePathFromCommand`, alongside the existing
+  `ExecutableNameFromCommand`), so a "System" hit is re-verified the same way Process Manager's
+  is; unrecognised programs are left blank so the UI never guesses a safety. A second
   post-pass, `VerifySignatures`, answers "who really made this" with a certificate rather
   than `FileVersionInfo.CompanyName`, which is the string the `Publisher` column shows and
   which any program can set to "Microsoft Corporation". It uses the shared
@@ -1144,7 +1151,10 @@ Key services:
   it back after the delete, before the read-only rescan (#2510).
 - `ProcessDescriptionService` — the built-in process database (`ProcessDescriptions.json`, an embedded
   resource) behind the static `Instance`: `Lookup` gives a process's plain-language description, category and
-  `ProcessSafety`, for Process Manager and Startup Manager.
+  `ProcessSafety`, for Process Manager and Startup Manager. The `Lookup(name, imagePath)` overload re-verifies
+  a "System" hit against `ProcessCriticality.IsUnderSystemRoot` and downgrades it to an unrecognised entry
+  naming the real folder when the image runs from outside `%SystemRoot%` — a database match by name alone
+  cannot tell the real `svchost.exe` from one merely called that in a profile folder.
 - `SpeedTestHistoryService` — persists speed test results to JSON for
   historical charting and trend analysis. One instance, shared by the Speed Test tab and the
   Dashboard's quick test; its `Saved` event is how a result recorded from the Dashboard reaches a

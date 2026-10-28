@@ -136,7 +136,7 @@ public sealed partial class ProcessManagerViewModel : ViewModelBase
                     if (!existingPids.Contains(p.Pid))
                     {
                         p.Icon = IconExtractorService.GetProcessIcon(p.FilePath, p.Name);
-                        var dbEntry = ProcessDescriptionService.Instance.Lookup(p.Name);
+                        var dbEntry = ProcessDescriptionService.Instance.Lookup(p.Name, p.FilePath);
                         if (dbEntry is not null)
                         {
                             p.PlainDescription = dbEntry.Description;
@@ -316,41 +316,6 @@ public sealed partial class ProcessManagerViewModel : ViewModelBase
         }
     }
 
-    private static readonly HashSet<string> BootCriticalProcesses = new(StringComparer.OrdinalIgnoreCase)
-    {
-        "winlogon", "wininit", "csrss", "smss", "services",
-        "lsass", "lsaiso", "fontdrvhost", "dwm", "logonui",
-        "svchost", "ctfmon", "userinit"
-    };
-
-    /// <summary>
-    /// Windows components that are killable, but whose death costs more than "a feature may look
-    /// broken until you sign out" — so the ordinary Windows-component warning would be untrue for them.
-    /// </summary>
-    /// <remarks>
-    /// Dropping the provenance arm from <see cref="IsKernelCritical"/> made 49 database entries
-    /// killable, which was the point — the app had been refusing to end Notepad. But the single warning
-    /// that replaced the refusal promises "will not crash Windows … a feature may stop working", and
-    /// that sentence is wrong for two groups inside those 49:
-    /// <list type="bullet">
-    /// <item>Security: ending <c>MsMpEng</c> or <c>SecurityHealthService</c> is an antivirus-disable
-    /// step, not a cosmetic one. (It fails on a protected-process OS — but the prompt should not be
-    /// reassuring about an attempt to switch off the machine's defences.)</item>
-    /// <item>Servicing: ending <c>TrustedInstaller</c> or <c>msiexec</c> mid-operation can leave a
-    /// half-applied update or a corrupt component store — damage that survives the restart the
-    /// ordinary message offers as the remedy.</item>
-    /// </list>
-    /// Still a confirmation and not a refusal: it is the user's machine, and unlike the boot-critical
-    /// set these really can be ended. What changes is that the prompt names the actual risk (#1773).
-    /// </remarks>
-    private static readonly HashSet<string> HighConsequenceProcesses = new(StringComparer.OrdinalIgnoreCase)
-    {
-        // Security — Defender's engine, its network inspection service, and the Security Centre.
-        "MsMpEng", "NisSrv", "SecurityHealthService", "SecurityHealthSystray",
-        // Servicing / installers — killing these mid-write is what corrupts state.
-        "TrustedInstaller", "msiexec", "WmiPrvSE", "WUDFHost",
-    };
-
     [RelayCommand]
     private void KillProcess(ProcessEntry? entry)
     {
@@ -440,16 +405,17 @@ public sealed partial class ProcessManagerViewModel : ViewModelBase
     /// ("would cause a system crash") is factually true.
     /// </summary>
     /// <remarks>
-    /// Deliberately keyed on <see cref="BootCriticalProcesses"/> alone. It used to also refuse any
-    /// entry whose <see cref="ProcessEntry.SafetyLevel"/> was "System", but that value is
-    /// PROVENANCE from the description database ("known Windows component" — see
-    /// <see cref="ProcessSafety"/>), not criticality. 59 of the 108 database entries carry it,
-    /// including notepad, calc, mspaint, Taskmgr, regedit and explorer — so the app refused to end
-    /// Notepad and told the user it would blue-screen the machine. Nothing is lost by dropping it:
-    /// this set is matched by name, and covers every genuinely unkillable process.
+    /// Deliberately keyed on name plus <see cref="ProcessCriticality.IsUnderSystemRoot"/>, never on
+    /// <see cref="ProcessEntry.SafetyLevel"/>: that value is PROVENANCE from the description database
+    /// ("known Windows component" — see <see cref="ProcessSafety"/>), not criticality. 59 of the 108
+    /// database entries carry it, including notepad, calc, mspaint, Taskmgr, regedit and explorer — so
+    /// keying the refusal on it once made the app refuse to end Notepad and tell the user it would
+    /// blue-screen the machine. The path check is narrower than that and does not reintroduce the bug:
+    /// a copy of <c>svchost.exe</c> running from a profile folder must not inherit the refusal that
+    /// protects the real one (#2792).
     /// </remarks>
     private static bool IsKernelCritical(ProcessEntry entry)
-        => BootCriticalProcesses.Contains(Path.GetFileNameWithoutExtension(entry.Name));
+        => ProcessCriticality.IsBootCritical(Path.GetFileNameWithoutExtension(entry.Name), entry.FilePath);
 
     /// <summary>
     /// True when the description database marks the process as a Windows component. Drives the
@@ -459,17 +425,18 @@ public sealed partial class ProcessManagerViewModel : ViewModelBase
         => string.Equals(entry.SafetyLevel, nameof(ProcessSafety.System), StringComparison.OrdinalIgnoreCase);
 
     /// <summary>
-    /// True for the security and servicing processes in <see cref="HighConsequenceProcesses"/>, whose
-    /// consequence the ordinary Windows-component warning would understate. Drives the strongest
+    /// True for the security and servicing processes in <see cref="ProcessCriticality.HighConsequenceProcesses"/>,
+    /// whose consequence the ordinary Windows-component warning would understate. Drives the strongest
     /// prompt — still a confirmation, never a refusal.
     /// </summary>
     /// <remarks>
-    /// Matched by NAME rather than by the database's category field, for the same reason
-    /// <see cref="IsKernelCritical"/> is: the categories are provenance, and a process absent from the
-    /// database (or renamed in it) must not silently fall out of this tier.
+    /// Matched by name plus path, for the same reason <see cref="IsKernelCritical"/> is: the database's
+    /// category field is provenance, a process absent from the database (or renamed in it) must not
+    /// silently fall out of this tier, and a process merely NAMED like one of these must not fall INTO
+    /// it from outside <c>%SystemRoot%</c> (#2792).
     /// </remarks>
     private static bool IsHighConsequence(ProcessEntry entry)
-        => HighConsequenceProcesses.Contains(Path.GetFileNameWithoutExtension(entry.Name));
+        => ProcessCriticality.IsHighConsequence(Path.GetFileNameWithoutExtension(entry.Name), entry.FilePath);
 
     [RelayCommand]
     private static void OpenFileLocation(ProcessEntry? entry)

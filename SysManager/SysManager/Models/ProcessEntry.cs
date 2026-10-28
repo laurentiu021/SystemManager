@@ -3,6 +3,7 @@
 // License: MIT
 
 using System.Globalization;
+using System.IO;
 using System.Windows.Media;
 using CommunityToolkit.Mvvm.ComponentModel;
 using SysManager.Helpers;
@@ -15,7 +16,9 @@ namespace SysManager.Models;
 public sealed partial class ProcessEntry : ObservableObject
 {
     [ObservableProperty] private int _pid;
-    [ObservableProperty] private string _name = "";
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(SafetyTooltip))]
+    private string _name = "";
     [ObservableProperty] private string _description = "";
     [ObservableProperty] private double _cpuPercent;
     [ObservableProperty]
@@ -31,12 +34,16 @@ public sealed partial class ProcessEntry : ObservableObject
     [NotifyPropertyChangedFor(nameof(StartTimeDisplay))]
     private DateTime _startTime;
     [ObservableProperty] private int _threadCount;
-    [ObservableProperty] private string _filePath = "";
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(SafetyTooltip))]
+    private string _filePath = "";
     [ObservableProperty] private ImageSource? _icon;
     [ObservableProperty] private bool _hasMainWindow;
     [ObservableProperty] private string _plainDescription = "";
     [ObservableProperty] private string _category = "Unknown";
-    [ObservableProperty] private string _safetyLevel = "Unknown";
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(SafetyTooltip))]
+    private string _safetyLevel = "Unknown";
 
     /// <summary>
     /// Whether Windows can confirm who made the running image, from its certificate.
@@ -78,4 +85,32 @@ public sealed partial class ProcessEntry : ObservableObject
     public string StartTimeDisplay => StartTime == default
         ? "—"
         : StartTime.ToString("yyyy-MM-dd HH:mm:ss", CultureInfo.InvariantCulture);
+
+    /// <summary>
+    /// The safety chip's tooltip. Tiered above the generic wording <see cref="ProcessSafetyPalette.Tooltip"/>
+    /// gives every "Windows" row.
+    /// </summary>
+    /// <remarks>
+    /// <see cref="ProcessSafetyPalette.Tooltip"/> told every System-tier row "ending it will not crash your
+    /// PC" — true for most of the database, but false for <see cref="ProcessCriticality.BootCriticalProcesses"/>
+    /// (which Process Manager actually refuses to end, for exactly that reason) and understated for
+    /// <see cref="ProcessCriticality.HighConsequenceProcesses"/>. This checks those two tiers by name AND path
+    /// first — the same verification <c>ProcessManagerViewModel.IsKernelCritical</c>/<c>IsHighConsequence</c>
+    /// apply to the refusal and the warning prompt — and falls back to the generic wording only when neither
+    /// tier matches, so the tooltip never promises something the rest of the tab contradicts (#2792).
+    /// </remarks>
+    public string SafetyTooltip
+    {
+        get
+        {
+            var bareName = Path.GetFileNameWithoutExtension(Name);
+            if (ProcessCriticality.IsBootCritical(bareName, FilePath))
+                return "A core Windows process. Ending it will cause a system crash (BSOD) or an immediate " +
+                       "sign-out, which is why Process Manager refuses to end it.";
+            if (ProcessCriticality.IsHighConsequence(bareName, FilePath))
+                return "A Windows security or servicing process. Ending it can disable protection or corrupt " +
+                       "an in-progress update — confirm you mean to before continuing.";
+            return ProcessSafetyPalette.Tooltip(SafetyLevel);
+        }
+    }
 }

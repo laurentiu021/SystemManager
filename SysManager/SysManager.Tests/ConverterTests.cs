@@ -411,7 +411,12 @@ public class ConverterTests
         Assert.Contains("ProcSafetyText", xaml);
         Assert.Contains("ProcSafetyColor", xaml);
         Assert.Contains("ProcSafetyBgColor", xaml);
-        Assert.Contains("ProcSafetyTip", xaml);
+        // The tooltip binds ProcessEntry.SafetyTooltip, NOT the ProcSafetyTip converter (#2792): the
+        // converter's wording is keyed on SafetyLevel alone and tells every "System" row ending it
+        // "will not crash your PC", which is false for boot-critical names and understated for the
+        // security/servicing tier. SafetyTooltip checks both tiers before falling back to the same
+        // converter wording, so the two must not read the identical property.
+        Assert.Contains("Binding SafetyTooltip", xaml);
         Assert.Contains("SortMemberPath=\"SafetyLevel\"", xaml);
     }
 

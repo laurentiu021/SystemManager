@@ -147,4 +147,57 @@ public class ProcessDescriptionServiceTests
             "these entries do not start with the program's name and a spaced em dash, so the slowness check would "
             + "name them by their whole description:\n  " + string.Join("\n  ", unnamed));
     }
+
+    // ── Lookup(name, imagePath) re-verifies a "System" hit against where it actually runs (#2792) ──
+
+    [Fact]
+    public void LookupWithPath_GenuineSystemProcess_KeepsTheSystemEntry()
+    {
+        var windows = Environment.GetFolderPath(Environment.SpecialFolder.Windows);
+        var path = Path.Combine(windows, "System32", "svchost.exe");
+
+        var entry = Sut.Lookup("svchost", path);
+
+        Assert.NotNull(entry);
+        Assert.Equal(ProcessSafety.System, entry!.Safety);
+    }
+
+    [Fact]
+    public void LookupWithPath_ProfileFolderImpersonator_IsDowngradedToUnrecognised()
+    {
+        // A copy of svchost.exe sitting in a profile folder is not the real service host — the
+        // database match alone used to let it inherit "System" and the "will not crash" reassurance.
+        var profile = Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData);
+        var path = Path.Combine(profile, "svchost.exe");
+
+        var entry = Sut.Lookup("svchost", path);
+
+        Assert.NotNull(entry);
+        Assert.Equal(ProcessSafety.Unknown, entry!.Safety);
+        Assert.Contains("Not recognised", entry.Description, StringComparison.Ordinal);
+        Assert.Contains(profile, entry.Description, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void LookupWithPath_UnreadablePath_StillTrustsTheName()
+    {
+        // Most real system processes cannot have MainModule read without elevation — an empty path is
+        // what the overwhelming majority of genuine boot-critical processes look like from here, so it
+        // must fail open rather than downgrade every one of them.
+        var entry = Sut.Lookup("svchost", null);
+
+        Assert.NotNull(entry);
+        Assert.Equal(ProcessSafety.System, entry!.Safety);
+    }
+
+    [Fact]
+    public void LookupWithPath_TrustedEntry_IsNeverRevalidated()
+    {
+        // Third-party "Trusted" entries have no fixed system folder to check against, so a path outside
+        // %SystemRoot% must not downgrade them the way it downgrades a "System" entry.
+        var entry = Sut.Lookup("chrome", @"C:\Users\someone\AppData\Local\Whatever\chrome.exe");
+
+        Assert.NotNull(entry);
+        Assert.Equal(ProcessSafety.Trusted, entry!.Safety);
+    }
 }

@@ -3,6 +3,8 @@
 // License: MIT
 
 using System.IO;
+using System.Security.Principal;
+using Microsoft.Win32;
 using SysManager.Helpers;
 
 namespace SysManager.Tests;
@@ -148,5 +150,131 @@ public class AdminHelperTests
         // The sentinel must still be passed, or the elevated child is treated as a duplicate and the
         // user is left looking at the non-elevated window.
         Assert.Contains("ArgumentList.Add(RelaunchedElevatedArg)", body, StringComparison.Ordinal);
+    }
+
+    // ── elevated as a different account (#2826) ──────────────────────────────
+
+    /// <summary>Sets both probes, and restores both on dispose — the two-probe equivalent of ForceElevation.</summary>
+    private sealed class ForcedAccountState : IDisposable
+    {
+        private readonly IDisposable _elevation;
+        private readonly Func<string?> _previousSid;
+
+        public ForcedAccountState(bool elevated, string? interactiveSid)
+        {
+            _elevation = AdminHelper.ForceElevation(elevated);
+            _previousSid = AdminHelper.InteractiveSessionSidProbe;
+            AdminHelper.InteractiveSessionSidProbe = () => interactiveSid;
+        }
+
+        public void Dispose()
+        {
+            AdminHelper.InteractiveSessionSidProbe = _previousSid;
+            _elevation.Dispose();
+        }
+    }
+
+    private static string OwnSid()
+    {
+        using var identity = WindowsIdentity.GetCurrent();
+        return identity.User!.Value;
+    }
+
+    [Fact]
+    public void IsElevatedAsAnotherUser_WhenNotElevated_IsFalse()
+    {
+        // Not elevated at all is never "elevated as another user" — the family-PC scenario this exists for
+        // only happens once "Run as administrator" has already been accepted.
+        using var _ = new ForcedAccountState(elevated: false, interactiveSid: "S-1-5-21-0-0-0-9999");
+        Assert.False(AdminHelper.IsElevatedAsAnotherUser());
+    }
+
+    [Fact]
+    public void IsElevatedAsAnotherUser_WhenElevatedAndSidsMatch_IsFalse()
+    {
+        // The ordinary case: a standard account elevates WITH ITS OWN password (or is already an
+        // administrator), so the elevated copy runs as the same account that is signed in.
+        using var _ = new ForcedAccountState(elevated: true, interactiveSid: OwnSid());
+        Assert.False(AdminHelper.IsElevatedAsAnotherUser());
+    }
+
+    [Fact]
+    public void IsElevatedAsAnotherUser_WhenElevatedAndSidsDiffer_IsTrue()
+    {
+        // The family-PC case: elevated with a DIFFERENT administrator's password.
+        using var _ = new ForcedAccountState(elevated: true, interactiveSid: "S-1-5-21-0-0-0-9999");
+        Assert.True(AdminHelper.IsElevatedAsAnotherUser());
+    }
+
+    [Fact]
+    public void IsElevatedAsAnotherUser_WhenTheInteractiveAccountIsUnknown_FailsSafeToFalse()
+    {
+        // No interactive session (a service session, or WTS could not say) must not be read as "different
+        // account" — there is nothing to redirect to, so claiming a mismatch here would be a guess.
+        using var _ = new ForcedAccountState(elevated: true, interactiveSid: null);
+        Assert.False(AdminHelper.IsElevatedAsAnotherUser());
+    }
+
+    [Fact]
+    public void PerUserRegistryRoot_WhenNotElevatedAsAnotherUser_IsTheRealCurrentUserHive()
+    {
+        using var _ = new ForcedAccountState(elevated: false, interactiveSid: null);
+        Assert.Equal(Registry.CurrentUser.Name, AdminHelper.PerUserRegistryRoot().Name);
+    }
+
+    [Fact]
+    public void PerUserRegistryRoot_WhenElevatedAsAnotherUser_ButTheSidCannotBeResolved_FallsBackLogged()
+    {
+        // The rare failure case: elevated as another account, but WTS could not say who is signed in.
+        // Falls back to this account's own hive rather than leaving the service unable to do anything —
+        // degraded, not broken, and the fallback is logged rather than silent.
+        using var _ = new ForcedAccountState(elevated: true, interactiveSid: null);
+        Assert.Equal(Registry.CurrentUser.Name, AdminHelper.PerUserRegistryRoot().Name);
+    }
+
+    [Fact]
+    public void PerUserRegistryRoot_WhenElevatedAsAnotherUser_ButTheHiveIsNotLoaded_FallsBackLogged()
+    {
+        // A SID that resolves to a syntactically valid string but has no loaded hive under HKEY_USERS —
+        // Registry.Users.OpenSubKey must return null cleanly for this, not throw, and the fallback still
+        // applies rather than leaving PerUserRegistryRoot unable to return anything.
+        using var _ = new ForcedAccountState(elevated: true, interactiveSid: "S-1-5-21-0-0-0-9999");
+        Assert.Equal(Registry.CurrentUser.Name, AdminHelper.PerUserRegistryRoot().Name);
+    }
+
+    /// <summary>
+    /// The actual redirect attempt — <c>Registry.Users.OpenSubKey</c> on the interactive SID — must still be
+    /// there on the elevated-as-another-user branch. Asserted against the source because every behavioural
+    /// test above happens to land on the SAME fallback value (<see cref="Registry.CurrentUser"/>) a real
+    /// signed-in SECOND account is needed to prove the success path, which this suite cannot create — so a
+    /// future change that silently dropped the redirect attempt and always returned the fallback would pass
+    /// every one of them.
+    /// </summary>
+    [Fact]
+    public void PerUserRegistryRoot_StillActuallyTriesTheInteractiveAccountsHive()
+    {
+        var source = File.ReadAllText(TestPaths.AppFile("Helpers", "AdminHelper.cs"));
+        var start = source.IndexOf("public static RegistryKey PerUserRegistryRoot", StringComparison.Ordinal);
+        Assert.True(start >= 0, "PerUserRegistryRoot not found — update this guard.");
+        var body = source[start..source.IndexOf("\n    }", start, StringComparison.Ordinal)];
+
+        Assert.Contains("Registry.Users.OpenSubKey", body, StringComparison.Ordinal);
+        Assert.Contains("InteractiveSessionSid()", body, StringComparison.Ordinal);
+    }
+
+    // ── each per-user service's default constructor actually calls PerUserRegistryRoot (#2826) ──
+
+    [Theory]
+    [InlineData("Services", "PrivacyService.cs", "AdminHelper.PerUserRegistryRoot()")]
+    [InlineData("Services", "PrivacyMonitorService.cs", "AdminHelper.PerUserRegistryRoot()")]
+    [InlineData("Services", "NotificationBlockerService.cs", "AdminHelper.PerUserRegistryRoot()")]
+    [InlineData("Services", "MaintenanceSchedulerService.cs", "AdminHelper.IsElevatedAsAnotherUser()")]
+    public void EachPerUserService_ActuallyConsultsTheSignedInAccount(string folder, string file, string mustContain)
+    {
+        // Asserted against the source, not behaviourally: the real redirect needs a second real signed-in
+        // account this suite cannot create. Each default constructor must still name the helper rather than
+        // defaulting straight to Registry.CurrentUser / WindowsIdentity.GetCurrent() again.
+        var source = File.ReadAllText(TestPaths.AppFile(folder, file));
+        Assert.Contains(mustContain, source, StringComparison.Ordinal);
     }
 }

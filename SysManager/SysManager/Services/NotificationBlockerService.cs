@@ -107,7 +107,11 @@ public sealed class NotificationBlockerService : INotificationBlockerService
     /// </summary>
     internal NotificationBlockerService(RegistryKey? baseKey, string? configDir, Func<Guid, string?> knownFolderPath)
     {
-        _baseKey = baseKey ?? Registry.CurrentUser;
+        // Defaults to the signed-in account's own notification settings via AdminHelper.PerUserRegistryRoot
+        // — Registry.CurrentUser itself when SysManager runs as that account, and the account signed in to
+        // the console when elevated as a different administrator, whose own senders this would otherwise
+        // mute instead (#2826).
+        _baseKey = baseKey ?? AdminHelper.PerUserRegistryRoot();
         _ledgerPath = LedgerPath(configDir);
         _knownFolderPath = knownFolderPath;
     }

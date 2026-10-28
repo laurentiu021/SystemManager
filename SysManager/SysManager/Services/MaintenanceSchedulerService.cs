@@ -7,6 +7,7 @@ using System.Globalization;
 using System.Management.Automation;
 using System.Security.Principal;
 using Serilog;
+using SysManager.Helpers;
 using SysManager.Models;
 
 namespace SysManager.Services;
@@ -170,9 +171,16 @@ public sealed class MaintenanceSchedulerService
         return status is { Exists: false };
     }
 
-    /// <summary>The SID of the account SysManager runs as, or null when Windows does not say.</summary>
+    /// <summary>
+    /// The SID of the account the scheduled task should run as: the signed-in console account when
+    /// elevated as a different administrator — so the task actually runs in that person's session, the way
+    /// the tab shows its next run — and the account SysManager runs as otherwise (#2826).
+    /// </summary>
     private static string? CurrentAccountSid()
     {
+        if (AdminHelper.IsElevatedAsAnotherUser() && AdminHelper.InteractiveSessionSid() is { Length: > 0 } interactiveSid)
+            return interactiveSid;
+
         try
         {
             // WindowsIdentity owns a native token handle, so it is disposed here, as RecycleBinHelper does.

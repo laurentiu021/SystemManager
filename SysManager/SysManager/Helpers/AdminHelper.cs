@@ -3,7 +3,9 @@
 // License: MIT
 
 using System.Diagnostics;
+using System.Runtime.InteropServices;
 using System.Security.Principal;
+using Microsoft.Win32;
 using Serilog;
 
 namespace SysManager.Helpers;
@@ -11,7 +13,7 @@ namespace SysManager.Helpers;
 /// <summary>
 /// Utilities for detecting current elevation and relaunching the app elevated on demand.
 /// </summary>
-public static class AdminHelper
+public static partial class AdminHelper
 {
     /// <summary>
     /// How elevation is decided. Production never replaces it; a test does, so the not-elevated branch can
@@ -62,6 +64,133 @@ public static class AdminHelper
         using var identity = WindowsIdentity.GetCurrent();
         var principal = new WindowsPrincipal(identity);
         return principal.IsInRole(WindowsBuiltInRole.Administrator);
+    }
+
+    /// <summary>
+    /// How the signed-in account is found. Same seam shape as <see cref="ElevationProbe"/>, for the same
+    /// reason: a test needs to assert both the matching-account and the different-account branch without
+    /// depending on who is actually signed in to the host running the suite.
+    /// </summary>
+    internal static Func<string?> InteractiveSessionSidProbe { get; set; } = QueryInteractiveSessionSid;
+
+    /// <summary>
+    /// The SID of the account signed in to the active console session, or null when it cannot be
+    /// determined (no interactive session, or the lookup failed).
+    /// </summary>
+    public static string? InteractiveSessionSid() => InteractiveSessionSidProbe();
+
+    /// <summary>
+    /// True when SysManager is running elevated as an account DIFFERENT from the one signed in to the
+    /// active console session.
+    /// </summary>
+    /// <remarks>
+    /// The family-PC case this exists for: a standard account elevates "Run as administrator" with a
+    /// parent's administrator password, and the elevated copy then runs AS that administrator — its own
+    /// token, its own <c>HKEY_CURRENT_USER</c>, its own <c>%USERNAME%</c>. Nothing before this compared the
+    /// two, so a per-user switch the signed-in person applied landed in the administrator's profile instead
+    /// of theirs and the tab still reported it as applied (#2826).
+    /// </remarks>
+    public static bool IsElevatedAsAnotherUser()
+    {
+        if (!IsElevated()) return false;
+
+        using var identity = WindowsIdentity.GetCurrent();
+        var currentSid = identity.User?.Value;
+        if (string.IsNullOrEmpty(currentSid)) return false;
+
+        var interactiveSid = InteractiveSessionSid();
+        return !string.IsNullOrEmpty(interactiveSid)
+            && !string.Equals(currentSid, interactiveSid, StringComparison.OrdinalIgnoreCase);
+    }
+
+    /// <summary>
+    /// The registry root a per-user service should read and write: the signed-in account's own
+    /// <c>HKEY_CURRENT_USER</c>-equivalent hive when elevated as a different account, or
+    /// <see cref="Registry.CurrentUser"/> otherwise.
+    /// </summary>
+    /// <remarks>
+    /// <c>HKEY_CURRENT_USER</c> is itself only ever a per-process VIEW onto
+    /// <c>HKEY_USERS\&lt;the running process's own SID&gt;</c>; the signed-in account's hive sits at the
+    /// same place under its own SID for as long as that account is signed in, loaded by Windows, needing
+    /// no manual load. Falls back to <see cref="Registry.CurrentUser"/> — logged, not silent — on the rare
+    /// failure to resolve or open that hive, rather than leaving a per-user tab unable to do anything at
+    /// all; the common case the bug this exists for was filed over is the account resolving correctly
+    /// (#2826).
+    /// </remarks>
+    public static RegistryKey PerUserRegistryRoot()
+    {
+        if (!IsElevatedAsAnotherUser()) return Registry.CurrentUser;
+
+        var sid = InteractiveSessionSid();
+        if (string.IsNullOrEmpty(sid))
+        {
+            Log.Warning("PerUserRegistryRoot: elevated as another account, but the signed-in account's SID could not be resolved; using the administrator's own hive");
+            return Registry.CurrentUser;
+        }
+
+        try
+        {
+            if (Registry.Users.OpenSubKey(sid, writable: true) is { } hive) return hive;
+            Log.Warning("PerUserRegistryRoot: elevated as another account, but {Sid}'s hive could not be opened; using the administrator's own hive", sid);
+            return Registry.CurrentUser;
+        }
+        catch (System.Security.SecurityException ex)
+        {
+            Log.Warning(ex, "PerUserRegistryRoot: denied opening {Sid}'s hive; using the administrator's own hive", sid);
+            return Registry.CurrentUser;
+        }
+    }
+
+    /// <summary>
+    /// Resolves the active console session's user name via <c>WTSQuerySessionInformationW</c> and
+    /// translates it to a SID. Fails to null rather than throwing: a session with no interactive user (a
+    /// service session, or nobody signed in at the lock screen's own session) is not an error, and nor is a
+    /// name <see cref="NTAccount"/> cannot translate.
+    /// </summary>
+    private static string? QueryInteractiveSessionSid()
+    {
+        var sessionId = NativeMethods.WTSGetActiveConsoleSessionId();
+        if (sessionId == 0xFFFFFFFF) return null; // no active console session
+
+        var userName = QuerySessionString(sessionId, NativeMethods.WtsUserName);
+        if (string.IsNullOrEmpty(userName)) return null;
+        var domainName = QuerySessionString(sessionId, NativeMethods.WtsDomainName);
+
+        try
+        {
+            var account = string.IsNullOrEmpty(domainName) ? userName : $@"{domainName}\{userName}";
+            return ((SecurityIdentifier)new NTAccount(account).Translate(typeof(SecurityIdentifier))).Value;
+        }
+        catch (IdentityNotMappedException ex)
+        {
+            Log.Debug(ex, "InteractiveSessionSid: could not translate the session account to a SID");
+            return null;
+        }
+    }
+
+    private static string? QuerySessionString(uint sessionId, int infoClass)
+    {
+        if (!NativeMethods.WTSQuerySessionInformation(IntPtr.Zero, sessionId, infoClass, out var buffer, out _))
+            return null;
+        try { return Marshal.PtrToStringUni(buffer); }
+        finally { NativeMethods.WTSFreeMemory(buffer); }
+    }
+
+    private static partial class NativeMethods
+    {
+        internal const int WtsUserName = 5;
+        internal const int WtsDomainName = 7;
+
+        [LibraryImport("kernel32.dll")]
+        internal static partial uint WTSGetActiveConsoleSessionId();
+
+        [LibraryImport("wtsapi32.dll", EntryPoint = "WTSQuerySessionInformationW", SetLastError = true)]
+        [return: MarshalAs(UnmanagedType.Bool)]
+        internal static partial bool WTSQuerySessionInformation(
+            IntPtr hServer, uint sessionId, int wtsInfoClass, out IntPtr buffer, out uint bytesReturned);
+
+        [LibraryImport("wtsapi32.dll", EntryPoint = "WTSFreeMemory")]
+        internal static partial void WTSFreeMemory(IntPtr memory);
     }
 
     /// <summary>

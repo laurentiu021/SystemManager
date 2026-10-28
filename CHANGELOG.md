@@ -10,6 +10,30 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.131.10] - 2026-10-28
+
+**Privacy & Telemetry, Camera/Mic/Location, Notification Blocker and Scheduled Maintenance now change
+your own account's settings when SysManager is elevated with a different administrator's password,
+not that administrator's.**
+
+### Fixed
+
+- **Elevating with a different administrator's password sent per-user changes into that
+  administrator's profile instead of yours.** "Run as administrator" on a standard account runs the
+  elevated copy AS the administrator whose password was given — its own `HKEY_CURRENT_USER`, its own
+  account. Nothing compared that account with the one actually signed in, so applying a Privacy &
+  Telemetry switch, reading your own webcam/microphone/location history, muting a notification
+  sender, or registering Scheduled Maintenance all read and wrote the administrator's profile while
+  the tab reported it as applied to you. On the common family-PC setup — a standard account with a
+  parent's administrator password — every one of those changes silently never reached the person who
+  made them.
+- SysManager now detects the mismatch and redirects these four to your own account's hive
+  (`HKEY_USERS\<your SID>`, loaded for as long as you are signed in) instead, falling back to the
+  administrator's own hive — logged, not silent — only on the rare failure to resolve or open it.
+
+Performance Mode's Xbox Game Bar switch has the same gap and remains open, tracked on #2826, since it
+needs a different fix shape (static methods rather than a constructor-injected registry root).
+
 ## [1.131.9] - 2026-10-28
 
 **Uninstaller's leftover search now protects a user folder moved to a drive root, refuses a link it

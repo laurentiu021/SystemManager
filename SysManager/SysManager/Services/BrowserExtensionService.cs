@@ -73,7 +73,12 @@ public sealed class BrowserExtensionService : IBrowserExtensionService
             {
                 var (executable, page) = ChromiumLaunch[browser];
                 // The browser's whole data folder behind a link: not followed, and said rather than left out.
-                var userData = ExtensionFiles.KindOf(Path.Combine(_localAppData, userDataRel));
+                // KindOf alone only sees a link in the LAST segment; an ancestor link (e.g. "Google" itself) still
+                // reports Folder here, so it is upgraded to Link when the full path is reached through one (#2814).
+                var userDataPath = Path.Combine(_localAppData, userDataRel);
+                var userData = ExtensionFiles.KindOf(userDataPath);
+                if (userData is ExtensionFiles.EntryKind.Folder && SafeFileWalk.IsReachedThroughLink(userDataPath))
+                    userData = ExtensionFiles.EntryKind.Link;
                 if (userData is ExtensionFiles.EntryKind.Link or ExtensionFiles.EntryKind.Unreadable)
                 {
                     found.Add((Unread(browser, browser, page, executable, null, userData), null));
@@ -115,8 +120,12 @@ public sealed class BrowserExtensionService : IBrowserExtensionService
             }
 
             // Firefox's profiles all sit under one folder: behind a link, none of them is read through it.
+            // Same upgrade as the Chromium branch above: an ancestor link (e.g. "Mozilla" itself) still
+            // reports Folder from KindOf alone (#2814).
             var firefoxProfiles = Path.Combine(_roamingAppData, BrowserProfiles.FirefoxProfilesRel);
             var firefoxRoot = ExtensionFiles.KindOf(firefoxProfiles);
+            if (firefoxRoot is ExtensionFiles.EntryKind.Folder && SafeFileWalk.IsReachedThroughLink(firefoxProfiles))
+                firefoxRoot = ExtensionFiles.EntryKind.Link;
             if (firefoxRoot is ExtensionFiles.EntryKind.Link or ExtensionFiles.EntryKind.Unreadable)
             {
                 found.Add((Unread("Firefox", "Firefox", FirefoxPage, FirefoxExecutable, null, firefoxRoot), null));

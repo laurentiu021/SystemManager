@@ -4,6 +4,7 @@
 
 using System.IO;
 using Serilog;
+using SysManager.Services;
 
 namespace SysManager.Helpers;
 
@@ -26,6 +27,18 @@ internal sealed record SafeWalkOptions
     /// left alone needs no separate mention.
     /// </remarks>
     internal ICollection<string>? SkippedLinks { get; init; }
+
+    /// <summary>
+    /// Refuse to walk a root that IS a link or is REACHED THROUGH one. True by default, so a caller added
+    /// later is protected without having to know this exists.
+    /// </summary>
+    /// <remarks>
+    /// Only File Shredder turns this off, and for a reason that does not generalise: it exists to destroy a
+    /// folder the user picked and named, and its safety net is the PROTECTED-ROOTS check applied to the
+    /// canonical path — not a refusal to act. Refusing the root there would make a shred report success
+    /// having destroyed nothing, which is worse than what this flag protects against (#2814).
+    /// </remarks>
+    internal bool RefuseRootReachedThroughLink { get; init; } = true;
 
     /// <summary>Directory trees to skip entirely. Null entries are ignored.</summary>
     /// <remarks>
@@ -192,7 +205,64 @@ internal static class SafeFileWalk
     /// then deleted — data loss outside the tree the caller asked for.
     /// </summary>
     private static bool CanEnter(string root, SafeWalkOptions options) =>
-        !IsReparsePoint(root) && !SystemPaths.IsInsideAnySubtree(root, [.. options.ExcludeSubtrees]);
+        (options.RefuseRootReachedThroughLink ? !IsReachedThroughLink(root) : !IsReparsePoint(root))
+        && !SystemPaths.IsInsideAnySubtree(root, [.. options.ExcludeSubtrees]);
+
+    /// <summary>
+    /// True when <paramref name="path"/> is a link, OR is reached through one in ANY part of its path.
+    /// </summary>
+    /// <remarks>
+    /// <para><see cref="IsReparsePoint"/> alone was not enough, and the gap was not obvious: Windows
+    /// resolves the links in a path's PARENT folders before it reports attributes, so
+    /// <c>File.GetAttributes</c> only ever sees a link in the LAST component. Measured on a junction
+    /// <c>linkparent</c> pointing at a real folder: the junction itself reports
+    /// <c>ReparsePoint: True</c>, while <c>linkparent\bucket</c> reports <c>False</c>, exists, and lists
+    /// its files — so the walk entered the link target and an elevated clean deleted there (#2814).</para>
+    /// <para>That mattered because several cleanup roots sit under folders a standard account can create
+    /// when the app that owns them is not installed: the launcher folders under <c>ProgramData</c>, and
+    /// <c>&lt;drive&gt;\Steam\…</c> on every fixed drive, where Authenticated Users may create folders at
+    /// the root. A link planted there put the bucket's real target wherever the link led, the scan sized
+    /// it, the bucket ticked itself because the size was above zero, and Clean ran elevated.</para>
+    /// <para>The rule is the one <c>LeftoverFinder</c> already applied and this walk did not: resolve the
+    /// path with <c>GetFinalPathNameByHandle</c>, which collapses EVERY reparse point in the chain, and
+    /// refuse when the canonical path is not the path asked for. Fails SAFE in both directions — an
+    /// unreadable entry stays a refusal, and so does one whose canonical name cannot be read at all.</para>
+    /// </remarks>
+    internal static bool IsReachedThroughLink(string path)
+    {
+        if (IsReparsePoint(path)) return true;
+
+        var asked = NormalizeForCompare(path);
+        if (asked is null) return true;
+
+        var canonical = NormalizeForCompare(FileShredderService.ResolveFinalPath(path));
+        // Null canonical: the path could not be opened at all. A path that does not exist is nothing to
+        // walk and the caller's own existence checks cover it, so this only refuses what cannot be
+        // verified — the same posture IsReparsePoint takes when attributes cannot be read.
+        if (canonical is null) return true;
+
+        return !string.Equals(canonical, asked, StringComparison.OrdinalIgnoreCase);
+    }
+
+    /// <summary>A path in the one form the comparison above can trust, or null when it has no such form.</summary>
+    /// <remarks>
+    /// Short (8.3) names are expanded and the trailing separator dropped, because the canonical name from
+    /// the handle carries neither — comparing without that would report every root as reached through a
+    /// link and refuse every clean. Same normalisation <c>LeftoverFinder</c> uses for the same comparison.
+    /// </remarks>
+    private static string? NormalizeForCompare(string? path)
+    {
+        if (string.IsNullOrWhiteSpace(path)) return null;
+        try
+        {
+            return Path.TrimEndingDirectorySeparator(
+                FileShredderService.ExpandShortPath(Path.GetFullPath(path)));
+        }
+        catch (ArgumentException) { return null; }
+        catch (NotSupportedException) { return null; }
+        catch (IOException) { return null; }
+        catch (UnauthorizedAccessException) { return null; }
+    }
 
     /// <summary>
     /// Materialises one directory's entries INSIDE a try, absorbing a failure from the call that creates the

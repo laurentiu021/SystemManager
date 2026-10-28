@@ -249,9 +249,12 @@ public sealed class BrowserCleanerService
     {
         try
         {
-            // Skip reparse-point leaves (a file/dir symlink or junction): following one
-            // could measure — and later delete — data outside the browser's own tree.
-            if (SafeFileWalk.IsReparsePoint(path)) return (0, 0);
+            // Skip anything that IS a link or is REACHED THROUGH one: following it could
+            // measure — and later delete — data outside the browser's own tree. The whole-path
+            // check matters because File.GetAttributes only ever sees a link in the last
+            // component, so a junction standing in for a parent folder (a profile folder, or
+            // the browser's own folder) was invisible to the old leaf-only test (#2814).
+            if (SafeFileWalk.IsReachedThroughLink(path)) return (0, 0);
             if (File.Exists(path)) return (SafeLength(path), 1);
             if (!Directory.Exists(path)) return (0, 0);
             long size = 0; var files = 0;
@@ -272,11 +275,11 @@ public sealed class BrowserCleanerService
         var deleted = 0;
         try
         {
-            // Skip reparse-point leaves before any delete. File.Delete on a file symlink
-            // removes the link, but a junction standing in for an expected directory leaf
-            // would otherwise be recursed into and its target's files deleted — data loss
-            // outside the browser tree. Fail-closed IsReparsePoint is the gate (see below).
-            if (SafeFileWalk.IsReparsePoint(path)) return 0;
+            // Skip links before any delete, including one anywhere in the path. File.Delete on a
+            // file symlink removes the link, but a junction standing in for an expected directory —
+            // whether the leaf or any parent — would otherwise be recursed into and its target's
+            // files deleted: data loss outside the browser tree. Fail-closed by design (#2814).
+            if (SafeFileWalk.IsReachedThroughLink(path)) return 0;
             if (File.Exists(path))
             {
                 if (TryDeleteFile(path)) deleted++;

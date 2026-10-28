@@ -10,6 +10,26 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.131.4] - 2026-10-28
+
+**Browser Cleaner and Deep Cleanup now see a link planted higher up in a folder's path, not just a link at
+the folder itself — so an elevated Clean can no longer be redirected to delete somewhere else.**
+
+### Fixed
+
+- **A link one or more folders above a cleanup root was not detected.** Both features checked whether the
+  folder they were about to measure or delete was itself a link, but Windows resolves a link anywhere in a
+  path's parent folders before reporting anything about it — so a junction standing in for an ancestor
+  folder (several of the folders these features look in sit under a location any standard account can
+  write to) read as an ordinary, readable folder. The scan sized whatever was on the other side of that
+  link, an elevated Clean deleted there, and nothing said a link had been involved. The check now resolves
+  the whole path and compares it against where it actually leads, closing the same gap in the shared file
+  walk every destructive feature in SysManager goes through.
+- **A browser's own vendor folder, or Firefox's profiles folder, being a link was shown as if the browser
+  were simply not installed.** Browser Cleaner's extension list and profile scan carried the same
+  last-segment-only check; a link higher up now shows the browser as unreadable, the same way a link at
+  the profile folder itself already did, rather than silently leaving it out.
+
 ## [1.131.3] - 2026-10-27
 
 **Release builds are now checked the way you actually start SysManager — without administrator rights — and a

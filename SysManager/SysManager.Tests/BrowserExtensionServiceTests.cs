@@ -180,6 +180,40 @@ public sealed class BrowserExtensionServiceTests : IDisposable
     }
 
     [Fact]
+    public async Task AnAncestorOfTheUserDataFolder_ThatIsALink_IsShownAsUnreadable_NotAsNone()
+    {
+        // The link sits on "Google", two levels above User Data, not on User Data itself — the gap the two
+        // tests above cannot see: Directory.Exists(userDataAbs) resolves THROUGH an ancestor junction and
+        // still reports true, so the old last-segment-only check read this as an ordinary, readable folder
+        // (#2814).
+        var elsewhere = Path.Combine(_root, "elsewhere");
+        Chromium(Path.Combine(elsewhere, "Chrome", "User Data", "Default"), IdA, "Behind the link");
+        Symlinks.RequireJunction(Path.Combine(_local, "Google"), elsewhere);
+
+        var profile = Assert.Single(await Service().ScanAsync());
+
+        Assert.Equal("Google Chrome", profile.Browser);
+        Assert.True(profile.CouldNotRead);
+        Assert.True(profile.BehindALink);
+        Assert.Empty(profile.Extensions);
+    }
+
+    [Fact]
+    public async Task AnAncestorOfTheFirefoxProfilesFolder_ThatIsALink_IsShownAsUnreadable_NotAsNone()
+    {
+        // The link sits on "Mozilla", one level above Firefox, not on Profiles itself.
+        var elsewhere = Path.Combine(_root, "elsewhere");
+        Directory.CreateDirectory(Path.Combine(elsewhere, "Firefox", "Profiles", "abcd1234.default-release"));
+        Symlinks.RequireJunction(Path.Combine(_roaming, "Mozilla"), elsewhere);
+
+        var profile = Assert.Single(await Service().ScanAsync());
+
+        Assert.Equal("Firefox", profile.Browser);
+        Assert.True(profile.CouldNotRead);
+        Assert.True(profile.BehindALink);
+    }
+
+    [Fact]
     public async Task AFirefoxProfileOtherThanTheDefault_IsNotStarted_SinceFirefoxWouldOpenAnother()
     {
         foreach (var folder in new[] { "abcd1234.default-release", "efgh5678.dev-edition" })

@@ -673,7 +673,7 @@ public sealed class DeepCleanupService
             // Guarded like a traversal root: a symlink here would make the caller delete its target,
             // outside the bucket's tree. IsReparsePoint fails safe on an access error. The walk below
             // applies the same rule to every file it finds — they used to disagree (#2376).
-            if (!SafeFileWalk.IsReparsePoint(path) && Matches(path, patterns)) yield return path;
+            if (!SafeFileWalk.IsReachedThroughLink(path) && Matches(path, patterns)) yield return path;
             yield break;
         }
 

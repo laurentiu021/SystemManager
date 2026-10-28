@@ -415,4 +415,127 @@ public class SafeFileWalkTests
         }
         finally { Directory.Delete(root, recursive: true); }
     }
+
+    // ---------- a link in a PARENT folder, not just the leaf (#2814) ----------
+
+    /// <summary>
+    /// A root reached through a junction in a PARENT folder is refused, not walked.
+    /// </summary>
+    /// <remarks>
+    /// The gap this closes, and why the old check could not see it: Windows resolves the links in a path's
+    /// parent folders before reporting attributes, so <see cref="SafeFileWalk.IsReparsePoint"/> only ever saw
+    /// a link in the LAST component. Measured: a junction reports <c>ReparsePoint: True</c> for itself and
+    /// <c>False</c> for a child path through it, which exists and lists its files. Several cleanup roots sit
+    /// under folders a standard account can create when the owning app is not installed, so a link planted in
+    /// a parent put the bucket's real target wherever the link led — and an elevated Clean deleted there.
+    /// </remarks>
+    [Fact]
+    public void Files_RefusesARootReachedThroughAJunctionInAParent()
+    {
+        var root = NewTempRoot();
+        var real = Path.Combine(root, "real");
+        var bucket = Path.Combine(real, "bucket");
+        Directory.CreateDirectory(bucket);
+        File.WriteAllBytes(Path.Combine(bucket, "victim.dat"), new byte[2048]);
+
+        var linkParent = Path.Combine(root, "linkparent");
+        Symlinks.RequireJunction(linkParent, real, () => Directory.Delete(root, recursive: true));
+
+        try
+        {
+            // Sanity, and the whole reason the old check failed: the child of the junction looks ordinary.
+            var throughLink = Path.Combine(linkParent, "bucket");
+            Assert.True(Directory.Exists(throughLink));
+            Assert.False(SafeFileWalk.IsReparsePoint(throughLink));
+
+            // The new check sees it, and the walk yields nothing.
+            Assert.True(SafeFileWalk.IsReachedThroughLink(throughLink));
+            Assert.Empty(SafeFileWalk.Files(throughLink, CancellationToken.None, Plain));
+            Assert.Empty(SafeFileWalk.DirectoriesDeepestFirst(throughLink, CancellationToken.None, Plain));
+
+            // And the data behind the link is still there.
+            Assert.True(File.Exists(Path.Combine(bucket, "victim.dat")));
+        }
+        finally
+        {
+            Directory.Delete(linkParent);            // the junction itself, not its target
+            Directory.Delete(root, recursive: true);
+        }
+    }
+
+    /// <summary>The ordinary path is unaffected: a root with no link in it still walks.</summary>
+    /// <remarks>
+    /// The half that stops the fix from being a silent off-switch. The canonical path is compared against the
+    /// asked-for one, and short (8.3) names and a trailing separator would both make an ordinary root differ
+    /// from its canonical form — so this asserts the normalisation, not just the refusal.
+    /// </remarks>
+    [Fact]
+    public void Files_StillWalksAnOrdinaryRoot_IncludingWithATrailingSeparator()
+    {
+        var root = NewTempRoot();
+        Directory.CreateDirectory(Path.Combine(root, "sub"));
+        File.WriteAllText(Path.Combine(root, "sub", "a.txt"), "x");
+
+        try
+        {
+            Assert.False(SafeFileWalk.IsReachedThroughLink(root));
+            Assert.False(SafeFileWalk.IsReachedThroughLink(root + Path.DirectorySeparatorChar));
+            Assert.Single(SafeFileWalk.Files(root, CancellationToken.None, Plain));
+            Assert.Single(SafeFileWalk.Files(root + Path.DirectorySeparatorChar, CancellationToken.None, Plain));
+        }
+        finally { Directory.Delete(root, recursive: true); }
+    }
+
+    /// <summary>
+    /// A caller that opts out still walks through a parent link — File Shredder's case.
+    /// </summary>
+    /// <remarks>
+    /// File Shredder exists to destroy a folder the user picked and named, and its safety net is the
+    /// protected-roots check applied to the CANONICAL path, not a refusal to act. Without this opt-out the
+    /// strict gate would have made a shred report success having destroyed nothing, which is a worse failure
+    /// than the one the gate prevents — so the opt-out is asserted rather than left to be rediscovered.
+    /// </remarks>
+    [Fact]
+    public void Files_WithTheOptOut_StillWalksThroughAParentLink()
+    {
+        // The root asked for here is the BUCKET REACHED THROUGH the junction, not the junction
+        // itself — the opt-out only restores the pre-fix behaviour (refuse a root that IS a link),
+        // it never allows walking a root that is itself a reparse point. That is what makes it
+        // safe for File Shredder: the one thing it still refuses is the one case ValidatePath's
+        // canonical-path check does not also cover.
+        var root = NewTempRoot();
+        var real = Path.Combine(root, "real");
+        var bucket = Path.Combine(real, "bucket");
+        Directory.CreateDirectory(bucket);
+        File.WriteAllText(Path.Combine(bucket, "doomed.txt"), "x");
+
+        var linkParent = Path.Combine(root, "linkparent");
+        Symlinks.RequireJunction(linkParent, real, () => Directory.Delete(root, recursive: true));
+
+        try
+        {
+            var throughLink = Path.Combine(linkParent, "bucket");
+            var opted = new SafeWalkOptions { RefuseRootReachedThroughLink = false };
+            Assert.Single(SafeFileWalk.Files(throughLink, CancellationToken.None, opted));
+
+            // The default is the safe one, so the same path is refused without the opt-out.
+            Assert.Empty(SafeFileWalk.Files(throughLink, CancellationToken.None, Plain));
+        }
+        finally
+        {
+            Directory.Delete(linkParent);
+            Directory.Delete(root, recursive: true);
+        }
+    }
+
+    /// <summary>A path whose canonical name cannot be read at all is refused, not walked.</summary>
+    /// <remarks>
+    /// Same posture <see cref="SafeFileWalk.IsReparsePoint"/> already takes for unreadable attributes: what
+    /// cannot be verified is not followed. A missing path is nothing to walk anyway, so this costs nothing
+    /// and keeps the gate fail-safe in both directions.
+    /// </remarks>
+    [Fact]
+    public void IsReachedThroughLink_RefusesWhatItCannotResolve() =>
+        Assert.True(SafeFileWalk.IsReachedThroughLink(
+            Path.Combine(NewTempRoot(), "does-not-exist", "either")));
 }

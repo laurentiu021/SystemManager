@@ -21,6 +21,7 @@ public sealed partial class ProcessManagerService
 {
     private readonly Func<IReadOnlyDictionary<int, IntPtr>> _mainWindowsByPid;
     private readonly Func<IntPtr, bool> _isHungWindow;
+    private readonly TimeProvider _time;
 
     public ProcessManagerService() : this(QueryMainWindowsByPid, IsHungAppWindow) { }
 
@@ -29,10 +30,11 @@ public sealed partial class ProcessManagerService
     /// rather than measured with a stopwatch.
     /// </summary>
     internal ProcessManagerService(Func<IReadOnlyDictionary<int, IntPtr>> mainWindowsByPid,
-                                   Func<IntPtr, bool> isHungWindow)
+                                   Func<IntPtr, bool> isHungWindow, TimeProvider? timeProvider = null)
     {
         _mainWindowsByPid = mainWindowsByPid;
         _isHungWindow = isHungWindow;
+        _time = timeProvider ?? TimeProvider.System;
     }
 
     // knownPids: PIDs the caller already shows. Their identity (description/path) is static and the
@@ -51,12 +53,14 @@ public sealed partial class ProcessManagerService
 
         try
         {
-            // First pass: capture CPU times
-            var cpuStart = new Dictionary<int, (TimeSpan Cpu, DateTime Time)>();
+            // First pass: capture CPU times. A monotonic timestamp (not DateTime.UtcNow) for the elapsed
+            // calculation below: a wall-clock step during this 100ms window — daylight saving, an NTP
+            // correction — would otherwise corrupt a single refresh's CPU% for every process (#2855).
+            var cpuStart = new Dictionary<int, (TimeSpan Cpu, long Stamp)>();
             foreach (var p in procs)
             {
                 if (ct.IsCancellationRequested) break;
-                try { cpuStart[p.Id] = (p.TotalProcessorTime, DateTime.UtcNow); }
+                try { cpuStart[p.Id] = (p.TotalProcessorTime, _time.GetTimestamp()); }
                 catch (InvalidOperationException) { /* access denied — skip CPU for this process */ }
                 catch (System.ComponentModel.Win32Exception) { /* access denied — skip CPU for this process */ }
             }
@@ -102,7 +106,7 @@ public sealed partial class ProcessManagerService
                         try
                         {
                             var cpuEnd = p.TotalProcessorTime;
-                            var elapsed = (DateTime.UtcNow - start.Time).TotalMilliseconds;
+                            var elapsed = _time.GetElapsedTime(start.Stamp).TotalMilliseconds;
                             if (elapsed > 0)
                                 entry.CpuPercent = Math.Round((cpuEnd - start.Cpu).TotalMilliseconds / elapsed / logicalCores * 100, 1);
                         }

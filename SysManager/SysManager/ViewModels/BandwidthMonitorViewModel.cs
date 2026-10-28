@@ -57,10 +57,15 @@ public sealed partial class BandwidthMonitorViewModel : ViewModelBase
     private readonly Func<TimeSpan, CancellationToken, Task<IReadOnlyList<BandwidthSample>>> _loadHistory;
     private readonly Func<IBandwidthMonitorService> _connectionSourceFactory;
     private readonly Func<IBandwidthMonitorService>? _etwSourceFactory;
+    private readonly TimeProvider _time;
 
     private IBandwidthMonitorService? _source;
     private CancellationTokenSource? _pollCts;
-    private DateTime _lastHistoryWrite = DateTime.MinValue;
+    // A monotonic timestamp, not the DateTime written into each BandwidthSample: that value is shown
+    // and saved, so it stays wall-clock, but THIS gate decides whether 5 seconds have genuinely passed.
+    // A local DateTime.Now subtraction went negative for up to an hour during the repeated autumn DST
+    // hour, so no sample was saved at all for that stretch (#2855).
+    private long _lastHistoryWriteStamp;
 
     public BulkObservableCollection<ProcessNetworkUsage> Processes { get; } = new();
 
@@ -187,12 +192,14 @@ public sealed partial class BandwidthMonitorViewModel : ViewModelBase
         BandwidthHistoryService history,
         Func<IBandwidthMonitorService> connectionSourceFactory,
         Func<IBandwidthMonitorService>? etwSourceFactory,
-        Func<TimeSpan, CancellationToken, Task<IReadOnlyList<BandwidthSample>>> loadHistory)
+        Func<TimeSpan, CancellationToken, Task<IReadOnlyList<BandwidthSample>>> loadHistory,
+        TimeProvider? timeProvider = null)
     {
         _history = history;
         _loadHistory = loadHistory;
         _connectionSourceFactory = connectionSourceFactory;
         _etwSourceFactory = etwSourceFactory;
+        _time = timeProvider ?? TimeProvider.System;
         IsElevated = AdminHelper.IsElevated();
         _selectedRange = RangeOptions[0]; // Live — the tab's job is the current moment first.
 
@@ -325,13 +332,14 @@ public sealed partial class BandwidthMonitorViewModel : ViewModelBase
         HasProcesses = Processes.Count > 0;
 
         // Feed the history graph at most once per ~5s so the file grows at a bounded rate even
-        // though we poll every second (matches ResourceHistory's 10s-ish cadence intent).
-        var now = DateTime.Now;
-        if ((now - _lastHistoryWrite).TotalSeconds >= HistoryWriteIntervalSeconds)
+        // though we poll every second (matches ResourceHistory's 10s-ish cadence intent). The GATE is
+        // monotonic (#2855); the SAMPLE's own timestamp stays DateTime.Now, because that value is shown
+        // on the chart and saved to the history file.
+        if (_time.GetElapsedTime(_lastHistoryWriteStamp).TotalSeconds >= HistoryWriteIntervalSeconds)
         {
-            _lastHistoryWrite = now;
+            _lastHistoryWriteStamp = _time.GetTimestamp();
             await _history.AppendAsync(
-                new BandwidthSample(now, snap.TotalDownBytesPerSec, snap.TotalUpBytesPerSec), ct)
+                new BandwidthSample(DateTime.Now, snap.TotalDownBytesPerSec, snap.TotalUpBytesPerSec), ct)
                 .ConfigureAwait(true);
         }
 

@@ -416,7 +416,7 @@ to scroll.
   every drift `SettingDrift.CanWriteBack` allows after one confirmation. Undo Changes' row for it opens this tab.
 - `NotificationBlockerViewModel` — lists the apps that have shown notifications with a per-app mute and the main
   switch; flips stay pending until Apply, which confirms and writes them, or Discard.
-- `BandwidthMonitorViewModel` — live total download/upload speed with a rolling throughput chart and a per-app usage list (Bandwidth Monitor tab). Polls the active `IBandwidthMonitorService` on a ~1&#160;s loop, paused while the tab is hidden (`IsActive`; the first sample after the tab comes back only resets the source's baseline, since it averages over the whole time away) and wrapping every sample in one `Task.Run` so no source runs its work on the render thread, reconciling rows in place by PID so icons/order don't flicker. Defaults to the no-admin connection source; when elevated and opted in, switches to the ETW source for precise per-app rates and falls back automatically if ETW can't start. Threshold-alert derivation and rate formatting come from `BandwidthFormat`/`FormatHelper`. A stored range is loaded through a function its internal constructor takes, so a test decides when the load finishes; a load that finishes after `Dispose` changes nothing, like a poll that does. The poll writes its app count through `ViewModelBase.ShowRefreshStatus`, so an export, a refusal or a loaded range stays on the status line. Read-only.
+- `BandwidthMonitorViewModel` — live total download/upload speed with a rolling throughput chart and a per-app usage list (Bandwidth Monitor tab). Polls the active `IBandwidthMonitorService` on a ~1&#160;s loop, paused while the tab is hidden (`IsActive`; the first sample after the tab comes back only resets the source's baseline, since it averages over the whole time away) and wrapping every sample in one `Task.Run` so no source runs its work on the render thread, reconciling rows in place by PID so icons/order don't flicker. Defaults to the no-admin connection source; when elevated and opted in, switches to the ETW source for precise per-app rates and falls back automatically if ETW can't start. Threshold-alert derivation and rate formatting come from `BandwidthFormat`/`FormatHelper`. A stored range is loaded through a function its internal constructor takes, so a test decides when the load finishes; a load that finishes after `Dispose` changes nothing, like a poll that does. The poll writes its app count through `ViewModelBase.ShowRefreshStatus`, so an export, a refusal or a loaded range stays on the status line. Read-only. The 5-second history-write throttle gates on an optional `TimeProvider`'s monotonic `GetElapsedTime`, not a subtracted local `DateTime.Now`: the wall-clock version went negative for up to an hour during the repeated autumn DST hour, so no sample was saved at all for that stretch even though the poll kept running every second — the SAVED sample's own timestamp stays `DateTime.Now`, since that value is shown on the chart (#2855).
 - `ConsoleViewModel` — shared, per-tab scrollable console (each tab gets its own
   instance; lines capped at 5000 to bound memory) backing the in-app Console mirror
   used by Cleanup, Windows Update, System Health, App Updates, and System Fixes —
@@ -511,7 +511,10 @@ Key services:
   `PingMonitorService` takes an optional `TimeProvider` (defaulting to `TimeProvider.System`) that
   supplies its between-tick delay, so a test drives the cadence rather than measuring it: the
   interval-change test used to sleep 1.2 real seconds and count samples, which reported the host's
-  spare CPU and went red on a loaded machine. It now asserts the exact delay the pump asks for.
+  spare CPU and went red on a loaded machine. It now asserts the exact delay the pump asks for. Each
+  `PingSample.Timestamp` reads from the same provider (`GetUtcNow()`), rather than a bare
+  `DateTime.UtcNow` sitting next to it unused — otherwise a test faking the clock for the delay still
+  saw the real wall clock in the sample it actually asserts on (#2855).
 - `SpeedTestService` — HTTP speed test against Cloudflare plus the Ookla CLI,
   auto-downloaded on first use. Behind `ISpeedTestService` for the Dashboard's quick test. A ping nobody
   answered and an upload the server refused are null, not 0: `MeasurePingAsync` is handed the single ping and
@@ -657,7 +660,10 @@ Key services:
   caller-supplied `Action<string>` — the View layer knows the shell view-model, this service
   does not, which is what keeps Services free of a ViewModels dependency. Navigation and
   read-only only: no system-mutating verb is reachable from the tray, because a confirmation
-  dialog is not visible there.
+  dialog is not visible there. Its three 4-hour notification cooldowns take an optional
+  `TimeProvider` and compare `GetElapsedTime` against a monotonic timestamp, not a subtracted
+  `DateTime.UtcNow`: a clock set back makes a wall-clock cooldown stay silent for LONGER than
+  four hours rather than shorter, and was untestable without a real multi-hour wait (#2855).
 - `LogService` — Serilog wrapper with a rolling file sink, wrapped by
   `UserPathScrubbingSink`. That wrapper renders each event and runs the finished line through
   `SanitizePath` before writing, so the Windows user name cannot reach the log regardless of
@@ -905,7 +911,10 @@ Key services:
   so a failure is never an empty scan. `LooseFilesName` names the entry for files loose in the
   folder, which the drill-in and the map both treat as not a folder.
 - `ProcessManagerService` — enumerate running processes, kill by PID,
-  open file location. `KillProcess(pid, startTime)` ends that process alone, never its tree, and
+  open file location. `Snapshot`'s CPU-delta window (capture, `Thread.Sleep(100)`, re-read) measures
+  elapsed time through an optional `TimeProvider`'s monotonic `GetTimestamp`/`GetElapsedTime`, not a
+  subtracted `DateTime.UtcNow`: a clock STEP during that 100&#160;ms window would otherwise corrupt
+  every process's CPU% for that one refresh (#2855). `KillProcess(pid, startTime)` ends that process alone, never its tree, and
   returns a `KillOutcome` (`Ended`, `NotRunning`, `Refused`) so the tab can tell a process that had
   already closed from one Windows would not end. The start time is the listed one: a process ID
   reused while the confirmation was open names a different program, which is left alone.
@@ -1850,7 +1859,12 @@ Key services:
   an unattended scheduled run is visible in the app's own history. `--health` deliberately
   does not: it changes nothing, and polling it would evict the whole history that is the
   only record of what the app changed. `OnlyTheMutatingCliVerbs_RecordAHeadlessRun` pins both
-  halves.
+  halves. `ErrorJson(message)` is the one entry point outside `ExecuteAsync` itself:
+  `App.RunCliAndExit`'s unexpected-fault branch (a throw `ExecuteAsync` never produces for a KNOWN
+  command) used to build `{"error":"..."}` by hand, escaping only `\` and `"` — a message containing
+  a CR, LF or TAB produced a document `ConvertFrom-Json` rejects, on the branch whose own comment
+  says it keeps the output machine-readable (#2855). Now routed through the same serializer as
+  every other `--json` error.
 - `MaintenanceSchedulerService` — registers/reads/removes the SysManager-owned Windows scheduled
   task of the account it runs as, `SysManager Scheduled Maintenance-<SID>` in the root of the Task
   Scheduler Library (`TaskName`), registered with that SID as its principal, so each account has its
@@ -2017,7 +2031,9 @@ Key utility classes that don't fit neatly into Services or ViewModels (not an ex
 - `FormatHelper` — byte-size and transfer-rate formatting, and `JoinForSentence` for an
   "a, b and c" list. Durations are `EtaCalculator.FormatTimeSpan`'s.
 - `GatewayHelper` — default gateway IP lookup for network tabs.
-- `EtaCalculator` — estimates time remaining for long-running operations.
+- `EtaCalculator` — estimates time remaining for long-running operations. `_gate` is a `Lock`, not a
+  plain `object` — the last one in the app; `ArchitectureTests.NoLockTargetIsAPlainObjectField` keeps
+  it that way (#2855).
 - `PendingReboot` — whether Windows waits for a restart and for what: component servicing (a Windows feature
   change), Windows Update, and pending file renames. The one check the Dashboard and Windows Update share (#2802).
 - `DriveProbe` — a drive as `DriveInfo` answers for it, behind delegates. `ReadFixed` reads each fixed drive that

@@ -211,6 +211,23 @@ public class CliRunnerTests
         Assert.Contains("Usage:", r.Output);
     }
 
+    [Theory]
+    [InlineData("line one\nline two")]
+    [InlineData("tab\there")]
+    [InlineData("carriage\rreturn")]
+    [InlineData("all\r\n\tthree")]
+    public void ErrorJson_WithControlCharactersInTheMessage_StillParses(string message)
+    {
+        // App.RunCliAndExit's unexpected-fault branch used to build {"error":"..."} by hand, escaping
+        // only \ and ". A fault message containing a CR, LF or TAB produced a document
+        // ConvertFrom-Json/JsonDocument.Parse rejects — on the exact branch whose own comment says it
+        // keeps the output machine-readable (#2855).
+        var json = CliRunner.ErrorJson(message);
+
+        var doc = System.Text.Json.JsonDocument.Parse(json); // throws if not valid JSON
+        Assert.Equal(message, doc.RootElement.GetProperty("error").GetString());
+    }
+
     [Fact]
     public async Task Execute_UnknownJson_EmitsParseableJsonError()
     {

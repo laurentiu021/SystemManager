@@ -248,5 +248,20 @@ public sealed class CliRunner
     private static string Json(object value)
         => JsonSerializer.Serialize(value, JsonDefaults.Indented);
 
+    /// <summary>
+    /// The <c>{"error": "..."}</c> payload every <c>--json</c> error already uses, exposed for the one
+    /// caller outside this class: <c>App.RunCliAndExit</c>'s unexpected-fault branch, which cannot go
+    /// through <see cref="ExecuteAsync"/> because the fault happened OUTSIDE it.
+    /// </summary>
+    /// <remarks>
+    /// That branch used to interpolate <c>{"error":"..."}</c> by hand, escaping only <c>\</c> and
+    /// <c>"</c>. A fault message containing a CR, LF or TAB — plausible from a nested exception's
+    /// <c>Message</c> — produced a document <c>ConvertFrom-Json</c> rejects, on the exact branch whose
+    /// own comment says it keeps the output machine-readable (#2855). Routing it through the same
+    /// serializer as every other <c>--json</c> error closes that gap once, here, rather than asking
+    /// the one hand-rolled call site to re-derive JSON's control-character escaping correctly.
+    /// </remarks>
+    internal static string ErrorJson(string message) => Json(new { error = message });
+
     internal static string CurrentVersion => Version;
 }

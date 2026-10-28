@@ -54,14 +54,16 @@ public class BandwidthMonitorViewModelTests : IDisposable
         Func<IBandwidthMonitorService>? connFactory = null,
         Func<IBandwidthMonitorService>? etwFactory = null,
         BandwidthHistoryService? history = null,
-        Func<TimeSpan, CancellationToken, Task<IReadOnlyList<BandwidthSample>>>? loadHistory = null)
+        Func<TimeSpan, CancellationToken, Task<IReadOnlyList<BandwidthSample>>>? loadHistory = null,
+        TimeProvider? timeProvider = null)
     {
         var store = history ?? new BandwidthHistoryService(_dir);
         var vm = new BandwidthMonitorViewModel(
             store,
             connFactory ?? (() => new FakeSource(BandwidthMode.Connections, available: true)),
             etwFactory,
-            loadHistory ?? store.LoadAsync);
+            loadHistory ?? store.LoadAsync,
+            timeProvider);
         vm.InitializationComplete.GetAwaiter().GetResult();
         return vm;
     }
@@ -301,6 +303,64 @@ public class BandwidthMonitorViewModelTests : IDisposable
         await vm.ReloadHistoryCommand.ExecuteAsync(null);
         await PollOnceAsync(vm);
         Assert.Equal("No network activity from user apps right now.", vm.StatusMessage);
+    }
+
+    // ── History write throttle is monotonic, not wall-clock (#2855) ──────────────────
+    //
+    // The gate used to subtract local DateTime.Now values. A clock set back — the repeated hour when
+    // daylight saving ends — makes that subtraction go negative for up to an hour, so no sample is
+    // saved at all for that stretch even though the poll keeps running every second.
+
+    private sealed class TestClock : TimeProvider
+    {
+        // A day past the 5-second write interval: _lastHistoryWriteStamp defaults to 0 ("never
+        // written"), and GetElapsedTime(0) must read as comfortably expired on the first poll.
+        private long _ticks = TimeSpan.FromHours(24).Ticks;
+
+        public override long TimestampFrequency => TimeSpan.TicksPerSecond;
+        public override long GetTimestamp() => _ticks;
+
+        public void Advance(TimeSpan by) => _ticks += by.Ticks;
+    }
+
+    [Fact]
+    public async Task APoll_WritesTheFirstHistorySampleImmediately()
+    {
+        var clock = new TestClock();
+        using var vm = NewVm(timeProvider: clock);
+
+        await PollOnceAsync(vm);
+
+        var saved = await new BandwidthHistoryService(_dir).LoadAsync(TimeSpan.FromDays(1), CancellationToken.None);
+        Assert.Single(saved);
+    }
+
+    [Fact]
+    public async Task APoll_WithinTheWriteInterval_DoesNotWriteASecondSample()
+    {
+        var clock = new TestClock();
+        using var vm = NewVm(timeProvider: clock);
+        await PollOnceAsync(vm);
+
+        clock.Advance(TimeSpan.FromSeconds(3)); // under the 5-second interval
+        await PollOnceAsync(vm);
+
+        var saved = await new BandwidthHistoryService(_dir).LoadAsync(TimeSpan.FromDays(1), CancellationToken.None);
+        Assert.Single(saved);
+    }
+
+    [Fact]
+    public async Task APoll_PastTheWriteInterval_WritesAnotherSample()
+    {
+        var clock = new TestClock();
+        using var vm = NewVm(timeProvider: clock);
+        await PollOnceAsync(vm);
+
+        clock.Advance(TimeSpan.FromSeconds(6)); // past the 5-second interval
+        await PollOnceAsync(vm);
+
+        var saved = await new BandwidthHistoryService(_dir).LoadAsync(TimeSpan.FromDays(1), CancellationToken.None);
+        Assert.Equal(2, saved.Count);
     }
 
     [Fact]

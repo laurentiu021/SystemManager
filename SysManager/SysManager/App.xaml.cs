@@ -271,7 +271,7 @@ public partial class App : Application
             LogService.Logger?.Error(ex, "CLI command threw unexpectedly");
             if (attached)
                 Console.Error.WriteLine(request.Json
-                    ? $"{{\"error\":\"{ex.Message.Replace("\\", "\\\\").Replace("\"", "\\\"")}\"}}"
+                    ? CliRunner.ErrorJson(ex.Message)
                     : $"Error: {ex.Message}");
         }
         finally

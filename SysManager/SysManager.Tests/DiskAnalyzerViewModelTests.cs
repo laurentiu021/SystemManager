@@ -98,6 +98,42 @@ public class DiskAnalyzerViewModelTests
     }
 
     [Fact]
+    public void ShowInExplorer_NonExistentFolder_SaysFolderNotFound()
+    {
+        // ShowInExplorer was static and only logged the refusal at Debug, where no user ever reads it —
+        // the tab read as if nothing had been asked of it (#2859). The scan is a point in time, so the
+        // folder can be gone by the time the user opens its row.
+        var vm = NewVm();
+        var entry = new DiskUsageEntry { FullPath = @"C:\no_such_" + Guid.NewGuid().ToString("N") };
+
+        vm.ShowInExplorerCommand.Execute(entry);
+
+        Assert.Contains("not found", vm.StatusMessage, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public void RelaunchAsAdminCommand_Exists()
+    {
+        var vm = NewVm();
+        Assert.NotNull(vm.RelaunchAsAdminCommand);
+    }
+
+    [Theory]
+    [InlineData(DiskAnalyzerService.AnalysisFailure.None, false)]
+    [InlineData(DiskAnalyzerService.AnalysisFailure.NotFound, false)]
+    [InlineData(DiskAnalyzerService.AnalysisFailure.IsLink, false)]
+    [InlineData(DiskAnalyzerService.AnalysisFailure.Unreadable, true)]
+    public void CanRelaunchAsAdminForFailure_OnlyTrueWhenWindowsRefusedToListIt(
+        DiskAnalyzerService.AnalysisFailure failure, bool expected)
+    {
+        // A missing folder or a shortcut to one elevation cannot fix, so the button offered to
+        // relaunch as administrator only when the real cause is a refused listing (#2859).
+        var vm = NewVm();
+        vm.LastFailure = failure;
+        Assert.Equal(expected, vm.CanRelaunchAsAdminForFailure);
+    }
+
+    [Fact]
     public void DrillDownCommand_Exists()
     {
         var vm = NewVm();

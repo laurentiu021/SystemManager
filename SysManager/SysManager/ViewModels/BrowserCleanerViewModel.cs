@@ -186,15 +186,10 @@ public sealed partial class BrowserCleanerViewModel : ViewModelBase, ISearchDest
         StatusMessage = ExtensionPresenter.ManageStatus(profile, opening, copied);
     }
 
-    private static bool CopyToClipboard(string text)
-    {
-        try
-        {
-            System.Windows.Clipboard.SetText(text);
-            return true;
-        }
-        catch (System.Runtime.InteropServices.ExternalException) { return false; }
-    }
+    // Only caught ExternalException, so a busy clipboard that failed a different documented way
+    // (ThreadStateException, InvalidOperationException) went unhandled instead of reporting
+    // "not copied" through ManageStatus like every other failure here does (#2859).
+    private static bool CopyToClipboard(string text) => ClipboardFeedback.TrySetText(text);
 
     /// <summary>
     /// Copies the user's ticks from the previous scan onto a fresh set, matched by browser and category.

@@ -292,7 +292,7 @@ The six controls whose effect is hardest to take back explain themselves, not ju
 Shred All announces the button and then "Overwrites every item in the list so it cannot be recovered, then
 deletes it. This cannot be undone, not even from the Recycle Bin. SysManager asks you to confirm first." The
 same goes for Uninstall selected, Kill process, Delete preset, Delete selected shortcuts, and the Run as
-administrator button that appears on the 31 pages needing elevation.
+administrator button that appears on the 32 pages needing elevation.
 
 Before that, the red colour and the confirmation dialog were the only warnings, and neither reaches someone
 who cannot see the screen — the dialog arrives after the button has already been pressed. The explanation is
@@ -526,8 +526,9 @@ Edit Windows environment variables without the cramped built-in dialog:
   event it lists again
 - Export to CSV — every event loaded, including any a filter is hiding — with a "search
   online" link for unknown events
-- The Security log requires administrator rights. Without them the page says so
-  outright rather than showing an empty list that looks like "no events"
+- The Security log requires administrator rights. Without them a banner at the top says so,
+  with a button that restarts SysManager elevated, rather than showing an empty list that
+  looks like "no events"
 
 ### System Report
 - One-click, read-only snapshot of the whole machine: OS, CPU, memory
@@ -1057,7 +1058,8 @@ System → System Fixes, where the tab name matches what they do.
   like a complete one
 - A folder it cannot measure at all — one that no longer exists, a link to somewhere else, or
   one Windows will not let it list — is reported as exactly that, not as an empty folder, and is
-  not remembered as your last scan of it
+  not remembered as your last scan of it. When the reason is that Windows refused to list it, a
+  "Run as administrator" button sits right there to restart SysManager elevated
 - **Remembers your last scan of each folder** (the 20 most recently scanned) and shows what changed —
   "3.2 GB larger than your last scan on 12 Jul 2026" — so a one-off number becomes an answer to "why did
   my disk fill up?". It is always phrased as *since your last scan*, never as live monitoring, because
@@ -2202,7 +2204,9 @@ offers, "rate us" prompts:
   scan is running in SysManager, which would be what it found
 - **Quick Actions** — Run Quick Cleanup, Update All Apps, Check Windows Updates and Run Speed
   Test run in place with a progress bar, and the result says whether it worked: an app update
-  that fails ends as "Failed" with winget's reason, not "Done". Check Windows Updates asks
+  that fails ends as "Failed" with winget's reason, not "Done". A Cancel button sits beside the
+  bar for as long as the action is still running and stops it, same as Escape; Update All Apps
+  stops between apps rather than mid-download. Check Windows Updates asks
   Windows Update what is waiting and says how many updates it found, or that Windows is up to
   date. It installs nothing: the link under the result opens the Windows Update tab, where you
   choose what to install. Run Speed Test records its result in the Speed Test tab's history, and

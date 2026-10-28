@@ -103,6 +103,34 @@ public class DuplicateFileViewModelTests
     }
 
     [Fact]
+    public void ShowInExplorer_NonExistentPath_SaysFileNotFound()
+    {
+        // ShowInExplorer was static and only logged the refusal at Debug, where no user ever reads it —
+        // the tab read as if nothing had been asked of it (#2859). The scan is a point in time, so the
+        // file can be gone by the time the user acts on the row.
+        var vm = NewVm();
+        var entry = new DuplicateFileEntry { Path = @"C:\no_such_" + Guid.NewGuid().ToString("N") };
+
+        vm.ShowInExplorerCommand.Execute(entry);
+
+        Assert.Contains("not found", vm.StatusMessage, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public void CopyPath_RealPath_SetsAStatusMessage()
+    {
+        // Same defect as Large Files' Copy path: a busy clipboard was swallowed with no message. Whether
+        // the sandbox's clipboard is actually available is not under this test's control, so it asserts
+        // only that SOME outcome was reported.
+        var vm = NewVm();
+        var entry = new DuplicateFileEntry { Path = @"C:\Windows\System32\notepad.exe" };
+
+        vm.CopyPathCommand.Execute(entry);
+
+        Assert.False(string.IsNullOrWhiteSpace(vm.StatusMessage));
+    }
+
+    [Fact]
     public void BrowseFolderCommand_Exists()
     {
         var vm = NewVm();

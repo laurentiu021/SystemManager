@@ -128,6 +128,10 @@ public sealed partial class LogsViewModel : ViewModelBase, IArrivalDestination
     // "no events match your filters" is misleading when the filters never ran.
     [ObservableProperty] private bool _loadWasRefused;
 
+    // The Security log is readable only when elevated — the banner names that and offers the
+    // one-click relaunch, instead of only a status-line sentence with no button (#2859).
+    [ObservableProperty] private bool _isElevated;
+
     public LogsViewModel(EventLogService eventLogs)
         : this(eventLogs, eventLogs.ReadAsync)
     {
@@ -143,12 +147,20 @@ public sealed partial class LogsViewModel : ViewModelBase, IArrivalDestination
     {
         _eventLogs = eventLogs;
         _readEvents = readEvents;
+        IsElevated = AdminHelper.IsElevated();
         EntriesView = CollectionViewSource.GetDefaultView(Entries);
         EntriesView.Filter = EntryFilter;
         // Disable Refresh while a scan runs — a second concurrent Refresh lets the
         // cancelled run's queued UI batches pollute the new Entries list. IsBusy lives
         // in the base class, so observe it here to re-evaluate the command.
         PropertyChanged += OnVmPropertyChanged;
+    }
+
+    [RelayCommand]
+    private void RelaunchAsAdmin()
+    {
+        if (AdminHelper.RelaunchAsAdmin())
+            App.RequestShutdown();
     }
 
     private bool NotBusy => !IsBusy;
@@ -498,9 +510,9 @@ public sealed partial class LogsViewModel : ViewModelBase, IArrivalDestination
             .AppendLine()
             .AppendLine("Full message:").AppendLine(e.FullMessage)
             .ToString();
-        try { Clipboard.SetText(text); StatusMessage = "Copied to clipboard"; }
-        catch (System.Runtime.InteropServices.ExternalException ex) { StatusMessage = ex.Message; }
-        catch (System.Threading.ThreadStateException ex) { StatusMessage = ex.Message; }
+        StatusMessage = Helpers.ClipboardFeedback.TrySetText(text)
+            ? "Copied to clipboard."
+            : Helpers.ClipboardFeedback.Busy;
     }
 
     [RelayCommand]

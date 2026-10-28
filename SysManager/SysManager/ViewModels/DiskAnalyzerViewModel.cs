@@ -101,6 +101,7 @@ public sealed partial class DiskAnalyzerViewModel : ViewModelBase
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(EmptyTitle))]
     [NotifyPropertyChangedFor(nameof(EmptyMessage))]
+    [NotifyPropertyChangedFor(nameof(CanRelaunchAsAdminForFailure))]
     private DiskAnalyzerService.AnalysisFailure _lastFailure;
 
     public string EmptyTitle => LastFailure != DiskAnalyzerService.AnalysisFailure.None
@@ -123,6 +124,13 @@ public sealed partial class DiskAnalyzerViewModel : ViewModelBase
         DiskAnalyzerService.AnalysisFailure.Unreadable => FolderUnreadableReason,
         _ => "",
     };
+
+    /// <summary>
+    /// Whether the empty state's advice names a button with nothing behind it. <c>FolderUnreadableReason</c>
+    /// says "Try Run as administrator", and only this failure is the kind that button can actually fix — a
+    /// missing folder or a link needs a different folder picked, not elevation (#2859).
+    /// </summary>
+    public bool CanRelaunchAsAdminForFailure => LastFailure == DiskAnalyzerService.AnalysisFailure.Unreadable;
 
     // Drive-level info
     [ObservableProperty] private long _driveTotal;
@@ -403,9 +411,16 @@ public sealed partial class DiskAnalyzerViewModel : ViewModelBase
     }
 
     [RelayCommand]
-    private static void ShowInExplorer(DiskUsageEntry? entry)
+    private void ShowInExplorer(DiskUsageEntry? entry)
     {
         if (entry is null) return;
+        // The scan is a point in time; a folder can be gone by the time the user opens its row. Logging
+        // the refusal at Debug, where no user ever reads it, read as success either way (#2859).
+        if (!Directory.Exists(entry.FullPath))
+        {
+            StatusMessage = "Folder not found — it may have been moved or deleted since the scan.";
+            return;
+        }
         try
         {
             System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
@@ -415,8 +430,8 @@ public sealed partial class DiskAnalyzerViewModel : ViewModelBase
                 UseShellExecute = true
             })?.Dispose();
         }
-        catch (InvalidOperationException ex) { Log.Debug(ex, "Failed to open explorer for {Path}", entry.FullPath); }
-        catch (System.ComponentModel.Win32Exception ex) { Log.Debug(ex, "Failed to open explorer for {Path}", entry.FullPath); }
+        catch (InvalidOperationException) { StatusMessage = "Could not open file location."; }
+        catch (System.ComponentModel.Win32Exception) { StatusMessage = "Could not open file location."; }
     }
 
     [RelayCommand]
@@ -496,6 +511,17 @@ public sealed partial class DiskAnalyzerViewModel : ViewModelBase
             if (!PresetPaths.Contains(SelectedPath))
                 PresetPaths.Add(SelectedPath);
         }
+    }
+
+    /// <summary>
+    /// The one-click relaunch the empty state's "Try Run as administrator" advice names, where it had no
+    /// button behind it (#2859).
+    /// </summary>
+    [RelayCommand]
+    private void RelaunchAsAdmin()
+    {
+        if (AdminHelper.RelaunchAsAdmin())
+            App.RequestShutdown();
     }
 
     private void UpdateDriveInfo()

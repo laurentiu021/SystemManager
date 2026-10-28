@@ -220,11 +220,15 @@ public class LargeFilesViewModelTests
     }
 
     [Fact]
-    public void ShowInExplorer_NonExistentPath_DoesNotThrow()
+    public void ShowInExplorer_NonExistentPath_SaysFileNotFound()
     {
+        // The scan is a point in time; the file can be gone by the time the user acts on the row. This
+        // used to return silently, leaving no way to tell "nothing happened" from "it opened behind
+        // another window" (#2859).
         var vm = NewVm();
-        var ex = Record.Exception(() => vm.ShowInExplorerCommand.Execute(@"C:\no_such_" + Guid.NewGuid().ToString("N")));
-        Assert.Null(ex);
+        vm.ShowInExplorerCommand.Execute(@"C:\no_such_" + Guid.NewGuid().ToString("N"));
+
+        Assert.Contains("not found", vm.ScanStatus, StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]
@@ -241,6 +245,18 @@ public class LargeFilesViewModelTests
         var vm = NewVm();
         var ex = Record.Exception(() => vm.CopyPathCommand.Execute(""));
         Assert.Null(ex);
+    }
+
+    [Fact]
+    public void CopyPath_RealPath_SetsAStatusMessage()
+    {
+        // The defect: Copy path swallowed a busy clipboard with no message at all, so nothing told the
+        // user whether anything happened (#2859). Whether the sandbox's clipboard is actually available
+        // is not under this test's control, so it asserts only that SOME outcome was reported.
+        var vm = NewVm();
+        vm.CopyPathCommand.Execute(@"C:\Windows\System32\notepad.exe");
+
+        Assert.False(string.IsNullOrWhiteSpace(vm.ScanStatus));
     }
 
     [Theory]

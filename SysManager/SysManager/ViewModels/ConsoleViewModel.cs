@@ -53,13 +53,13 @@ public sealed partial class ConsoleViewModel : ObservableObject
     {
         PowerShellLine[] snapshot;
         lock (_gate) snapshot = Lines.ToArray();
-        try
-        {
-            var text = string.Join(Environment.NewLine, snapshot.Select(l => $"[{l.Timestamp.ToString("HH:mm:ss", CultureInfo.InvariantCulture)}] {l.Kind}: {l.Text}"));
-            Clipboard.SetText(text);
-        }
-        catch (System.Runtime.InteropServices.ExternalException) { /* clipboard locked or unavailable */ }
-        catch (System.Threading.ThreadStateException) { /* no STA thread (headless/CI) */ }
-        catch (InvalidOperationException) { /* clipboard not available in this context */ }
+        var text = string.Join(Environment.NewLine, snapshot.Select(l => $"[{l.Timestamp.ToString("HH:mm:ss", CultureInfo.InvariantCulture)}] {l.Kind}: {l.Text}"));
+        // A toast, not a status line: this view model is shared by five tabs with no status line of
+        // their own to write to, and swallowing the busy-clipboard case here read as success either way
+        // (#2859).
+        var copied = Helpers.ClipboardFeedback.TrySetText(text);
+        Services.ToastService.Instance.Show(
+            copied ? "Copied" : "Could not copy",
+            copied ? Helpers.ClipboardFeedback.Copied : Helpers.ClipboardFeedback.Busy);
     }
 }

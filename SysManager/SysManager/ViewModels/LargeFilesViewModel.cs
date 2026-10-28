@@ -176,18 +176,30 @@ public sealed partial class LargeFilesViewModel : ViewModelBase
     [RelayCommand]
     private void ShowInExplorer(string? path)
     {
-        if (string.IsNullOrWhiteSpace(path) || !File.Exists(path)) return;
-        try { Process.Start(new ProcessStartInfo(SystemPaths.ResolveSystemTool("explorer.exe"), $"/select,\"{path}\"") { UseShellExecute = true })?.Dispose(); }
-        catch (InvalidOperationException) { /* best-effort */ }
-        catch (System.ComponentModel.Win32Exception) { /* best-effort */ }
+        if (string.IsNullOrWhiteSpace(path)) return;
+        // ScanStatus, not StatusMessage: this tab's one status line is bound to ScanStatus
+        // (LargeFilesView.xaml), so a write to the base class's own property would be silently invisible.
+        // The scan is a point in time; the user acts on the row afterwards, and the file can be gone by
+        // then — silently doing nothing left no way to tell "nothing happened" from "it opened behind
+        // another window" (#2859).
+        if (!File.Exists(path))
+        {
+            ScanStatus = "File not found — it may have been moved or deleted since the scan.";
+            return;
+        }
+        try
+        {
+            Process.Start(new ProcessStartInfo(SystemPaths.ResolveSystemTool("explorer.exe"), $"/select,\"{path}\"") { UseShellExecute = true })?.Dispose();
+        }
+        catch (InvalidOperationException) { ScanStatus = "Could not open file location."; }
+        catch (System.ComponentModel.Win32Exception) { ScanStatus = "Could not open file location."; }
     }
 
     [RelayCommand]
     private void CopyPath(string? path)
     {
         if (string.IsNullOrWhiteSpace(path)) return;
-        try { System.Windows.Clipboard.SetText(path); }
-        catch (System.Runtime.InteropServices.ExternalException) { /* clipboard may be locked */ }
+        ScanStatus = ClipboardFeedback.TrySetTextAndDescribe(path);
     }
 
     protected override void Dispose(bool disposing)

@@ -2096,6 +2096,15 @@ Key utility classes that don't fit neatly into Services or ViewModels (not an ex
   Extensions view shows, in a fixed order, amber for what changes what the user sees, reaches every
   website or can control the browser like a developer tool. A permission it does not know is shown by
   its own name, never dropped (#1526).
+- `ClipboardFeedback` — the one wording for a "Copy" button that could not reach the clipboard
+  (#2859). `Clipboard.SetText` has three documented failure modes — `ExternalException` when another
+  process holds it, `ThreadStateException` with no STA message loop, `InvalidOperationException` on a
+  host with no clipboard at all — and before this, each tab's copy command caught some subset of the
+  three, or none, in its own words. `TrySetText` takes the write as a `Func<string, bool>` so a test
+  can prove the busy case without touching the real OS clipboard; `TrySetTextAndDescribe` is the
+  convenience most call sites use. About, System Health, System Report, the CLI, System Logs, Large
+  Files, Duplicate Finder, the shared `ConsoleViewModel` and Browser Cleaner's extension-page copy all
+  go through it now.
 
 ## Dependency Injection
 

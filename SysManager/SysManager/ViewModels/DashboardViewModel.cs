@@ -22,7 +22,10 @@ public sealed partial class DashboardViewModel : ViewModelBase
     // Quick Tune-Up and the slowdown check both take the Disk lock, so at most one of them runs.
     /// <inheritdoc/>
     protected internal override IRelayCommand? EscapeCancel =>
-        IsTuneUpRunning ? CancelTuneUpCommand : IsSlowdownCheckRunning ? CancelSlowdownCheckCommand : null;
+        IsTuneUpRunning ? CancelTuneUpCommand
+        : IsSlowdownCheckRunning ? CancelSlowdownCheckCommand
+        : IsQuickActionCancelable ? CancelQuickActionCommand
+        : null;
 
     private readonly SystemInfoService _sys;
     private readonly ITuneUpService _tuneUp;
@@ -161,14 +164,33 @@ public sealed partial class DashboardViewModel : ViewModelBase
     public BulkObservableCollection<ActivityEntry> RecentActivity { get; } = new();
 
     // ── Quick Action state ──────────────────────────────────────────────
-    [ObservableProperty] private bool _isQuickActionRunning;
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(IsQuickActionCancelable))]
+    private bool _isQuickActionRunning;
     [ObservableProperty] private string _quickActionName = "";
     [ObservableProperty] private string _quickActionStatus = "";
     [ObservableProperty] private string _quickActionDetail = "";
     [ObservableProperty] private int _quickActionProgress;
-    [ObservableProperty] private bool _isQuickActionDone;
+    // True until the one quick action with a real, continuously-updating percentage (Speed Test) says
+    // otherwise. Quick Cleanup, Update All and the Windows Update check only ever have two fixed
+    // milestones (e.g. 50 then 100), which is not progress a determinate bar can honestly show (#2859).
+    [ObservableProperty] private bool _isQuickActionIndeterminate;
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(IsQuickActionCancelable))]
+    private bool _isQuickActionDone;
     [ObservableProperty] private string _quickActionNavigateLabel = "";
     private string? _quickActionNavigateTarget;
+    private CancellationTokenSource? _quickActionCts;
+
+    /// <summary>Whether Cancel should be offered: a quick action is running and has not yet finished.</summary>
+    /// <remarks>
+    /// <see cref="IsQuickActionRunning"/> alone is not enough — unlike Tune-Up, which flips
+    /// <see cref="IsTuneUpRunning"/> back to false and shows its result in a separate card, a quick
+    /// action's card stays bound to <see cref="IsQuickActionRunning"/> for its whole lifetime, success or
+    /// failure, until <see cref="DismissQuickActionCommand"/>. Without this, Escape/the Cancel button
+    /// would stay live over an already-finished action with nothing left to cancel.
+    /// </remarks>
+    public bool IsQuickActionCancelable => IsQuickActionRunning && !IsQuickActionDone;
 
     // ── Tune-Up state ────────────────────────────────────────────────────
     [ObservableProperty] private bool _isTuneUpRunning;
@@ -1146,7 +1168,7 @@ public sealed partial class DashboardViewModel : ViewModelBase
             // tree, so it can't be redirected into unrelated user data. This replaces an
             // earlier inline cleaner that only scanned the user TEMP top level and swallowed
             // every error.
-            var (freed, _, _) = await _tuneUp.CleanTempFilesAsync(CancellationToken.None);
+            var (freed, _, _) = await _tuneUp.CleanTempFilesAsync(_quickActionCts!.Token);
 
             QuickActionProgress = 100;
             var freedMB = freed / 1024.0 / 1024.0;
@@ -1185,7 +1207,9 @@ public sealed partial class DashboardViewModel : ViewModelBase
             // Updates tab. A hand-rolled command here had drifted — it was missing
             // --no-progress / --disable-interactivity / --include-unknown and reported success
             // even when winget failed.
-            var result = await _winget.UpgradeAllAsync(CancellationToken.None);
+            // Upgrades one package at a time internally, checking the token between each, so a cancel lands
+            // between packages rather than only at the very end (#2859).
+            var result = await _winget.UpgradeAllAsync(_quickActionCts!.Token);
             QuickActionProgress = 100;
             ActivityLogService.Instance.Log("App Updates",
                 result.Succeeded
@@ -1230,7 +1254,7 @@ public sealed partial class DashboardViewModel : ViewModelBase
             IReadOnlyList<UpdateEntry> found;
             try
             {
-                found = await _windowsUpdate.ScanAsync(CancellationToken.None);
+                found = await _windowsUpdate.ScanAsync(_quickActionCts!.Token);
             }
             // The card shows the message as its detail, and a COM message is an HRESULT in jargon. These are the
             // Windows Update tab's own words for the same two failures.
@@ -1284,11 +1308,11 @@ public sealed partial class DashboardViewModel : ViewModelBase
                 QuickActionDetail = p.Message;
             });
             var result = await progress.SettleAfterAsync(
-                reporter => _speedTest.RunHttpAsync(reporter, CancellationToken.None));
+                reporter => _speedTest.RunHttpAsync(reporter, _quickActionCts!.Token));
 
             QuickActionProgress = 100;
             QuickActionDetail = DescribeSpeedTest(result, saved: await _speedHistory.SaveAsync(result));
-        });
+        }, hasRealProgress: true);
     }
 
     /// <summary>
@@ -1376,6 +1400,10 @@ public sealed partial class DashboardViewModel : ViewModelBase
         QuickSpeedTestCommand.NotifyCanExecuteChanged();
     }
 
+    /// <summary>Stops the quick action in progress. A no-op once it has finished (#2859).</summary>
+    [RelayCommand]
+    private void CancelQuickAction() => _quickActionCts?.Cancel();
+
     private bool CanRunQuickAction() => !IsQuickActionRunning || IsQuickActionDone;
 
     /// <summary>
@@ -1386,11 +1414,19 @@ public sealed partial class DashboardViewModel : ViewModelBase
     /// Whether the action changes how full a drive is, so the storage card and the score are read again once it is
     /// done.
     /// </param>
+    /// <param name="hasRealProgress">
+    /// Whether <paramref name="action"/> reports a genuinely continuous percentage (only Speed Test does).
+    /// The other three only ever have two fixed milestones, which an indeterminate bar represents honestly
+    /// and a determinate one does not (#2859).
+    /// </param>
     private async Task RunQuickActionAsync(
-        string name, string tabLabel, string navId, Func<Task> action, bool readsStorageAfter = false)
+        string name, string tabLabel, string navId, Func<Task> action, bool readsStorageAfter = false,
+        bool hasRealProgress = false)
     {
+        _quickActionCts = new CancellationTokenSource();
         IsQuickActionRunning = true;
         IsQuickActionDone = false;
+        IsQuickActionIndeterminate = !hasRealProgress;
         QuickActionName = name;
         QuickActionStatus = "Running...";
         QuickActionProgress = 0;
@@ -1411,6 +1447,11 @@ public sealed partial class DashboardViewModel : ViewModelBase
             LoadActivity();
             done = true;
         }
+        catch (OperationCanceledException)
+        {
+            QuickActionStatus = "Cancelled";
+            IsQuickActionDone = true;
+        }
         catch (Exception ex)
         {
             // Broad on purpose: a quick action is any of the tab's operations, and whatever one throws is shown on its
@@ -1422,6 +1463,8 @@ public sealed partial class DashboardViewModel : ViewModelBase
         }
         finally
         {
+            _quickActionCts?.Dispose();
+            _quickActionCts = null;
             QuickCleanupCommand.NotifyCanExecuteChanged();
             QuickUpdateAppsCommand.NotifyCanExecuteChanged();
             QuickWindowsUpdateCommand.NotifyCanExecuteChanged();

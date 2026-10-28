@@ -352,9 +352,16 @@ public sealed partial class DuplicateFileViewModel : ViewModelBase
     }
 
     [RelayCommand]
-    private static void ShowInExplorer(DuplicateFileEntry? entry)
+    private void ShowInExplorer(DuplicateFileEntry? entry)
     {
         if (entry is null) return;
+        // The scan is a point in time; a duplicate can be gone by the time the user acts on the row.
+        // Logging the refusal at Debug, where no user ever reads it, read as success either way (#2859).
+        if (!System.IO.File.Exists(entry.Path))
+        {
+            StatusMessage = "File not found — it may have been moved or deleted since the scan.";
+            return;
+        }
         try
         {
             System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
@@ -364,16 +371,15 @@ public sealed partial class DuplicateFileViewModel : ViewModelBase
                 UseShellExecute = true
             })?.Dispose();
         }
-        catch (InvalidOperationException ex) { Log.Debug(ex, "Failed to open explorer for {Path}", entry.Path); }
-        catch (System.ComponentModel.Win32Exception ex) { Log.Debug(ex, "Failed to open explorer for {Path}", entry.Path); }
+        catch (InvalidOperationException) { StatusMessage = "Could not open file location."; }
+        catch (System.ComponentModel.Win32Exception) { StatusMessage = "Could not open file location."; }
     }
 
     [RelayCommand]
-    private static void CopyPath(DuplicateFileEntry? entry)
+    private void CopyPath(DuplicateFileEntry? entry)
     {
         if (entry is null) return;
-        try { System.Windows.Clipboard.SetText(entry.Path); }
-        catch (System.Runtime.InteropServices.ExternalException ex) { Log.Debug(ex, "Failed to copy path to clipboard"); }
+        StatusMessage = SysManager.Helpers.ClipboardFeedback.TrySetTextAndDescribe(entry.Path);
     }
 
     /// <summary>

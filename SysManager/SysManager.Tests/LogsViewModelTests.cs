@@ -28,6 +28,22 @@ public class LogsViewModelTests
         };
 
     [Fact]
+    public void Constructor_IsElevated_MatchesAdminHelper()
+    {
+        // The Security log is readable only when elevated; the banner's state must reflect the real
+        // source of truth, not a hardcoded default (#2859).
+        var vm = new LogsViewModel(new Services.EventLogService());
+        Assert.Equal(SysManager.Helpers.AdminHelper.IsElevated(), vm.IsElevated);
+    }
+
+    [Fact]
+    public void RelaunchAsAdminCommand_Exists()
+    {
+        var vm = new LogsViewModel(new Services.EventLogService());
+        Assert.NotNull(vm.RelaunchAsAdminCommand);
+    }
+
+    [Fact]
     public void Defaults_ShowCriticalErrorWarning_HideInfoVerbose()
     {
         var vm = new LogsViewModel(new Services.EventLogService());

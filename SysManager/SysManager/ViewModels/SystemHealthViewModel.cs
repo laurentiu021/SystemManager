@@ -169,16 +169,9 @@ public sealed partial class SystemHealthViewModel : ViewModelBase
     {
         if (Bios is null) { StatusMessage = "Run a scan first."; return; }
         var text = $"{Bios.BoardDisplay} — BIOS {Bios.Version} ({Bios.ReleaseDate})".Trim();
-        try
-        {
-            System.Windows.Clipboard.SetText(text);
-            StatusMessage = "BIOS info copied to clipboard.";
-        }
-        catch (System.Runtime.InteropServices.ExternalException ex)
-        {
-            Log.Debug("Clipboard locked: {Error}", ex.Message);
-            StatusMessage = "Couldn't copy: the clipboard is in use.";
-        }
+        StatusMessage = Helpers.ClipboardFeedback.TrySetText(text)
+            ? "BIOS info copied to clipboard."
+            : Helpers.ClipboardFeedback.Busy;
     }
 
     [RelayCommand]

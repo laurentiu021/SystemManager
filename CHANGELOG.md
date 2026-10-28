@@ -10,6 +10,35 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.132.0] - 2026-10-28
+
+**Dashboard quick actions can now be cancelled mid-run, System Logs and Disk Analyzer put an actual
+button next to their admin-rights messages instead of only naming the problem, and copying a path or
+revealing a file that is no longer there now says so instead of doing nothing.**
+
+### Added
+- A Cancel button beside the Dashboard's quick-action progress bar, for as long as the action runs,
+  wired to Escape the same way every other cancellable operation is. None of the four (Quick Cleanup,
+  Update All Apps, Check Windows Updates, Run Speed Test) could be stopped before this short of closing
+  the tab; Update All Apps passes the token through to each package so it stops between apps rather
+  than mid-download.
+- A "Run as administrator" button on the Security log's elevation notice in System Logs, and on a Disk
+  Analyzer folder Windows refused to list. Both used to only name the problem, with nothing on the page
+  to act on it.
+
+### Fixed
+- Quick Cleanup, Update All Apps and Check Windows Updates only ever reported two fixed milestones, not
+  real progress, so their bar showed fake progress instead of being indeterminate; Run Speed Test keeps
+  its continuously updating percentage.
+- "Show in Explorer" on Large Files, Duplicate Finder and Disk Analyzer did nothing, silently, for a
+  file or folder that had been moved or deleted since the scan, with no way to tell that from the
+  window simply opening behind another one. All three now say so.
+- "Copy path" and every other "Copy" button in the app (About, System Health, System Report, the CLI,
+  System Logs, Large Files, Duplicate Finder, and the shared console five tabs use) swallowed a busy
+  clipboard without telling you, or told you in a different sentence on every tab. They now share one
+  wording through a new `ClipboardFeedback` helper, and Browser Cleaner's extension-page copy, which
+  only caught one of the three documented clipboard failures, now catches all three.
+
 ## [1.131.15] - 2026-10-28
 
 **The command line's error output is valid JSON again when the error message itself contains a line

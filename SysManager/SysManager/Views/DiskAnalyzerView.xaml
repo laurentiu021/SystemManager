@@ -297,11 +297,26 @@
                 </ListView.ItemTemplate>
             </ListView>
 
-            <!-- Empty state -->
-            <v:EmptyState Glyph="&#xE838;"
-                          Title="{Binding EmptyTitle}"
-                          Message="{Binding EmptyMessage}"
-                          Visibility="{Binding Entries.Count, Converter={StaticResource FlexVis}, ConverterParameter=Inverse}"/>
+            <!-- Empty state. The relaunch button is an extra, not an EmptyState feature: the control has
+                 no action slot, so it is a sibling in the same StackPanel, as the Dashboard's slowdown
+                 empty state already does for "Open System Health" — visible only for the one failure its
+                 own advice names a button for (#2859). -->
+            <StackPanel VerticalAlignment="Center" HorizontalAlignment="Center"
+                        Visibility="{Binding Entries.Count, Converter={StaticResource FlexVis}, ConverterParameter=Inverse}">
+                <v:EmptyState Glyph="&#xE838;"
+                              Title="{Binding EmptyTitle}"
+                              Message="{Binding EmptyMessage}"/>
+                <!-- SecondaryButton, not AdminButton: that style is reserved for the one shared elevation
+                     banner control (ArchitectureTests.TheElevationBanner_LivesInOneControl_AndItsHostsExposeWhatItBinds),
+                     and this is a contextual recovery action in an empty state, not a persistent
+                     privileged-page banner — the same style the Dashboard's analogous "Open System
+                     Health" empty-state action uses. -->
+                <Button Content="Run as administrator" Command="{Binding RelaunchAsAdminCommand}"
+                        AutomationProperties.Name="Run as administrator"
+                        AutomationProperties.HelpText="Closes SysManager and opens it again with administrator rights. Windows will ask you to allow it first."
+                        Style="{StaticResource SecondaryButton}" Padding="10,4" HorizontalAlignment="Center" Margin="0,8,0,0"
+                        Visibility="{Binding CanRelaunchAsAdminForFailure, Converter={StaticResource BoolToVis}}"/>
+            </StackPanel>
             </Grid>
             </Grid>
         </Border>

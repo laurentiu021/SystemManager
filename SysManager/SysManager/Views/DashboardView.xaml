@@ -657,21 +657,33 @@
                             </StackPanel>
                         </Button>
 
-                        <!-- Progress section (visible when action running or done) -->
+                        <!-- Progress section (visible when action running or done). Cancel/Dismiss, the
+                             indeterminate bar while there is no real percentage, and the purple accent
+                             instead of MetricBlue all match Quick Tune-Up's identical card above (#2859). -->
                         <Border Margin="0,12,0,0" Padding="0,12,0,0" BorderThickness="0,1,0,0"
                                 BorderBrush="{DynamicResource Border1}"
                                 Visibility="{Binding IsQuickActionRunning, Converter={StaticResource BoolToVis}}">
                             <StackPanel>
                                 <DockPanel Margin="0,0,0,6">
+                                    <StackPanel Orientation="Horizontal" DockPanel.Dock="Right">
+                                        <Button Content="Cancel" Command="{Binding CancelQuickActionCommand}"
+                                                AutomationProperties.Name="Cancel quick action"
+                                                Style="{StaticResource GhostButton}" Padding="10,2"
+                                                Visibility="{Binding IsQuickActionCancelable, Converter={StaticResource BoolToVis}}"/>
+                                        <Button Content="Dismiss" Command="{Binding DismissQuickActionCommand}"
+                                                AutomationProperties.Name="Dismiss quick action"
+                                                Style="{StaticResource GhostButton}" Padding="10,2" Margin="8,0,0,0"
+                                                Visibility="{Binding IsQuickActionDone, Converter={StaticResource BoolToVis}}"/>
+                                        <TextBlock Text="{Binding QuickActionStatus}" Style="{StaticResource Caption}"
+                                                   VerticalAlignment="Center" Margin="8,0,0,0"/>
+                                    </StackPanel>
                                     <TextBlock Text="{Binding QuickActionName}" Style="{StaticResource Subtle}" Foreground="{DynamicResource TextPrimary}" FontWeight="Medium"
                                                DockPanel.Dock="Left" VerticalAlignment="Center"/>
-                                    <TextBlock Text="{Binding QuickActionStatus}" Style="{StaticResource Caption}"
-                                               DockPanel.Dock="Right" HorizontalAlignment="Right" VerticalAlignment="Center"
-                                               Foreground="{DynamicResource MetricBlue}"/>
                                 </DockPanel>
                                 <ProgressBar AutomationProperties.Name="Quick action progress" Height="4" Minimum="0" Maximum="100"
+                                             IsIndeterminate="{Binding IsQuickActionIndeterminate}"
                                              Value="{Binding QuickActionProgress, Mode=OneWay}"
-                                             Foreground="{DynamicResource MetricBlue}" Background="{DynamicResource Surface3}" Margin="0,0,0,6"/>
+                                             Background="{DynamicResource Surface3}" Margin="0,0,0,6"/>
                                 <TextBlock Text="{Binding QuickActionDetail}" Style="{StaticResource Caption}"
                                            Foreground="{DynamicResource TextMuted}" Margin="0,0,0,8"
                                            Visibility="{Binding QuickActionDetail, Converter={StaticResource FlexVis}}"/>

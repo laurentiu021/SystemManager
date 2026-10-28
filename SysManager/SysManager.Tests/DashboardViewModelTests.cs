@@ -688,6 +688,68 @@ public class DashboardViewModelTests
     }
 
     [Fact]
+    public async Task QuickCleanup_HasNoRealProgress_SoTheBarIsIndeterminate()
+    {
+        // Quick Cleanup only ever reports two fixed milestones (50 then 100), which a determinate bar
+        // showed as real progress it was not (#2859).
+        using var confirm = new DialogAnswer(confirm: true);
+        var vm = NewVm(QuietWinget());
+
+        await vm.QuickCleanupCommand.ExecuteAsync(null);
+
+        Assert.True(vm.IsQuickActionIndeterminate);
+    }
+
+    [Fact]
+    public void Escape_CancelsTheQuickAction_WhileItIsRunningAndNotYetDone()
+    {
+        // Unlike Tune-Up, a quick action's card stays bound to IsQuickActionRunning for its whole
+        // lifetime — success or failure — until DismissQuickActionCommand, so IsQuickActionRunning alone
+        // would leave Escape/Cancel live over an already-finished action with nothing left to cancel (#2859).
+        var vm = NewVm();
+        Assert.False(vm.IsQuickActionCancelable);
+        Assert.Null(vm.EscapeCancel);
+
+        vm.IsQuickActionRunning = true;
+        Assert.True(vm.IsQuickActionCancelable);
+        Assert.Same(vm.CancelQuickActionCommand, vm.EscapeCancel);
+
+        vm.IsQuickActionDone = true;
+        Assert.False(vm.IsQuickActionCancelable);
+        Assert.Null(vm.EscapeCancel);
+    }
+
+    [Fact]
+    public async Task QuickCleanup_CancelCommand_StopsTheRunningActionAndReportsCancelled()
+    {
+        // Proves Cancel reaches the real token RunQuickActionAsync hands the service, not just a command
+        // that exists and does nothing (#2859).
+        using var confirm = new DialogAnswer(confirm: true);
+        var tuneUp = Substitute.For<ITuneUpService>();
+        var tokenCaptured = new TaskCompletionSource<CancellationToken>();
+        tuneUp.CleanTempFilesAsync(Arg.Any<CancellationToken>()).Returns(ci =>
+        {
+            var ct = ci.Arg<CancellationToken>();
+            var tcs = new TaskCompletionSource<(long, int, int)>();
+            ct.Register(() => tcs.TrySetCanceled(ct));
+            tokenCaptured.TrySetResult(ct);
+            return tcs.Task;
+        });
+        var vm = NewVm(QuietWinget(), tuneUp: tuneUp);
+
+        var run = vm.QuickCleanupCommand.ExecuteAsync(null);
+        await tokenCaptured.Task;
+        Assert.True(vm.IsQuickActionCancelable);
+
+        vm.CancelQuickActionCommand.Execute(null);
+        await run;
+
+        Assert.Equal("Cancelled", vm.QuickActionStatus);
+        Assert.True(vm.IsQuickActionDone);
+        Assert.False(vm.IsQuickActionCancelable);
+    }
+
+    [Fact]
     public void QuickUpdateApps_WhenUserDeclinesConfirm_DoesNotRun()
     {
         var vm = NewVm();
@@ -730,6 +792,32 @@ public class DashboardViewModelTests
             await vm.QuickUpdateAppsCommand.ExecuteAsync(null);
 
             await winget.Received(1).UpgradeAllAsync(Arg.Any<CancellationToken>());
+        }
+        finally
+        {
+            DialogService.Instance = prevDialog;
+        }
+    }
+
+    [Fact]
+    public async Task QuickUpdateApps_PassesACancellableToken_SoCancelReachesTheInProgressUpgrade()
+    {
+        // Before #2859, RunQuickActionAsync had no CancellationTokenSource at all, so every quick
+        // action — Update All Apps included — ran CancellationToken.None, which UpgradeAllAsync's
+        // own per-package loop had no way to stop early with.
+        var winget = Substitute.For<IWingetService>();
+        winget.UpgradeAllAsync(Arg.Any<CancellationToken>()).Returns(WingetResult.From(0));
+        var vm = NewVm(winget);
+
+        var prevDialog = DialogService.Instance;
+        var dialog = Substitute.For<IDialogService>();
+        dialog.Confirm(Arg.Any<string>(), Arg.Any<string>()).Returns(true);
+        DialogService.Instance = dialog;
+        try
+        {
+            await vm.QuickUpdateAppsCommand.ExecuteAsync(null);
+
+            await winget.Received(1).UpgradeAllAsync(Arg.Is<CancellationToken>(t => t.CanBeCanceled));
         }
         finally
         {
@@ -965,6 +1053,9 @@ public class DashboardViewModelTests
 
             Assert.Equal("✓ Done", vm.QuickActionStatus);
             Assert.Equal(DashboardViewModel.DescribeSpeedTest(QuickResult, saved: true), vm.QuickActionDetail);
+            // Speed Test is the one quick action with a real, continuously-updating percentage, so its bar
+            // is determinate — unlike the other three, which only ever have two fixed milestones (#2859).
+            Assert.False(vm.IsQuickActionIndeterminate);
             var saved = await history.LoadAsync();
             Assert.NotNull(saved);
             Assert.Equal(QuickResult, Assert.Single(saved));

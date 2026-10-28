@@ -24,6 +24,7 @@
             <RowDefinition Height="Auto"/>
             <RowDefinition Height="Auto"/>
             <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
             <RowDefinition Height="*"/>
             <RowDefinition Height="Auto"/>
         </Grid.RowDefinitions>
@@ -49,8 +50,13 @@
             </StackPanel>
         </DockPanel>
 
+        <!-- Elevation banner: the Security log is readable only when SysManager runs elevated (#2859). -->
+        <v:AdminBanner Grid.Row="1" Margin="28,12,28,0"
+                       NotElevatedMessage="Reading the Security log requires administrator privileges. Other logs do not need it."
+                       ElevatedMessage="Running as administrator — the Security log can be read."/>
+
         <!-- Severity count glass cards -->
-        <StackPanel Grid.Row="1" Orientation="Horizontal" Margin="28,16,28,0">
+        <StackPanel Grid.Row="2" Orientation="Horizontal" Margin="28,16,28,0">
             <!-- Critical — uses the per-preset Critical brushes (ThemeService.ApplyStatusBrushes)
                  like its sibling cards, so it stays legible on the light presets instead of keeping a
                  dark-calibrated 8%-alpha red that washed out to near-invisible on near-white. -->
@@ -143,7 +149,7 @@
         </StackPanel>
 
         <!-- Filter bar -->
-        <Border Grid.Row="2" Style="{StaticResource Card}" Margin="28,16,28,0">
+        <Border Grid.Row="3" Style="{StaticResource Card}" Margin="28,16,28,0">
             <StackPanel>
                 <StackPanel Orientation="Horizontal">
                     <TextBlock Text="Log" Style="{StaticResource Subtle}" VerticalAlignment="Center"/>
@@ -248,7 +254,7 @@
         </Border>
 
         <!-- List-detail -->
-        <Grid Grid.Row="3" Margin="28,16,28,0">
+        <Grid Grid.Row="4" Margin="28,16,28,0">
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="2*"/>
                 <ColumnDefinition Width="10"/>
@@ -485,6 +491,6 @@
         </Grid>
 
         <!-- Status bar -->
-        <v:StatusFooter Grid.Row="4" Margin="28,12,28,24" ProgressName="Log loading progress"/>
+        <v:StatusFooter Grid.Row="5" Margin="28,12,28,24" ProgressName="Log loading progress"/>
     </Grid>
 </UserControl>

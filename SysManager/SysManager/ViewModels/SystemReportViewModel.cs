@@ -121,16 +121,9 @@ public sealed partial class SystemReportViewModel : ViewModelBase
     [RelayCommand(CanExecute = nameof(CanExport))]
     private void Copy()
     {
-        try
-        {
-            Clipboard.SetText(ReportText);
-            StatusMessage = "Report copied to clipboard.";
-        }
-        catch (System.Runtime.InteropServices.ExternalException ex)
-        {
-            Log.Debug("Clipboard locked: {Error}", ex.Message);
-            StatusMessage = "Couldn't copy: the clipboard is in use by another application.";
-        }
+        StatusMessage = Helpers.ClipboardFeedback.TrySetText(ReportText)
+            ? "Report copied to clipboard."
+            : Helpers.ClipboardFeedback.Busy;
     }
 
     [RelayCommand]

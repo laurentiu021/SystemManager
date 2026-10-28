@@ -649,16 +649,9 @@ public sealed partial class AboutViewModel : ViewModelBase
         try
         {
             var text = await Task.Run(() => CollectEnvironmentInfo()).ConfigureAwait(true);
-            try
-            {
-                Clipboard.SetText(text);
-                ReportStatus = "Environment info copied to clipboard.";
-            }
-            catch (System.Runtime.InteropServices.ExternalException ex)
-            {
-                Log.Debug("Clipboard locked: {Error}", ex.Message);
-                ReportStatus = "Couldn't copy to clipboard: it's currently in use by another application.";
-            }
+            ReportStatus = Helpers.ClipboardFeedback.TrySetText(text)
+                ? "Environment info copied to clipboard."
+                : Helpers.ClipboardFeedback.Busy;
         }
         catch (System.Management.ManagementException ex)
         {
@@ -943,15 +936,13 @@ public sealed partial class AboutViewModel : ViewModelBase
         try
         {
             var report = await _reportService.GenerateReportAsync();
-            try
+            if (Helpers.ClipboardFeedback.TrySetText(report))
             {
-                Clipboard.SetText(report);
                 ReportStatus = "Full system report copied to clipboard.";
             }
-            catch (System.Runtime.InteropServices.ExternalException ex)
+            else
             {
-                Log.Debug("Clipboard locked: {Error}", ex.Message);
-                ReportStatus = "Couldn't copy to clipboard: it's currently in use by another application.";
+                ReportStatus = Helpers.ClipboardFeedback.Busy;
             }
         }
         catch (InvalidOperationException ex)

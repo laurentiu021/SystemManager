@@ -40,11 +40,14 @@ public sealed class PrivacyMonitorService
     private readonly RegistryKey _baseKey;
 
     /// <summary>
-    /// Creates the service over a registry root. Defaults to <see cref="Registry.CurrentUser"/>
-    /// (the real per-user consent store); tests pass a redirected root.
+    /// Creates the service over a registry root. Defaults to the signed-in account's own consent
+    /// store via <see cref="AdminHelper.PerUserRegistryRoot"/> — <see cref="Registry.CurrentUser"/>
+    /// itself when SysManager runs as that account, and the account signed in to the console when
+    /// elevated as a different administrator, whose own webcam/microphone/location history this would
+    /// otherwise read instead (#2826). Tests pass a redirected root.
     /// </summary>
     public PrivacyMonitorService(RegistryKey? baseKey = null)
-        => _baseKey = baseKey ?? Registry.CurrentUser;
+        => _baseKey = baseKey ?? AdminHelper.PerUserRegistryRoot();
 
     /// <summary>Reads the access history for all capabilities off the UI thread, most-recent first.</summary>
     public Task<PrivacyAccessReport> ReadAsync(CancellationToken ct = default)

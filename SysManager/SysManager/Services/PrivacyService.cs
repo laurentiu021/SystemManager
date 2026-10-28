@@ -6,6 +6,7 @@ using System.IO;
 using System.Security;
 using Microsoft.Win32;
 using Serilog;
+using SysManager.Helpers;
 using SysManager.Models;
 
 namespace SysManager.Services;
@@ -21,14 +22,18 @@ public sealed class PrivacyService : IPrivacyService
     private readonly RegistryKey _hklmRoot;
 
     /// <summary>
-    /// Creates the service. <paramref name="hkcuRoot"/> defaults to <see cref="Registry.CurrentUser"/> and
-    /// <paramref name="hklmRoot"/> to <see cref="Registry.LocalMachine"/>, the two hives the toggles' paths name.
-    /// Tests pass redirected roots (an HKCU subkey they own), as <see cref="EdgeOneDriveService"/>'s tests do, so
-    /// a test that applies a change writes there rather than into this machine's privacy policies.
+    /// Creates the service. <paramref name="hkcuRoot"/> defaults to the signed-in account's own hive via
+    /// <see cref="AdminHelper.PerUserRegistryRoot"/> — <see cref="Registry.CurrentUser"/> itself when
+    /// SysManager runs as that account, which is the overwhelming majority of the time, and the account
+    /// signed in to the console when elevated as a different administrator (#2826). <paramref
+    /// name="hklmRoot"/> defaults to <see cref="Registry.LocalMachine"/>, the other hive the toggles' paths
+    /// name. Tests pass redirected roots (an HKCU subkey they own), as <see cref="EdgeOneDriveService"/>'s
+    /// tests do, so a test that applies a change writes there rather than into this machine's privacy
+    /// policies.
     /// </summary>
     public PrivacyService(RegistryKey? hkcuRoot = null, RegistryKey? hklmRoot = null)
     {
-        _hkcuRoot = hkcuRoot ?? Registry.CurrentUser;
+        _hkcuRoot = hkcuRoot ?? AdminHelper.PerUserRegistryRoot();
         _hklmRoot = hklmRoot ?? Registry.LocalMachine;
     }
 

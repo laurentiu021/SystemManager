@@ -1880,7 +1880,17 @@ Key services:
 
 Key utility classes that don't fit neatly into Services or ViewModels (not an exhaustive list):
 
-- `AdminHelper` — elevation check (`IsElevated()`) and UAC relaunch.
+- `AdminHelper` — elevation check (`IsElevated()`) and UAC relaunch. `IsElevatedAsAnotherUser()` compares
+  the running process's SID against the account signed in to the active console session (via
+  `WTSQuerySessionInformationW`) — true on a standard account elevated with a DIFFERENT administrator's
+  password, the family-PC case. `PerUserRegistryRoot()` is the per-user registry root every per-user
+  service should use instead of `Registry.CurrentUser` directly: the signed-in account's own hive under
+  `HKEY_USERS\<their SID>` when the two differ, falling back (logged) to the running account's own hive
+  when that SID or hive cannot be resolved. `PrivacyService`, `PrivacyMonitorService`,
+  `NotificationBlockerService` and `MaintenanceSchedulerService`'s task-registration SID all go through
+  it now, so a per-user switch the signed-in person applies actually reaches their own profile rather
+  than the administrator's (#2826). Performance Mode's Xbox Game Bar switch and an admin-banner notice
+  for this mode are tracked separately.
 - `AtomicFile` — the single way every service writes a whole file of user data (the two NDJSON
   histories append a line instead, and rewrite through it when they prune). Writes a
   uniquely-named temp file beside the destination, flushes it onto the device,

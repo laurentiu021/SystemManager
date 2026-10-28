@@ -10,6 +10,19 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.131.8] - 2026-10-28
+
+**File Shredder now overwrites a file's named streams, including the Zone.Identifier stream Windows
+adds to every download, instead of letting the delete remove them unoverwritten.**
+
+### Fixed
+
+- **Only the main content of a file was overwritten; named streams were deleted along with it
+  unoverwritten.** Windows records where a downloaded file came from in a separate Zone.Identifier
+  stream, and `File.Delete` removes streams like it alongside the file without anyone having written
+  over their bytes first. Every named stream is now found and overwritten with the same passes as
+  the main content before the file and its streams are removed together.
+
 ## [1.131.7] - 2026-10-28
 
 **File Shredder now warns when an item you queue sits inside a OneDrive-synced folder.**

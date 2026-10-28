@@ -105,6 +105,8 @@ What the app can and cannot do by design:
   file rather than leaving it half-overwritten at its original name. An item inside a
   OneDrive-synced folder is warned about, not refused: the overwrite and delete still
   happen locally, but OneDrive's own version history and recycle bin can keep a copy.
+  Named streams — including the Zone.Identifier Windows adds to a downloaded file — are
+  overwritten too, before the delete that would otherwise remove them untouched.
 - Delete files in the cleanup categories you tick (Deep Cleanup, Quick Cleanup, Quick
   Tune-Up). Each category is a fixed list of folders; junctions and symlinks are never
   followed, the folders single-file .NET apps unpack into under TEMP are left alone, and

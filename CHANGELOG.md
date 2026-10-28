@@ -10,6 +10,22 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.131.13] - 2026-10-28
+
+**Timer Resolution, Battery Health and Bandwidth Monitor now show the same decimal mark as the rest
+of the app, instead of switching to a comma on Romanian, German or French Windows.**
+
+### Fixed
+- Three figures were interpolated through `CultureInfo.CurrentCulture` while the rest of the app
+  renders numbers invariant: Timer Resolution's millisecond values (a custom `0.###` pattern read
+  "0,5 ms"), Battery Health's health and wear percentages (a bare, unformatted number read "87,5%"),
+  and Bandwidth Monitor's threshold alert, which mixed a comma-decimal threshold with an
+  already-invariant rate in the same sentence ("exceeded 12,5 Mbps (↓ 13.1 Mbps …)"). All three now
+  render with the invariant decimal mark. The architecture guard that is meant to catch this class of
+  bug only recognised fixed `F`/`N`/`P`-letter formats, so a custom pattern like `0.###` passed
+  unnoticed; it now also recognises any custom digit-placeholder pattern around a decimal or group
+  mark. (#2795)
+
 ## [1.131.12] - 2026-10-28
 
 **CSV exports no longer let a file, folder or program name open as a formula when you double-click

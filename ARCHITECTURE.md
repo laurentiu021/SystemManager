@@ -1181,7 +1181,11 @@ Key services:
 - `BulkInstallerService` — installs apps via winget in batch with
   per-item progress and error reporting.
 - `FileShredderService` — secure multi-pass file overwrite (DoD 5220.22-M
-  style) and deletion.
+  style) and deletion. Every `Log.*` call here and in `FileShredderViewModel` is checked by
+  `ArchitectureTests.ShredderLogging_NeverNamesAPathOrAttachesTheCaughtException`: none may hold a
+  `{Path}`/`{Dir}`/`{Stream}` template token, a path-shaped argument, or the caught exception object
+  itself — the sink's real output template renders a logged exception's full message, which commonly
+  is the path — only the outcome, the method, and for a failure the exception type and HResult (#2796).
 - `PrivacyService` (`IPrivacyService`) — reads and writes Windows privacy and telemetry
   registry toggles (activity history, advertising ID, diagnostics, etc.). Each toggle carries a
   stable `Key` that a privacy profile names it by; the list is pinned by a test, because renaming a

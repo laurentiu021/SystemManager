@@ -220,7 +220,13 @@ What the app can and cannot do by design:
   report does not carry your account name in its paths. The
   replacement happens in the log sink rather than at each logging call, so a new
   code path cannot forget it. Paths outside your user profile, such as
-  `C:\Program Files\...`, are recorded as-is.
+  `C:\Program Files\...`, are recorded as-is. File Shredder is the one deliberate
+  exception to that last sentence: it never writes the name or location of a file you
+  asked to destroy, anywhere in the path, because a shredded file's own identity is
+  itself the evidence the shred is meant to remove — not only the account that owned
+  it. Its log calls record only the outcome, the method and, for a failure, the
+  exception type and HResult, never the caught exception object itself (whose own
+  message often names the path the template otherwise avoids).
 - **Auto-update**: new builds are downloaded from the official GitHub
   Releases endpoint. The app does not auto-install without an explicit
   click. Before applying, the downloaded binary's SHA256 is compared against

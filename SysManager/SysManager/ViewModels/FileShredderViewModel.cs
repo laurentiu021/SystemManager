@@ -72,7 +72,10 @@ public sealed partial class FileShredderViewModel : ViewModelBase
             }
             catch (IOException ex)
             {
-                Log.Warning(ex, "Could not read file info: {Path}", filePath);
+                // No {Path} and no attached exception: the file's own name and folder are the evidence a
+                // shred exists to remove, and the sink renders a logged exception's own message in full,
+                // which commonly names the path itself (#2796).
+                Log.Warning("Could not read file info. {ExceptionType} (HResult {HResult})", ex.GetType().Name, ex.HResult);
                 skipped.Add(Path.GetFileName(filePath));
             }
             catch (UnauthorizedAccessException ex)
@@ -80,7 +83,7 @@ public sealed partial class FileShredderViewModel : ViewModelBase
                 // A file the user dragged in but cannot read — skip it rather than aborting the
                 // whole drop. UnauthorizedAccessException is a sibling of IOException, not a
                 // subclass, so the catch above never covered it.
-                Log.Warning(ex, "Access denied reading file info: {Path}", filePath);
+                Log.Warning("Access denied reading file info. {ExceptionType} (HResult {HResult})", ex.GetType().Name, ex.HResult);
                 skipped.Add(Path.GetFileName(filePath));
             }
         }
@@ -163,15 +166,17 @@ public sealed partial class FileShredderViewModel : ViewModelBase
                 ? DescribeCloudSyncWarning([dirInfo.Name])
                 : string.Empty;
         }
+        // No {Path} and no attached exception in either arm — the folder's name and location must not
+        // survive into the log (#2796).
         catch (UnauthorizedAccessException ex)
         {
-            Log.Warning(ex, "Access denied while reading folder: {Path}", folderPath);
+            Log.Warning("Access denied while reading folder. {ExceptionType} (HResult {HResult})", ex.GetType().Name, ex.HResult);
             StatusMessage = DescribeSkipped([Path.GetFileName(folderPath.TrimEnd(
                 Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar))]);
         }
         catch (IOException ex)
         {
-            Log.Warning(ex, "Could not read folder info: {Path}", folderPath);
+            Log.Warning("Could not read folder info. {ExceptionType} (HResult {HResult})", ex.GetType().Name, ex.HResult);
             StatusMessage = DescribeSkipped([Path.GetFileName(folderPath.TrimEnd(
                 Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar))]);
         }
@@ -332,7 +337,10 @@ public sealed partial class FileShredderViewModel : ViewModelBase
                 {
                     item.Status = "Failed";
                     failed++;
-                    Log.Warning(ex, "Failed to shred: {Path}", item.Path);
+                    // No {Path} and no attached exception — same reason as every other shredder log call
+                    // in this file and FileShredderService (#2796). The notice below still names the file
+                    // to the USER, on their own screen, which is not the leak this guards against.
+                    Log.Warning("Failed to shred. {ExceptionType} (HResult {HResult})", ex.GetType().Name, ex.HResult);
 
                     // The service words these for the user — which files were left in place, why a hard-
                     // linked file cannot be shredded, that a junction would have destroyed data

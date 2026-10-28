@@ -10,6 +10,19 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.131.14] - 2026-10-28
+
+**File Shredder no longer writes the name or location of a shredded file to the diagnostic log, which
+is kept for weeks and attached to a bug report.**
+
+### Fixed
+- `FileShredderService` and `FileShredderViewModel` logged the full path of every file and folder
+  shredded, both in the message text and, for several failures, through the caught exception object —
+  whose own message (for example "Access to the path '...' is denied") often names the path even when
+  the log call's own template does not. The app had already decided this must not happen for the
+  activity log, which records only a count; the diagnostic log kept the evidence anyway. Every call
+  now logs only the outcome, the method and, for a failure, the exception type and HResult. (#2796)
+
 ## [1.131.13] - 2026-10-28
 
 **Timer Resolution, Battery Health and Bandwidth Monitor now show the same decimal mark as the rest

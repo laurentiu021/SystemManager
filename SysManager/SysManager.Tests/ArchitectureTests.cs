@@ -13013,6 +13013,87 @@ public partial class ArchitectureTests
     private static partial Regex StreamWriteCall();
 
     /// <summary>
+    /// No Serilog call in <c>FileShredderService</c> or <c>FileShredderViewModel</c> names a path, or
+    /// attaches the raw exception object that was caught.
+    /// </summary>
+    /// <remarks>
+    /// <c>FileShredderViewModel</c> already writes only counts to the activity log, because a file name
+    /// "would leave behind exactly the evidence the shred was meant to remove" — but the rolling Serilog
+    /// file both classes also write to kept the name and folder of every shredded file, through a
+    /// <c>{Path}</c>/<c>{Dir}</c>/<c>{Stream}</c> template token AND through the caught exception object
+    /// itself: the sink's real output template includes <c>{Exception}</c>, so attaching <c>ex</c> renders
+    /// its full <c>Message</c> into the log even when the call's own template names nothing — and a
+    /// framework I/O exception's <c>Message</c> routinely IS the path ("Access to the path '...' is
+    /// denied"). Up to 14 daily files are kept, and the newest three go into the diagnostics bundle the
+    /// About tab offers for a bug report (#2796).
+    /// <para>Checked by source text, not behaviour: proving a Serilog call wrote nothing sensitive would
+    /// need a real sink and a real exception shaped like Windows' own messages, which is what this guard
+    /// exists to make unnecessary. Comments are stripped first so prose cannot satisfy or defeat a match.</para>
+    /// </remarks>
+    [Fact]
+    public void ShredderLogging_NeverNamesAPathOrAttachesTheCaughtException()
+    {
+        var files = new[]
+        {
+            ("Services", "FileShredderService.cs"),
+            ("ViewModels", "FileShredderViewModel.cs"),
+        };
+        var offenders = new List<string>();
+        var callsScanned = 0;
+
+        foreach (var (folder, file) in files)
+        {
+            var source = WithoutComments(File.ReadAllText(TestPaths.AppFile(folder, file)));
+
+            foreach (Match call in ShredderLogCall().Matches(source))
+            {
+                callsScanned++;
+                var line = source[..call.Index].Count(c => c == '\n') + 1;
+                var text = call.Value;
+
+                if (RawExceptionAttached().IsMatch(text))
+                    offenders.Add($"{file}:{line} attaches the caught exception object, whose own Message "
+                        + "the sink renders in full: " + Collapse(text));
+
+                if (PathShapedTemplateToken().IsMatch(text))
+                    offenders.Add($"{file}:{line} names a path in its message template: " + Collapse(text));
+
+                foreach (var suspect in PathShapedArgument)
+                    if (text.Contains(suspect, StringComparison.Ordinal))
+                        offenders.Add($"{file}:{line} passes {suspect.Trim()} as an argument: " + Collapse(text));
+            }
+        }
+
+        // Vacuity floor: the two files carry 12 Log calls as fixed, measured here. Fewer means the regex
+        // stopped matching real calls, not that the files got safer.
+        Assert.True(callsScanned >= 10,
+            $"only {callsScanned} shredder log calls were found — this guard is looking at the wrong text, "
+            + "not finding a clean codebase.");
+
+        Assert.True(offenders.Count == 0,
+            "A File Shredder log call can still write the name or location of a shredded file, or the "
+            + "exception message that often contains it:\n  " + string.Join("\n  ", offenders.Distinct()));
+    }
+
+    // One Log.<Level>(...) call, balancing nested parentheses one level deep (enough for every call site
+    // in these two files, which nest at most a method call inside an argument).
+    [GeneratedRegex(@"Log\.(?:Verbose|Debug|Information|Warning|Error|Fatal)\((?:[^()]|\([^()]*\))*\)",
+                    RegexOptions.Singleline)]
+    private static partial Regex ShredderLogCall();
+
+    [GeneratedRegex(@"Log\.\w+\(\s*ex\b")]
+    private static partial Regex RawExceptionAttached();
+
+    [GeneratedRegex(@"\{(?:Path|Dir|Stream|Folder|File)\}", RegexOptions.IgnoreCase)]
+    private static partial Regex PathShapedTemplateToken();
+
+    // Local variable/property names known to hold a path in these two files, checked as plain substrings
+    // rather than a regex: each is a word the methods involved actually use, not a pattern that could
+    // drift to match something unrelated.
+    private static readonly string[] PathShapedArgument =
+        ["filePath", "folderPath", "streamPath", "item.Path", "files[i]", "files[", " dir)", " dir,"];
+
+    /// <summary>
     /// Every CLI verb that changes the machine records it in the app's own history, and the read-only one
     /// does not.
     /// </summary>

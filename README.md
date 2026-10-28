@@ -1445,6 +1445,9 @@ Answers "what is actually using my space?" by listing the biggest files in one p
   stream to every file downloaded from the internet, recording where it came from, and `File.Delete`
   removes streams like it unoverwritten alongside the file — now every named stream is overwritten
   with the same passes first
+- **Never writes a shredded file's name or location anywhere SysManager keeps.** The activity log holds
+  only a count, and the diagnostic log — kept for weeks and bundled into a bug report from the About
+  tab — holds only the outcome, the method and, for a failure, the exception type and HResult
 - Confirmation dialog before irreversible shred
 
 ### Ping

@@ -88,7 +88,7 @@ public sealed class EtaCalculator
     /// handler, with nothing marshalling to the UI thread. <c>_projectedFinish</c> is a
     /// <c>TimeSpan?</c>, so a torn read there yields an arbitrary duration on screen.
     /// </summary>
-    private readonly object _gate = new();
+    private readonly Lock _gate = new();
 
     private long _startTimestamp;
     private long _lastSampleTimestamp;

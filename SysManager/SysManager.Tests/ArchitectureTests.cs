@@ -12333,6 +12333,60 @@ public partial class ArchitectureTests
     private static partial Regex HardcodedDuration();
 
     /// <summary>
+    /// Every lock target is a <see cref="Lock"/> field, never a plain <c>object</c>.
+    /// </summary>
+    /// <remarks>
+    /// <see cref="Lock"/> is the type the app's locks settled on — a dedicated primitive the C# <c>lock</c>
+    /// statement recognises specially, avoiding the boxing and the heavier <c>Monitor</c> path a bare
+    /// <c>object</c> target takes. A field typed <c>object</c> and only ever used in a <c>lock</c>
+    /// statement is the shape the migration missed, one at a time, until none were left but
+    /// <c>EtaCalculator._gate</c> (#2855).
+    /// <para>Checked by correlating a field DECLARATION with its USE: a field whose declared type is
+    /// <c>object</c> is only an offender if some <c>lock (name)</c> in the same file actually names it —
+    /// an <c>object</c> field never locked on (there are several, holding ordinary data) is not this
+    /// defect and must not be flagged.</para>
+    /// </remarks>
+    [Fact]
+    public void NoLockTargetIsAPlainObjectField()
+    {
+        var offenders = new List<string>();
+        var fieldsScanned = 0;
+
+        foreach (var file in Directory.EnumerateFiles(TestPaths.AppProject(), "*.cs", SearchOption.AllDirectories))
+        {
+            if (file.Contains($"{Path.DirectorySeparatorChar}obj{Path.DirectorySeparatorChar}", StringComparison.Ordinal))
+                continue;
+
+            var source = WithoutComments(File.ReadAllText(file));
+
+            foreach (Match field in ObjectTypedField().Matches(source))
+            {
+                fieldsScanned++;
+                var name = field.Groups["name"].Value;
+                if (Regex.IsMatch(source, @"\block\s*\(\s*" + Regex.Escape(name) + @"\s*\)"))
+                    offenders.Add($"{Path.GetFileName(file)}: {name}");
+            }
+        }
+
+        // Vacuity floor, measured at 8 (AudioMixerService's five undocumented COM interface pointers,
+        // NavItem's _content). Set a little below that so ordinary churn in those fields cannot make
+        // this guard fail for the wrong reason; this only proves the DECLARATION half of the scan still
+        // matches real code, not that the app stayed exactly this shape.
+        Assert.True(fieldsScanned >= 5,
+            $"only {fieldsScanned} object-typed fields were found across the app — this guard is looking "
+            + "at the wrong text, not finding a clean codebase.");
+
+        Assert.True(offenders.Count == 0,
+            "A lock target is still a plain object field, not a Lock — use `private readonly Lock "
+            + "_name = new();`:\n  " + string.Join("\n  ", offenders));
+    }
+
+    // A private/internal field declared as `object`, capturing its name. Matches both with and without
+    // an initializer, so a field assigned in a constructor is still caught.
+    [GeneratedRegex(@"(?:private|internal)\s+(?:readonly\s+)?object\??\s+(?<name>_?\w+)\s*(?:=|;)")]
+    private static partial Regex ObjectTypedField();
+
+    /// <summary>
     /// Performance Mode must refuse to CAPTURE a recovery baseline while a game profile is live — and must
     /// still be allowed to LOAD one that was persisted earlier.
     /// <para>The lock added for #1501 stops the two tabs from snapshotting each other mid-change, but it is

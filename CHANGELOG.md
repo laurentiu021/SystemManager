@@ -10,6 +10,27 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.131.15] - 2026-10-28
+
+**The command line's error output is valid JSON again when the error message itself contains a line
+break or a tab, and four background timers no longer measure time against the wall clock.**
+
+### Fixed
+- The command line's `--json` error output was built by hand for one fault path, escaping only
+  backslashes and quotes. A message containing a carriage return, line feed or tab produced a
+  document a JSON parser rejects, on the exact branch whose own comment says it keeps the output
+  machine-readable. It now goes through the same serializer as every other `--json` error.
+- Four places measured an interval by subtracting `DateTime` values instead of a monotonic clock: the
+  notification area's 4-hour cooldowns (a clock set back kept them silent for longer than intended, not
+  shorter), Process Manager's CPU-percent sampling window, Ping's per-sample timestamp, and Bandwidth
+  Monitor's 5-second history throttle, which lost up to an hour of saved history during the repeated
+  autumn daylight-saving hour because the subtraction went negative. All four now use a monotonic
+  timestamp for the interval itself.
+
+### Changed
+- `EtaCalculator`'s one remaining plain-`object` lock target is now the dedicated `Lock` type the rest
+  of the app's locks already use, and an automated check keeps it that way. (#2855)
+
 ## [1.131.14] - 2026-10-28
 
 **File Shredder no longer writes the name or location of a shredded file to the diagnostic log, which

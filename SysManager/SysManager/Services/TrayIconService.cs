@@ -49,10 +49,27 @@ public sealed class TrayIconService : IDisposable
     /// <summary>The menu item that shows <see cref="MenuStatusLine"/>, or null before the menu is built.</summary>
     private System.Windows.Controls.MenuItem? _statusItem;
 
-    // Notification cooldowns — don't spam the user
-    private DateTime _lastRamNotification = DateTime.MinValue;
-    private DateTime _lastUptimeNotification = DateTime.MinValue;
-    private DateTime _lastDiskNotification = DateTime.MinValue;
+    /// <summary>
+    /// The source of <see cref="CheckAndNotify"/>'s cooldown timestamps, defaulting to
+    /// <see cref="System.TimeProvider.System"/>.
+    /// </summary>
+    /// <remarks>
+    /// The three cooldown fields below used to subtract <see cref="DateTime.UtcNow"/> values — the
+    /// clock the rest of the app's interval arithmetic (<c>EtwBandwidthSource</c>, <c>TemperatureService</c>)
+    /// deliberately avoids, because a clock set back (daylight saving, NTP correction, the user) makes a
+    /// wall-clock cooldown stay silent for LONGER than intended rather than shorter, and because it is
+    /// untestable without a real multi-hour wait: these three cooldowns could previously only be smoke-tested
+    /// with <c>Assert.DoesNotThrow</c> (#2855).
+    /// </remarks>
+    private readonly TimeProvider _time;
+
+    // Notification cooldowns — don't spam the user. internal (not private) so a test can observe which
+    // branch of CheckAndNotify actually fired without a real Windows toast, which ShowNotification needs
+    // a live _trayIcon to raise. 0 (TimeProvider's own "never") behaves as an already-expired cooldown,
+    // the same role DateTime.MinValue played.
+    internal long LastRamNotificationStamp;
+    internal long LastUptimeNotificationStamp;
+    internal long LastDiskNotificationStamp;
     private static readonly TimeSpan NotificationCooldown = TimeSpan.FromHours(4);
 
     /// <summary>
@@ -68,9 +85,10 @@ public sealed class TrayIconService : IDisposable
     /// <summary>Whether background notifications are enabled.</summary>
     public bool NotificationsEnabled { get; set; } = true;
 
-    public TrayIconService(SystemInfoService sysInfo)
+    public TrayIconService(SystemInfoService sysInfo, TimeProvider? timeProvider = null)
     {
         _sysInfo = sysInfo;
+        _time = timeProvider ?? TimeProvider.System;
         _timer = new DispatcherTimer
         {
             Interval = TimeSpan.FromSeconds(60)
@@ -339,22 +357,20 @@ public sealed class TrayIconService : IDisposable
 
     internal void CheckAndNotify(SystemSnapshot snapshot)
     {
-        var now = DateTime.UtcNow;
-
         // High RAM, at the notification area's own limit (see HealthLimits).
         if (snapshot.Memory.UsedPercent > HealthLimits.HighMemoryNotifiedAbovePercent
-            && now - _lastRamNotification > NotificationCooldown)
+            && _time.GetElapsedTime(LastRamNotificationStamp) > NotificationCooldown)
         {
-            _lastRamNotification = now;
+            LastRamNotificationStamp = _time.GetTimestamp();
             ShowNotification("High Memory Usage",
                 $"RAM is at {snapshot.Memory.UsedPercent:0}% — consider closing unused applications.");
         }
 
         // High uptime, at the notification area's own limit (see HealthLimits).
         if (snapshot.Os.Uptime.TotalDays > HealthLimits.RestartNotifiedAfterDays
-            && now - _lastUptimeNotification > NotificationCooldown)
+            && _time.GetElapsedTime(LastUptimeNotificationStamp) > NotificationCooldown)
         {
-            _lastUptimeNotification = now;
+            LastUptimeNotificationStamp = _time.GetTimestamp();
             ShowNotification("Restart Recommended",
                 $"Your PC has been running for {(int)snapshot.Os.Uptime.TotalDays} days. A restart can improve performance.");
         }
@@ -370,9 +386,9 @@ public sealed class TrayIconService : IDisposable
         // a non-technical user to back up over nothing. "Unknown" is excluded deliberately: not
         // knowing is not a failure, and it is what both arms emit when the value is unreadable.
         var unhealthyDisk = snapshot.Disks.FirstOrDefault(d => IsDiskProblem(d.HealthStatus));
-        if (unhealthyDisk is not null && now - _lastDiskNotification > NotificationCooldown)
+        if (unhealthyDisk is not null && _time.GetElapsedTime(LastDiskNotificationStamp) > NotificationCooldown)
         {
-            _lastDiskNotification = now;
+            LastDiskNotificationStamp = _time.GetTimestamp();
             ShowNotification("Disk Health Warning",
                 $"{unhealthyDisk.FriendlyName} reports status: {unhealthyDisk.HealthStatus}. Consider backing up important data.");
         }

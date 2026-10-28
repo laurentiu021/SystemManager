@@ -150,7 +150,10 @@ public sealed class PingMonitorService : IDisposable
         if (!Targets.TryGetValue(host, out var current) || !current.IsEnabled) return;
         if (ct.IsCancellationRequested) return;
 
-        var sample = new PingSample(DateTime.UtcNow, host, latency, status);
+        // The same provider the pump's between-tick delay already uses, not a bare DateTime.UtcNow —
+        // otherwise a test that fakes the clock for the delay still sees the real wall clock show up in
+        // every sample's own timestamp (#2855).
+        var sample = new PingSample(_time.GetUtcNow().UtcDateTime, host, latency, status);
         RaiseSampleReceived(sample);
     }
 

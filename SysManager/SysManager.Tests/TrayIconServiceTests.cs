@@ -120,6 +120,87 @@ public class TrayIconServiceTests
         svc.Dispose();
     }
 
+    // ---------- notification cooldown (#2855) ----------
+    //
+    // CheckAndNotify used to gate its three notifications on `DateTime.UtcNow - lastNotified >
+    // NotificationCooldown`. A clock set BACK — daylight saving, an NTP correction, the user — makes
+    // that subtraction smaller or negative, so the cooldown stays silent for LONGER than four hours
+    // rather than shorter; it is also untestable, because asserting it needs a real four-hour wait.
+    // These use a controllable clock and the internal stamp fields to observe which branch actually ran,
+    // since ShowNotification itself needs a live tray icon no test creates.
+
+    private sealed class TestClock : TimeProvider
+    {
+        // Starts a day past the 4-hour cooldown: the stamp fields default to 0 ("never notified"), and
+        // GetElapsedTime(0) must read as comfortably expired on the very first check, the same role
+        // DateTime.MinValue played for the DateTime subtraction this replaces.
+        private long _ticks = TimeSpan.FromHours(24).Ticks;
+
+        public override long TimestampFrequency => TimeSpan.TicksPerSecond;
+        public override long GetTimestamp() => _ticks;
+
+        public void Advance(TimeSpan by) => _ticks += by.Ticks;
+    }
+
+    [Fact]
+    public void CheckAndNotify_HighRam_FirstTime_SetsTheStamp()
+    {
+        var clock = new TestClock();
+        var svc = new TrayIconService(new SystemInfoService(), clock);
+
+        svc.CheckAndNotify(MakeSnapshot(ramUsedPct: 95, uptimeDays: 1));
+
+        Assert.NotEqual(0, svc.LastRamNotificationStamp);
+        svc.Dispose();
+    }
+
+    [Fact]
+    public void CheckAndNotify_HighRam_WithinCooldown_DoesNotNotifyAgain()
+    {
+        var clock = new TestClock();
+        var svc = new TrayIconService(new SystemInfoService(), clock);
+        svc.CheckAndNotify(MakeSnapshot(ramUsedPct: 95, uptimeDays: 1));
+        var firstStamp = svc.LastRamNotificationStamp;
+
+        clock.Advance(TimeSpan.FromHours(3));
+        svc.CheckAndNotify(MakeSnapshot(ramUsedPct: 95, uptimeDays: 1));
+
+        Assert.Equal(firstStamp, svc.LastRamNotificationStamp);
+        svc.Dispose();
+    }
+
+    [Fact]
+    public void CheckAndNotify_HighRam_PastCooldown_NotifiesAgain()
+    {
+        var clock = new TestClock();
+        var svc = new TrayIconService(new SystemInfoService(), clock);
+        svc.CheckAndNotify(MakeSnapshot(ramUsedPct: 95, uptimeDays: 1));
+        var firstStamp = svc.LastRamNotificationStamp;
+
+        clock.Advance(TimeSpan.FromHours(4) + TimeSpan.FromSeconds(1));
+        svc.CheckAndNotify(MakeSnapshot(ramUsedPct: 95, uptimeDays: 1));
+
+        Assert.NotEqual(firstStamp, svc.LastRamNotificationStamp);
+        svc.Dispose();
+    }
+
+    [Fact]
+    public void CheckAndNotify_HighUptime_PastCooldown_NotifiesAgain()
+    {
+        // The uptime and disk cooldowns use the identical GetElapsedTime shape as RAM's; this pins that
+        // the fix was applied to all three, not only the one exercised above.
+        var clock = new TestClock();
+        var svc = new TrayIconService(new SystemInfoService(), clock);
+        svc.CheckAndNotify(MakeSnapshot(ramUsedPct: 50, uptimeDays: 20));
+        var firstStamp = svc.LastUptimeNotificationStamp;
+
+        clock.Advance(TimeSpan.FromHours(4) + TimeSpan.FromSeconds(1));
+        svc.CheckAndNotify(MakeSnapshot(ramUsedPct: 50, uptimeDays: 20));
+
+        Assert.NotEqual(firstStamp, svc.LastUptimeNotificationStamp);
+        svc.Dispose();
+    }
+
     // ---------- the one-line readout the context menu header shows ----------
 
     /// <summary>

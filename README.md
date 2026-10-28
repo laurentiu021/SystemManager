@@ -1429,7 +1429,9 @@ Answers "what is actually using my space?" by listing the biggest files in one p
 - Skips junction points and symbolic links (prevents symlink attacks) — whether the link is the item
   you selected directly or one found inside a folder you shred
 - **Refuses Windows' own folders** — Windows, System32 and Program Files — even through a link or a
-  short name, a file with more than one hard link, and a selected folder that is itself a link. A file
+  short name, a file with more than one hard link, a selected folder that is itself a link, and a
+  compressed, sparse or encrypted file: NTFS writes those to new disk clusters rather than overwriting
+  in place, so the original bytes would stay readable in the space the old clusters occupied. A file
   it cannot overwrite is left where it is and named, never deleted the ordinary way
 - A write error partway through an overwrite (a full disk, a removed drive) still finishes the job —
   the file is truncated and removed rather than left half-overwritten under its original name — and

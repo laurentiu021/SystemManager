@@ -122,6 +122,19 @@ public sealed partial class FileShredderService
                 + $"at its target, outside the selected location: {target}");
         }
 
+        // Refuse a compressed, sparse or EFS-encrypted file before opening it at all: NTFS keeps these in
+        // a form where changed data goes to NEWLY ALLOCATED clusters before the old ones are freed, so an
+        // ordinary write handle's passes land on the new clusters while the original bytes stay readable
+        // in the freed space — the same reason Sysinternals' SDelete has to find and overwrite those
+        // clusters directly instead of writing through a handle like this one's (#2824).
+        if (DescribeWhyNotOverwritable(attrs) is { } why)
+            throw new IOException(
+                $"\"{Path.GetFileName(filePath)}\" is {why}. NTFS writes changed data for files like this to "
+                + "new disk clusters rather than overwriting in place, so a secure overwrite cannot reach the "
+                + "original bytes — they would stay readable in the space the old clusters occupied. Remove "
+                + "that attribute first, or delete it normally and rely on full-disk encryption (BitLocker) to "
+                + "protect what remains on the drive.");
+
         if (attrs.HasFlag(FileAttributes.ReadOnly))
             File.SetAttributes(filePath, attrs & ~FileAttributes.ReadOnly);
 
@@ -596,6 +609,20 @@ public sealed partial class FileShredderService
 
         return result;
     }
+
+    /// <summary>
+    /// Names why <paramref name="attrs"/> cannot be securely overwritten in place, or null when there is
+    /// no such reason. Checked against bare attributes rather than a live file, so every combination —
+    /// including the ones a real compressed/sparse/encrypted file would be awkward to set up for a test —
+    /// is directly testable (#2824).
+    /// </summary>
+    internal static string? DescribeWhyNotOverwritable(FileAttributes attrs) => attrs switch
+    {
+        _ when attrs.HasFlag(FileAttributes.Encrypted) => "encrypted",
+        _ when attrs.HasFlag(FileAttributes.Compressed) => "compressed",
+        _ when attrs.HasFlag(FileAttributes.SparseFile) => "a sparse file",
+        _ => null,
+    };
 
     /// <summary>
     /// Returns the byte pattern for each pass. A null entry means random fill.

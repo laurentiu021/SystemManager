@@ -10,6 +10,21 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.131.6] - 2026-10-28
+
+**File Shredder now refuses a compressed, sparse or encrypted file instead of overwriting bytes that
+are not the ones actually holding the data.**
+
+### Fixed
+
+- **A compressed, sparse or encrypted file was told apart from an ordinary one, without actually being
+  overwritten in the sense the confirmation promises.** NTFS keeps a file like this in a form where
+  changed data goes to newly allocated disk clusters before the old ones are freed, rather than being
+  written over the existing bytes — the same reason a dedicated tool like Sysinternals' SDelete has to
+  find and overwrite those clusters directly. An ordinary write handle's passes landed on the new
+  clusters, while the original data stayed readable in the space the old ones occupied. The tab now
+  refuses a file like this outright, naming why, instead of reporting it as securely destroyed.
+
 ## [1.131.5] - 2026-10-28
 
 **File Shredder no longer follows a link given to it directly, and a write error partway through an

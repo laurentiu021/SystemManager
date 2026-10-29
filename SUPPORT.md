@@ -31,10 +31,10 @@ A few quick things that make bug reports land faster:
 2. **Search existing issues** — same topic may already be open or closed.
 3. **Grab environment info** — click **"Copy environment info"** on the
    About tab inside the app. It copies a ready-to-paste block with your
-   SysManager version, Windows version, architecture, .NET version and
-   elevation state, plus a hardware summary — CPU, RAM, graphics card and
-   driver, each drive's size and free space, and display resolution. Read it
-   before you paste it somewhere public.
+   SysManager version, Windows version, architecture, .NET version,
+   elevation state and Windows language, plus a hardware summary — CPU, RAM,
+   graphics card and driver, each drive's size and free space, and display
+   resolution. Read it before you paste it somewhere public.
 4. **Attach the logs** — **Save diagnostics bundle** on the About tab puts the
    newest three log files, the system report (with your network adapters' MAC
    addresses left out and the last two parts of your IP address masked) and the environment

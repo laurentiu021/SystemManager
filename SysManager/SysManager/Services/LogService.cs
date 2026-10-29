@@ -4,6 +4,7 @@
 
 using System.Globalization;
 using System.IO;
+using System.Runtime.InteropServices;
 using System.Text.RegularExpressions;
 using Serilog;
 using Serilog.Core;
@@ -36,6 +37,16 @@ public static partial class LogService
     /// and cannot be read out of a single-file bundle without running it.
     /// </summary>
     internal const string StartupMessage = "SysManager {Version} started";
+
+    /// <summary>
+    /// Logged once, right after <see cref="StartupMessage"/>: a locale bug needs this round trip less
+    /// often if the answer is already in the log (#2861). Two code pages because they can disagree —
+    /// see <see cref="PowerShellRunner.ReadOemEncoding"/>'s remarks — and culture and display language
+    /// because a regional format and a UI language are independent settings.
+    /// </summary>
+    internal const string EnvironmentMessage =
+        "Windows {WindowsVersion}, OS {OSArchitecture}, process {ProcessArchitecture}, culture {Culture}, "
+        + "display language {DisplayLanguage}, OEM code page {OemCodePage} (regional format {RegionalOemCodePage})";
 
     /// <summary>
     /// Where the rolling log is written. Settable only through <see cref="Init(string?)"/>, and only
@@ -143,6 +154,14 @@ public static partial class LogService
         // The same source the About tab and the updater read, so a log, a crash marker and a release
         // can all be matched to one another rather than guessed at.
         Logger.Information(StartupMessage, UpdateService.CurrentVersion.ToString(3));
+        Logger.Information(EnvironmentMessage,
+            Environment.OSVersion.VersionString,
+            RuntimeInformation.OSArchitecture,
+            RuntimeInformation.ProcessArchitecture,
+            CultureInfo.CurrentCulture.Name,
+            CultureInfo.CurrentUICulture.Name,
+            PowerShellRunner.GetOEMCP(),
+            CultureInfo.CurrentCulture.TextInfo.OEMCodePage);
     }
 
     /// <summary>

@@ -2919,11 +2919,11 @@ the list:
   See [SECURITY.md](SECURITY.md) for the full policy.
 
 The **About** tab inside the app has a "Copy environment info" helper that copies your
-SysManager version, Windows version, architecture, .NET version and elevation state, plus a
-hardware summary — CPU, RAM, graphics card and driver, each drive's size and free space, and
-display resolution — in a format ready to paste into a bug report. **Save diagnostics bundle**,
-beside it, puts that, the system report and the newest three log files into one zip you can
-attach; nothing is sent.
+SysManager version, Windows version, architecture, .NET version, elevation state and Windows
+language, plus a hardware summary — CPU, RAM, graphics card and driver, each drive's size and
+free space, and display resolution — in a format ready to paste into a bug report. **Save
+diagnostics bundle**, beside it, puts that, the system report and the newest three log files
+into one zip you can attach; nothing is sent.
 
 ## Tech stack
 

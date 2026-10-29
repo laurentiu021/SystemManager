@@ -677,6 +677,10 @@ public sealed partial class AboutViewModel : ViewModelBase
             sb.Append("Architecture: ").AppendLine(RuntimeInformation.OSArchitecture.ToString());
             sb.Append(".NET: ").AppendLine(RuntimeInformation.FrameworkDescription);
             sb.Append("Elevated: ").AppendLine(SafeIsElevated() ? "yes" : "no");
+            // Culture (the regional format) and display language (the UI language) are independent
+            // Windows settings, and several log/report parsers match English text (#2861).
+            sb.Append("Language: ").Append(CultureInfo.CurrentCulture.Name)
+              .Append(" (display ").Append(CultureInfo.CurrentUICulture.Name).AppendLine(")");
 
             // CPU
             try

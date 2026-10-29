@@ -154,8 +154,12 @@ public sealed partial class PowerShellRunner : IPowerShellRunner, IDisposable
         }
     }
 
+    /// <summary>The system's OEM code page, as Windows itself reports it — not the regional format's.</summary>
+    /// <remarks>Internal rather than private so <see cref="LogService"/> can log it beside the regional
+    /// format's <c>CultureInfo.CurrentCulture.TextInfo.OEMCodePage</c> at startup (#2861): the two can
+    /// disagree, which is exactly what <see cref="ReadOemEncoding"/>'s remarks document.</remarks>
     [System.Runtime.InteropServices.LibraryImport("kernel32.dll")]
-    private static partial uint GetOEMCP();
+    internal static partial uint GetOEMCP();
 
     /// <summary>
     /// The encoding of the system's ANSI code page, as <c>GetACP</c> gives it: the one older Notepad and many localised

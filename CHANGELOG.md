@@ -10,6 +10,17 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.135.0] - 2026-10-29
+
+**The diagnostics bundle now includes every `[ERR]` and `[FTL]` log line from every log file still
+kept, not only the three newest ones it already carries in full.**
+
+### Added
+- `errors.txt` in the diagnostics bundle: every line the log marked `[ERR]` or `[FTL]`, with its
+  continuation lines (a stack trace, or a multi-line message), from every retained log — up to
+  fourteen — newest file first. An old or early error could previously fall outside both the
+  three whole logs the bundle carries and the 512 KB kept from each.
+
 ## [1.134.0] - 2026-10-29
 
 **The bug-report and general-issue forms now have a real drop target for the diagnostics bundle

@@ -6,6 +6,7 @@ using System.Globalization;
 using System.IO;
 using System.IO.Compression;
 using System.Text;
+using System.Text.RegularExpressions;
 using Serilog;
 
 namespace SysManager.Services;
@@ -27,7 +28,7 @@ namespace SysManager.Services;
 /// The logs need no such treatment: the sink strips the Windows user name from every line, message,
 /// property and exception text alike, before it reaches disk.</para>
 /// </remarks>
-public sealed class DiagnosticsBundleService
+public sealed partial class DiagnosticsBundleService
 {
     /// <summary>
     /// How many of the newest rolling log files go in.
@@ -50,6 +51,16 @@ public sealed class DiagnosticsBundleService
     /// file believing it is whole.
     /// </remarks>
     internal const long MaxBytesPerLog = 512 * 1024;
+
+    /// <summary>
+    /// The most bytes <see cref="BuildErrorsText"/> collects before it stops reading further logs.
+    /// </summary>
+    /// <remarks>
+    /// Smaller than <see cref="MaxBytesPerLog"/>: an [ERR] or [FTL] line is rare, so this much of them
+    /// is a lot of distinct failures, and the point of errors.txt is reach — every retained log, not
+    /// just the newest three — not completeness past what a reader could get through.
+    /// </remarks>
+    internal const long MaxErrorBytes = 256 * 1024;
 
     private readonly SystemReportService _report;
     private readonly string _logDir;
@@ -111,6 +122,7 @@ public sealed class DiagnosticsBundleService
             await WriteEntryAsync(zip, "README.txt", Readme(logs), ct).ConfigureAwait(false);
             await WriteEntryAsync(zip, "environment.txt", environment, ct).ConfigureAwait(false);
             await WriteEntryAsync(zip, "system-report.txt", report, ct).ConfigureAwait(false);
+            await WriteEntryAsync(zip, "errors.txt", BuildErrorsText(_logDir, ct), ct).ConfigureAwait(false);
 
             foreach (var log in logs)
             {
@@ -208,6 +220,78 @@ public sealed class DiagnosticsBundleService
     }
 
     /// <summary>
+    /// Every <c>[ERR]</c> and <c>[FTL]</c> line and its continuation lines (an exception's stack trace,
+    /// or a multi-line message), across EVERY retained log — not only the <see cref="NewestLogFiles"/>
+    /// whole copies above, which can leave an early or old error out entirely (#2861).
+    /// </summary>
+    /// <remarks>
+    /// Newest file first, read line by line rather than loaded whole: a retained file can be up to
+    /// <see cref="LogService.MaxLogFileBytes"/> (10 MB), and only the rare <c>[ERR]</c>/<c>[FTL]</c>
+    /// lines are kept. A line that does not start a new timestamped entry is a continuation of
+    /// whichever entry came before it — that is how Serilog renders an exception's stack trace and any
+    /// embedded newline in a message, with no timestamp of its own (<see cref="LogService"/>'s sink).
+    /// Stops once <see cref="MaxErrorBytes"/> is reached, so one log full of the same repeated failure
+    /// cannot crowd out a different one in an older file.
+    /// </remarks>
+    internal static string BuildErrorsText(string logDir, CancellationToken ct = default)
+    {
+        var sb = new StringBuilder();
+        if (!Directory.Exists(logDir)) return "No log files were found to check for errors.";
+
+        List<string> files;
+        try
+        {
+            files = [.. Directory.EnumerateFiles(logDir, "sysmanager-*.log", SearchOption.TopDirectoryOnly)
+                .OrderByDescending(f => f, StringComparer.Ordinal)];
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            Log.Warning("Diagnostics bundle could not list the log folder for errors.txt: {Error}", ex.Message);
+            return "The log folder could not be read.";
+        }
+
+        foreach (var file in files)
+        {
+            ct.ThrowIfCancellationRequested();
+            if (sb.Length >= MaxErrorBytes) break;
+            AppendErrorLines(file, sb);
+        }
+
+        return sb.Length > 0 ? sb.ToString() : "No [ERR] or [FTL] lines were found in any retained log.";
+    }
+
+    private static void AppendErrorLines(string path, StringBuilder sb)
+    {
+        try
+        {
+            using var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
+            using var reader = new StreamReader(stream, Encoding.UTF8);
+
+            var collecting = false;
+            string? line;
+            while ((line = reader.ReadLine()) is not null)
+            {
+                var entryStart = LogEntryStart().Match(line);
+                if (entryStart.Success)
+                    collecting = entryStart.Groups[1].Value is "ERR" or "FTL";
+
+                if (!collecting) continue;
+
+                sb.AppendLine(line);
+                if (sb.Length >= MaxErrorBytes) return;
+            }
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            Log.Warning("Diagnostics bundle skipped a log file while building errors.txt: {Error}", ex.Message);
+        }
+    }
+
+    /// <summary>The start of a log line Serilog's sink writes — any level, not only ERR/FTL.</summary>
+    [GeneratedRegex(@"^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\.\d{3} \[(\w{3})\] ")]
+    private static partial Regex LogEntryStart();
+
+    /// <summary>
     /// The note that ships inside the zip, naming every file and stating plainly that nothing was sent.
     /// </summary>
     /// <remarks>
@@ -233,6 +317,9 @@ public sealed class DiagnosticsBundleService
         sb.AppendLine("                     and memory.");
         sb.AppendLine("  system-report.txt  The full system report: operating system, processor, memory,");
         sb.AppendLine("                     graphics, motherboard, drives and their health, network adapters.");
+        sb.AppendLine("  errors.txt         Every line the log marked [ERR] or [FTL], with its continuation");
+        sb.AppendLine("                     lines, from EVERY log file still kept on this PC — not only the");
+        sb.AppendLine("                     ones below — so an older error is not left out.");
 
         if (logs.Count == 0)
         {

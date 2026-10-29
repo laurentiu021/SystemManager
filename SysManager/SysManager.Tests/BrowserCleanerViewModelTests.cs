@@ -14,9 +14,8 @@ namespace SysManager.Tests;
 /// Tests for <see cref="BrowserCleanerViewModel"/>: its Extensions half (#1526), and the toast it shows after a clean
 /// (#2456) — the rescan replaces the status line at once, so the toast is often the only result the user sees.
 /// </summary>
-// Serialized: CleanAsync_WhileDiskCategoryLocked swaps the static DialogService.Instance and touches the
-// process-wide OperationLockService.Instance. Required by
-// ArchitectureTests.ProcessWideStaticUsers_AreInTheSerializedCollection.
+// Serialized: CleanAsync_WhileDiskCategoryLocked touches the process-wide OperationLockService.Instance.
+// Required by ArchitectureTests.ProcessWideStaticUsers_AreInTheSerializedCollection.
 [Collection("ProcessWideStatics")]
 public class BrowserCleanerViewModelTests
 {
@@ -25,7 +24,7 @@ public class BrowserCleanerViewModelTests
     // The extension service is substituted, so no profile is read and no browser is started, and the clipboard
     // is a recorder, which a test thread could not reach anyway.
     private static BrowserCleanerViewModel NewVm(IBrowserExtensionService? extensions = null, List<string>? copied = null,
-        bool clipboardWorks = true)
+        bool clipboardWorks = true, IDialogService? dialog = null)
     {
         var root = Path.Combine(Path.GetTempPath(), "smtest_browsercleaner_" + Guid.NewGuid().ToString("N"));
         var vm = new BrowserCleanerViewModel(
@@ -35,7 +34,8 @@ public class BrowserCleanerViewModelTests
             {
                 copied?.Add(text);
                 return clipboardWorks;
-            });
+            },
+            dialog: dialog);
         vm.InitializationComplete.GetAwaiter().GetResult();
         return vm;
     }
@@ -296,7 +296,12 @@ public class BrowserCleanerViewModelTests
     {
         // #2510. A deletion batch that is cancelled with nothing to name it when SysManager closes
         // mid-run now shares the disk-scanning/deleting tabs' lock.
-        var vm = NewVm();
+        // The dialog is passed through the constructor (#2860) rather than swapping the process-wide
+        // DialogService.Instance: that swap only takes effect for a VM constructed AFTER it, and this
+        // test's own VM already existed by the time it used to run.
+        var dialog = Substitute.For<IDialogService>();
+        dialog.Confirm(Arg.Any<string>(), Arg.Any<string>()).Returns(true);
+        var vm = NewVm(dialog: dialog);
         vm.Items.Add(new BrowserCleanupItem
         {
             Browser = "Test Browser",
@@ -306,24 +311,46 @@ public class BrowserCleanerViewModelTests
             IsSelected = true,
         });
 
-        var prevDialog = DialogService.Instance;
-        var dialog = Substitute.For<IDialogService>();
-        dialog.Confirm(Arg.Any<string>(), Arg.Any<string>()).Returns(true);
-        DialogService.Instance = dialog;
         using var held = OperationLockService.Instance.TryAcquire(OperationCategory.Disk, "Deep Cleanup");
         Assert.NotNull(held);
-        try
-        {
-            await vm.CleanCommand.ExecuteAsync(null);
 
-            Assert.Equal("Cannot start — Deep Cleanup is already running.", vm.StatusMessage);
-            Assert.False(vm.IsBusy);
-            Assert.Single(vm.Items);
-        }
-        finally
+        await vm.CleanCommand.ExecuteAsync(null);
+
+        Assert.Equal("Cannot start — Deep Cleanup is already running.", vm.StatusMessage);
+        Assert.False(vm.IsBusy);
+        Assert.Single(vm.Items);
+    }
+
+    [Fact]
+    public async Task CleanAsync_WhenConfirmed_ReachesTheInjectedToastAndActivityLog_NotTheRealOnes()
+    {
+        // The dialog, the toast and the activity log were all DialogService.Instance/ToastService.Instance/
+        // ActivityLogService.Instance before #2860, reachable only by swapping those process-wide statics.
+        // This proves the constructor seam actually carries through to all three call sites, not just the
+        // one the existing locked-category test already covered.
+        var dialog = Substitute.For<IDialogService>();
+        dialog.Confirm(Arg.Any<string>(), Arg.Any<string>()).Returns(true);
+        var toast = Substitute.For<IToastService>();
+        var activityLog = Substitute.For<IActivityLog>();
+        var root = Path.Combine(Path.GetTempPath(), "smtest_browsercleaner_" + Guid.NewGuid().ToString("N"));
+        var vm = new BrowserCleanerViewModel(
+            new BrowserCleanerService(Path.Combine(root, "Local"), Path.Combine(root, "Roaming")),
+            Substitute.For<IBrowserExtensionService>(),
+            dialog: dialog, toast: toast, activityLog: activityLog);
+        await vm.InitializationComplete;
+        vm.Items.Add(new BrowserCleanupItem
         {
-            DialogService.Instance = prevDialog;
-        }
+            Browser = "Test Browser",
+            Category = "Cache",
+            Description = "test",
+            Paths = [],
+            IsSelected = true,
+        });
+
+        await vm.CleanCommand.ExecuteAsync(null);
+
+        toast.Received(1).Show(Arg.Any<string>(), Arg.Any<string>(), Arg.Any<int>());
+        activityLog.Received(1).Log("Browser Cleaner", Arg.Any<string>());
     }
 
     [Fact]

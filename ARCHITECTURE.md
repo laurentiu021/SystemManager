@@ -434,8 +434,10 @@ to scroll.
 
 Thin wrappers around the underlying platform. Each service is designed to be
 unit-testable. Services that a view-model needs to substitute in tests sit behind
-an interface seam. Thirty-seven are registered against their implementation in `ServiceRegistration.cs` and
-constructor-injected: `IPowerShellRunner` (PowerShellRunner), `IWingetService` (WingetService),
+an interface seam. Forty-one are registered against their implementation in `ServiceRegistration.cs` and
+constructor-injected: `IDialogService`, `IOperationLock`, `IToastService` and `IActivityLog` (all four
+via a factory resolving to the same process-wide `.Instance` singleton everything else still calls
+directly, not a second disconnected one), `IPowerShellRunner` (PowerShellRunner), `IWingetService` (WingetService),
 `ITuneUpService` (TuneUpService, the Dashboard's Quick Tune-Up and Quick Cleanup),
 `ISlowdownService` (SlowdownService, the Dashboard's "Why is it slow?" check),
 `IAppBlockerService` (AppBlockerService), `IBatteryReportService` (BatteryReportService, Battery Health's capacity
@@ -461,6 +463,12 @@ Changes tab), `IPutBackSignal` (PutBackSignal, which tells a tab that Undo Chang
 (FirstRunService, whether the Welcome screen has been seen on this PC),
 `IGamingProfileService`, and `ISessionRestorePoint` (the last two via a factory). `INavigationService`, like
 `ISpeedTestService`, forwards to the concrete singleton.
+
+`IDialogService`, `IOperationLock`, `IToastService` and `IActivityLog` are migrated one view model at a
+time (#2860) rather than all at once: `BrowserCleanerViewModel` is the first. The rest still call
+`DialogService.Instance`, `OperationLockService.Instance`, `ToastService.Instance` and
+`ActivityLogService.Instance` directly — 38, 31, 33 and 20 view models respectively, re-measured rather
+than quoted, since the point of migrating incrementally is that this number only ever shrinks.
 
 `INavigationService` is the seam a tab uses to send the user to another tab, so a tab that diagnoses
 something can offer the tab that fixes it. It is **late-bound**: the shell builds the tab view models and

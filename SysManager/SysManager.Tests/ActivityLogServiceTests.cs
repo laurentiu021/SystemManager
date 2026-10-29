@@ -383,7 +383,14 @@ public sealed class ActivityLogServiceTests : IDisposable
 
         var source = File.ReadAllText(path);
 
-        Assert.Contains("ActivityLogService.Instance.Log(", source);
+        // BrowserCleanerViewModel takes IActivityLog through its constructor instead of calling the
+        // static directly (#2860); either shape of reaching the activity log counts, since the point is
+        // whether the operation is logged at all, not which of the two ways reaches it.
+        var logsThroughTheStatic = source.Contains("ActivityLogService.Instance.Log(", StringComparison.Ordinal);
+        var logsThroughAnInjectedSeam =
+            source.Contains("IActivityLog", StringComparison.Ordinal) && source.Contains(".Log(", StringComparison.Ordinal);
+        Assert.True(logsThroughTheStatic || logsThroughAnInjectedSeam,
+            $"{viewModel} calls neither ActivityLogService.Instance.Log(...) nor an injected IActivityLog.Log(...)");
     }
 
     [Fact]

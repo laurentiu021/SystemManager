@@ -43,6 +43,10 @@ public sealed partial class BrowserCleanerViewModel : ViewModelBase, ISearchDest
     private readonly BrowserCleanerService _service;
     private readonly IBrowserExtensionService _extensions;
     private readonly Func<string, bool> _copyText;
+    private readonly IDialogService _dialog;
+    private readonly IOperationLock _operationLock;
+    private readonly IToastService _toast;
+    private readonly IActivityLog _activityLog;
     private CancellationTokenSource? _cts;
 
     public BulkObservableCollection<BrowserCleanupItem> Items { get; } = new();
@@ -96,12 +100,21 @@ public sealed partial class BrowserCleanerViewModel : ViewModelBase, ISearchDest
     /// <summary>Builds the tab over the cleaner, the extension list and the clipboard, and starts the first scan.</summary>
     /// <param name="extensions">Lists the extensions and opens a browser on its extensions page.</param>
     /// <param name="copyText">Puts text on the clipboard and says whether it could; the real clipboard unless a test passes its own.</param>
+    /// <param name="dialog">Defaults to <see cref="DialogService.Instance"/> (#2860).</param>
+    /// <param name="operationLock">Defaults to <see cref="OperationLockService.Instance"/> (#2860).</param>
+    /// <param name="toast">Defaults to <see cref="ToastService.Instance"/> (#2860).</param>
+    /// <param name="activityLog">Defaults to <see cref="ActivityLogService.Instance"/> (#2860).</param>
     public BrowserCleanerViewModel(BrowserCleanerService service, IBrowserExtensionService extensions,
-        Func<string, bool>? copyText = null)
+        Func<string, bool>? copyText = null, IDialogService? dialog = null, IOperationLock? operationLock = null,
+        IToastService? toast = null, IActivityLog? activityLog = null)
     {
         _service = service;
         _extensions = extensions;
         _copyText = copyText ?? CopyToClipboard;
+        _dialog = dialog ?? DialogService.Instance;
+        _operationLock = operationLock ?? OperationLockService.Instance;
+        _toast = toast ?? ToastService.Instance;
+        _activityLog = activityLog ?? ActivityLogService.Instance;
         StatusMessage = "Scanning installed browsers…";
         PropertyChanged += OnVmPropertyChanged;
         InitializeAsync(ScanAsync);
@@ -283,7 +296,7 @@ public sealed partial class BrowserCleanerViewModel : ViewModelBase, ISearchDest
             : "";
         var sizeNote = FormatHelper.FormatSize(selected.Sum(i => i.SizeBytes));
 
-        if (!DialogService.Instance.Confirm(
+        if (!_dialog.Confirm(
                 $"Clean {selected.Count} selected categor{(selected.Count == 1 ? "y" : "ies")} (~{sizeNote})?\n\n" +
                 "Close the affected browsers first so locked files can be removed. Open files are skipped, not forced." +
                 sensitiveNote,
@@ -295,10 +308,10 @@ public sealed partial class BrowserCleanerViewModel : ViewModelBase, ISearchDest
 
         // A deletion batch that is cancelled with nothing to name it when SysManager closes mid-run. Shares
         // the disk-scanning/deleting tabs' lock (#2510).
-        using var opLock = OperationLockService.Instance.TryAcquire(OperationCategory.Disk, "Browser Cleaner");
+        using var opLock = _operationLock.TryAcquire(OperationCategory.Disk, "Browser Cleaner");
         if (opLock is null)
         {
-            StatusMessage = $"Cannot start — {OperationLockService.Instance.GetActiveOperationName(OperationCategory.Disk)} is already running.";
+            StatusMessage = $"Cannot start — {_operationLock.GetActiveOperationName(OperationCategory.Disk)} is already running.";
             return;
         }
 
@@ -312,10 +325,10 @@ public sealed partial class BrowserCleanerViewModel : ViewModelBase, ISearchDest
             var deleted = await _service.CleanAsync(selected, _cts.Token).ConfigureAwait(true);
             StatusMessage = $"Removed {deleted} file(s). Re-scanning…";
             var (toastTitle, toastDetail) = CleanToast(deleted);
-            ToastService.Instance.Show(toastTitle, toastDetail);
+            _toast.Show(toastTitle, toastDetail);
             // Counts only. Naming the categories would record which browser/profile data the user
             // chose to erase, and activity.json is plain text under %LocalAppData%.
-            ActivityLogService.Instance.Log("Browser Cleaner",
+            _activityLog.Log("Browser Cleaner",
                 string.Create(CultureInfo.InvariantCulture,
                     $"Removed {deleted:N0} file{(deleted == 1 ? "" : "s")} from {selected.Count} categor{(selected.Count == 1 ? "y" : "ies")}"));
             Log.Information("BrowserCleaner: cleaned {Count} categories, {Deleted} files", selected.Count, deleted);

@@ -64,7 +64,7 @@ public sealed class PrivacyService : IPrivacyService
 
         try
         {
-            using var key = OpenOrCreateKey(toggle.RegistryPath, writable: true);
+            using var key = RegistryPaths.OpenOrCreateKey(_hkcuRoot, _hklmRoot, toggle.RegistryPath, writable: true);
             if (key is null)
             {
                 Log.Warning("Privacy toggle {Name} not applied — could not open/create {Path}",
@@ -149,7 +149,7 @@ public sealed class PrivacyService : IPrivacyService
     {
         try
         {
-            using var key = OpenOrCreateKey(toggle.RegistryPath, writable: false);
+            using var key = RegistryPaths.OpenOrCreateKey(_hkcuRoot, _hklmRoot, toggle.RegistryPath, writable: false);
             if (key is null) return false;
 
             var value = key.GetValue(toggle.ValueName);
@@ -176,36 +176,6 @@ public sealed class PrivacyService : IPrivacyService
     }
 
     /// <summary>
-    /// Opens or creates a registry key from a full path string (e.g. "HKLM\SOFTWARE\...").
-    /// Returns null if the root hive is unrecognized or access is denied.
-    /// </summary>
-    private RegistryKey? OpenOrCreateKey(string fullPath, bool writable)
-    {
-        var separatorIndex = fullPath.IndexOf('\\');
-        if (separatorIndex < 0) return null;
-
-        var hiveName = fullPath[..separatorIndex].ToUpperInvariant();
-        var subPath = fullPath[(separatorIndex + 1)..];
-
-        var hive = hiveName switch
-        {
-            "HKCU" or "HKEY_CURRENT_USER" => _hkcuRoot,
-            "HKLM" or "HKEY_LOCAL_MACHINE" => _hklmRoot,
-            _ => null
-        };
-
-        if (hive is null) return null;
-
-        if (writable)
-        {
-            // CreateSubKey creates intermediate keys if missing
-            return hive.CreateSubKey(subPath, writable: true);
-        }
-
-        return hive.OpenSubKey(subPath, writable: false);
-    }
-
-    /// <summary>
     /// Builds the full set of toggle definitions with their registry mappings.
     /// </summary>
     private static List<PrivacyToggle> CreateToggleDefinitions()
@@ -219,7 +189,7 @@ public sealed class PrivacyService : IPrivacyService
                 Name = "Disable diagnostic data",
                 Description = "Prevents Windows from sending diagnostic and usage data to Microsoft.",
                 Category = "Telemetry",
-                RegistryPath = @"HKLM\SOFTWARE\Policies\Microsoft\Windows\DataCollection",
+                RegistryPath = RegistryPaths.DataCollectionPolicy,
                 ValueName = "AllowTelemetry",
                 EnabledValue = 0,
                 DisabledValue = 3
@@ -230,7 +200,7 @@ public sealed class PrivacyService : IPrivacyService
                 Name = "Disable activity history",
                 Description = "Stops Windows from collecting activity history and sending it to Microsoft.",
                 Category = "Telemetry",
-                RegistryPath = @"HKLM\SOFTWARE\Policies\Microsoft\Windows\System",
+                RegistryPath = RegistryPaths.WindowsSystemPolicy,
                 ValueName = "EnableActivityFeed",
                 EnabledValue = 0,
                 DisabledValue = 1
@@ -241,7 +211,7 @@ public sealed class PrivacyService : IPrivacyService
                 Name = "Disable advertising ID",
                 Description = "Prevents apps from using your advertising ID for targeted ads.",
                 Category = "Telemetry",
-                RegistryPath = @"HKCU\Software\Microsoft\Windows\CurrentVersion\AdvertisingInfo",
+                RegistryPath = RegistryPaths.AdvertisingInfo,
                 ValueName = "Enabled",
                 EnabledValue = 0,
                 DisabledValue = 1
@@ -265,7 +235,7 @@ public sealed class PrivacyService : IPrivacyService
                 Name = "Disable Start suggestions",
                 Description = "Removes suggested apps and content from the Start menu.",
                 Category = "UI Declutter",
-                RegistryPath = @"HKCU\Software\Microsoft\Windows\CurrentVersion\ContentDeliveryManager",
+                RegistryPath = RegistryPaths.ContentDeliveryManager,
                 ValueName = "SubscribedContent-338388Enabled",
                 EnabledValue = 0,
                 DisabledValue = 1
@@ -276,7 +246,7 @@ public sealed class PrivacyService : IPrivacyService
                 Name = "Disable tips",
                 Description = "Turns off Windows tips and suggestions notifications.",
                 Category = "UI Declutter",
-                RegistryPath = @"HKCU\Software\Microsoft\Windows\CurrentVersion\ContentDeliveryManager",
+                RegistryPath = RegistryPaths.ContentDeliveryManager,
                 ValueName = "SoftLandingEnabled",
                 EnabledValue = 0,
                 DisabledValue = 1
@@ -287,7 +257,7 @@ public sealed class PrivacyService : IPrivacyService
                 Name = "Disable lock screen tips",
                 Description = "Removes tips and tricks from the lock screen.",
                 Category = "UI Declutter",
-                RegistryPath = @"HKCU\Software\Microsoft\Windows\CurrentVersion\ContentDeliveryManager",
+                RegistryPath = RegistryPaths.ContentDeliveryManager,
                 ValueName = "RotatingLockScreenOverlayEnabled",
                 EnabledValue = 0,
                 DisabledValue = 1
@@ -298,7 +268,7 @@ public sealed class PrivacyService : IPrivacyService
                 Name = "Disable Spotlight ads",
                 Description = "Removes promotional content from Windows Spotlight on the lock screen.",
                 Category = "UI Declutter",
-                RegistryPath = @"HKCU\Software\Microsoft\Windows\CurrentVersion\ContentDeliveryManager",
+                RegistryPath = RegistryPaths.ContentDeliveryManager,
                 ValueName = "SubscribedContent-353696Enabled",
                 EnabledValue = 0,
                 DisabledValue = 1
@@ -333,7 +303,7 @@ public sealed class PrivacyService : IPrivacyService
                 Name = "Disable web search",
                 Description = "Removes Bing web results from Start menu and taskbar search.",
                 Category = "Features",
-                RegistryPath = @"HKCU\Software\Policies\Microsoft\Windows\Explorer",
+                RegistryPath = RegistryPaths.ExplorerPolicy,
                 ValueName = "DisableSearchBoxSuggestions",
                 EnabledValue = 1,
                 DisabledValue = 0
@@ -344,7 +314,7 @@ public sealed class PrivacyService : IPrivacyService
                 Name = "Disable widgets",
                 Description = "Turns off the Widgets board (news and interests) on the taskbar.",
                 Category = "Features",
-                RegistryPath = @"HKLM\SOFTWARE\Policies\Microsoft\Dsh",
+                RegistryPath = RegistryPaths.Dsh,
                 ValueName = "AllowNewsAndInterests",
                 EnabledValue = 0,
                 DisabledValue = 1

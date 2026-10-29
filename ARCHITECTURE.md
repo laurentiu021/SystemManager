@@ -1198,7 +1198,10 @@ Key services:
 - `PrivacyService` (`IPrivacyService`) — reads and writes Windows privacy and telemetry
   registry toggles (activity history, advertising ID, diagnostics, etc.). Each toggle carries a
   stable `Key` that a privacy profile names it by; the list is pinned by a test, because renaming a
-  key would make every profile already exported drop that choice.
+  key would make every profile already exported drop that choice. The six registry paths it shares
+  with `SettingsWatchdogService` — which re-reads the same policy keys to notice Windows reverting
+  them — are declared once, in `Helpers.RegistryPaths`, which also owns the hive-parsing and
+  open/create logic both services used to carry as byte-identical private copies (#2860).
 - `UndoChangesService` (`IUndoChangesService`) — finds the changes SysManager can put back from the copies
   five tabs already keep: Performance Mode's record of the original settings (compared with the settings now,
   through `PerformanceService.TakeSnapshotAsync`, its graphics setting read from the card the record names; held
@@ -1832,8 +1835,13 @@ Key services:
   tends to reset (telemetry, web search, widgets, lock-screen ads, Start suggestions, …)
   as a JSON baseline in `%LocalAppData%\SysManager\settings-baseline.json`, then diffs the
   live registry against it and restores drifted values on request. `DetectChanges` is a
-  pure, unit-tested diff; registry access reuses the validated HKCU/HKLM helper pattern
-  from `PrivacyService`. Reads/writes only well-known values; nothing leaves the machine.
+  pure, unit-tested diff; registry access goes through the same `Helpers.RegistryPaths` helper
+  `PrivacyService` uses, now injectable (`hkcuRoot`/`hklmRoot`, after `configDir`), but still
+  defaulting to `Registry.CurrentUser`, deliberately NOT `AdminHelper.PerUserRegistryRoot()` like
+  Privacy — the watchdog restores what it saved under whichever account ran that save, so following
+  the signed-in account when elevated as a different administrator would restore the wrong
+  account's settings; reconciling the two defaults is #2826, not this (#2860).
+  Reads/writes only well-known values; nothing leaves the machine.
   `DetectDrift` has two shapes: the no-argument one reads the live values itself, and the
   overload takes a snapshot the caller already read. A caller that also DISPLAYS those values
   must use the overload, so the drift verdict and the displayed value describe one moment —

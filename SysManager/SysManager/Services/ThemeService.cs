@@ -70,6 +70,9 @@ public sealed class ThemeService
     private static readonly Dictionary<string, string> LightToDark =
         DarkToLight.ToDictionary(kv => kv.Value, kv => kv.Key);
 
+    /// <summary>The file name, also registered in <see cref="ProfileService"/>'s catalog.</summary>
+    internal const string FileName = "theme.json";
+
     /// <summary>
     /// Production goes through <see cref="Instance"/>, which passes null and lands on the real
     /// <c>%AppData%\SysManager\theme.json</c> (ROAMING, where this file has always lived — changing it
@@ -91,9 +94,7 @@ public sealed class ThemeService
     /// </param>
     internal ThemeService(string? configDir = null, Func<bool>? windowsPrefersDark = null, bool paintsTheApp = true)
     {
-        _settingsPath = Path.Combine(
-            configDir ?? AppDataFolders.Roaming,
-            "theme.json");
+        _settingsPath = Path.Combine(configDir ?? AppDataFolders.Roaming, FileName);
         _windowsPrefersDark = windowsPrefersDark ?? WindowsIsOnDark;
         _paintsTheApp = paintsTheApp;
     }

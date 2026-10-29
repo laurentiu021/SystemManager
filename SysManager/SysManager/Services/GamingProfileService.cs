@@ -58,6 +58,9 @@ public sealed class GamingProfileService : IGamingProfileService, IDisposable
     // 1 once the question about a session a previous run left on has been claimed in this run.
     private int _recoveryQuestionClaimed;
 
+    /// <summary>The file name, also registered in <see cref="ProfileService"/>'s catalog.</summary>
+    internal const string FileName = "gaming-profiles.json";
+
     public GamingProfileService(
         PerformanceService performance,
         ITimerResolutionService timer,
@@ -73,7 +76,7 @@ public sealed class GamingProfileService : IGamingProfileService, IDisposable
         _standby = standby;
         _restorePoint = restorePoint;
         _isElevated = isElevated;
-        _storePath = storePath ?? Path.Join(AppDataFolders.Local, "gaming-profiles.json");
+        _storePath = storePath ?? Path.Join(AppDataFolders.Local, FileName);
     }
 
     public bool IsActive => _appliedSteps.Count > 0;

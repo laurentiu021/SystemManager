@@ -50,11 +50,14 @@ public sealed class VolumePresetService
     /// </summary>
     private readonly Lock _mutateLock = new();
 
+    /// <summary>The file name, also registered in <see cref="ProfileService"/>'s catalog.</summary>
+    internal const string FileName = "volume-presets.json";
+
     /// <summary>Creates the service. <paramref name="configDir"/> is overridable for tests.</summary>
     public VolumePresetService(string? configDir = null)
     {
         var dir = configDir ?? AppDataFolders.Local;
-        _path = Path.Combine(dir, "volume-presets.json");
+        _path = Path.Combine(dir, FileName);
     }
 
     /// <summary>

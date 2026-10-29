@@ -84,7 +84,7 @@ public sealed class ProfileService
     ///   this installation's history.</item>
     /// <item><c>activity.json</c> — the local activity log. It is a record of what happened here, not a
     ///   setting, and merging two machines' histories would make it a fiction.</item>
-    /// <item><c>ProcessDescriptions.json</c>, <c>icon-fetch.json</c> — bundled data and a cache.</item>
+    /// <item><c>ProcessDescriptions.json</c> — bundled data.</item>
     /// <item><c>resource-history-config.json</c> — a single retention number; a whole section and a
     ///   checkbox for one integer costs the user more attention than it saves.</item>
     /// <item><c>disk-analyzer-preference.json</c> — whether the Disk Analyzer map is shown, one yes or no, for the
@@ -95,20 +95,20 @@ public sealed class ProfileService
     /// </summary>
     private static readonly (string Key, string DisplayName, string FileName, Base Base)[] Catalog =
     [
-        ("theme", "Theme & appearance", "theme.json", Base.Roaming),        // ThemeService → Roaming
-        ("speedtest", "Speed-test history", "speedtest-history.json", Base.Local), // SpeedTestHistoryService → Local
-        ("updatecheck", "Update-check preference", "update-check.json", Base.Roaming), // UpdateCheckPreferenceService → Roaming
-        ("darkmode", "Dark-mode schedule", "darkmode-schedule.json", Base.Roaming), // WindowsThemeService → Roaming
-        (GamingSectionKey, "Gaming profiles", "gaming-profiles.json", Base.Local), // GamingProfileService → Local
-        ("volume", "Volume presets", "volume-presets.json", Base.Local),   // VolumePresetService → Local
-        ("closebehaviour", "Close-button behaviour", "close-preference.json", Base.Local), // ClosePreferenceService → Local
-        ("standby", "Standby-memory preference", "standby-preference.json", Base.Local), // StandbyPreferenceService → Local
+        ("theme", "Theme & appearance", ThemeService.FileName, Base.Roaming),
+        ("speedtest", "Speed-test history", SpeedTestHistoryService.FileName, Base.Local),
+        ("updatecheck", "Update-check preference", UpdateCheckPreferenceService.FileName, Base.Roaming),
+        ("darkmode", "Dark-mode schedule", WindowsThemeService.FileName, Base.Roaming),
+        (GamingSectionKey, "Gaming profiles", GamingProfileService.FileName, Base.Local),
+        ("volume", "Volume presets", VolumePresetService.FileName, Base.Local),
+        ("closebehaviour", "Close-button behaviour", ClosePreferenceService.FileName, Base.Local),
+        ("standby", "Standby-memory preference", StandbyPreferenceService.FileName, Base.Local),
         // AppIconService → Local. This is a consent bit, not a cache: it records whether the Bulk
         // Installer may fetch icons from the web, and it defaults to off. It was the only user
         // preference the app persists that a profile did not carry, so exporting on one PC and
         // importing on another silently reset the choice — the same shape as "updatecheck", which is
         // also a network-consent preference and has always been carried.
-        ("appicons", "App-icon fetching", "icon-fetch.json", Base.Local),
+        ("appicons", "App-icon fetching", AppIconService.FileName, Base.Local),
     ];
 
     /// <summary>

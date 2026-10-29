@@ -8696,6 +8696,58 @@ public partial class ArchitectureTests
     [GeneratedRegex(@"\b(\d+\.\d+\.\d+)\b", RegexOptions.Compiled)]
     private static partial Regex SemanticVersion();
 
+    /// <summary>
+    /// No issue-template textarea that tells the reporter to attach something also sets <c>render</c>.
+    /// </summary>
+    /// <remarks>
+    /// GitHub's issue-form schema: a textarea with <c>render</c> set "will not expand for file attachments
+    /// or Markdown editing" — rendering formats whatever text is typed into a code block, it does not open a
+    /// drop target. The log field in both <c>bug_report.yml</c> and <c>general_issue.yml</c> said "attach the
+    /// file" and "you can attach instead" while declaring <c>render: text</c>, so a reporter who dragged the
+    /// diagnostics bundle onto that box had nowhere for it to land (#2861).
+    /// </remarks>
+    [Fact]
+    public void NoIssueTemplateTextarea_MentionsAttachingAndSetsRender()
+    {
+        var dir = Path.Combine(TestPaths.RepoRoot(), ".github", "ISSUE_TEMPLATE");
+        var files = Directory.EnumerateFiles(dir, "*.yml").OrderBy(f => f, StringComparer.Ordinal).ToList();
+        Assert.True(files.Count >= 3, $"only {files.Count} issue templates were found — the guard is vacuous");
+
+        var offenders = new List<string>();
+        var scanned = 0;
+        foreach (var file in files)
+        {
+            var lines = File.ReadAllLines(file);
+            for (var i = 0; i < lines.Length; i++)
+            {
+                if (lines[i].Trim() != "- type: textarea") continue;
+                var end = Array.FindIndex(lines, i + 1,
+                    l => l.TrimStart().StartsWith("- type:", StringComparison.Ordinal));
+                if (end < 0) end = lines.Length;
+                scanned++;
+
+                var block = string.Join('\n', lines[i..end]);
+                var mentionsAttach = block.Contains("attach", StringComparison.OrdinalIgnoreCase);
+                var setsRender = AttachmentTextareaRender().IsMatch(block);
+                if (mentionsAttach && setsRender)
+                {
+                    offenders.Add($"{Path.GetFileName(file)}:{i + 1} tells the reporter to attach something "
+                        + "but sets render, so GitHub will not expand this box for a file drop");
+                }
+            }
+        }
+
+        Assert.True(scanned >= 5,
+            $"only {scanned} textarea fields were found across the templates, out of 5+ measured — the "
+            + "search is out of date, so a pass proves nothing.");
+        Assert.True(offenders.Count == 0,
+            "an issue-template field invites a file attachment and also sets render, so the box will not "
+            + "take the drop:\n  " + string.Join("\n  ", offenders));
+    }
+
+    [GeneratedRegex(@"^\s*render:\s*\S", RegexOptions.Multiline | RegexOptions.Compiled)]
+    private static partial Regex AttachmentTextareaRender();
+
     /// <summary>The tab labels exactly as the sidebar registers them.</summary>
     private static HashSet<string> SidebarTabLabels()
     {

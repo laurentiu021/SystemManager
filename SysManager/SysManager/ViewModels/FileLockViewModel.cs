@@ -20,7 +20,7 @@ namespace SysManager.ViewModels;
 /// (after confirmation). Detection works as a standard user; killing a locker owned by
 /// SYSTEM or another user needs elevation, surfaced rather than thrown.
 /// </summary>
-public sealed partial class FileLockViewModel : ViewModelBase
+public sealed partial class FileLockViewModel : ElevatedViewModelBase
 {
     /// <inheritdoc/>
     protected internal override IRelayCommand? RefreshOnF5 => ScanCommand;
@@ -29,7 +29,6 @@ public sealed partial class FileLockViewModel : ViewModelBase
 
     public BulkObservableCollection<FileLocker> Lockers { get; } = new();
 
-    [ObservableProperty] private bool _isElevated;
     [ObservableProperty] private string _path = "";
     [ObservableProperty] private bool _hasScanned;
 
@@ -50,17 +49,10 @@ public sealed partial class FileLockViewModel : ViewModelBase
     public FileLockViewModel(IFileLockService service)
     {
         _service = service;
-        IsElevated = AdminHelper.IsElevated();
         StatusMessage = "Enter a file or folder path, then scan to see what's using it.";
         PropertyChanged += OnVmPropertyChanged;
     }
 
-    [RelayCommand]
-    private void RelaunchAsAdmin()
-    {
-        if (AdminHelper.RelaunchAsAdmin())
-            App.RequestShutdown();
-    }
 
     private bool CanScan => !IsBusy && !string.IsNullOrWhiteSpace(Path);
 

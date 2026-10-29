@@ -16,7 +16,7 @@ using SysManager.Services;
 
 namespace SysManager.ViewModels;
 
-public sealed partial class SystemHealthViewModel : ViewModelBase
+public sealed partial class SystemHealthViewModel : ElevatedViewModelBase
 {
     /// <inheritdoc/>
     protected internal override IRelayCommand? RefreshOnF5 => ScanCommand;
@@ -45,7 +45,6 @@ public sealed partial class SystemHealthViewModel : ViewModelBase
     [ObservableProperty] private CpuInfo? _cpu;
     [ObservableProperty] private MemoryInfo? _memory;
     [ObservableProperty] private string _summary = "Press 'Scan' to collect system info";
-    [ObservableProperty] private bool _isElevated;
     [ObservableProperty] private bool _isChkdskRunning;
     [ObservableProperty] private string _chkdskStatus = string.Empty;
 
@@ -72,7 +71,6 @@ public sealed partial class SystemHealthViewModel : ViewModelBase
         _drives = drives;
         _runner = runner;
         _biosService = biosService;
-        IsElevated = AdminHelper.IsElevated();
         _runner.LineReceived += OnRunnerLineReceived;
 
         InitializeAsync(InitAsync);
@@ -449,12 +447,6 @@ public sealed partial class SystemHealthViewModel : ViewModelBase
         return exitCode == 0 ? "Healthy" : $"Exit {exitCode}";
     }
 
-    [RelayCommand]
-    private void RelaunchAsAdmin()
-    {
-        if (AdminHelper.RelaunchAsAdmin())
-            App.RequestShutdown();
-    }
 
     [GeneratedRegex(@"^[A-Z]:$", RegexOptions.IgnoreCase)]
     private static partial Regex DriveLetterPattern();

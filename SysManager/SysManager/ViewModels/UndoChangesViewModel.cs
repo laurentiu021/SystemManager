@@ -24,7 +24,7 @@ namespace SysManager.ViewModels;
 /// <para>There is deliberately no "undo everything". One button reversing several unrelated changes would itself be a
 /// large change, and a restore point already does "everything".</para>
 /// </remarks>
-public sealed partial class UndoChangesViewModel : ViewModelBase
+public sealed partial class UndoChangesViewModel : ElevatedViewModelBase
 {
     /// <inheritdoc/>
     protected internal override IRelayCommand? RefreshOnF5 => RefreshCommand;
@@ -76,7 +76,6 @@ public sealed partial class UndoChangesViewModel : ViewModelBase
     /// <summary>The tabs whose switches are their own undo.</summary>
     public IReadOnlyList<UndoSwitch> Switches => SwitchTabs;
 
-    [ObservableProperty] private bool _isElevated;
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(ShowNothingToPutBack))]
@@ -127,7 +126,6 @@ public sealed partial class UndoChangesViewModel : ViewModelBase
         _service = service;
         _navigation = navigation;
         _clock = clock ?? TimeProvider.System;
-        IsElevated = AdminHelper.IsElevated();
         StatusMessage = "Looking for changes SysManager can put back…";
         RestorePointText = IsElevated
             ? LookingForRestorePoint
@@ -351,12 +349,6 @@ public sealed partial class UndoChangesViewModel : ViewModelBase
         if (!string.IsNullOrWhiteSpace(navId)) _navigation.GoTo(navId);
     }
 
-    [RelayCommand]
-    private void RelaunchAsAdmin()
-    {
-        if (AdminHelper.RelaunchAsAdmin())
-            App.RequestShutdown();
-    }
 
     private void Show(UndoScan scan)
     {

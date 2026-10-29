@@ -19,7 +19,7 @@ namespace SysManager.ViewModels;
 /// (Tamper Protection can silently reject it); changes are confirmed first. All four changes run
 /// through one funnel, which takes the shared session restore point before the first of them.
 /// </summary>
-public sealed partial class DefenderViewModel : ViewModelBase
+public sealed partial class DefenderViewModel : ElevatedViewModelBase
 {
     /// <inheritdoc/>
     protected internal override IRelayCommand? RefreshOnF5 => RefreshCommand;
@@ -29,7 +29,6 @@ public sealed partial class DefenderViewModel : ViewModelBase
 
     public BulkObservableCollection<string> ExclusionPaths { get; } = new();
 
-    [ObservableProperty] private bool _isElevated;
     [ObservableProperty] private bool _isAvailable = true;
     [ObservableProperty] private bool _isTamperProtected;
     [ObservableProperty] private string _realtimeDisplay = "—";
@@ -56,18 +55,11 @@ public sealed partial class DefenderViewModel : ViewModelBase
     {
         _service = service;
         _restorePoint = restorePoint;
-        IsElevated = AdminHelper.IsElevated();
         StatusMessage = "Reading Defender status…";
         PropertyChanged += OnVmPropertyChanged;
         InitializeAsync(RefreshAsync);
     }
 
-    [RelayCommand]
-    private void RelaunchAsAdmin()
-    {
-        if (AdminHelper.RelaunchAsAdmin())
-            App.RequestShutdown();
-    }
 
     /// <summary>True when no Defender operation is in flight — gates the mutating
     /// commands so a user can't start a second Set-MpPreference while the first is

@@ -33,7 +33,7 @@ namespace SysManager.ViewModels;
 /// <para>Network-stack reset (Winsock/TCP-IP/DNS flush) lives on the Network Repair tab, which owns
 /// it, so it is not duplicated here — the card list carries a pointer to it instead.</para>
 /// </remarks>
-public sealed partial class SystemFixesViewModel : ViewModelBase
+public sealed partial class SystemFixesViewModel : ElevatedViewModelBase
 {
     // Escape stops nothing here, so there is no EscapeCancel: every run on this tab repairs or changes Windows, and
     // Escape is a bare keypress. It stopped SFC, DISM and the scripted repairs half-way (#2834). The Cancel button
@@ -56,8 +56,6 @@ public sealed partial class SystemFixesViewModel : ViewModelBase
     private CancellationTokenSource? _cts;
     private CancellationTokenSource? _sfcCts;
     private CancellationTokenSource? _dismCts;
-
-    [ObservableProperty] private bool _isElevated;
 
     // Per-repair running flags. Two reasons they are not just IsBusy: the SFC and DISM indicators
     // and verdicts are bound to their own flag, and a repair that runs for half an hour has to be
@@ -93,10 +91,19 @@ public sealed partial class SystemFixesViewModel : ViewModelBase
     {
         _service = service;
         _runner = runner;
-        IsElevated = AdminHelper.IsElevated();
         StatusMessage = "Pick a repair. Each asks for confirmation before it runs.";
         _service.LineReceived += OnLine;
         _runner.LineReceived += OnLine;
+        PropertyChanged += OnVmPropertyChanged;
+    }
+
+    // IsElevated now lives on ElevatedViewModelBase, so its change notification can no longer reach
+    // NotifyFixCommands through an OnIsElevatedChanged partial hook (the toolkit generates that hook's
+    // declaration in the SAME partial class as the field, which is the base — a derived class cannot
+    // implement a base class's partial method). PropertyChanged is the base's own notification channel.
+    private void OnVmPropertyChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
+    {
+        if (e.PropertyName == nameof(IsElevated)) NotifyFixCommands();
     }
 
     /// <summary>
@@ -105,7 +112,6 @@ public sealed partial class SystemFixesViewModel : ViewModelBase
     /// </summary>
     private bool CanRunFix => !IsAnyRunning && IsElevated;
 
-    partial void OnIsElevatedChanged(bool value) => NotifyFixCommands();
     partial void OnIsFixRunningChanged(bool value) => OnAnyRunningChanged();
     partial void OnIsSfcRunningChanged(bool value) => OnAnyRunningChanged();
     partial void OnIsDismRunningChanged(bool value) => OnAnyRunningChanged();
@@ -628,13 +634,6 @@ public sealed partial class SystemFixesViewModel : ViewModelBase
         _cts?.Cancel();
         _sfcCts?.Cancel();
         _dismCts?.Cancel();
-    }
-
-    [RelayCommand]
-    private void RelaunchAsAdmin()
-    {
-        if (AdminHelper.RelaunchAsAdmin())
-            App.RequestShutdown();
     }
 
     protected override void Dispose(bool disposing)

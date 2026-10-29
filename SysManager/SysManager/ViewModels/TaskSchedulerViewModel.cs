@@ -17,7 +17,7 @@ namespace SysManager.ViewModels;
 /// the selected task. Disabling is reversible; tasks are never deleted. System tasks
 /// require a confirmation warning; changes need admin and are verified by read-back.
 /// </summary>
-public sealed partial class TaskSchedulerViewModel : ViewModelBase
+public sealed partial class TaskSchedulerViewModel : ElevatedViewModelBase
 {
     /// <inheritdoc/>
     protected internal override IRelayCommand? RefreshOnF5 => RefreshCommand;
@@ -38,7 +38,6 @@ public sealed partial class TaskSchedulerViewModel : ViewModelBase
 
     public BulkObservableCollection<ScheduledTaskInfo> Tasks { get; } = new();
 
-    [ObservableProperty] private bool _isElevated;
     [ObservableProperty] private ScheduledTaskInfo? _selectedTask;
     [ObservableProperty] private string _filter = "";
     [ObservableProperty] private bool _hideSystemTasks;
@@ -68,7 +67,6 @@ public sealed partial class TaskSchedulerViewModel : ViewModelBase
     public TaskSchedulerViewModel(TaskSchedulerService service)
     {
         _service = service;
-        IsElevated = AdminHelper.IsElevated();
         StatusMessage = "Loading scheduled tasks…";
         PropertyChanged += OnVmPropertyChanged;
         InitializeAsync(RefreshAsync);
@@ -90,12 +88,6 @@ public sealed partial class TaskSchedulerViewModel : ViewModelBase
         }
     }
 
-    [RelayCommand]
-    private void RelaunchAsAdmin()
-    {
-        if (AdminHelper.RelaunchAsAdmin())
-            App.RequestShutdown();
-    }
 
     [RelayCommand(CanExecute = nameof(NotBusy))]
     private async Task RefreshAsync()

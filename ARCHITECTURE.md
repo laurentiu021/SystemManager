@@ -2156,13 +2156,22 @@ In tests/designer (no DI container) every VM is built eagerly via a manual depen
 
 Features that require admin (Windows Update installs, SFC/DISM, system-wide winget
 upgrades, …) check elevation via `AdminHelper.IsElevated()` and surface a banner
-when running unelevated — `AdminBanner`, on 31 tabs. Its button calls
+when running unelevated — `AdminBanner`, on 32 tabs. Its button calls
 `AdminHelper.RelaunchAsAdmin()`, which first asks through `QuitGuard` when something is
 still running, then starts a new copy with `runas` and the single argument
 `--relaunched-elevated` (the original command line is not passed on) and returns true;
 the caller then closes this instance with `App.RequestShutdown()`. The elevated copy
 waits up to 5 seconds for the single-instance mutex to be handed over instead of exiting
 as a duplicate.
+
+`ElevatedViewModelBase` (in `ViewModelBase`'s own namespace) declares `IsElevated` and
+`RelaunchAsAdminCommand` once, since `AdminBanner` binds both ambiently from its host's
+DataContext rather than from properties on the control. 28 of the 32 hosts inherit from it;
+28 identical fields and commands, hand-copied one tab at a time, collapsed into this one
+(#2860). Four hosts still wire elevation by hand, deliberately: `AppUpdatesViewModel` logs
+who asked for elevation before relaunching, and `BootAnalyzerViewModel`, `StartupViewModel`
+and `WindowsUpdateViewModel` take elevation as an injected probe they read more than once,
+which the base's one-shot constructor assignment does not support.
 
 ## Keyboard accelerators
 

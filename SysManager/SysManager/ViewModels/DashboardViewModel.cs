@@ -14,7 +14,7 @@ using SysManager.Services;
 
 namespace SysManager.ViewModels;
 
-public sealed partial class DashboardViewModel : ViewModelBase
+public sealed partial class DashboardViewModel : ElevatedViewModelBase
 {
     /// <inheritdoc/>
     protected internal override IRelayCommand? RefreshOnF5 => RefreshCommand;
@@ -114,7 +114,6 @@ public sealed partial class DashboardViewModel : ViewModelBase
     // ── System info (static, refreshed on scan) ──────────────────────────
     [ObservableProperty] private string _osLine = "";
     [ObservableProperty] private string _uptimeLine = "";
-    [ObservableProperty] private bool _isElevated;
 
     // ── Health Score ──────────────────────────────────────────────────────
     [ObservableProperty] private HealthScoreResult? _healthResult;
@@ -297,7 +296,6 @@ public sealed partial class DashboardViewModel : ViewModelBase
         _winget = winget;
         _crashMarkers = crashMarkers;
         _memTest = memTest;
-        IsElevated = AdminHelper.IsElevated();
         InitializeAsync(InitAsync);
     }
 
@@ -1507,12 +1505,6 @@ public sealed partial class DashboardViewModel : ViewModelBase
         }
     }
 
-    [RelayCommand]
-    private void RelaunchAsAdmin()
-    {
-        if (AdminHelper.RelaunchAsAdmin())
-            App.RequestShutdown();
-    }
 
     // ── Tune-Up (preserved from original) ─────────────────────────────────
 

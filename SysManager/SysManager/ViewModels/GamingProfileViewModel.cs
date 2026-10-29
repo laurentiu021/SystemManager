@@ -20,7 +20,7 @@ namespace SysManager.ViewModels;
 /// <para>Preview scope (v1): every action is fully reversible. Killing background processes
 /// and saved multi-game profiles are intentionally not part of this preview — see the banner.</para>
 /// </summary>
-public sealed partial class GamingProfileViewModel : ViewModelBase
+public sealed partial class GamingProfileViewModel : ElevatedViewModelBase
 {
     /// <inheritdoc/>
     protected internal override IRelayCommand? RefreshOnF5 => RefreshProcessesCommand;
@@ -32,7 +32,6 @@ public sealed partial class GamingProfileViewModel : ViewModelBase
     /// <summary>Running processes the user can pick as the game to optimize (optional).</summary>
     public BulkObservableCollection<RunningProcess> Processes { get; } = new();
 
-    [ObservableProperty] private bool _isElevated;
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(HasSelectedGame))]
@@ -60,7 +59,6 @@ public sealed partial class GamingProfileViewModel : ViewModelBase
         _service = service;
         _cpu = cpu;
         _putBack = putBack;
-        IsElevated = AdminHelper.IsElevated();
         _service.SessionAutoReverted += OnSessionAutoReverted;
         if (_putBack is not null) _putBack.PutBack += OnPutBack;
 
@@ -329,12 +327,6 @@ public sealed partial class GamingProfileViewModel : ViewModelBase
         return string.Join(" · ", parts) + ".";
     }
 
-    [RelayCommand]
-    private void RelaunchAsAdmin()
-    {
-        if (AdminHelper.RelaunchAsAdmin())
-            App.RequestShutdown();
-    }
 
     protected override void Dispose(bool disposing)
     {

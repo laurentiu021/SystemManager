@@ -20,7 +20,7 @@ namespace SysManager.ViewModels;
 /// done programmatically, so the tab guides the user to Windows Settings. Every action confirms
 /// first and reports its honest outcome.
 /// </summary>
-public sealed partial class EdgeOneDriveViewModel : ViewModelBase
+public sealed partial class EdgeOneDriveViewModel : ElevatedViewModelBase
 {
     private readonly EdgeOneDriveService _service;
     // Removing OneDrive or de-integrating Edge is among the scariest things in the app for the
@@ -29,7 +29,6 @@ public sealed partial class EdgeOneDriveViewModel : ViewModelBase
     // most one point.
     private readonly ISessionRestorePoint _restorePoint;
 
-    [ObservableProperty] private bool _isElevated;
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(OneDriveStateText))]
@@ -81,7 +80,6 @@ public sealed partial class EdgeOneDriveViewModel : ViewModelBase
     {
         _service = service;
         _restorePoint = restorePoint;
-        IsElevated = AdminHelper.IsElevated();
         StatusMessage = "Reading Edge and OneDrive status…";
         PropertyChanged += OnVmPropertyChanged;
         InitializeAsync(RefreshAsync);
@@ -102,12 +100,6 @@ public sealed partial class EdgeOneDriveViewModel : ViewModelBase
         RestoreEdgeCommand.NotifyCanExecuteChanged();
     }
 
-    [RelayCommand]
-    private void RelaunchAsAdmin()
-    {
-        if (AdminHelper.RelaunchAsAdmin())
-            App.RequestShutdown();
-    }
 
     [RelayCommand(CanExecute = nameof(NotBusy))]
     private async Task RefreshAsync()

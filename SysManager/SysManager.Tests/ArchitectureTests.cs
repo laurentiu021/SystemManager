@@ -5450,6 +5450,14 @@ public partial class ArchitectureTests
     /// duplication being removed. The cost is that a host whose view model lacks either member renders a
     /// banner stuck in one state, or a button that does nothing, with no compiler error and no visible clue.
     /// The second assertion is what makes that cost safe.</para>
+    /// <para><b>A second round of drift, in the view models rather than the views.</b> The two members
+    /// themselves were still hand-copied into 29 view models (#2860) — <c>ElevatedViewModelBase</c> now
+    /// declares both, so a host's own source text no longer needs to spell "IsElevated" or
+    /// "RelaunchAsAdmin": inheriting the base satisfies this assertion exactly as having both members
+    /// written out does. Four hosts still write them by hand, deliberately: <c>AppUpdatesViewModel</c>
+    /// logs who asked for elevation before relaunching, and <c>BootAnalyzerViewModel</c>,
+    /// <c>StartupViewModel</c> and <c>WindowsUpdateViewModel</c> take elevation as an injected probe they
+    /// read more than once, which the base's one-shot constructor assignment does not support.</para>
     /// </remarks>
     [Fact]
     public void TheElevationBanner_LivesInOneControl_AndItsHostsExposeWhatItBinds()
@@ -5493,11 +5501,11 @@ public partial class ArchitectureTests
             .Where(n => n.Length > 0)
             .ToList();
 
-        // Vacuity floor: 31 views host the banner, re-measured today — it was 30 when this was written and a
-        // host has been added since, which is exactly why the number is stated rather than remembered. A
-        // collapse means the element match broke and the view-model assertion below is checking nothing.
-        Assert.True(hosts.Count >= 28,
-            $"only {hosts.Count} views were found hosting <v:AdminBanner/>, out of 31 measured — the element "
+        // Vacuity floor: 32 views host the banner, re-measured today — it was 30 when this was written and
+        // two hosts have been added since, which is exactly why the number is stated rather than remembered.
+        // A collapse means the element match broke and the view-model assertion below is checking nothing.
+        Assert.True(hosts.Count >= 29,
+            $"only {hosts.Count} views were found hosting <v:AdminBanner/>, out of 32 measured — the element "
             + "match is out of date, so a pass proves nothing.");
 
         var missing = new List<string>();
@@ -5513,6 +5521,9 @@ public partial class ArchitectureTests
             }
 
             var source = File.ReadAllText(viewModel);
+            // ElevatedViewModelBase declares both members once, so a host that inherits from it satisfies
+            // this assertion without spelling either name itself (#2860).
+            if (source.Contains(": ElevatedViewModelBase", StringComparison.Ordinal)) continue;
             if (!source.Contains("IsElevated", StringComparison.Ordinal))
                 missing.Add($"{host} — its view model exposes no IsElevated, so the banner cannot switch state");
             if (!source.Contains("RelaunchAsAdmin", StringComparison.Ordinal))
@@ -18082,7 +18093,12 @@ public partial class ArchitectureTests
         }
 
         // 35 when this was written: 33 administrator relaunches, the tray's Exit and closing the window.
-        Assert.True(exits >= 30,
+        // #2860 collapsed 28 of those near-identical relaunch copies into ElevatedViewModelBase's one
+        // shared method, dropping the real count to 9: the shared method, four hosts that still wire
+        // elevation by hand (AppUpdates logs who asked; BootAnalyzer, Startup and WindowsUpdate take an
+        // injected probe read more than once), Cleanup's second, inline relaunch, Disk Analyzer's
+        // unrelated recovery button, the tray's Exit and closing the window.
+        Assert.True(exits >= 8,
             $"only {exits} App.RequestShutdown() calls were found, so this scan is no longer seeing the app's exits");
 
         // The relaunch has to ask BEFORE it starts the elevated copy, because that copy then waits for this

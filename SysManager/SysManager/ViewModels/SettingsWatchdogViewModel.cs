@@ -20,7 +20,7 @@ namespace SysManager.ViewModels;
 /// drift in plain language, offering one-click restore. Read-only until the user explicitly
 /// saves a baseline or restores a setting; restore writes only well-known registry values.
 /// </summary>
-public sealed partial class SettingsWatchdogViewModel : ViewModelBase
+public sealed partial class SettingsWatchdogViewModel : ElevatedViewModelBase
 {
     /// <inheritdoc/>
     protected internal override IRelayCommand? RefreshOnF5 => RefreshCommand;
@@ -46,7 +46,6 @@ public sealed partial class SettingsWatchdogViewModel : ViewModelBase
     [ObservableProperty] private bool _hasBaseline;
     [ObservableProperty] private string _baselineTaken = "";
     [ObservableProperty] private bool _hasDrift;
-    [ObservableProperty] private bool _isElevated;
 
     /// <summary>
     /// True while the tab is on screen. Set by <see cref="MainWindowViewModel.SetActive"/>; becoming visible looks
@@ -66,7 +65,6 @@ public sealed partial class SettingsWatchdogViewModel : ViewModelBase
     public SettingsWatchdogViewModel(ISettingsWatchdogService service)
     {
         _service = service;
-        IsElevated = AdminHelper.IsElevated();
         InitializeAsync(() => { Refresh(); return System.Threading.Tasks.Task.CompletedTask; });
     }
 
@@ -77,12 +75,6 @@ public sealed partial class SettingsWatchdogViewModel : ViewModelBase
         if (value && InitializationComplete.IsCompleted) Refresh();
     }
 
-    [RelayCommand]
-    private void RelaunchAsAdmin()
-    {
-        if (AdminHelper.RelaunchAsAdmin())
-            App.RequestShutdown();
-    }
 
     /// <summary>Re-reads the baseline and live state and rebuilds both the watched list and the drifts.</summary>
     [RelayCommand]

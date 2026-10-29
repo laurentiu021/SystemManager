@@ -18,7 +18,7 @@ namespace SysManager.ViewModels;
 /// require administrator rights; restoring reboots the machine and is gated behind
 /// an explicit confirmation dialog.
 /// </summary>
-public sealed partial class RestorePointsViewModel : ViewModelBase
+public sealed partial class RestorePointsViewModel : ElevatedViewModelBase
 {
     /// <inheritdoc/>
     protected internal override IRelayCommand? RefreshOnF5 => RefreshCommand;
@@ -33,7 +33,6 @@ public sealed partial class RestorePointsViewModel : ViewModelBase
 
     public BulkObservableCollection<RestorePoint> RestorePoints { get; } = new();
 
-    [ObservableProperty] private bool _isElevated;
     [ObservableProperty] private bool _hasPoints;
     [ObservableProperty] private string _newDescription = "";
 
@@ -67,7 +66,6 @@ public sealed partial class RestorePointsViewModel : ViewModelBase
     {
         _service = service;
         _clock = clock ?? TimeProvider.System;
-        IsElevated = AdminHelper.IsElevated();
         StatusMessage = "Loading restore points…";
         PropertyChanged += OnVmPropertyChanged;
         InitializeAsync(RefreshAsync);
@@ -313,12 +311,6 @@ public sealed partial class RestorePointsViewModel : ViewModelBase
     [RelayCommand]
     private void Cancel() => _cts?.Cancel();
 
-    [RelayCommand]
-    private void RelaunchAsAdmin()
-    {
-        if (AdminHelper.RelaunchAsAdmin())
-            App.RequestShutdown();
-    }
 
     protected override void Dispose(bool disposing)
     {

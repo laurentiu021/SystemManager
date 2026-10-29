@@ -15,7 +15,7 @@ using SysManager.Services;
 
 namespace SysManager.ViewModels;
 
-public sealed partial class DeepCleanupViewModel : ViewModelBase
+public sealed partial class DeepCleanupViewModel : ElevatedViewModelBase
 {
     /// <inheritdoc/>
     protected internal override IRelayCommand? RefreshOnF5 => ScanCommand;
@@ -41,7 +41,6 @@ public sealed partial class DeepCleanupViewModel : ViewModelBase
     /// would not list read as empty, without ever saying that administrator rights were the reason, which is the
     /// one thing the user could have acted on.
     /// </remarks>
-    [ObservableProperty] private bool _isElevated;
 
     [ObservableProperty] private bool _isScanning;
     [ObservableProperty] private bool _isCleaning;
@@ -79,16 +78,8 @@ public sealed partial class DeepCleanupViewModel : ViewModelBase
         // states must not flicker from "needs administrator" to "running as administrator" after the page
         // has painted. Nothing else needs initialising here — the locations list this tab used to build
         // left with the large-files finder (#1523), so there is no InitializeAsync call any more.
-        IsElevated = AdminHelper.IsElevated();
     }
 
-    /// <summary>Restarts SysManager elevated, so the <c>%WinDir%</c> buckets stop being skipped.</summary>
-    [RelayCommand]
-    private void RelaunchAsAdmin()
-    {
-        if (AdminHelper.RelaunchAsAdmin())
-            App.RequestShutdown();
-    }
 
     // Forward any running state to IsBusy so the sidebar progress indicator works
     partial void OnIsScanningChanged(bool value)

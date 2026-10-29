@@ -34,7 +34,7 @@ namespace SysManager.ViewModels;
 /// <see cref="ProcessManagerViewModel"/> / <see cref="AudioMixerViewModel"/>. Strictly local and
 /// read-only — nothing is changed on the system and nothing leaves the machine.
 /// </summary>
-public sealed partial class BandwidthMonitorViewModel : ViewModelBase
+public sealed partial class BandwidthMonitorViewModel : ElevatedViewModelBase
 {
     /// <inheritdoc/>
     protected internal override IRelayCommand? RefreshOnF5 => ReloadHistoryCommand;
@@ -102,7 +102,6 @@ public sealed partial class BandwidthMonitorViewModel : ViewModelBase
 
     [ObservableProperty] private bool _isActive;
     [ObservableProperty] private bool _hasProcesses;
-    [ObservableProperty] private bool _isElevated;
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(DownDisplay))]
@@ -200,7 +199,6 @@ public sealed partial class BandwidthMonitorViewModel : ViewModelBase
         _connectionSourceFactory = connectionSourceFactory;
         _etwSourceFactory = etwSourceFactory;
         _time = timeProvider ?? TimeProvider.System;
-        IsElevated = AdminHelper.IsElevated();
         _selectedRange = RangeOptions[0]; // Live — the tab's job is the current moment first.
 
         ThroughputXAxes = [BuildTimeAxis()];
@@ -579,12 +577,6 @@ public sealed partial class BandwidthMonitorViewModel : ViewModelBase
     partial void OnTotalDownBytesPerSecChanged(double value) => EvaluateAlert();
     partial void OnTotalUpBytesPerSecChanged(double value) => EvaluateAlert();
 
-    [RelayCommand]
-    private void RelaunchAsAdmin()
-    {
-        if (AdminHelper.RelaunchAsAdmin())
-            App.RequestShutdown();
-    }
 
     // ── Live chart plumbing (mirrors ResourceHistoryViewModel's idiom) ─────
 

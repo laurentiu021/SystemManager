@@ -19,7 +19,7 @@ namespace SysManager.ViewModels;
 /// by location, lets the user toggle them, switch between Win10/Win11 style,
 /// and customize which entries appear on right-click.
 /// </summary>
-public sealed partial class ContextMenuViewModel : ViewModelBase
+public sealed partial class ContextMenuViewModel : ElevatedViewModelBase
 {
     /// <inheritdoc/>
     protected internal override IRelayCommand? RefreshOnF5 => RefreshCommand;
@@ -36,7 +36,6 @@ public sealed partial class ContextMenuViewModel : ViewModelBase
     [ObservableProperty] private int _disabledCount;
     [ObservableProperty] private int _totalCount;
     [ObservableProperty] private bool _isClassicMenuEnabled;
-    [ObservableProperty] private bool _isElevated;
     [ObservableProperty] private string _activePresetId = "";
     [ObservableProperty] private string _presetDescription = "";
 
@@ -66,7 +65,6 @@ public sealed partial class ContextMenuViewModel : ViewModelBase
     public ContextMenuViewModel(IContextMenuService service)
     {
         _service = service;
-        IsElevated = AdminHelper.IsElevated();
         IsClassicMenuEnabled = _service.IsClassicMenuEnabled();
         ActivePresetId = IsClassicMenuEnabled ? "win10" : "win11";
         PresetDescription = IsClassicMenuEnabled
@@ -150,12 +148,6 @@ public sealed partial class ContextMenuViewModel : ViewModelBase
         finally { IsBusy = false; IsProgressIndeterminate = false; }
     }
 
-    [RelayCommand]
-    private void RelaunchAsAdmin()
-    {
-        if (AdminHelper.RelaunchAsAdmin())
-            App.RequestShutdown();
-    }
 
     [RelayCommand]
     private async Task ToggleEntryAsync(object? parameter)

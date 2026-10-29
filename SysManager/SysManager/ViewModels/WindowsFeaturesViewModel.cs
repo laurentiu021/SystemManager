@@ -15,7 +15,7 @@ namespace SysManager.ViewModels;
 /// Windows Features tab — lists optional features, allows enable/disable toggle.
 /// Requires administrator privileges for modifications.
 /// </summary>
-public sealed partial class WindowsFeaturesViewModel : ViewModelBase
+public sealed partial class WindowsFeaturesViewModel : ElevatedViewModelBase
 {
     /// <inheritdoc/>
     protected internal override IRelayCommand? RefreshOnF5 => ScanCommand;
@@ -42,7 +42,6 @@ public sealed partial class WindowsFeaturesViewModel : ViewModelBase
     [ObservableProperty] private int _featureCount;
     [ObservableProperty] private int _enabledCount;
     [ObservableProperty] private string _summary = "Click Scan to list Windows optional features.";
-    [ObservableProperty] private bool _isElevated;
     [ObservableProperty] private bool _pendingReboot;
 
     /// <summary>True while the list is read: the one run on this tab that Cancel and Escape stop.</summary>
@@ -61,7 +60,6 @@ public sealed partial class WindowsFeaturesViewModel : ViewModelBase
         // would cross-contaminate the captured output (the SFC/DISM bug class). Re-evaluate
         // both commands' CanExecute when IsBusy flips so they are mutually exclusive.
         PropertyChanged += OnVmPropertyChanged;
-        IsElevated = AdminHelper.IsElevated();
     }
 
     private void OnVmPropertyChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
@@ -71,12 +69,6 @@ public sealed partial class WindowsFeaturesViewModel : ViewModelBase
         ToggleFeatureCommand.NotifyCanExecuteChanged();
     }
 
-    [RelayCommand]
-    private void RelaunchAsAdmin()
-    {
-        if (AdminHelper.RelaunchAsAdmin())
-            App.RequestShutdown();
-    }
 
     [RelayCommand(CanExecute = nameof(NotBusy))]
     private async Task ScanAsync()

@@ -105,8 +105,8 @@ public sealed class SystemLeftoverEnvironment : ILeftoverEnvironment
     /// </summary>
     public IReadOnlyList<string> OwnFolders { get; } =
     [
-        Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "SysManager"),
-        Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "SysManager"),
+        AppDataFolders.Local,
+        AppDataFolders.Roaming,
         AppContext.BaseDirectory,
     ];
 

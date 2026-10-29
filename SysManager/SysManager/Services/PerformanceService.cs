@@ -90,9 +90,7 @@ public sealed partial class PerformanceService : IDisposable
         : this(
             ps,
             restorePoints,
-            Path.Combine(
-                Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-                "SysManager"),
+            AppDataFolders.Local,
             System.Diagnostics.Process.GetProcesses,
             writeGpu: WriteGpuToRegistry,
             setUiEffects: SetUiEffects,

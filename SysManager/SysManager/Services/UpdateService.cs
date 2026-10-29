@@ -9,6 +9,7 @@ using System.Net.Http.Json;
 using System.Runtime.CompilerServices;
 using System.Security.Cryptography;
 using System.Text.Json.Serialization;
+using SysManager.Helpers;
 
 [assembly: InternalsVisibleTo("SysManager.Tests")]
 
@@ -243,9 +244,7 @@ public sealed class UpdateService : IUpdateService
     {
         if (string.IsNullOrWhiteSpace(rel.AssetUrl)) return null;
 
-        var dir = _downloadDir ?? Path.Join(
-            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-            "SysManager", "updates");
+        var dir = _downloadDir ?? AppDataFolders.Updates;
         var target = Path.Join(dir, $"SysManager-{rel.Version}.exe");
 
         // SEC-M2: Skip re-download only if we have a cached hash that matches.

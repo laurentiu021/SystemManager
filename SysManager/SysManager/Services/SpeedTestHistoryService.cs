@@ -54,8 +54,7 @@ public sealed class SpeedTestHistoryService : IDisposable
     /// </summary>
     public SpeedTestHistoryService(string? configDir = null)
     {
-        var dir = configDir ?? Path.Join(
-            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "SysManager");
+        var dir = configDir ?? AppDataFolders.Local;
         _historyPath = Path.Join(dir, "speedtest-history.json");
     }
 

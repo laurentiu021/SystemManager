@@ -39,8 +39,7 @@ public sealed class BandwidthHistoryService
     /// </summary>
     public BandwidthHistoryService(string? configDir = null)
     {
-        _dataDir = configDir ?? Path.Join(
-            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "SysManager");
+        _dataDir = configDir ?? AppDataFolders.Local;
         _dataPath = Path.Join(_dataDir, "bandwidth-history.ndjson");
     }
 

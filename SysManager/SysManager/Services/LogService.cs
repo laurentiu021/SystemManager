@@ -10,6 +10,7 @@ using Serilog.Core;
 using Serilog.Events;
 using Serilog.Formatting.Display;
 using Serilog.Parsing;
+using SysManager.Helpers;
 
 namespace SysManager.Services;
 
@@ -84,8 +85,7 @@ public static partial class LogService
             return requested;
         }
 
-        return Path.Combine(
-            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "SysManager", "logs");
+        return AppDataFolders.Logs;
     }
 
     // Dynamically build regex from the actual user profile parent directory

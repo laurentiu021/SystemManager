@@ -92,8 +92,7 @@ public sealed class ThemeService
     internal ThemeService(string? configDir = null, Func<bool>? windowsPrefersDark = null, bool paintsTheApp = true)
     {
         _settingsPath = Path.Combine(
-            configDir ?? Path.Combine(
-                Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "SysManager"),
+            configDir ?? AppDataFolders.Roaming,
             "theme.json");
         _windowsPrefersDark = windowsPrefersDark ?? WindowsIsOnDark;
         _paintsTheApp = paintsTheApp;

@@ -10,6 +10,7 @@ using System.Security;
 using System.Text.RegularExpressions;
 using Microsoft.Win32;
 using Serilog;
+using SysManager.Helpers;
 using SysManager.Models;
 
 namespace SysManager.Services;
@@ -783,9 +784,7 @@ public sealed partial class ContextMenuService : IContextMenuService
 
         try
         {
-            var backupDir = Path.Combine(
-                Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-                "SysManager", "Backups", "ContextMenu");
+            var backupDir = Path.Combine(AppDataFolders.Backups, "ContextMenu");
             Directory.CreateDirectory(backupDir);
 
             var timestamp = DateTime.Now.ToString("yyyyMMdd_HHmmss", CultureInfo.InvariantCulture);

@@ -52,8 +52,7 @@ public sealed class DiskScanHistoryService : IDisposable
     /// </summary>
     public DiskScanHistoryService(string? configDir = null)
     {
-        var dir = configDir ?? Path.Join(
-            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "SysManager");
+        var dir = configDir ?? AppDataFolders.Local;
         _historyPath = Path.Join(dir, "disk-scan-history.json");
     }
 

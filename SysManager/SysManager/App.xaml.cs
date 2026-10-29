@@ -9,6 +9,7 @@ using System.Runtime.InteropServices;
 using System.Windows;
 using System.Windows.Threading;
 using Microsoft.Extensions.DependencyInjection;
+using SysManager.Helpers;
 using SysManager.Models;
 using SysManager.Services;
 
@@ -722,8 +723,7 @@ public partial class App : Application
     {
         try
         {
-            var dir = Path.Combine(
-                Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "SysManager");
+            var dir = AppDataFolders.Local;
             Directory.CreateDirectory(dir);
             File.WriteAllText(Path.Combine(dir, "last-crash.json"), BuildCrashMarker(ex, DateTimeOffset.UtcNow));
         }

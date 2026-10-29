@@ -58,8 +58,7 @@ public sealed class AppIconService
     /// </param>
     public AppIconService(HttpMessageHandler? handler = null, string? configDir = null)
     {
-        var root = configDir ?? Path.Combine(
-            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "SysManager");
+        var root = configDir ?? AppDataFolders.Local;
         _cacheDir = Path.Combine(root, "IconCache");
         _settingsPath = Path.Combine(root, "icon-fetch.json");
 

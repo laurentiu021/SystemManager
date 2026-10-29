@@ -61,8 +61,7 @@ public sealed class ActivityLogService
     /// </summary>
     internal ActivityLogService(string? configDir, TimeSpan? lockWait = null)
     {
-        var dir = configDir ?? Path.Join(
-            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "SysManager");
+        var dir = configDir ?? AppDataFolders.Local;
         _filePath = Path.Join(dir, "activity.json");
         _lockAttempts = Math.Max(1, (int)((lockWait?.TotalMilliseconds ?? DefaultLockWaitMs) / LockRetryDelayMs));
         Load();

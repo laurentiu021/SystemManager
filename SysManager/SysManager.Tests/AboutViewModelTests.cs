@@ -169,6 +169,7 @@ public class AboutViewModelTests
     [InlineData("OpenRepoCommand")]
     [InlineData("OpenLicenseCommand")]
     [InlineData("OpenDownloadFolderCommand")]
+    [InlineData("ShowDiagnosticsBundleInFolderCommand")]
     public void CommandExists(string propertyName)
     {
         var vm = NewVmNoAutoCheck();
@@ -208,6 +209,14 @@ public class AboutViewModelTests
     {
         var vm = NewVmNoAutoCheck();
         var ex = Record.Exception(() => vm.OpenDownloadFolderCommand.Execute(null));
+        Assert.Null(ex);
+    }
+
+    [Fact]
+    public void ShowDiagnosticsBundleInFolderCommand_NoPath_DoesNotThrow()
+    {
+        var vm = NewVmNoAutoCheck();
+        var ex = Record.Exception(() => vm.ShowDiagnosticsBundleInFolderCommand.Execute(null));
         Assert.Null(ex);
     }
 
@@ -500,6 +509,7 @@ public class AboutViewModelTests
 
         Assert.Empty(vm.ReportStatus);
         Assert.False(vm.IsGeneratingReport);
+        Assert.Null(vm.LastDiagnosticsBundlePath);
     }
 
     [Fact]
@@ -514,7 +524,9 @@ public class AboutViewModelTests
 
         Assert.True(File.Exists(path));
         Assert.Contains("Nothing was sent anywhere.", vm.ReportStatus, StringComparison.Ordinal);
+        Assert.Equal(path, vm.LastDiagnosticsBundlePath);
     }
+
     [Fact]
     public async Task ConstructingTheViewModel_DoesNotTouchTheRealPreferenceFile()
     {

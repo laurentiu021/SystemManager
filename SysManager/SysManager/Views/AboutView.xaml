@@ -126,6 +126,14 @@
                             <TextBlock Text="{Binding ReportStatus}"
                                        Style="{StaticResource SubtleStatusLine}" Margin="0,10,0,0" TextWrapping="Wrap"
                                        Visibility="{Binding ReportStatus, Converter={StaticResource FlexVis}, Mode=OneWay}"/>
+                            <!-- Shown only once Save diagnostics bundle has actually written a file this
+                                 session: the same /select reveal "Show file" already uses above, so finding
+                                 the zip to drag into an issue form's bundle field does not need navigating
+                                 the save path by hand (#2861). -->
+                            <TextBlock Style="{StaticResource Body}" Margin="0,4,0,0"
+                                       Visibility="{Binding LastDiagnosticsBundlePath, Converter={StaticResource FlexVis}}">
+                                <Hyperlink Command="{Binding ShowDiagnosticsBundleInFolderCommand}" Foreground="{DynamicResource Accent}">Show in folder</Hyperlink>
+                            </TextBlock>
                             <!-- Rollback feedback lives beside its own button rather than in the update
                                  card below, for the same reason ReportStatus was moved here: writing to a
                                  shared status line makes one action overwrite another's message. -->

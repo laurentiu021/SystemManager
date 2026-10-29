@@ -116,13 +116,19 @@ body:
       required: true
 
   - type: textarea
+    id: bundle
+    attributes:
+      label: Diagnostics bundle (optional)
+      description: |
+        **Save diagnostics bundle** on the About tab puts the newest logs, the system report and your
+        environment info into one zip. Drag it into this box.
+
+  - type: textarea
     id: logs
     attributes:
       label: Log excerpt (optional)
       description: |
-        Logs are in `%LOCALAPPDATA%\SysManager\logs\`. Paste the relevant lines, or attach the file.
-        **Save diagnostics bundle** on the About tab puts the newest logs, the system report and your
-        environment info into one zip you can attach instead.
+        Logs are in `%LOCALAPPDATA%\SysManager\logs\`. Paste the relevant lines.
       render: text
 
   - type: textarea

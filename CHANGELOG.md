@@ -10,6 +10,23 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.134.0] - 2026-10-29
+
+**The bug-report and general-issue forms now have a real drop target for the diagnostics bundle
+zip, and About offers to reveal it in Explorer right after saving it.**
+
+### Added
+- A "Diagnostics bundle" field on the bug-report and general-issue forms, without GitHub's
+  code-block rendering turned on, so the zip **Save diagnostics bundle** writes can actually be
+  dragged in. The log-excerpt field beside it is now for pasted lines only.
+- "Show in folder" next to About's status line once Save diagnostics bundle has written a file
+  this session, the same Explorer reveal "Show file" already offers for a downloaded update.
+
+### Fixed
+- Both issue forms' log field set `render: text`, which GitHub's own schema does not expand for a
+  file drop — so dragging the diagnostics bundle in had nowhere to land, despite both forms telling
+  reporters to attach it there.
+
 ## [1.133.0] - 2026-10-29
 
 **The log, "Copy environment info" and the diagnostics bundle now all record your Windows language

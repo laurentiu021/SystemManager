@@ -118,6 +118,13 @@ public sealed partial class AboutViewModel : ViewModelBase
     [ObservableProperty] private bool _autoDownloadFailed;
 
     /// <summary>
+    /// Where the last successfully saved diagnostics bundle landed, or null before one is saved this
+    /// session. Drives the "Show in folder" offer next to <see cref="ReportStatus"/> (#2861): a zip
+    /// named with a timestamp is otherwise found only by typing the save dialog's path from memory.
+    /// </summary>
+    [ObservableProperty] private string? _lastDiagnosticsBundlePath;
+
+    /// <summary>
     /// True when Install stopped short with the downloaded file still usable: it could not be opened, the published
     /// hash could not be fetched, the running copy could not be found, or the new version would not start. The view
     /// then shows the reason in a warning row in place of the green one, with Install still offered.
@@ -910,6 +917,7 @@ public sealed partial class AboutViewModel : ViewModelBase
             };
             ReportStatus = string.Create(CultureInfo.InvariantCulture,
                 $"Saved {Path.GetFileName(path)} — report, environment info and {logs}. Nothing was sent anywhere.");
+            LastDiagnosticsBundlePath = path;
             ToastService.Instance.Show("Diagnostics bundle saved", Path.GetFileName(path));
         }
         catch (IOException ex)
@@ -1228,6 +1236,23 @@ public sealed partial class AboutViewModel : ViewModelBase
         if (!string.IsNullOrEmpty(dir) && Directory.Exists(dir))
         {
             try { Process.Start(new ProcessStartInfo(SysManager.Helpers.SystemPaths.ResolveSystemTool("explorer.exe"), $"/select,\"{DownloadedPath}\"") { UseShellExecute = true })?.Dispose(); }
+            catch (InvalidOperationException) { /* explorer launch is best-effort */ }
+            catch (System.ComponentModel.Win32Exception) { /* explorer launch is best-effort */ }
+        }
+    }
+
+    /// <summary>
+    /// Reveals the diagnostics bundle Explorer already selects, so finding the zip to drag into an
+    /// issue form's new bundle field (#2861) does not need navigating %TEMP%-style save paths by hand.
+    /// </summary>
+    [RelayCommand]
+    private void ShowDiagnosticsBundleInFolder()
+    {
+        if (string.IsNullOrWhiteSpace(LastDiagnosticsBundlePath)) return;
+        var dir = Path.GetDirectoryName(LastDiagnosticsBundlePath);
+        if (!string.IsNullOrEmpty(dir) && Directory.Exists(dir))
+        {
+            try { Process.Start(new ProcessStartInfo(SysManager.Helpers.SystemPaths.ResolveSystemTool("explorer.exe"), $"/select,\"{LastDiagnosticsBundlePath}\"") { UseShellExecute = true })?.Dispose(); }
             catch (InvalidOperationException) { /* explorer launch is best-effort */ }
             catch (System.ComponentModel.Win32Exception) { /* explorer launch is best-effort */ }
         }

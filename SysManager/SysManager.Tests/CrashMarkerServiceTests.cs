@@ -218,14 +218,15 @@ public class CrashMarkerServiceTests : IDisposable
     [Fact]
     public void DescribeForUser_NamesNeitherTheExceptionTypeNorAPath()
     {
-        // The target persona can act on neither. It points at the Logs tab instead, which is a place
-        // in the app she can actually reach.
+        // The target persona can act on neither. It points at Save diagnostics bundle instead (#2861),
+        // which GitHub's issue forms can actually take — unlike the log folder's up to 14 files.
         var text = CrashMarkerService.DescribeForUser(Marker(Now.AddMinutes(-5)));
 
         Assert.DoesNotContain("NullReferenceException", text);
         Assert.DoesNotContain(@"\", text);
         Assert.Contains("closed unexpectedly", text);
-        Assert.Contains("System Logs", text);
+        Assert.Contains("F1", text, StringComparison.Ordinal);
+        Assert.Contains("Save diagnostics bundle", text, StringComparison.Ordinal);
     }
 
     [Fact]

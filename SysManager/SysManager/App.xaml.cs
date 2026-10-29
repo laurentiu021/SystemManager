@@ -590,6 +590,9 @@ public partial class App : Application
     /// nothing they can act on and does not mention that a log exists at all. The app knew exactly
     /// where the evidence went and did not say, so a report arrived as "it just closed" with nothing
     /// attached.</para>
+    /// <para>Ends by pointing at Save diagnostics bundle rather than the log folder (#2861): GitHub's
+    /// issue forms take one file, and the folder can hold up to 14 files of up to 10 MB. The window is
+    /// loaded whenever this dialog shows — see <see cref="DecideUiFault"/> — so F1 reaches About.</para>
     /// <para>Deliberately built from string literals, the exception text, and one static property.
     /// It must not touch DI, the theme, or any service: the unhandled exception may have come from
     /// any of them, so anything else risks faulting inside the crash handler itself. Pure and
@@ -613,7 +616,7 @@ public partial class App : Application
             Technical details were saved to:
             {LogService.LogDir}
 
-            If this keeps happening, that folder is what to attach when reporting it.
+            If this keeps happening, press F1 to open About and choose Save diagnostics bundle — that is what to attach when reporting it.
             """;
     }
 
@@ -626,6 +629,9 @@ public partial class App : Application
     /// it was least true, with no window and no tray icon left behind (#2863). Same constraints: literals,
     /// the exception text and one static property only, since the fault may have come from anywhere in
     /// startup, including DI and the theme.
+    /// <para>Keeps pointing at the log folder rather than Save diagnostics bundle (#2861): this shows
+    /// before the main window ever loads, so there is no About tab for F1 to open and no way to run the
+    /// command that writes the bundle.</para>
     /// </remarks>
     internal static string BuildStartupFailureMessage(Exception? ex)
     {

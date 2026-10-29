@@ -110,9 +110,10 @@ public sealed class CrashMarkerService
 
     /// <summary>
     /// The plain-language sentence shown to the user. Names no exception type and no file path: the
-    /// target persona cannot act on either, and the log folder is already surfaced by the Logs tab.
+    /// target persona cannot act on either. Points at Save diagnostics bundle rather than the Logs tab
+    /// (#2861): GitHub's issue forms take one file, not the log folder's up to 14.
     /// </summary>
     public static string DescribeForUser(CrashMarker marker) =>
         $"SysManager closed unexpectedly on {marker.WhenUtc.ToLocalTime().ToString("d MMMM, HH:mm", CultureInfo.InvariantCulture)}. " +
-        "Details were saved to its log, which you can open from the System Logs tab if you want to report it.";
+        "Press F1 to open About and choose Save diagnostics bundle if you want to report it.";
 }

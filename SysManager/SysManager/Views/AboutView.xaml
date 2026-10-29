@@ -70,7 +70,7 @@
                             <Button Content="Copy environment info"
                                     Command="{Binding CopyEnvironmentInfoCommand}"
                                     Style="{StaticResource SecondaryButton}" Margin="8,0,0,0"
-                                    ToolTip="Copy your SysManager version, Windows version, architecture and elevation state — ready to paste into a bug report."/>
+                                    ToolTip="Copy your SysManager version, Windows version, architecture, elevation state and Windows language — ready to paste into a bug report."/>
                             <!-- One file instead of four manual steps. Producing evidence for a bug used to
                                  mean copying the environment block, exporting the report, then leaving the
                                  app to find the right day's log in a hidden AppData folder — which the

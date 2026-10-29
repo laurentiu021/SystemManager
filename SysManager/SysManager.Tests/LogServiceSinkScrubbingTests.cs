@@ -3,6 +3,7 @@
 // License: MIT
 
 using System.IO;
+using System.Linq;
 using System.Reflection;
 using Serilog;
 using Serilog.Core;
@@ -217,6 +218,56 @@ public sealed class LogServiceSinkScrubbingTests : IDisposable
 
         Assert.Contains("SysManager 1.65.19 started", text);
         Assert.DoesNotContain("\"1.65.19\"", text);
+    }
+
+    // ── The locale line, right after the startup line (#2861) ────────────────
+
+    [Fact]
+    public void EnvironmentMessage_NamesEveryValueALocaleBugNeeds()
+    {
+        Assert.StartsWith("Windows ", LogService.EnvironmentMessage, StringComparison.Ordinal);
+        foreach (var token in new[]
+        {
+            "{WindowsVersion}", "{OSArchitecture}", "{ProcessArchitecture}",
+            "{Culture}", "{DisplayLanguage}", "{OemCodePage}", "{RegionalOemCodePage}",
+        })
+        {
+            Assert.Contains(token, LogService.EnvironmentMessage, StringComparison.Ordinal);
+        }
+    }
+
+    [Fact]
+    public void EnvironmentMessage_RendersTheRealLocaleWithoutThrowing()
+    {
+        var text = WriteAndRead(log => log.Information(LogService.EnvironmentMessage,
+            Environment.OSVersion.VersionString,
+            System.Runtime.InteropServices.RuntimeInformation.OSArchitecture,
+            System.Runtime.InteropServices.RuntimeInformation.ProcessArchitecture,
+            System.Globalization.CultureInfo.CurrentCulture.Name,
+            System.Globalization.CultureInfo.CurrentUICulture.Name,
+            SysManager.Services.PowerShellRunner.GetOEMCP(),
+            System.Globalization.CultureInfo.CurrentCulture.TextInfo.OEMCodePage));
+
+        Assert.Contains(System.Globalization.CultureInfo.CurrentCulture.Name, text, StringComparison.Ordinal);
+        Assert.Contains(System.Globalization.CultureInfo.CurrentUICulture.Name, text, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Init_LogsTheEnvironmentLineRightAfterTheStartupLine()
+    {
+        // Mirrors TheReleaseWorkflow_ProvesThePublishedBinaryReportsTheTag's own pattern: read the
+        // source rather than call the real Init, which is one-shot per process and already called by
+        // the time any unit test runs.
+        var lines = File.ReadAllLines(
+                Path.Combine(TestPaths.RepoRoot(), "SysManager", "SysManager", "Services", "LogService.cs"))
+            .Where(l => !l.TrimStart().StartsWith("//", StringComparison.Ordinal))
+            .ToList();
+        var startupAt = lines.FindIndex(l => l.Contains("Information(StartupMessage", StringComparison.Ordinal));
+        Assert.True(startupAt >= 0, "LogService no longer logs StartupMessage.");
+
+        var next = lines.Skip(startupAt + 1).FirstOrDefault(l => l.Contains('(', StringComparison.Ordinal));
+        Assert.NotNull(next);
+        Assert.Contains("Information(EnvironmentMessage", next, StringComparison.Ordinal);
     }
 
     // ── The log file is bounded ──────────────────────────────────────────────

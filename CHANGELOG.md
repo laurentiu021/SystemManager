@@ -10,6 +10,18 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.133.0] - 2026-10-29
+
+**The log, "Copy environment info" and the diagnostics bundle now all record your Windows language
+and both of its OEM code pages, so a locale-specific bug no longer needs a round trip to ask.**
+
+### Added
+- A line logged right after every startup line, naming the Windows version, the OS and process
+  architectures, your culture, your display language, and both OEM code pages — the regional
+  format's and the one Windows actually uses, which can disagree (#2844).
+- "Copy environment info" and the diagnostics bundle's `environment.txt` now include the same
+  Windows language line.
+
 ## [1.132.1] - 2026-10-29
 
 **The last-resort crash dialog and the "closed unexpectedly last time" notice now point at Save

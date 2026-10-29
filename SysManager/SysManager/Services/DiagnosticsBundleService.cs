@@ -229,7 +229,8 @@ public sealed class DiagnosticsBundleService
         sb.AppendLine();
         sb.AppendLine("What is in here");
         sb.AppendLine("  environment.txt    SysManager and Windows versions, architecture, whether SysManager");
-        sb.AppendLine("                     was running as administrator, and your CPU and memory.");
+        sb.AppendLine("                     was running as administrator, your Windows language, and your CPU");
+        sb.AppendLine("                     and memory.");
         sb.AppendLine("  system-report.txt  The full system report: operating system, processor, memory,");
         sb.AppendLine("                     graphics, motherboard, drives and their health, network adapters.");
 

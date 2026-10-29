@@ -645,6 +645,23 @@ public class AboutViewModelTests
             ["Disk C: 100 GB total, 40 GB free (NTFS)", "Disk F: 50 GB total, 25 GB free (exFAT)"],
             lines);
     }
+
+    // ── The environment block names the Windows language (#2861) ──
+
+    [Fact]
+    public void CollectEnvironmentInfo_NamesTheWindowsLanguage()
+    {
+        // Private by design — it feeds both "Copy environment info" (the clipboard) and the
+        // diagnostics bundle's environment.txt, and a unit test should not touch either.
+        var vm = NewVmNoAutoCheck();
+        var method = typeof(AboutViewModel).GetMethod("CollectEnvironmentInfo",
+            System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)!;
+
+        var text = (string)method.Invoke(vm, null)!;
+
+        Assert.Contains("Language: " + System.Globalization.CultureInfo.CurrentCulture.Name, text, StringComparison.Ordinal);
+        Assert.Contains(System.Globalization.CultureInfo.CurrentUICulture.Name, text, StringComparison.Ordinal);
+    }
 }
 
 /// <summary>

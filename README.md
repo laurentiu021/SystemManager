@@ -2271,11 +2271,12 @@ offers, "rate us" prompts:
 - **Export or copy a full system report**, and a separate "Copy environment info" for
   pasting into a bug report
 - **Save diagnostics bundle** writes one `.zip` with everything a bug report needs: the
-  system report, your environment info, the three most recent daily log files, and every
+  system report, your environment info, the three most recent daily log files, every
   `[ERR]`/`[FTL]` line (with its continuation lines) from every log still kept, not only
-  those three. It replaces four manual steps, the last two of which were finding a hidden
-  `AppData` folder and working out which day's log covered the problem. **Nothing is sent
-  anywhere** — you
+  those three, and Windows' own record of a crash SysManager could not log itself — a native
+  fault or a hang — from the last 14 days. It replaces four manual steps, the last two of
+  which were finding a hidden `AppData` folder and working out which day's log covered the
+  problem. **Nothing is sent anywhere** — you
   choose where the file goes and whether to attach it, and a `README.txt` inside names every
   file and says what was deliberately left out. Your network adapters' hardware addresses are
   not included and the last two parts of each local IP address are masked, because a hardware
@@ -2924,8 +2925,9 @@ The **About** tab inside the app has a "Copy environment info" helper that copie
 SysManager version, Windows version, architecture, .NET version, elevation state and Windows
 language, plus a hardware summary — CPU, RAM, graphics card and driver, each drive's size and
 free space, and display resolution — in a format ready to paste into a bug report. **Save
-diagnostics bundle**, beside it, puts that, the system report, the newest three log files and
-every `[ERR]`/`[FTL]` line from every log still kept into one zip you can attach; nothing is sent.
+diagnostics bundle**, beside it, puts that, the system report, the newest three log files,
+every `[ERR]`/`[FTL]` line from every log still kept, and Windows' own record of a crash
+SysManager could not log itself into one zip you can attach; nothing is sent.
 
 ## Tech stack
 

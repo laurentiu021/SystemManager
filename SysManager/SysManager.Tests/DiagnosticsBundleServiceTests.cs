@@ -259,6 +259,38 @@ public sealed class DiagnosticsBundleServiceTests : IDisposable
         Assert.False(string.IsNullOrWhiteSpace(text));
     }
 
+    // ── windows-events.txt: the crashes SysManager cannot log itself (#2861) ──
+
+    [Theory]
+    [InlineData("Application Error", 1000, true)]
+    [InlineData(".NET Runtime", 1026, true)]
+    [InlineData("Application Hang", 1002, true)]
+    [InlineData("Windows Error Reporting", 1001, true)]
+    [InlineData("application error", 1000, true)] // case-insensitive, like Windows provider names are
+    [InlineData("Application Error", 1001, false)] // right provider, wrong id — not one of the four pairs
+    [InlineData("Some Other Provider", 1000, false)] // right id, wrong provider
+    [InlineData("Application Error", 0, false)]
+    public void IsTrackedCrashEvent_MatchesOnlyTheFourDocumentedPairs(string provider, int eventId, bool expected)
+    {
+        Assert.Equal(expected, DiagnosticsBundleService.IsTrackedCrashEvent(provider, eventId));
+    }
+
+    [Fact]
+    public async Task PackAsync_IncludesWindowsEventsTxt()
+    {
+        // Against the real Application log: a test cannot fabricate an EventRecord (EventLogService's own
+        // tests hit the same wall), so this proves the entry exists and the read completes without
+        // throwing — the actual filtering logic is covered in isolation above.
+        var zipPath = Path.Combine(_outDir, "bundle-events.zip");
+
+        await NewService().PackAsync(zipPath, "env", CannedReport);
+
+        using var zip = ZipFile.OpenRead(zipPath);
+        var names = zip.Entries.Select(e => e.FullName).ToList();
+        Assert.Contains("windows-events.txt", names);
+        Assert.False(string.IsNullOrWhiteSpace(ReadEntry(zip, "windows-events.txt")));
+    }
+
     // ── The README ───────────────────────────────────────────────────────────
 
     /// <summary>

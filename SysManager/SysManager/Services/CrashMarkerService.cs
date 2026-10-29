@@ -6,6 +6,7 @@ using System.Globalization;
 using System.IO;
 using System.Text.Json;
 using Serilog;
+using SysManager.Helpers;
 
 namespace SysManager.Services;
 
@@ -47,8 +48,7 @@ public sealed class CrashMarkerService
     /// <summary>Creates the service. <paramref name="configDir"/> is overridable for tests.</summary>
     public CrashMarkerService(string? configDir = null)
     {
-        var dir = configDir ?? Path.Combine(
-            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "SysManager");
+        var dir = configDir ?? AppDataFolders.Local;
         _path = Path.Combine(dir, "last-crash.json");
     }
 

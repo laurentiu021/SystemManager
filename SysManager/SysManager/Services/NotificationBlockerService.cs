@@ -117,10 +117,8 @@ public sealed class NotificationBlockerService : INotificationBlockerService
     }
 
     /// <summary>Resolves the ledger file, overridable for tests exactly as the registry root is.</summary>
-    private static string LedgerPath(string? configDir) => Path.Combine(
-        configDir ?? Path.Combine(
-            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "SysManager"),
-        WriteLedgerFileName);
+    private static string LedgerPath(string? configDir) =>
+        Path.Combine(configDir ?? AppDataFolders.Local, WriteLedgerFileName);
 
     /// <summary>The stored shape. A record so the JSON stays explicit.</summary>
     private sealed record Ledger(int Writes);

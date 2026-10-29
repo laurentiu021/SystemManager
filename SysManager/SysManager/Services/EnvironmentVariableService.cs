@@ -12,6 +12,7 @@ using System.Text.Json;
 using System.Text.RegularExpressions;
 using Microsoft.Win32;
 using Serilog;
+using SysManager.Helpers;
 using SysManager.Models;
 
 namespace SysManager.Services;
@@ -97,9 +98,7 @@ public sealed partial class EnvironmentVariableService
         Func<RegistryKey, string, RegistryKey?>? openBackupKey = null,
         Func<string, Stream>? openBackupFile = null)
     {
-        _backupDir = backupDir ?? Path.Combine(
-            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-            "SysManager", "Backups", "Environment");
+        _backupDir = backupDir ?? Path.Combine(AppDataFolders.Backups, "Environment");
         _userRoot = userRoot;
         _machineRoot = machineRoot;
         _enforceMachineBackupProtection = enforceMachineBackupProtection;

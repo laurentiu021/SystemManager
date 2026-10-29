@@ -68,8 +68,7 @@ public sealed class ResourceHistoryService : IDisposable
         _sys = sys;
         _temps = temps;
         _gpu = gpu;
-        _dataDir = configDir ?? Path.Join(
-            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "SysManager");
+        _dataDir = configDir ?? AppDataFolders.Local;
         _dataPath = Path.Join(_dataDir, "resource-history.ndjson");
         _configPath = Path.Join(_dataDir, "resource-history-config.json");
         (_retentionDays, _retentionKnown) = LoadRetention() is { } days ? (days, true) : (7, false);

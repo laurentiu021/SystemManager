@@ -68,8 +68,7 @@ public sealed class SettingsWatchdogService : ISettingsWatchdogService
     /// <param name="hklmRoot">Defaults to <see cref="Registry.LocalMachine"/>.</param>
     public SettingsWatchdogService(string? configDir = null, RegistryKey? hkcuRoot = null, RegistryKey? hklmRoot = null)
     {
-        var dir = configDir ?? Path.Join(
-            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "SysManager");
+        var dir = configDir ?? AppDataFolders.Local;
         _baselinePath = Path.Join(dir, "settings-baseline.json");
         _sightingsPath = Path.Join(dir, "settings-drift.json");
         _hkcuRoot = hkcuRoot ?? Registry.CurrentUser;

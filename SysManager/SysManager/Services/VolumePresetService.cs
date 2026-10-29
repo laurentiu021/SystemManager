@@ -53,8 +53,7 @@ public sealed class VolumePresetService
     /// <summary>Creates the service. <paramref name="configDir"/> is overridable for tests.</summary>
     public VolumePresetService(string? configDir = null)
     {
-        var dir = configDir ?? Path.Combine(
-            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "SysManager");
+        var dir = configDir ?? AppDataFolders.Local;
         _path = Path.Combine(dir, "volume-presets.json");
     }
 

@@ -45,9 +45,7 @@ internal static class UpdateApplier
     /// app to a USB stick still has exactly one file.
     /// </remarks>
     internal static string PreviousBuildPath(string? updatesDir = null) => Path.Join(
-        updatesDir ?? Path.Join(
-            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-            "SysManager", "updates"),
+        updatesDir ?? AppDataFolders.Updates,
         PreviousBuildFileName);
 
     /// <summary>

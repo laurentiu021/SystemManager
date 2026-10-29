@@ -59,8 +59,7 @@ public sealed class AppAlertHistory : IAppAlertHistory
     /// <summary>A history kept under <paramref name="configDir"/>, so a test points it at a temp folder.</summary>
     internal AppAlertHistory(string? configDir)
     {
-        var dir = configDir ?? Path.Join(
-            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "SysManager");
+        var dir = configDir ?? AppDataFolders.Local;
         _filePath = Path.Join(dir, "app-alerts.json");
     }
 

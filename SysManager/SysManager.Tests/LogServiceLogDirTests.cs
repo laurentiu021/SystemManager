@@ -3,6 +3,7 @@
 // License: MIT
 
 using System.IO;
+using SysManager.Helpers;
 using SysManager.Services;
 
 namespace SysManager.Tests;
@@ -27,11 +28,13 @@ public class LogServiceLogDirTests
     [Fact]
     public void ResolveLogDir_WithNothingRequested_KeepsThePerUserDefault()
     {
+        // AppDataFolders.Logs, not a reconstructed Environment.GetFolderPath call: TestAssemblyInit
+        // redirects AppDataFolders.Local for this whole run (#2860), so the "per-user default" this
+        // test run actually has is the redirected one, and asserting the real profile path here would
+        // fail under that redirect for a reason unrelated to what this test is pinning.
         var resolved = LogService.ResolveLogDir(null, loggerExists: false);
 
-        var expected = Path.Combine(
-            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "SysManager", "logs");
-        Assert.Equal(expected, resolved);
+        Assert.Equal(AppDataFolders.Logs, resolved);
     }
 
     [Theory]

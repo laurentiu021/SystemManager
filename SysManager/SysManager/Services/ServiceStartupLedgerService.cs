@@ -59,8 +59,7 @@ public sealed class ServiceStartupLedgerService
     /// <summary>Creates the service. <paramref name="configDir"/> is overridable for tests.</summary>
     public ServiceStartupLedgerService(string? configDir = null)
     {
-        var dir = configDir ?? Path.Combine(
-            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "SysManager");
+        var dir = configDir ?? AppDataFolders.Local;
         _path = Path.Combine(dir, "service-startup-ledger.json");
     }
 

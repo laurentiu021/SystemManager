@@ -11,6 +11,7 @@ using System.Net.NetworkInformation;
 using System.Security.Cryptography;
 using System.Text.Json;
 using Serilog;
+using SysManager.Helpers;
 using SysManager.Models;
 
 namespace SysManager.Services;
@@ -431,9 +432,7 @@ public sealed class SpeedTestService : ISpeedTestService
     private static async Task<PinnedCli> EnsureOoklaAsync(
         IProgress<(int, string)>? progress, CancellationToken ct)
     {
-        var toolsDir = Path.Join(
-            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-            "SysManager", "tools");
+        var toolsDir = AppDataFolders.Tools;
 
         // Run all synchronous file-system checks on a thread-pool thread
         // so the UI thread is never blocked by disk I/O.

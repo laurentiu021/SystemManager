@@ -57,8 +57,7 @@ public sealed partial class WindowsThemeService : IWindowsThemeService
     public WindowsThemeService(string? configDir = null)
     {
         _schedulePath = Path.Combine(
-            configDir ?? Path.Combine(
-                Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "SysManager"),
+            configDir ?? AppDataFolders.Roaming,
             "darkmode-schedule.json");
     }
 

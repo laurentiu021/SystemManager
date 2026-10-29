@@ -1919,6 +1919,16 @@ Key services:
 
 Key utility classes that don't fit neatly into Services or ViewModels (not an exhaustive list):
 
+- `AppDataFolders` — the one source for `%LocalAppData%\SysManager` and `%AppData%\SysManager`,
+  composed independently at roughly thirty call sites before this (#2860), among them pairs that have
+  to agree: the crash marker's writer in `App` and its reader in `CrashMarkerService`, the update
+  folder in `UpdateService` and `UpdateApplier`, and the two entries `ILeftoverEnvironment.OwnFolders`
+  uses to keep the Uninstaller from offering SysManager's own data back as a leftover. `Local` and
+  `Roaming` are settable, not `static readonly`, so `TestAssemblyInit` in both test projects can
+  redirect both away from the real profile once, before any test runs — the same way it already
+  redirects `ActivityLogService.Instance` (#1772) — as the floor underneath every service's own
+  `configDir` seam, not a replacement for it. `Logs`, `Updates`, `Tools`, `IconCache` and `Backups`
+  are the sub-folders built from `Local`.
 - `AdminHelper` — elevation check (`IsElevated()`) and UAC relaunch. `IsElevatedAsAnotherUser()` compares
   the running process's SID against the account signed in to the active console session (via
   `WTSQuerySessionInformationW`) — true on a standard account elevated with a DIFFERENT administrator's

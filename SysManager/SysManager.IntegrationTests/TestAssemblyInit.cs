@@ -4,12 +4,14 @@
 
 using System.IO;
 using System.Runtime.CompilerServices;
+using SysManager.Helpers;
 using SysManager.Services;
 
 namespace SysManager.IntegrationTests;
 
 /// <summary>
-/// Redirects the process-wide singletons that write user data, once, before any test runs.
+/// Redirects the process-wide singletons and folder roots that write user data, once, before any
+/// test runs.
 /// <para>
 /// This exists because per-test discipline demonstrably does not hold. The activity log had a
 /// <c>configDir</c> seam AND a test suite that used it correctly — and the real
@@ -26,6 +28,13 @@ namespace SysManager.IntegrationTests;
 /// (<c>ActivityLogScope</c>, <c>DialogAnswer</c>) remain the right tool when a test needs to
 /// ASSERT on what was written; this is the floor underneath them.
 /// </para>
+/// <para>
+/// <see cref="AppDataFolders.Local"/>/<see cref="AppDataFolders.Roaming"/> are redirected here too
+/// (#2860), as the floor underneath every service's own <c>configDir</c> seam — the seam still wins
+/// where a test passes one, but a construction the seam-coverage scan cannot see (a target-typed
+/// <c>new(...)</c>, an object the container builds, a view model that quietly falls back) now lands
+/// in this run's own temp folder instead of the real profile.
+/// </para>
 /// </summary>
 internal static class TestAssemblyInit
 {
@@ -39,6 +48,8 @@ internal static class TestAssemblyInit
             Path.GetTempPath(), "SysManagerTestRun", Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(dir);
 
+        AppDataFolders.Local = Path.Combine(dir, "Local");
+        AppDataFolders.Roaming = Path.Combine(dir, "Roaming");
         ActivityLogService.Instance = new ActivityLogService(dir);
     }
 }

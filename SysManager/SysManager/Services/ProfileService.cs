@@ -123,10 +123,8 @@ public sealed class ProfileService
     {
         _privacy = privacy;
         _gaming = gaming;
-        _localConfigDir = configDir ?? Path.Combine(
-            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "SysManager");
-        _roamingConfigDir = configDir ?? Path.Combine(
-            Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "SysManager");
+        _localConfigDir = configDir ?? AppDataFolders.Local;
+        _roamingConfigDir = configDir ?? AppDataFolders.Roaming;
     }
 
     /// <summary>Test seam: distinct Local/Roaming bases to verify each section lands in the right one.</summary>

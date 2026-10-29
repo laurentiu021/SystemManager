@@ -73,9 +73,7 @@ public sealed class GamingProfileService : IGamingProfileService, IDisposable
         _standby = standby;
         _restorePoint = restorePoint;
         _isElevated = isElevated;
-        _storePath = storePath ?? Path.Join(
-            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-            "SysManager", "gaming-profiles.json");
+        _storePath = storePath ?? Path.Join(AppDataFolders.Local, "gaming-profiles.json");
     }
 
     public bool IsActive => _appliedSteps.Count > 0;

@@ -50,8 +50,7 @@ public sealed class FirstRunService : IFirstRunService
     /// <summary>A record kept under <paramref name="configDir"/>, so a test points it at a temp folder.</summary>
     internal FirstRunService(string? configDir, TimeProvider? clock = null)
     {
-        var dir = configDir ?? Path.Join(
-            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "SysManager");
+        var dir = configDir ?? AppDataFolders.Local;
         _filePath = Path.Join(dir, FileName);
         _clock = clock ?? TimeProvider.System;
     }

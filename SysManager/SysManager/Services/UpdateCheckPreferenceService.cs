@@ -76,8 +76,7 @@ public sealed class UpdateCheckPreferenceService
     {
         // Roaming, like theme.json: this is a stated preference that should follow the user
         // between machines, not machine-local state like a history file.
-        var dir = configDir ?? Path.Combine(
-            Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "SysManager");
+        var dir = configDir ?? AppDataFolders.Roaming;
         _path = Path.Combine(dir, FileName);
     }
 

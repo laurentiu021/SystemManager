@@ -10,6 +10,18 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.136.0] - 2026-10-29
+
+**The diagnostics bundle now includes Windows' own record of a crash SysManager could not log
+itself — a native fault, a stack overflow, or a hang.**
+
+### Added
+- `windows-events.txt` in the diagnostics bundle: Application Error (1000), .NET Runtime (1026),
+  Application Hang (1002) and Windows Error Reporting (1001) events from the last 14 days that
+  mention SysManager, matched in managed code rather than in the Windows Event Log query itself —
+  a sparse provider/event-ID filter there risks the same uncancellable native block that ruled out
+  a severity filter in the Logs tab's own query. Read under a 15-second budget.
+
 ## [1.135.0] - 2026-10-29
 
 **The diagnostics bundle now includes every `[ERR]` and `[FTL]` log line from every log file still

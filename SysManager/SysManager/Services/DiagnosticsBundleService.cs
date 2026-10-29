@@ -8,6 +8,7 @@ using System.IO.Compression;
 using System.Text;
 using System.Text.RegularExpressions;
 using Serilog;
+using SysManager.Models;
 
 namespace SysManager.Services;
 
@@ -62,8 +63,46 @@ public sealed partial class DiagnosticsBundleService
     /// </remarks>
     internal const long MaxErrorBytes = 256 * 1024;
 
+    /// <summary>
+    /// The window <see cref="BuildWindowsEventsTextAsync"/> searches: the Application log's events over the
+    /// last 14 days where the message mentions SysManager.
+    /// </summary>
+    internal const int WindowsEventsDays = 14;
+
+    /// <summary>
+    /// <see cref="EventLogQueryOptions.MaxResults"/> for that search — how many Application-log records
+    /// (of any provider) it will read looking for a match, bounded further by <see cref="WindowsEventsBudget"/>.
+    /// </summary>
+    internal const int MaxWindowsEventsRecords = 5000;
+
+    /// <summary>
+    /// How long <see cref="BuildWindowsEventsTextAsync"/> may run before it stops early and says so.
+    /// </summary>
+    /// <remarks>
+    /// Matches <see cref="SystemReportService.RecentProblemsBudget"/>'s pattern: a bounded background read
+    /// the user explicitly asked for (pressing Save diagnostics bundle), not a live UI refresh, so a few
+    /// seconds of real work is an acceptable trade for not needing a second, message-less read pass.
+    /// </remarks>
+    internal static readonly TimeSpan WindowsEventsBudget = TimeSpan.FromSeconds(15);
+
+    /// <summary>The most bytes <see cref="BuildWindowsEventsTextAsync"/> collects.</summary>
+    internal const long MaxWindowsEventsBytes = 128 * 1024;
+
+    /// <summary>
+    /// The crashes the app itself cannot log: a native fault, a stack overflow, <see cref="Environment.FailFast(string?)"/>
+    /// or a hang leave no app log line and no <c>last-crash.json</c>, but Windows records them here.
+    /// </summary>
+    internal static readonly (string Provider, int EventId)[] CrashEventsTracked =
+    [
+        ("Application Error", 1000),
+        (".NET Runtime", 1026),
+        ("Application Hang", 1002),
+        ("Windows Error Reporting", 1001),
+    ];
+
     private readonly SystemReportService _report;
     private readonly string _logDir;
+    private readonly EventLogService _events;
 
     /// <summary>Creates a bundle writer over a report source and a log directory.</summary>
     /// <param name="report">Supplies the sharable system report.</param>
@@ -72,10 +111,15 @@ public sealed partial class DiagnosticsBundleService
     /// resolves through <see cref="LogService.LogDir"/>, and a test that used it would read — and a careless
     /// one could write — the developer's own log folder.
     /// </param>
-    public DiagnosticsBundleService(SystemReportService report, string? logDir = null)
+    /// <param name="events">
+    /// Reads the Application log for <see cref="BuildWindowsEventsTextAsync"/>. Overridable for the same
+    /// reason as <paramref name="logDir"/>: the default reads this PC's real Application log.
+    /// </param>
+    public DiagnosticsBundleService(SystemReportService report, string? logDir = null, EventLogService? events = null)
     {
         _report = report;
         _logDir = logDir ?? LogService.LogDir;
+        _events = events ?? new EventLogService();
     }
 
     /// <summary>What went into the bundle, so the caller can say so rather than guess.</summary>
@@ -123,6 +167,8 @@ public sealed partial class DiagnosticsBundleService
             await WriteEntryAsync(zip, "environment.txt", environment, ct).ConfigureAwait(false);
             await WriteEntryAsync(zip, "system-report.txt", report, ct).ConfigureAwait(false);
             await WriteEntryAsync(zip, "errors.txt", BuildErrorsText(_logDir, ct), ct).ConfigureAwait(false);
+            await WriteEntryAsync(zip, "windows-events.txt",
+                await BuildWindowsEventsTextAsync(ct).ConfigureAwait(false), ct).ConfigureAwait(false);
 
             foreach (var log in logs)
             {
@@ -292,6 +338,78 @@ public sealed partial class DiagnosticsBundleService
     private static partial Regex LogEntryStart();
 
     /// <summary>
+    /// Windows' own record of the crashes SysManager cannot log itself: a native fault inside a P/Invoke or
+    /// COM call, a stack overflow, <see cref="Environment.FailFast(string?)"/>, or a hang leave no app log line and no
+    /// <c>last-crash.json</c>, but the four providers in <see cref="CrashEventsTracked"/> log them to the
+    /// Application log regardless (#2861).
+    /// </summary>
+    /// <remarks>
+    /// The provider and event ID are matched in MANAGED code, after an UNFILTERED read of the window — not
+    /// as XPath clauses. <see cref="EventLogService"/>'s own <c>BuildXPath</c> documents why a sparse XPath
+    /// clause (there, severity) over a window with few matches blocks a single native <c>ReadEvent()</c> call
+    /// for minutes with no way for a <see cref="CancellationToken"/> to interrupt it: a Provider/EventID
+    /// clause asking for one of four sources out of everything Windows logs to Application is exactly that
+    /// shape. Reading everything and filtering here instead keeps the cancellation point where
+    /// <see cref="EventLogService.Enumerate"/> already puts it: between records, not inside one blocking call.
+    /// <para>Message text, not the XML: this is read-only evidence for a human, not a parser, and the one
+    /// place a Windows user name could appear is the message, which <see cref="LogService.SanitizePath"/>
+    /// already strips from every app log line.</para>
+    /// </remarks>
+    private async Task<string> BuildWindowsEventsTextAsync(CancellationToken ct)
+    {
+        var sb = new StringBuilder();
+        var matches = 0;
+
+        using var linked = CancellationTokenSource.CreateLinkedTokenSource(ct);
+        linked.CancelAfter(WindowsEventsBudget);
+        try
+        {
+            var options = new EventLogQueryOptions
+            {
+                LogName = "Application",
+                Since = DateTime.UtcNow.AddDays(-WindowsEventsDays),
+                MaxResults = MaxWindowsEventsRecords,
+            };
+
+            await foreach (var entry in _events.ReadAsync(options, linked.Token).ConfigureAwait(false))
+            {
+                if (!IsTrackedCrashEvent(entry.ProviderName, entry.EventId)) continue;
+                if (!entry.FullMessage.Contains("SysManager", StringComparison.OrdinalIgnoreCase)) continue;
+
+                matches++;
+                var timestamp = entry.Timestamp.ToString("yyyy-MM-dd HH:mm:ss", CultureInfo.InvariantCulture);
+                sb.AppendLine(string.Create(CultureInfo.InvariantCulture,
+                    $"{timestamp} [{entry.ProviderName} {entry.EventId}]"));
+                sb.AppendLine(LogService.SanitizePath(entry.FullMessage));
+                sb.AppendLine();
+                if (sb.Length >= MaxWindowsEventsBytes) break;
+            }
+        }
+        catch (OperationCanceledException) when (!ct.IsCancellationRequested)
+        {
+            Log.Warning("Diagnostics bundle's Windows-events search hit its time budget after {Matches} match(es)", matches);
+            sb.AppendLine();
+            sb.AppendLine("[SysManager: this search stopped early because it was taking too long. "
+                + "What is above is what it found before then.]");
+        }
+
+        if (matches == 0 && _events.LastOutcome != EventLogService.ReadOutcome.Ok)
+            return $"The Application event log could not be read ({_events.LastOutcome}).";
+
+        return sb.Length > 0
+            ? sb.ToString()
+            : string.Create(CultureInfo.InvariantCulture,
+                $"No matching crash events (Application Error, .NET Runtime, Application Hang or Windows "
+                + $"Error Reporting mentioning SysManager) were found in the last {WindowsEventsDays} days.");
+    }
+
+    /// <summary>Whether a record's provider and event ID are one of <see cref="CrashEventsTracked"/>.</summary>
+    /// <remarks>Internal so this — the actual matching logic — is testable without a real Application log.</remarks>
+    internal static bool IsTrackedCrashEvent(string providerName, int eventId) =>
+        Array.Exists(CrashEventsTracked,
+            p => p.EventId == eventId && string.Equals(p.Provider, providerName, StringComparison.OrdinalIgnoreCase));
+
+    /// <summary>
     /// The note that ships inside the zip, naming every file and stating plainly that nothing was sent.
     /// </summary>
     /// <remarks>
@@ -320,6 +438,9 @@ public sealed partial class DiagnosticsBundleService
         sb.AppendLine("  errors.txt         Every line the log marked [ERR] or [FTL], with its continuation");
         sb.AppendLine("                     lines, from EVERY log file still kept on this PC — not only the");
         sb.AppendLine("                     ones below — so an older error is not left out.");
+        sb.AppendLine("  windows-events.txt Windows' own record of a crash SysManager could not log itself (a");
+        sb.AppendLine(string.Create(CultureInfo.InvariantCulture,
+            $"                     native fault or a hang), from the last {WindowsEventsDays} days."));
 
         if (logs.Count == 0)
         {

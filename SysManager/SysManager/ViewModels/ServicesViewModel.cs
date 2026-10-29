@@ -17,7 +17,7 @@ namespace SysManager.ViewModels;
 /// Services tab — lists all Windows services with gaming recommendations,
 /// allows start/stop and startup type changes.
 /// </summary>
-public sealed partial class ServicesViewModel : ViewModelBase, IFilterable
+public sealed partial class ServicesViewModel : ElevatedViewModelBase, IFilterable
 {
     /// <inheritdoc/>
     protected internal override IRelayCommand? RefreshOnF5 => RefreshCommand;
@@ -36,7 +36,6 @@ public sealed partial class ServicesViewModel : ViewModelBase, IFilterable
 
     public BulkObservableCollection<ServiceEntry> Services { get; } = new();
 
-    [ObservableProperty] private bool _isElevated;
     [ObservableProperty] private string _filterText = "";
     [ObservableProperty] private string _selectedFilter = "All";
     [ObservableProperty] private ServiceEntry? _selectedService;
@@ -102,7 +101,6 @@ public sealed partial class ServicesViewModel : ViewModelBase, IFilterable
         _notify = notify ?? ((title, detail) => ToastService.Instance.Show(title, detail));
         _readServices = readServices ?? ServiceManagerService.GetAllServices;
         if (_putBack is not null) _putBack.PutBack += OnPutBack;
-        IsElevated = AdminHelper.IsElevated();
         InitializeAsync(InitAsync);
     }
 
@@ -120,12 +118,6 @@ public sealed partial class ServicesViewModel : ViewModelBase, IFilterable
         });
     }
 
-    [RelayCommand]
-    private void RelaunchAsAdmin()
-    {
-        if (AdminHelper.RelaunchAsAdmin())
-            App.RequestShutdown();
-    }
 
     private async Task InitAsync()
     {

@@ -24,7 +24,7 @@ namespace SysManager.ViewModels;
 /// • Confirmation dialog before every destructive action.
 /// • GPU changes warn about reboot requirement.
 /// </summary>
-public sealed partial class PerformanceViewModel : ViewModelBase
+public sealed partial class PerformanceViewModel : ElevatedViewModelBase
 {
     /// <inheritdoc/>
     protected internal override IRelayCommand? RefreshOnF5 => RefreshCommand;
@@ -40,7 +40,6 @@ public sealed partial class PerformanceViewModel : ViewModelBase
     // can't both observe a null snapshot and race the capture/save.
     private readonly SemaphoreSlim _snapshotGate = new(1, 1);
 
-    [ObservableProperty] private bool _isElevated;
     [ObservableProperty] private PerformanceProfile _profile = new();
     [ObservableProperty] private string _summary = "Click Refresh to read current performance settings.";
 
@@ -71,7 +70,6 @@ public sealed partial class PerformanceViewModel : ViewModelBase
         _gaming = gaming;
         _putBack = putBack;
         if (_putBack is not null) _putBack.PutBack += OnPutBack;
-        IsElevated = AdminHelper.IsElevated();
         PropertyChanged += OnVmPropertyChanged;
         InitializeAsync(InitAsync);
     }
@@ -1040,12 +1038,6 @@ public sealed partial class PerformanceViewModel : ViewModelBase
         IsProcessorStateLocked = planKey is "high" or "ultimate";
     }
 
-    [RelayCommand]
-    private void RelaunchAsAdmin()
-    {
-        if (AdminHelper.RelaunchAsAdmin())
-            App.RequestShutdown();
-    }
 
     // CQ-M4: Override Dispose to clean up the PerformanceService's PowerShellRunner
     // event subscriptions and prevent the fire-and-forget InitAsync from running

@@ -12,13 +12,12 @@ using SysManager.Services;
 namespace SysManager.ViewModels;
 
 /// <summary>DNS flush, Winsock reset, TCP/IP reset.</summary>
-public sealed partial class NetworkRepairViewModel : ViewModelBase
+public sealed partial class NetworkRepairViewModel : ElevatedViewModelBase
 {
     public NetworkSharedState Shared { get; }
 
     private readonly ISessionRestorePoint _restorePoint;
 
-    [ObservableProperty] private bool _isElevated;
     [ObservableProperty] private bool _isRepairing;
     [ObservableProperty] private string _repairStatus = "";
     [ObservableProperty] private bool _repairNeedsReboot;
@@ -33,15 +32,8 @@ public sealed partial class NetworkRepairViewModel : ViewModelBase
     {
         Shared = shared;
         _restorePoint = restorePoint;
-        IsElevated = AdminHelper.IsElevated();
     }
 
-    [RelayCommand]
-    private void RelaunchAsAdmin()
-    {
-        if (AdminHelper.RelaunchAsAdmin())
-            App.RequestShutdown();
-    }
 
     [RelayCommand]
     private async Task FlushDnsAsync()

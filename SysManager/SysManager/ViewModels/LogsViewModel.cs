@@ -24,7 +24,7 @@ namespace SysManager.ViewModels;
 /// live via a CollectionView, and shows a plain-English explanation for the
 /// selected entry. Supports export to CSV and jumping to the raw log file.
 /// </summary>
-public sealed partial class LogsViewModel : ViewModelBase, IArrivalDestination
+public sealed partial class LogsViewModel : ElevatedViewModelBase, IArrivalDestination
 {
     /// <inheritdoc/>
     protected internal override IRelayCommand? RefreshOnF5 => RefreshCommand;
@@ -130,7 +130,6 @@ public sealed partial class LogsViewModel : ViewModelBase, IArrivalDestination
 
     // The Security log is readable only when elevated — the banner names that and offers the
     // one-click relaunch, instead of only a status-line sentence with no button (#2859).
-    [ObservableProperty] private bool _isElevated;
 
     public LogsViewModel(EventLogService eventLogs)
         : this(eventLogs, eventLogs.ReadAsync)
@@ -147,7 +146,6 @@ public sealed partial class LogsViewModel : ViewModelBase, IArrivalDestination
     {
         _eventLogs = eventLogs;
         _readEvents = readEvents;
-        IsElevated = AdminHelper.IsElevated();
         EntriesView = CollectionViewSource.GetDefaultView(Entries);
         EntriesView.Filter = EntryFilter;
         // Disable Refresh while a scan runs — a second concurrent Refresh lets the
@@ -156,12 +154,6 @@ public sealed partial class LogsViewModel : ViewModelBase, IArrivalDestination
         PropertyChanged += OnVmPropertyChanged;
     }
 
-    [RelayCommand]
-    private void RelaunchAsAdmin()
-    {
-        if (AdminHelper.RelaunchAsAdmin())
-            App.RequestShutdown();
-    }
 
     private bool NotBusy => !IsBusy;
 

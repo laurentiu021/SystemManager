@@ -18,7 +18,7 @@ namespace SysManager.ViewModels;
 /// below a threshold (ISLC-style). Purging is safe/non-destructive but needs admin; auto
 /// and manual purge only run while the app is open.
 /// </summary>
-public sealed partial class StandbyMemoryViewModel : ViewModelBase
+public sealed partial class StandbyMemoryViewModel : ElevatedViewModelBase
 {
     private readonly StandbyMemoryService _service;
     private readonly StandbyPreferenceService _preferences;
@@ -31,7 +31,6 @@ public sealed partial class StandbyMemoryViewModel : ViewModelBase
     [ObservableProperty] private string _totalDisplay = "—";
     [ObservableProperty] private string _availableDisplay = "—";
     [ObservableProperty] private string _loadDisplay = "—";
-    [ObservableProperty] private bool _isElevated;
     [ObservableProperty] private bool _autoPurgeEnabled;
     [ObservableProperty] private double _thresholdMb = StandbyPreferenceService.DefaultThresholdMb;
 
@@ -51,7 +50,6 @@ public sealed partial class StandbyMemoryViewModel : ViewModelBase
     {
         _service = service;
         _preferences = preferences ?? new StandbyPreferenceService();
-        IsElevated = AdminHelper.IsElevated();
 
         // Auto-purge is set-and-forget, so losing it on restart made it effectively unusable:
         // the user armed it, closed the app, and it silently reverted to off at the default
@@ -228,12 +226,6 @@ public sealed partial class StandbyMemoryViewModel : ViewModelBase
         finally { IsBusy = false; IsProgressIndeterminate = false; }
     }
 
-    [RelayCommand]
-    private void RelaunchAsAdmin()
-    {
-        if (AdminHelper.RelaunchAsAdmin())
-            App.RequestShutdown();
-    }
 
     protected override void Dispose(bool disposing)
     {

@@ -18,7 +18,7 @@ namespace SysManager.ViewModels;
 /// <summary>
 /// Bulk Installer tab — select curated apps and install them via winget.
 /// </summary>
-public sealed partial class BulkInstallerViewModel : ViewModelBase
+public sealed partial class BulkInstallerViewModel : ElevatedViewModelBase
 {
     /// <inheritdoc/>
     protected internal override IRelayCommand? EscapeCancel =>
@@ -40,7 +40,6 @@ public sealed partial class BulkInstallerViewModel : ViewModelBase
 
     [ObservableProperty] private string _filterText = "";
     [ObservableProperty] private string _selectedCategory = "All";
-    [ObservableProperty] private bool _isElevated;
 
     /// <summary>
     /// When on, app icons are fetched from the Google favicon service. Off by default
@@ -134,7 +133,6 @@ public sealed partial class BulkInstallerViewModel : ViewModelBase
     {
         _service = service;
         _iconService = iconService;
-        IsElevated = AdminHelper.IsElevated();
         // Reflect the persisted opt-in WITHOUT triggering a save/reload during ctor init.
         _loadWebIcons = _iconService.NetworkFetchEnabled;
         Apps.ReplaceWith(BuildCuratedApps());
@@ -225,12 +223,6 @@ public sealed partial class BulkInstallerViewModel : ViewModelBase
     [GeneratedRegex(@"^\d+\s+(package|packages|upgrade|upgrades)\b", RegexOptions.IgnoreCase)]
     private static partial Regex ListSummaryPattern();
 
-    [RelayCommand]
-    private void RelaunchAsAdmin()
-    {
-        if (AdminHelper.RelaunchAsAdmin())
-            App.RequestShutdown();
-    }
 
     /// <summary>
     /// Gate for the install command. Without it the "Install Selected" button stays

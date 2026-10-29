@@ -22,7 +22,7 @@ namespace SysManager.ViewModels;
 /// staged the same way a click is: the switches move, the pending count says how many, and nothing is
 /// written until Apply (#1530).</para>
 /// </summary>
-public sealed partial class PrivacyViewModel : ViewModelBase, ISearchDestination
+public sealed partial class PrivacyViewModel : ElevatedViewModelBase, ISearchDestination
 {
     /// <inheritdoc/>
     protected internal override IRelayCommand? RefreshOnF5 => RefreshCommand;
@@ -39,7 +39,6 @@ public sealed partial class PrivacyViewModel : ViewModelBase, ISearchDestination
 
     [ObservableProperty] private List<string> _categories = [];
     [ObservableProperty] private string _selectedCategory = "All";
-    [ObservableProperty] private bool _isElevated;
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(HasPendingChanges))]
     [NotifyPropertyChangedFor(nameof(ApplyText))]
@@ -100,7 +99,6 @@ public sealed partial class PrivacyViewModel : ViewModelBase, ISearchDestination
         _service = service;
         _restorePoint = restorePoint;
         _importedChoices = importedChoices;
-        IsElevated = AdminHelper.IsElevated();
         // Read the registry-backed toggles off the UI thread so the eagerly-built VM
         // doesn't block startup; the UI update runs back on the UI thread (ConfigureAwait true).
         InitializeAsync(LoadTogglesAsync);
@@ -279,12 +277,6 @@ public sealed partial class PrivacyViewModel : ViewModelBase, ISearchDestination
         PendingChangeCount = pending;
     }
 
-    [RelayCommand]
-    private void RelaunchAsAdmin()
-    {
-        if (AdminHelper.RelaunchAsAdmin())
-            App.RequestShutdown();
-    }
 
     [RelayCommand]
     private async Task ApplyChanges()

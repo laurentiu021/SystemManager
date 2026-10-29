@@ -16,7 +16,7 @@ namespace SysManager.ViewModels;
 /// App Blocker tab — prevents selected applications from executing using
 /// Image File Execution Options (IFEO) registry mechanism.
 /// </summary>
-public sealed partial class AppBlockerViewModel : ViewModelBase
+public sealed partial class AppBlockerViewModel : ElevatedViewModelBase
 {
     /// <inheritdoc/>
     protected internal override IRelayCommand? RefreshOnF5 => RefreshListCommand;
@@ -26,7 +26,6 @@ public sealed partial class AppBlockerViewModel : ViewModelBase
     [ObservableProperty] private string _newExeName = "";
     [ObservableProperty] private string _blockStatus = "Enter an executable name and click Block to prevent it from running.";
     [ObservableProperty] private int _blockedCount;
-    [ObservableProperty] private bool _isElevated;
 
     /// <summary>
     /// True when at least one existing block cannot be lifted from inside the app, so the tab shows the
@@ -63,18 +62,11 @@ public sealed partial class AppBlockerViewModel : ViewModelBase
     public AppBlockerViewModel(IAppBlockerService blocker)
     {
         _blocker = blocker;
-        IsElevated = AdminHelper.IsElevated();
         // Walk the IFEO registry tree off the UI thread so the eagerly-built VM doesn't
         // block startup; the UI update runs back on the UI thread (ConfigureAwait true).
         InitializeAsync(RefreshListAsync);
     }
 
-    [RelayCommand]
-    private void RelaunchAsAdmin()
-    {
-        if (AdminHelper.RelaunchAsAdmin())
-            App.RequestShutdown();
-    }
 
     private async Task RefreshListAsync()
     {

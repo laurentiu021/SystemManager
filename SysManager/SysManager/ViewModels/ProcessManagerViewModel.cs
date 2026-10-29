@@ -19,7 +19,7 @@ namespace SysManager.ViewModels;
 /// Process Manager tab — lists running processes with memory/thread info,
 /// allows kill and open file location.
 /// </summary>
-public sealed partial class ProcessManagerViewModel : ViewModelBase
+public sealed partial class ProcessManagerViewModel : ElevatedViewModelBase
 {
     /// <inheritdoc/>
     protected internal override IRelayCommand? RefreshOnF5 => RefreshCommand;
@@ -31,7 +31,6 @@ public sealed partial class ProcessManagerViewModel : ViewModelBase
     public BulkObservableCollection<ProcessEntry> Processes { get; } = new();
     public BulkObservableCollection<ProcessEntry> FilteredProcesses { get; } = new();
 
-    [ObservableProperty] private bool _isElevated;
     [ObservableProperty] private string _filterText = "";
     [ObservableProperty] private bool _showOnlyApps;
     [ObservableProperty] private bool _isActive = true;
@@ -56,16 +55,9 @@ public sealed partial class ProcessManagerViewModel : ViewModelBase
     {
         _service = service;
         _killProcess = killProcess ?? throw new ArgumentNullException(nameof(killProcess));
-        IsElevated = AdminHelper.IsElevated();
         InitializeAsync(InitAsync);
     }
 
-    [RelayCommand]
-    private void RelaunchAsAdmin()
-    {
-        if (AdminHelper.RelaunchAsAdmin())
-            App.RequestShutdown();
-    }
 
     private async Task InitAsync()
     {

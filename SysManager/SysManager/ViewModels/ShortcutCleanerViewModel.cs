@@ -18,7 +18,7 @@ namespace SysManager.ViewModels;
 /// <summary>
 /// Shortcut Cleaner tab — scans for broken .lnk files and allows deletion.
 /// </summary>
-public sealed partial class ShortcutCleanerViewModel : ViewModelBase
+public sealed partial class ShortcutCleanerViewModel : ElevatedViewModelBase
 {
     /// <inheritdoc/>
     protected internal override IRelayCommand? RefreshOnF5 => ScanCommand;
@@ -32,7 +32,6 @@ public sealed partial class ShortcutCleanerViewModel : ViewModelBase
 
     public BulkObservableCollection<BrokenShortcut> BrokenShortcuts { get; } = new();
 
-    [ObservableProperty] private bool _isElevated;
     [ObservableProperty] private string _scanStatus = "Click Scan to find broken shortcuts.";
     [ObservableProperty] private string _currentLocation = "";
     [ObservableProperty] private int _brokenCount;
@@ -43,15 +42,8 @@ public sealed partial class ShortcutCleanerViewModel : ViewModelBase
     public ShortcutCleanerViewModel(ShortcutCleanerService service)
     {
         _service = service;
-        IsElevated = AdminHelper.IsElevated();
     }
 
-    [RelayCommand]
-    private void RelaunchAsAdmin()
-    {
-        if (AdminHelper.RelaunchAsAdmin())
-            App.RequestShutdown();
-    }
 
     [RelayCommand]
     private async Task ScanAsync()

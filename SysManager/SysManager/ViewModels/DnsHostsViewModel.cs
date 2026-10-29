@@ -17,7 +17,7 @@ namespace SysManager.ViewModels;
 /// Combined ViewModel for DNS preset switching and hosts file editing.
 /// Both operations require administrator privileges.
 /// </summary>
-public sealed partial class DnsHostsViewModel : ViewModelBase
+public sealed partial class DnsHostsViewModel : ElevatedViewModelBase
 {
     /// <inheritdoc/>
     protected internal override IRelayCommand? RefreshOnF5 => RefreshHostsCommand;
@@ -70,7 +70,6 @@ public sealed partial class DnsHostsViewModel : ViewModelBase
 
     // ── Elevation ────────────────────────────────────────────────────────
 
-    [ObservableProperty] private bool _isElevated;
 
     public DnsHostsViewModel(DnsService dnsService, HostsFileService hostsService, IPutBackSignal? putBack = null)
         : this(dnsService, hostsService, autoInit: true, putBack) { }
@@ -89,7 +88,6 @@ public sealed partial class DnsHostsViewModel : ViewModelBase
         _putBack = putBack;
         if (_putBack is not null) _putBack.PutBack += OnPutBack;
         Presets = _dnsService.GetPresets();
-        IsElevated = AdminHelper.IsElevated();
 
         if (autoInit)
             InitializeAsync(LoadInitialDataAsync);
@@ -737,12 +735,6 @@ public sealed partial class DnsHostsViewModel : ViewModelBase
     [RelayCommand]
     private Task RefreshHostsAsync() => LoadHostsAsync();
 
-    [RelayCommand]
-    private void RelaunchAsAdmin()
-    {
-        if (AdminHelper.RelaunchAsAdmin())
-            App.RequestShutdown();
-    }
 
     // ── Cleanup ──────────────────────────────────────────────────────────
 

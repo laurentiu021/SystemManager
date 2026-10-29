@@ -14,7 +14,7 @@ using SysManager.Services;
 
 namespace SysManager.ViewModels;
 
-public sealed partial class CleanupViewModel : ViewModelBase
+public sealed partial class CleanupViewModel : ElevatedViewModelBase
 {
     /// <inheritdoc/>
     protected internal override IRelayCommand? RefreshOnF5 => RescanCommand;
@@ -59,7 +59,6 @@ public sealed partial class CleanupViewModel : ViewModelBase
 
     public ConsoleViewModel Console { get; } = new();
 
-    [ObservableProperty] private bool _isElevated;
 
     // Per-task running flags so buttons stay independent and the main thread doesn't block a user
     // navigating away while a component-store cleanup grinds for half an hour.
@@ -101,7 +100,6 @@ public sealed partial class CleanupViewModel : ViewModelBase
         _recycleBin = recycleBin;
         _runner.LineReceived += OnRunnerLineReceived;
         _runner.ProgressChanged += OnRunnerProgressChanged;
-        IsElevated = AdminHelper.IsElevated();
 
         InitializeAsync(InitAsync);
     }
@@ -216,12 +214,6 @@ public sealed partial class CleanupViewModel : ViewModelBase
         IsProgressIndeterminate = IsAnyRunning && !IsStoreRunning;
     }
 
-    [RelayCommand]
-    private void RelaunchAsAdmin()
-    {
-        if (AdminHelper.RelaunchAsAdmin())
-            App.RequestShutdown();
-    }
 
     [RelayCommand]
     private async Task CleanTempAsync()

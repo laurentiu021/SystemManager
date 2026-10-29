@@ -19,7 +19,7 @@ namespace SysManager.ViewModels;
 /// dedicated PATH editor (reorder, remove duplicates, flag missing folders).
 /// Edits are local until the user presses Apply; Machine-scope writes need admin.
 /// </summary>
-public sealed partial class EnvironmentVariablesViewModel : ViewModelBase
+public sealed partial class EnvironmentVariablesViewModel : ElevatedViewModelBase
 {
     /// <inheritdoc/>
     protected internal override IRelayCommand? RefreshOnF5 => RefreshCommand;
@@ -80,7 +80,6 @@ public sealed partial class EnvironmentVariablesViewModel : ViewModelBase
 
     [ObservableProperty] private string _searchText = "";
     [ObservableProperty] private string _selectedScopeFilter = "All";
-    [ObservableProperty] private bool _isElevated;
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(HasPendingChanges))]
@@ -119,7 +118,6 @@ public sealed partial class EnvironmentVariablesViewModel : ViewModelBase
         _putBack = putBack;
         _folderExists = folderExists ?? throw new ArgumentNullException(nameof(folderExists));
         if (_putBack is not null) _putBack.PutBack += OnPutBack;
-        IsElevated = AdminHelper.IsElevated();
         // Read both env hives off the UI thread so the eagerly-built VM doesn't block
         // startup; the UI update runs back on the UI thread (ConfigureAwait true).
         InitializeAsync(LoadAsync);
@@ -406,12 +404,6 @@ public sealed partial class EnvironmentVariablesViewModel : ViewModelBase
 
     // ── Apply / discard / refresh / restore ──────────────────────────────────────
 
-    [RelayCommand]
-    private void RelaunchAsAdmin()
-    {
-        if (AdminHelper.RelaunchAsAdmin())
-            App.RequestShutdown();
-    }
 
     [RelayCommand]
     private async Task ApplyChanges()

@@ -92,6 +92,17 @@ public class CrashDialogMessageTests
         Assert.DoesNotContain(".log", text);
     }
 
+    [Fact]
+    public void ItPointsAtSaveDiagnosticsBundle_NotTheFolderAlone_ToAttach()
+    {
+        // GitHub's issue forms take one file; the log folder can hold up to 14 (#2861). The window is
+        // loaded whenever this dialog shows (DecideUiFault), so F1 reaching About is always true here.
+        var text = App.BuildCrashMessage(new InvalidOperationException("x"));
+
+        Assert.Contains("F1", text, StringComparison.Ordinal);
+        Assert.Contains("Save diagnostics bundle", text, StringComparison.Ordinal);
+    }
+
     // ---- the startup variant (#2863) ----
 
     /// <summary>
@@ -143,5 +154,16 @@ public class CrashDialogMessageTests
 
         Assert.Contains(LogService.LogDir, text);
         Assert.DoesNotContain(".log", text);
+    }
+
+    [Fact]
+    public void TheStartupMessage_UnlikeTheRunningOne_DoesNotMentionF1()
+    {
+        // This shows before the main window ever loads (#2861): there is no About tab for F1 to open
+        // yet, so pointing at it here — unlike BuildCrashMessage — would send the user to a key that
+        // does nothing.
+        var text = App.BuildStartupFailureMessage(new InvalidOperationException("x"));
+
+        Assert.DoesNotContain("F1", text, StringComparison.Ordinal);
     }
 }

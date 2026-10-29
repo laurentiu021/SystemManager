@@ -10,6 +10,20 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.132.1] - 2026-10-29
+
+**The last-resort crash dialog and the "closed unexpectedly last time" notice now point at Save
+diagnostics bundle instead of the log folder, since GitHub's issue forms take one zip, not up to 14
+log files.**
+
+### Fixed
+- The crash dialog shown while SysManager keeps running, and the notice shown the next time it starts
+  after closing unexpectedly, both told the user to attach the log folder when reporting a problem.
+  GitHub's issue forms accept one file; the log folder holds up to 14, at up to 10 MB each. Both now
+  say to press F1, open About and choose Save diagnostics bundle instead. The separate dialog shown
+  when SysManager fails before its window ever loads still points at the folder: there is no About
+  tab yet for F1 to open.
+
 ## [1.132.0] - 2026-10-28
 
 **Dashboard quick actions can now be cancelled mid-run, System Logs and Disk Analyzer put an actual

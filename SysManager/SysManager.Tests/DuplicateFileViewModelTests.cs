@@ -3,7 +3,9 @@
 // License: MIT
 
 using System.IO;
+using NSubstitute;
 using SysManager.Models;
+using SysManager.Services;
 using SysManager.ViewModels;
 
 namespace SysManager.Tests;
@@ -20,9 +22,9 @@ public class DuplicateFileViewModelTests
     // The VM resolves its preset folders asynchronously off the UI thread (known-folder +
     // DriveInfo probing can stall, so it's moved off startup); wait for that init so the
     // preset assertions observe the populated collection instead of racing the load.
-    private static DuplicateFileViewModel NewVm()
+    private static DuplicateFileViewModel NewVm(IDialogService? dialog = null)
     {
-        var vm = new DuplicateFileViewModel(new Services.DuplicateFileService());
+        var vm = new DuplicateFileViewModel(new Services.DuplicateFileService(), dialog);
         vm.InitializationComplete.GetAwaiter().GetResult();
         return vm;
     }
@@ -549,5 +551,33 @@ public class DuplicateFileViewModelTests
         Assert.All(explanations, e => Assert.False(string.IsNullOrWhiteSpace(e)));
         Assert.Equal(failures.Count, explanations.Distinct(StringComparer.Ordinal).Count());
         Assert.Equal("", DuplicateFileViewModel.DescribeFailure(Services.DuplicateFileService.ScanFailure.None));
+    }
+
+    // ── BrowseFolder: the picker, not just the business logic behind it (#2860) ──
+
+    [Fact]
+    public void BrowseFolder_WhenCancelled_LeavesSelectedFolderUnchanged()
+    {
+        var dialog = Substitute.For<IDialogService>();
+        dialog.PickFolder(Arg.Any<string>()).Returns((string?)null);
+        var vm = NewVm(dialog);
+        var before = vm.SelectedFolder;
+
+        vm.BrowseFolderCommand.Execute(null);
+
+        Assert.Equal(before, vm.SelectedFolder);
+    }
+
+    [Fact]
+    public void BrowseFolder_WhenAFolderIsPicked_SetsSelectedFolder_AndAddsItToPresets()
+    {
+        var dialog = Substitute.For<IDialogService>();
+        dialog.PickFolder(Arg.Any<string>()).Returns(@"D:\Picked\Folder");
+        var vm = NewVm(dialog);
+
+        vm.BrowseFolderCommand.Execute(null);
+
+        Assert.Equal(@"D:\Picked\Folder", vm.SelectedFolder);
+        Assert.Contains(@"D:\Picked\Folder", vm.PresetFolders);
     }
 }

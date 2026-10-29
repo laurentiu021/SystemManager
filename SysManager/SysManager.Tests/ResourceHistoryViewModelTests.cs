@@ -6,6 +6,7 @@ using System;
 using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
+using NSubstitute;
 using SysManager.Models;
 using SysManager.Services;
 using SysManager.ViewModels;
@@ -224,5 +225,42 @@ public class ResourceHistoryViewModelReloadTests : IDisposable
 
         vm.Dispose();
         vm.Dispose();
+    }
+
+    // ── ExportCsvAsync: the picker, not just ToCsv (#2860) ──
+
+    [Fact]
+    public async Task ExportCsvAsync_WhenCancelled_WritesNothing()
+    {
+        using var service = SeededService(new ResourceSample(DateTime.Now, 10, 20, null, null, null));
+        var dialog = Substitute.For<IDialogService>();
+        dialog.PickSaveFile(Arg.Any<string>(), Arg.Any<string>()).Returns((string?)null);
+        using var vm = new ResourceHistoryViewModel(service, dialog);
+        await vm.InitializationComplete;
+        var before = vm.StatusMessage;
+
+        await vm.ExportCsvCommand.ExecuteAsync(null);
+
+        Assert.Equal(before, vm.StatusMessage);
+    }
+
+    [Fact]
+    public async Task ExportCsvAsync_WhenAPathIsPicked_WritesTheCsvThere()
+    {
+        using var service = SeededService(new ResourceSample(DateTime.Now, 10, 20, null, null, null));
+        var path = Path.Combine(Path.GetTempPath(), "smtest_resourcehistory_" + Guid.NewGuid().ToString("N") + ".csv");
+        var dialog = Substitute.For<IDialogService>();
+        dialog.PickSaveFile(Arg.Any<string>(), Arg.Any<string>()).Returns(path);
+        using var vm = new ResourceHistoryViewModel(service, dialog);
+        await vm.InitializationComplete;
+
+        try
+        {
+            await vm.ExportCsvCommand.ExecuteAsync(null);
+
+            Assert.True(File.Exists(path));
+            Assert.Contains(Path.GetFileName(path), vm.StatusMessage, StringComparison.Ordinal);
+        }
+        finally { File.Delete(path); }
     }
 }

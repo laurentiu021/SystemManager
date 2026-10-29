@@ -3,6 +3,7 @@
 // License: MIT
 
 using System.IO;
+using NSubstitute;
 using SysManager.Models;
 using SysManager.Services;
 using SysManager.ViewModels;
@@ -21,12 +22,12 @@ public class DiskAnalyzerViewModelTests
     // The VM resolves its preset paths asynchronously off the UI thread (DriveInfo probing
     // can stall, so it's moved off startup); wait for that init so the preset assertions
     // observe the populated collection instead of racing the background load.
-    private static DiskAnalyzerViewModel NewVm()
+    private static DiskAnalyzerViewModel NewVm(IDialogService? dialog = null)
     {
         var vm = new DiskAnalyzerViewModel(new DiskAnalyzerService(),
             new DiskScanHistoryService(Path.Combine(Path.GetTempPath(),
                 "SysManagerDiskHistVm_" + Guid.NewGuid().ToString("N"))),
-            TempPreferences());
+            TempPreferences(), dialog);
         vm.InitializationComplete.GetAwaiter().GetResult();
         return vm;
     }
@@ -740,5 +741,63 @@ public class DiskAnalyzerViewModelTests
         var vm = NewVm();
 
         Assert.Same(vm.AnalyzeCommand, vm.RefreshOnF5);
+    }
+
+    // ── The picker commands, not just the business logic behind them (#2860) ──
+
+    [Fact]
+    public void BrowseFolder_WhenCancelled_LeavesSelectedPathUnchanged()
+    {
+        var dialog = Substitute.For<IDialogService>();
+        dialog.PickFolder(Arg.Any<string>()).Returns((string?)null);
+        var vm = NewVm(dialog);
+        var before = vm.SelectedPath;
+
+        vm.BrowseFolderCommand.Execute(null);
+
+        Assert.Equal(before, vm.SelectedPath);
+    }
+
+    [Fact]
+    public void BrowseFolder_WhenAFolderIsPicked_SetsSelectedPath_AndAddsItToPresets()
+    {
+        var dialog = Substitute.For<IDialogService>();
+        dialog.PickFolder(Arg.Any<string>()).Returns(@"D:\Picked\Folder");
+        var vm = NewVm(dialog);
+
+        vm.BrowseFolderCommand.Execute(null);
+
+        Assert.Equal(@"D:\Picked\Folder", vm.SelectedPath);
+        Assert.Contains(@"D:\Picked\Folder", vm.PresetPaths);
+    }
+
+    [Fact]
+    public async Task ExportCsvAsync_WhenCancelled_WritesNothing()
+    {
+        var dialog = Substitute.For<IDialogService>();
+        dialog.PickSaveFile(Arg.Any<string>(), Arg.Any<string>()).Returns((string?)null);
+        var vm = NewVm(dialog);
+
+        await vm.ExportCsvCommand.ExecuteAsync(null);
+
+        Assert.Equal("", vm.StatusMessage);
+    }
+
+    [Fact]
+    public async Task ExportCsvAsync_WhenAPathIsPicked_WritesTheCsvThere()
+    {
+        var path = Path.Combine(Path.GetTempPath(), "smtest_diskanalyzer_" + Guid.NewGuid().ToString("N") + ".csv");
+        var dialog = Substitute.For<IDialogService>();
+        dialog.PickSaveFile(Arg.Any<string>(), Arg.Any<string>()).Returns(path);
+        var vm = NewVm(dialog);
+
+        try
+        {
+            await vm.ExportCsvCommand.ExecuteAsync(null);
+
+            Assert.True(File.Exists(path));
+            Assert.Contains(Path.GetFileName(path), vm.StatusMessage, StringComparison.Ordinal);
+        }
+        finally { File.Delete(path); }
     }
 }

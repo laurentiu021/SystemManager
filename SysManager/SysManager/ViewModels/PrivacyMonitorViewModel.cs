@@ -7,7 +7,6 @@ using System.Globalization;
 using System.IO;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
-using Microsoft.Win32;
 using Serilog;
 using SysManager.Helpers;
 using SysManager.Models;
@@ -27,6 +26,7 @@ public sealed partial class PrivacyMonitorViewModel : ViewModelBase
     protected internal override IRelayCommand? RefreshOnF5 => RefreshCommand;
 
     private readonly Func<CancellationToken, Task<PrivacyAccessReport>> _read;
+    private readonly IDialogService _dialog;
     private CancellationTokenSource? _cts;
 
     public BulkObservableCollection<PrivacyAccessEntry> Entries { get; } = new();
@@ -51,12 +51,15 @@ public sealed partial class PrivacyMonitorViewModel : ViewModelBase
     /// <summary>The read the tab started when it was last shown. Internal so a test can await it.</summary>
     internal Task ShownRefresh { get; private set; } = Task.CompletedTask;
 
-    public PrivacyMonitorViewModel(PrivacyMonitorService service) : this(service.ReadAsync) { }
+    public PrivacyMonitorViewModel(PrivacyMonitorService service, IDialogService? dialog = null)
+        : this(service.ReadAsync, dialog) { }
 
     /// <summary>Test seam: the consent-store read, so a failed one can be supplied without the registry.</summary>
-    internal PrivacyMonitorViewModel(Func<CancellationToken, Task<PrivacyAccessReport>> read)
+    /// <param name="dialog">Defaults to <see cref="DialogService.Instance"/> (#2860).</param>
+    internal PrivacyMonitorViewModel(Func<CancellationToken, Task<PrivacyAccessReport>> read, IDialogService? dialog = null)
     {
         _read = read;
+        _dialog = dialog ?? DialogService.Instance;
         StatusMessage = "Reading access history…";
         PropertyChanged += OnVmPropertyChanged;
         // Read off the UI thread so a registry walk (or a corrupt-hive failure) can never block or
@@ -195,19 +198,16 @@ public sealed partial class PrivacyMonitorViewModel : ViewModelBase
     [RelayCommand(CanExecute = nameof(HasEntries))]
     private async Task ExportCsvAsync()
     {
-        var dlg = new SaveFileDialog
-        {
-            FileName = $"SysManager-Privacy-{DateTime.Now.ToString("yyyy-MM-dd-HHmmss", CultureInfo.InvariantCulture)}.csv",
-            Filter = "CSV file (*.csv)|*.csv|All files (*.*)|*.*"
-        };
-        if (dlg.ShowDialog() != true) return;
+        var fileName = $"SysManager-Privacy-{DateTime.Now.ToString("yyyy-MM-dd-HHmmss", CultureInfo.InvariantCulture)}.csv";
+        var path = _dialog.PickSaveFile(fileName, "CSV file (*.csv)|*.csv|All files (*.*)|*.*");
+        if (path is null) return;
 
         try
         {
             var csv = PrivacyMonitorService.ToCsv(Entries, CultureInfo.CurrentCulture);
-            await Csv.WriteAsync(dlg.FileName, csv);
-            StatusMessage = $"Exported {Entries.Count} entry(ies) to {Path.GetFileName(dlg.FileName)}.";
-            ToastService.Instance.Show("Access history exported", Path.GetFileName(dlg.FileName));
+            await Csv.WriteAsync(path, csv);
+            StatusMessage = $"Exported {Entries.Count} entry(ies) to {Path.GetFileName(path)}.";
+            ToastService.Instance.Show("Access history exported", Path.GetFileName(path));
         }
         catch (IOException ex) { StatusMessage = $"Export failed: {ex.Message}"; }
         catch (UnauthorizedAccessException ex) { StatusMessage = $"Export failed (access denied): {ex.Message}"; }

@@ -2,7 +2,10 @@
 // Author: laurentiu021 · https://github.com/laurentiu021/SystemManager
 // License: MIT
 
+using System.IO;
+using NSubstitute;
 using SysManager.Models;
+using SysManager.Services;
 using SysManager.ViewModels;
 
 namespace SysManager.Tests;
@@ -24,9 +27,9 @@ public class PrivacyMonitorViewModelTests
     private static PrivacyAccessReport Report(IReadOnlyList<PrivacyAccessEntry> entries, params string[] unreadable)
         => new(entries, unreadable);
 
-    private static async Task<PrivacyMonitorViewModel> SettledVm(Func<PrivacyAccessReport> read)
+    private static async Task<PrivacyMonitorViewModel> SettledVm(Func<PrivacyAccessReport> read, IDialogService? dialog = null)
     {
-        var vm = new PrivacyMonitorViewModel(_ => Task.FromResult(read()));
+        var vm = new PrivacyMonitorViewModel(_ => Task.FromResult(read()), dialog);
         await vm.InitializationComplete;
         return vm;
     }
@@ -169,5 +172,38 @@ public class PrivacyMonitorViewModelTests
         await vm.ShownRefresh;
 
         Assert.Equal(2, reads);
+    }
+
+    // ── ExportCsvAsync: the picker, not just ToCsv (#2860) ──
+
+    [Fact]
+    public async Task ExportCsvAsync_WhenCancelled_WritesNothing()
+    {
+        var dialog = Substitute.For<IDialogService>();
+        dialog.PickSaveFile(Arg.Any<string>(), Arg.Any<string>()).Returns((string?)null);
+        var vm = await SettledVm(() => Report([Mic]), dialog);
+        var before = vm.StatusMessage;
+
+        await vm.ExportCsvCommand.ExecuteAsync(null);
+
+        Assert.Equal(before, vm.StatusMessage);
+    }
+
+    [Fact]
+    public async Task ExportCsvAsync_WhenAPathIsPicked_WritesTheCsvThere()
+    {
+        var path = Path.Combine(Path.GetTempPath(), "smtest_privacymonitor_" + Guid.NewGuid().ToString("N") + ".csv");
+        var dialog = Substitute.For<IDialogService>();
+        dialog.PickSaveFile(Arg.Any<string>(), Arg.Any<string>()).Returns(path);
+        var vm = await SettledVm(() => Report([Mic]), dialog);
+
+        try
+        {
+            await vm.ExportCsvCommand.ExecuteAsync(null);
+
+            Assert.True(File.Exists(path));
+            Assert.Contains(Path.GetFileName(path), vm.StatusMessage, StringComparison.Ordinal);
+        }
+        finally { File.Delete(path); }
     }
 }

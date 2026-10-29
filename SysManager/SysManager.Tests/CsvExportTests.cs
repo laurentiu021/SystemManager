@@ -16,9 +16,9 @@ namespace SysManager.Tests;
 /// </summary>
 /// <remarks>
 /// The formatters are pure static methods precisely so they can be tested without a file dialog, which is the
-/// shape <c>ResourceHistoryService.ToCsv</c> established. What is NOT covered here is the command itself:
-/// <c>SaveFileDialog.ShowDialog()</c> needs a window, so the export commands are exercised by the guard that
-/// checks each one is bound in its view, not by these tests.
+/// shape <c>ResourceHistoryService.ToCsv</c> established. The export command itself — the picker and the write
+/// together — is exercised per view model, through a substituted <see cref="IDialogService"/> (#2860), rather
+/// than here.
 /// </remarks>
 public class CsvExportTests
 {

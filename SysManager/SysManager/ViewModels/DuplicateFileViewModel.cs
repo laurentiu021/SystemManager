@@ -34,6 +34,7 @@ public sealed partial class DuplicateFileViewModel : ViewModelBase
         IsBusy ? CancelScanCommand : null;
 
     private readonly DuplicateFileService _service;
+    private readonly IDialogService _dialog;
     private CancellationTokenSource? _cts;
 
     public BulkObservableCollection<DuplicateFileGroup> Groups { get; } = new();
@@ -110,9 +111,12 @@ public sealed partial class DuplicateFileViewModel : ViewModelBase
         _ => "",
     };
 
-    public DuplicateFileViewModel(DuplicateFileService service)
+    /// <summary>Builds the Duplicate Finder tab over its known-folder presets.</summary>
+    /// <param name="dialog">Defaults to <see cref="DialogService.Instance"/> (#2860).</param>
+    public DuplicateFileViewModel(DuplicateFileService service, IDialogService? dialog = null)
     {
         _service = service;
+        _dialog = dialog ?? DialogService.Instance;
         // Resolve known-folder paths + probe drives off the UI thread: DriveInfo.IsReady can stall on
         // a disconnected mapped/removable volume. This tab is LAZY — NavItem.ContentFactory builds it
         // on first open, not at startup (the eager set is Dashboard, DarkMode and About; see the list
@@ -400,13 +404,10 @@ public sealed partial class DuplicateFileViewModel : ViewModelBase
     [RelayCommand]
     private void BrowseFolder()
     {
-        var dialog = new Microsoft.Win32.OpenFolderDialog
+        var folder = _dialog.PickFolder("Select folder to scan for duplicates");
+        if (folder is not null)
         {
-            Title = "Select folder to scan for duplicates"
-        };
-        if (dialog.ShowDialog() == true)
-        {
-            SelectedFolder = dialog.FolderName;
+            SelectedFolder = folder;
             if (!PresetFolders.Contains(SelectedFolder))
                 PresetFolders.Add(SelectedFolder);
         }

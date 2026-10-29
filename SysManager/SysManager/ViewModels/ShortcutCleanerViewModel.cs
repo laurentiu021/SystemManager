@@ -7,7 +7,6 @@ using System.IO;
 using System.Windows;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
-using Microsoft.Win32;
 using Serilog;
 using SysManager.Helpers;
 using SysManager.Models;
@@ -28,6 +27,7 @@ public sealed partial class ShortcutCleanerViewModel : ElevatedViewModelBase
         IsScanning ? CancelCommand : null;
 
     private readonly ShortcutCleanerService _service;
+    private readonly IDialogService _dialog;
     private CancellationTokenSource? _cts;
 
     public BulkObservableCollection<BrokenShortcut> BrokenShortcuts { get; } = new();
@@ -39,9 +39,12 @@ public sealed partial class ShortcutCleanerViewModel : ElevatedViewModelBase
     [ObservableProperty] private bool _isScanning;
     [ObservableProperty] private bool _moveToRecycleBin = true;
 
-    public ShortcutCleanerViewModel(ShortcutCleanerService service)
+    /// <summary>Builds the Shortcut Cleaner tab over an empty result list.</summary>
+    /// <param name="dialog">Defaults to <see cref="DialogService.Instance"/> (#2860).</param>
+    public ShortcutCleanerViewModel(ShortcutCleanerService service, IDialogService? dialog = null)
     {
         _service = service;
+        _dialog = dialog ?? DialogService.Instance;
     }
 
 
@@ -225,19 +228,16 @@ public sealed partial class ShortcutCleanerViewModel : ElevatedViewModelBase
     [RelayCommand(CanExecute = nameof(HasBrokenShortcuts))]
     private async Task ExportCsvAsync()
     {
-        var dlg = new SaveFileDialog
-        {
-            FileName = $"SysManager-BrokenShortcuts-{DateTime.Now.ToString("yyyy-MM-dd-HHmmss", CultureInfo.InvariantCulture)}.csv",
-            Filter = "CSV file (*.csv)|*.csv|All files (*.*)|*.*"
-        };
-        if (dlg.ShowDialog() != true) return;
+        var fileName = $"SysManager-BrokenShortcuts-{DateTime.Now.ToString("yyyy-MM-dd-HHmmss", CultureInfo.InvariantCulture)}.csv";
+        var path = _dialog.PickSaveFile(fileName, "CSV file (*.csv)|*.csv|All files (*.*)|*.*");
+        if (path is null) return;
 
         try
         {
             var csv = ShortcutCleanerService.ToCsv(BrokenShortcuts, CultureInfo.CurrentCulture);
-            await Csv.WriteAsync(dlg.FileName, csv);
-            StatusMessage = $"Exported {BrokenShortcuts.Count} shortcut(s) to {Path.GetFileName(dlg.FileName)}.";
-            ToastService.Instance.Show("Broken shortcuts exported", Path.GetFileName(dlg.FileName));
+            await Csv.WriteAsync(path, csv);
+            StatusMessage = $"Exported {BrokenShortcuts.Count} shortcut(s) to {Path.GetFileName(path)}.";
+            ToastService.Instance.Show("Broken shortcuts exported", Path.GetFileName(path));
         }
         catch (IOException ex) { StatusMessage = $"Export failed: {ex.Message}"; }
         catch (UnauthorizedAccessException ex) { StatusMessage = $"Export failed (access denied): {ex.Message}"; }

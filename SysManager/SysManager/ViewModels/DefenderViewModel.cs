@@ -26,6 +26,7 @@ public sealed partial class DefenderViewModel : ElevatedViewModelBase
 
     private readonly DefenderService _service;
     private readonly ISessionRestorePoint _restorePoint;
+    private readonly IDialogService _dialog;
 
     public BulkObservableCollection<string> ExclusionPaths { get; } = new();
 
@@ -51,10 +52,13 @@ public sealed partial class DefenderViewModel : ElevatedViewModelBase
         ? "Add a folder above to exclude it from Defender scans."
         : "Windows shows Defender's exclusions only to an administrator. Use \"Run as administrator\" to see and change them.";
 
-    public DefenderViewModel(DefenderService service, ISessionRestorePoint restorePoint)
+    /// <summary>Reads and changes Microsoft Defender settings.</summary>
+    /// <param name="dialog">Defaults to <see cref="DialogService.Instance"/> (#2860).</param>
+    public DefenderViewModel(DefenderService service, ISessionRestorePoint restorePoint, IDialogService? dialog = null)
     {
         _service = service;
         _restorePoint = restorePoint;
+        _dialog = dialog ?? DialogService.Instance;
         StatusMessage = "Reading Defender status…";
         PropertyChanged += OnVmPropertyChanged;
         InitializeAsync(RefreshAsync);
@@ -144,10 +148,10 @@ public sealed partial class DefenderViewModel : ElevatedViewModelBase
     [RelayCommand(CanExecute = nameof(NotBusy))]
     private async Task AddExclusionAsync()
     {
-        var dialog = new Microsoft.Win32.OpenFolderDialog { Title = "Select a folder to exclude from scanning" };
-        if (dialog.ShowDialog() != true) return;
+        var folder = _dialog.PickFolder("Select a folder to exclude from scanning");
+        if (folder is null) return;
 
-        string path = dialog.FolderName;
+        string path = folder;
         if (!IsValidExclusionPath(path))
         {
             StatusMessage = "That folder path is not valid.";

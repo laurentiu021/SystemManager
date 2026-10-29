@@ -6,7 +6,6 @@ using System.Globalization;
 using System.IO;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
-using Microsoft.Win32;
 using Serilog;
 using SysManager.Helpers;
 using SysManager.Models;
@@ -32,6 +31,7 @@ public sealed partial class ProfileViewModel : ViewModelBase
     private readonly ProfileService _service;
     private readonly IPrivacyChoicesHandoff _privacyChoices;
     private readonly INavigationService _navigation;
+    private readonly IDialogService _dialog;
 
     /// <summary>Sections discovered for export: see <see cref="ProfileService.AvailableSections"/>.</summary>
     public BulkObservableCollection<SelectableSection> Sections { get; } = new();
@@ -51,11 +51,15 @@ public sealed partial class ProfileViewModel : ViewModelBase
     /// <summary>The list refresh the tab started when it was last shown. Internal so a test can await it.</summary>
     internal Task ShownRefresh { get; private set; } = Task.CompletedTask;
 
-    public ProfileViewModel(ProfileService service, IPrivacyChoicesHandoff privacyChoices, INavigationService navigation)
+    /// <summary>Builds the Profile Export/Import tab.</summary>
+    /// <param name="dialog">Defaults to <see cref="DialogService.Instance"/> (#2860).</param>
+    public ProfileViewModel(ProfileService service, IPrivacyChoicesHandoff privacyChoices, INavigationService navigation,
+        IDialogService? dialog = null)
     {
         _service = service;
         _privacyChoices = privacyChoices;
         _navigation = navigation;
+        _dialog = dialog ?? DialogService.Instance;
         StatusMessage = "Export your SysManager settings to a file, or import a profile from another PC.";
         // Read the config files off the UI thread so the eagerly-built VM doesn't block
         // startup; the collection update runs back on the UI thread.
@@ -133,12 +137,9 @@ public sealed partial class ProfileViewModel : ViewModelBase
             return;
         }
 
-        var dlg = new SaveFileDialog
-        {
-            FileName = $"SysManager-Profile-{DateTime.Now.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture)}.json",
-            Filter = "SysManager profile (*.json)|*.json|All files (*.*)|*.*"
-        };
-        if (dlg.ShowDialog() != true) return;
+        var fileName = $"SysManager-Profile-{DateTime.Now.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture)}.json";
+        var path = _dialog.PickSaveFile(fileName, "SysManager profile (*.json)|*.json|All files (*.*)|*.*");
+        if (path is null) return;
 
         IsBusy = true;
         IsProgressIndeterminate = true;
@@ -153,9 +154,9 @@ public sealed partial class ProfileViewModel : ViewModelBase
                 return;
             }
 
-            await _service.ExportToFileAsync(dlg.FileName, profile).ConfigureAwait(true);
-            StatusMessage = DescribeExport(profile.Sections.Count, keys.Count, Path.GetFileName(dlg.FileName));
-            ToastService.Instance.Show("Profile exported", Path.GetFileName(dlg.FileName));
+            await _service.ExportToFileAsync(path, profile).ConfigureAwait(true);
+            StatusMessage = DescribeExport(profile.Sections.Count, keys.Count, Path.GetFileName(path));
+            ToastService.Instance.Show("Profile exported", Path.GetFileName(path));
             Log.Information("Profile: exported {Count} of {Selected} sections", profile.Sections.Count, keys.Count);
         }
         catch (IOException ex) { StatusMessage = $"Export failed: {ex.Message}"; }
@@ -183,19 +184,15 @@ public sealed partial class ProfileViewModel : ViewModelBase
     [RelayCommand]
     private async Task ImportAsync()
     {
-        var dlg = new OpenFileDialog
-        {
-            Filter = "SysManager profile (*.json)|*.json|All files (*.*)|*.*",
-            CheckFileExists = true
-        };
-        if (dlg.ShowDialog() != true) return;
+        var files = _dialog.PickOpenFiles("", "SysManager profile (*.json)|*.json|All files (*.*)|*.*");
+        if (files.Count == 0) return;
 
         IsBusy = true;
         IsProgressIndeterminate = true;
         try
         {
             ConfigProfile? profile;
-            try { profile = await _service.ImportFromFileAsync(dlg.FileName).ConfigureAwait(true); }
+            try { profile = await _service.ImportFromFileAsync(files[0]).ConfigureAwait(true); }
             catch (NotSupportedException ex) { StatusMessage = ex.Message; return; }
 
             Import(profile);

@@ -12,7 +12,6 @@ using System.Windows;
 using System.Windows.Data;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
-using Microsoft.Win32;
 using SysManager.Helpers;
 using SysManager.Models;
 using SysManager.Services;
@@ -35,6 +34,7 @@ public sealed partial class LogsViewModel : ElevatedViewModelBase, IArrivalDesti
 
     private readonly EventLogService _eventLogs;
     private readonly Func<EventLogQueryOptions, CancellationToken, IAsyncEnumerable<FriendlyEventEntry>> _readEvents;
+    private readonly IDialogService _dialog;
     private CancellationTokenSource? _cts;
 
     public BulkObservableCollection<FriendlyEventEntry> Entries { get; } = new();
@@ -131,8 +131,8 @@ public sealed partial class LogsViewModel : ElevatedViewModelBase, IArrivalDesti
     // The Security log is readable only when elevated — the banner names that and offers the
     // one-click relaunch, instead of only a status-line sentence with no button (#2859).
 
-    public LogsViewModel(EventLogService eventLogs)
-        : this(eventLogs, eventLogs.ReadAsync)
+    public LogsViewModel(EventLogService eventLogs, IDialogService? dialog = null)
+        : this(eventLogs, eventLogs.ReadAsync, dialog)
     {
     }
 
@@ -140,12 +140,15 @@ public sealed partial class LogsViewModel : ElevatedViewModelBase, IArrivalDesti
     /// Test seam: <paramref name="readEvents"/> stands in for <see cref="EventLogService.ReadAsync"/>, so a test
     /// can feed the load a known number of events without reading this machine's event logs.
     /// </summary>
+    /// <param name="dialog">Defaults to <see cref="DialogService.Instance"/> (#2860).</param>
     internal LogsViewModel(
         EventLogService eventLogs,
-        Func<EventLogQueryOptions, CancellationToken, IAsyncEnumerable<FriendlyEventEntry>> readEvents)
+        Func<EventLogQueryOptions, CancellationToken, IAsyncEnumerable<FriendlyEventEntry>> readEvents,
+        IDialogService? dialog = null)
     {
         _eventLogs = eventLogs;
         _readEvents = readEvents;
+        _dialog = dialog ?? DialogService.Instance;
         EntriesView = CollectionViewSource.GetDefaultView(Entries);
         EntriesView.Filter = EntryFilter;
         // Disable Refresh while a scan runs — a second concurrent Refresh lets the
@@ -510,17 +513,14 @@ public sealed partial class LogsViewModel : ElevatedViewModelBase, IArrivalDesti
     [RelayCommand]
     private void ExportCsv()
     {
-        var dlg = new SaveFileDialog
-        {
-            FileName = $"sysmanager-{SelectedLog}-{DateTime.Now.ToString("yyyyMMdd-HHmmss", CultureInfo.InvariantCulture)}.csv",
-            Filter = "CSV (*.csv)|*.csv|All files (*.*)|*.*"
-        };
-        if (dlg.ShowDialog() != true) return;
+        var fileName = $"sysmanager-{SelectedLog}-{DateTime.Now.ToString("yyyyMMdd-HHmmss", CultureInfo.InvariantCulture)}.csv";
+        var path = _dialog.PickSaveFile(fileName, "CSV (*.csv)|*.csv|All files (*.*)|*.*");
+        if (path is null) return;
 
         try
         {
-            Csv.Write(dlg.FileName, ToCsv(Entries, CultureInfo.CurrentCulture));
-            StatusMessage = $"Exported {Entries.Count} events to {dlg.FileName}";
+            Csv.Write(path, ToCsv(Entries, CultureInfo.CurrentCulture));
+            StatusMessage = $"Exported {Entries.Count} events to {path}";
         }
         catch (IOException ex) { StatusMessage = "Export failed: " + ex.Message; }
         catch (UnauthorizedAccessException ex) { StatusMessage = "Export failed: " + ex.Message; }

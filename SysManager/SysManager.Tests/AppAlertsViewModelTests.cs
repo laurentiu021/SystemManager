@@ -2,6 +2,7 @@
 // Author: laurentiu021 · https://github.com/laurentiu021/SystemManager
 // License: MIT
 
+using System.IO;
 using CommunityToolkit.Mvvm.Input;
 using NSubstitute;
 using SysManager.Models;
@@ -26,8 +27,8 @@ public class AppAlertsViewModelTests
         return history;
     }
 
-    private static AppAlertsViewModel NewVm(IAppAlertHistory? history = null) =>
-        new(new Services.AppAlertService(), history ?? NoHistory());
+    private static AppAlertsViewModel NewVm(IAppAlertHistory? history = null, IDialogService? dialog = null) =>
+        new(new Services.AppAlertService(), history ?? NoHistory(), dialog);
 
     [Fact]
     public void InitialState_IsCorrect()
@@ -386,5 +387,39 @@ public class AppAlertsViewModelTests
 
         entry.IsAcknowledged = true;
         Assert.Equal("IsAcknowledged", changed);
+    }
+
+    // ── ExportCsvAsync: the picker, not just ToCsv (#2860) ──
+
+    [Fact]
+    public async Task ExportCsvAsync_WhenCancelled_WritesNothing()
+    {
+        var dialog = Substitute.For<IDialogService>();
+        dialog.PickSaveFile(Arg.Any<string>(), Arg.Any<string>()).Returns((string?)null);
+        var vm = NewVm(dialog: dialog);
+
+        await vm.ExportCsvCommand.ExecuteAsync(null);
+
+        Assert.Equal("", vm.StatusMessage);
+    }
+
+    [Fact]
+    public async Task ExportCsvAsync_WhenAPathIsPicked_WritesTheCsvThere()
+    {
+        var path = Path.Combine(Path.GetTempPath(), "smtest_appalerts_" + Guid.NewGuid().ToString("N") + ".csv");
+        var dialog = Substitute.For<IDialogService>();
+        dialog.PickSaveFile(Arg.Any<string>(), Arg.Any<string>()).Returns(path);
+        var vm = NewVm(dialog: dialog);
+        vm.Alerts.Add(new AppInstallEntry { Name = "App1" });
+
+        try
+        {
+            await vm.ExportCsvCommand.ExecuteAsync(null);
+
+            Assert.True(File.Exists(path));
+            Assert.Contains("App1", await File.ReadAllTextAsync(path));
+            Assert.Contains(Path.GetFileName(path), vm.StatusMessage, StringComparison.Ordinal);
+        }
+        finally { File.Delete(path); }
     }
 }

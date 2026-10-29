@@ -20,7 +20,8 @@ namespace SysManager.Services;
 /// baseline snapshot of their preferences; later the watchdog re-reads the live values
 /// and reports any drift in plain language, with one-click restore of the registry-backed
 /// settings. Strictly local — reads/writes only well-known registry values, nothing leaves
-/// the machine. Registry access mirrors <see cref="PrivacyService"/>'s validated helper.
+/// the machine. Registry access goes through the same <see cref="Helpers.RegistryPaths"/> helper
+/// <see cref="PrivacyService"/> uses, since both watch the same keys (#2860).
 /// </summary>
 public sealed class SettingsWatchdogService : ISettingsWatchdogService
 {
@@ -46,6 +47,9 @@ public sealed class SettingsWatchdogService : ISettingsWatchdogService
     // in between would otherwise write them back.
     private readonly Lock _saveLock = new();
 
+    private readonly RegistryKey _hkcuRoot;
+    private readonly RegistryKey _hklmRoot;
+
     /// <summary>
     /// Creates the service.
     /// </summary>
@@ -54,12 +58,22 @@ public sealed class SettingsWatchdogService : ISettingsWatchdogService
     /// correct in production; tests MUST pass a temp directory, or they read and write the user's
     /// real baseline.
     /// </param>
-    public SettingsWatchdogService(string? configDir = null)
+    /// <param name="hkcuRoot">
+    /// Defaults to <see cref="Registry.CurrentUser"/>, NOT <see cref="AdminHelper.PerUserRegistryRoot"/> —
+    /// unlike <see cref="PrivacyService"/>, deliberately: the watchdog restores exactly what IT saved as a
+    /// baseline, under whichever account ran that save, so following the signed-in account when elevated
+    /// as a different administrator would restore the wrong account's settings. Reconciling the two
+    /// defaults is tracked separately (#2826).
+    /// </param>
+    /// <param name="hklmRoot">Defaults to <see cref="Registry.LocalMachine"/>.</param>
+    public SettingsWatchdogService(string? configDir = null, RegistryKey? hkcuRoot = null, RegistryKey? hklmRoot = null)
     {
         var dir = configDir ?? Path.Join(
             Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "SysManager");
         _baselinePath = Path.Join(dir, "settings-baseline.json");
         _sightingsPath = Path.Join(dir, "settings-drift.json");
+        _hkcuRoot = hkcuRoot ?? Registry.CurrentUser;
+        _hklmRoot = hklmRoot ?? Registry.LocalMachine;
     }
 
     /// <summary>The catalog of settings the watchdog tracks. Stable order for the UI.</summary>
@@ -263,7 +277,7 @@ public sealed class SettingsWatchdogService : ISettingsWatchdogService
 
         try
         {
-            using var key = OpenOrCreateKey(drift.Setting.RegistryPath, writable: true);
+            using var key = RegistryPaths.OpenOrCreateKey(_hkcuRoot, _hklmRoot, drift.Setting.RegistryPath, writable: true);
             if (key is null) return false;
             key.SetValue(drift.Setting.ValueName, baseline, RegistryValueKind.DWord);
             Log.Information("Settings Watchdog restored {Name} to {Value}",
@@ -302,13 +316,13 @@ public sealed class SettingsWatchdogService : ISettingsWatchdogService
         return drifts;
     }
 
-    // ── Registry access (mirrors PrivacyService) ───────────────────────────
+    // ── Registry access (shared with PrivacyService via RegistryPaths) ─────
 
-    private static int? ReadValue(WatchedSetting setting)
+    private int? ReadValue(WatchedSetting setting)
     {
         try
         {
-            using var key = OpenOrCreateKey(setting.RegistryPath, writable: false);
+            using var key = RegistryPaths.OpenOrCreateKey(_hkcuRoot, _hklmRoot, setting.RegistryPath, writable: false);
             var value = key?.GetValue(setting.ValueName);
             if (value is int i) return i;
             if (value is not null && int.TryParse(value.ToString(), out var parsed)) return parsed;
@@ -320,22 +334,6 @@ public sealed class SettingsWatchdogService : ISettingsWatchdogService
                 setting.RegistryPath, setting.ValueName, ex.Message);
             return null;
         }
-    }
-
-    private static RegistryKey? OpenOrCreateKey(string fullPath, bool writable)
-    {
-        var sep = fullPath.IndexOf('\\');
-        if (sep < 0) return null;
-        var hiveName = fullPath[..sep].ToUpperInvariant();
-        var subPath = fullPath[(sep + 1)..];
-        var hive = hiveName switch
-        {
-            "HKCU" or "HKEY_CURRENT_USER" => Registry.CurrentUser,
-            "HKLM" or "HKEY_LOCAL_MACHINE" => Registry.LocalMachine,
-            _ => null
-        };
-        if (hive is null) return null;
-        return writable ? hive.CreateSubKey(subPath, writable: true) : hive.OpenSubKey(subPath, writable: false);
     }
 
     // Instance, because the baseline path is now per-instance (the configDir seam).
@@ -359,38 +357,38 @@ public sealed class SettingsWatchdogService : ISettingsWatchdogService
         [
             new WatchedSetting("telemetry", "Diagnostic data (telemetry)",
                 "Windows Update can raise the telemetry level back to Full.",
-                "Privacy", @"HKLM\SOFTWARE\Policies\Microsoft\Windows\DataCollection", "AllowTelemetry",
+                "Privacy", RegistryPaths.DataCollectionPolicy, "AllowTelemetry",
                 new Dictionary<int, string> { [0] = "Off (Security)", [1] = "Required", [2] = "Enhanced", [3] = "Full" }),
 
             new WatchedSetting("advertising-id", "Advertising ID",
                 "Targeted-ad ID that updates sometimes re-enable.",
-                "Privacy", @"HKCU\Software\Microsoft\Windows\CurrentVersion\AdvertisingInfo", "Enabled", onOff),
+                "Privacy", RegistryPaths.AdvertisingInfo, "Enabled", onOff),
 
             new WatchedSetting("activity-feed", "Activity history",
                 "Collection of your activity timeline.",
-                "Privacy", @"HKLM\SOFTWARE\Policies\Microsoft\Windows\System", "EnableActivityFeed", onOff),
+                "Privacy", RegistryPaths.WindowsSystemPolicy, "EnableActivityFeed", onOff),
 
             new WatchedSetting("web-search", "Web search in Start",
                 "Bing web results in the Start-menu search box.",
-                "Search", @"HKCU\Software\Policies\Microsoft\Windows\Explorer", "DisableSearchBoxSuggestions", offOn),
+                "Search", RegistryPaths.ExplorerPolicy, "DisableSearchBoxSuggestions", offOn),
 
             new WatchedSetting("widgets", "Widgets (news & interests)",
                 "The taskbar Widgets board, often re-enabled by updates.",
-                "Taskbar", @"HKLM\SOFTWARE\Policies\Microsoft\Dsh", "AllowNewsAndInterests", onOff),
+                "Taskbar", RegistryPaths.Dsh, "AllowNewsAndInterests", onOff),
 
             new WatchedSetting("start-suggestions", "Start menu suggestions",
                 "Suggested apps and promoted content in Start.",
-                "UI Declutter", @"HKCU\Software\Microsoft\Windows\CurrentVersion\ContentDeliveryManager",
+                "UI Declutter", RegistryPaths.ContentDeliveryManager,
                 "SubscribedContent-338388Enabled", onOff),
 
             new WatchedSetting("lockscreen-ads", "Lock-screen tips & ads",
                 "Spotlight tips and promotions on the lock screen.",
-                "UI Declutter", @"HKCU\Software\Microsoft\Windows\CurrentVersion\ContentDeliveryManager",
+                "UI Declutter", RegistryPaths.ContentDeliveryManager,
                 "RotatingLockScreenOverlayEnabled", onOff),
 
             new WatchedSetting("tips", "Windows tips",
                 "Tips-and-suggestions notifications.",
-                "UI Declutter", @"HKCU\Software\Microsoft\Windows\CurrentVersion\ContentDeliveryManager",
+                "UI Declutter", RegistryPaths.ContentDeliveryManager,
                 "SoftLandingEnabled", onOff),
         ];
     }

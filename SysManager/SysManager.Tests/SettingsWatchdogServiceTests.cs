@@ -3,6 +3,7 @@
 // License: MIT
 
 using System.IO;
+using Microsoft.Win32;
 using SysManager.Models;
 using SysManager.Services;
 
@@ -160,6 +161,39 @@ public sealed class SettingsWatchdogServiceTests : IDisposable
         // CanRestore=false and null baseline are both early-out false paths.
         Assert.False(svc.Restore(new SettingDrift(known, BaselineValue: 1, CurrentValue: 0, CanRestore: false)));
         Assert.False(svc.Restore(new SettingDrift(known, BaselineValue: null, CurrentValue: 0, CanRestore: true)));
+    }
+
+    // ── hive seam (#2860) ───────────────────────────────────────────────────────────────────────
+    //
+    // Before this, ReadValue and OpenOrCreateKey were private static, hard-wired to Registry.CurrentUser
+    // and Registry.LocalMachine, so no test could prove the read went through an injected root at all —
+    // every "read" test here was reading this machine's real policies and happened to pass because this
+    // machine's values matched the test's expectations. The hive seam shares RegistryPaths.OpenOrCreateKey
+    // with PrivacyService without changing the Watchdog's default root (still Registry.CurrentUser, not
+    // Privacy's AdminHelper.PerUserRegistryRoot() — the two defaults are reconciled by #2826, not here).
+
+    [Fact]
+    public void ReadCurrent_UsesTheInjectedHive_NotTheRealOne()
+    {
+        var rootName = @"Software\SysManagerTests\WatchdogHive_" + Guid.NewGuid().ToString("N");
+        var root = Registry.CurrentUser.CreateSubKey(rootName, writable: true)!;
+        try
+        {
+            // "advertising-id" is HKCU-rooted in the real catalog; writing it under the throwaway root
+            // and reading it back through the service proves the injected hkcuRoot reached the read,
+            // not Registry.CurrentUser itself.
+            using (var sub = root.CreateSubKey(@"Software\Microsoft\Windows\CurrentVersion\AdvertisingInfo", writable: true)!)
+                sub.SetValue("Enabled", 1, RegistryValueKind.DWord);
+
+            var svc = new SettingsWatchdogService(_dir, hkcuRoot: root, hklmRoot: root);
+            var current = svc.ReadCurrent();
+
+            Assert.Equal(1, current["advertising-id"]);
+        }
+        finally
+        {
+            Registry.CurrentUser.DeleteSubKeyTree(rootName, throwOnMissingSubKey: false);
+        }
     }
 
     // ── configDir seam ───────────────────────────────────────────────────────────────────────

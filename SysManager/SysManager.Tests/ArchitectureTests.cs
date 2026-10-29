@@ -13658,11 +13658,13 @@ public partial class ArchitectureTests
     /// fighting over one switch with neither aware of the other. The repo had already learned this lesson
     /// and written it down: <c>Helpers/WingetId.cs</c> exists because the winget-ID allowlist had been
     /// copy-pasted into three services "where three copies could drift apart".</para>
-    /// <para>Nine duplicate pairs predate this guard and are listed with the reason each is tolerated, so
+    /// <para>Three duplicate pairs predate this guard and are listed with the reason each is tolerated, so
     /// the rule can be enforced now rather than after a cleanup that may never happen. The allowlist is
     /// keyed to the EXACT set of files, not to a count and not to the literal alone: adding a THIRD copy of
     /// an already-tolerated path fails, and so does fixing a pair without deleting its entry — a stale
-    /// exemption is a lie about the codebase that the next reader will trust.</para>
+    /// exemption is a lie about the codebase that the next reader will trust. Six of the original nine
+    /// were PrivacyService and SettingsWatchdogService's shared policy paths, resolved by giving them one
+    /// owner, <see cref="Helpers.RegistryPaths"/>, rather than tolerating the duplication forever (#2860).</para>
     /// </summary>
     [Fact]
     public void NoRegistryPath_IsDeclaredInTwoPlaces()
@@ -13681,23 +13683,6 @@ public partial class ArchitectureTests
                 "Services/AppAlertService.cs,Services/UninstallerService.cs",
             [@"software\wow6432node\microsoft\windows\currentversion\uninstall"] =
                 "Services/AppAlertService.cs,Services/UninstallerService.cs",
-
-            // SettingsWatchdogService re-declares the policy keys PrivacyService writes, so it can notice
-            // when Windows silently reverts them. Watching your own writes needs the same path twice, but
-            // it is still duplication: correct one and not the other and the watchdog quietly stops
-            // watching the toggle it is named after.
-            [@"hklm\software\policies\microsoft\windows\datacollection"] =
-                "Services/PrivacyService.cs,Services/SettingsWatchdogService.cs",
-            [@"hklm\software\policies\microsoft\windows\system"] =
-                "Services/PrivacyService.cs,Services/SettingsWatchdogService.cs",
-            [@"hkcu\software\microsoft\windows\currentversion\advertisinginfo"] =
-                "Services/PrivacyService.cs,Services/SettingsWatchdogService.cs",
-            [@"hkcu\software\microsoft\windows\currentversion\contentdeliverymanager"] =
-                "Services/PrivacyService.cs,Services/SettingsWatchdogService.cs",
-            [@"hkcu\software\policies\microsoft\windows\explorer"] =
-                "Services/PrivacyService.cs,Services/SettingsWatchdogService.cs",
-            [@"hklm\software\policies\microsoft\dsh"] =
-                "Services/PrivacyService.cs,Services/SettingsWatchdogService.cs",
         };
 
         var appDir = TestPaths.AppProject();

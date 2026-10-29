@@ -182,6 +182,83 @@ public sealed class DiagnosticsBundleServiceTests : IDisposable
         Assert.Contains("already written", text, StringComparison.Ordinal);
     }
 
+    // ── errors.txt: every [ERR]/[FTL], across every retained log, not just the newest three (#2861) ──
+
+    [Fact]
+    public void BuildErrorsText_CollectsErrAndFtlLinesWithContinuations_NewestFileFirst()
+    {
+        NewLog("20260916", string.Join('\n',
+        [
+            "2026-09-16 09:00:00.000 [INF] Started",
+            "2026-09-16 09:00:01.000 [ERR] An old failure",
+            "System.Exception: boom-old",
+            "   at Foo.Old()",
+            "2026-09-16 09:00:02.000 [INF] Carrying on",
+            "",
+        ]));
+        NewLog("20260918", string.Join('\n',
+        [
+            "2026-09-18 09:00:00.000 [INF] Started",
+            "2026-09-18 09:00:01.000 [FTL] A fresh failure",
+            "System.Exception: boom-new",
+            "2026-09-18 09:00:02.000 [WRN] Unrelated warning",
+            "",
+        ]));
+
+        var text = DiagnosticsBundleService.BuildErrorsText(_logDir);
+
+        Assert.Contains("A fresh failure", text, StringComparison.Ordinal);
+        Assert.Contains("boom-new", text, StringComparison.Ordinal);
+        Assert.Contains("An old failure", text, StringComparison.Ordinal);
+        Assert.Contains("boom-old", text, StringComparison.Ordinal);
+        Assert.Contains("at Foo.Old()", text, StringComparison.Ordinal);
+        Assert.DoesNotContain("Started", text, StringComparison.Ordinal);
+        Assert.DoesNotContain("Carrying on", text, StringComparison.Ordinal);
+        Assert.DoesNotContain("Unrelated warning", text, StringComparison.Ordinal);
+        // Newest FILE first: the 18th's entry appears before the 16th's.
+        Assert.True(text.IndexOf("A fresh failure", StringComparison.Ordinal)
+            < text.IndexOf("An old failure", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void BuildErrorsText_ReadsEveryRetainedLog_NotOnlyTheNewestThree()
+    {
+        // Five files — two more than NewestLogFiles — so this proves the scan is NOT limited to the
+        // same three that go into the zip as whole copies. The error sits in the OLDEST one.
+        foreach (var day in new[] { "20260918", "20260917", "20260916", "20260915" })
+            NewLog(day, "2026-09-18 09:00:00.000 [INF] Started\n");
+        NewLog("20260914", string.Join('\n',
+        [
+            "2026-09-14 09:00:00.000 [INF] Started",
+            "2026-09-14 09:00:01.000 [ERR] The oldest failure",
+            "",
+        ]));
+
+        var text = DiagnosticsBundleService.BuildErrorsText(_logDir);
+
+        Assert.Contains("The oldest failure", text, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void BuildErrorsText_WithNoErrors_SaysSoRatherThanAnEmptyFile()
+    {
+        NewLog("20260918", "2026-09-18 09:00:00.000 [INF] Started\n");
+
+        var text = DiagnosticsBundleService.BuildErrorsText(_logDir);
+
+        Assert.Contains("No [ERR] or [FTL]", text, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void BuildErrorsText_WithNoLogFolder_SaysSoRatherThanThrowing()
+    {
+        Directory.Delete(_logDir, recursive: true);
+
+        var text = DiagnosticsBundleService.BuildErrorsText(_logDir);
+
+        Assert.False(string.IsNullOrWhiteSpace(text));
+    }
+
     // ── The README ───────────────────────────────────────────────────────────
 
     /// <summary>
@@ -250,11 +327,36 @@ public sealed class DiagnosticsBundleServiceTests : IDisposable
         Assert.Contains("README.txt", names);
         Assert.Contains("environment.txt", names);
         Assert.Contains("system-report.txt", names);
+        Assert.Contains("errors.txt", names);
         Assert.Contains("logs/sysmanager-20260918.log", names);
         Assert.Contains("logs/sysmanager-20260917.log", names);
 
         Assert.Contains("ENVIRONMENT-MARKER", ReadEntry(zip, "environment.txt"), StringComparison.Ordinal);
         Assert.Contains("MARKER-TODAY", ReadEntry(zip, "logs/sysmanager-20260918.log"), StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task PackAsync_ErrorsTxt_HoldsAnErrorFromAnOlderLogThanTheOnesIncludedWhole()
+    {
+        NewLog("20260918", "2026-09-18 09:00:00.000 [INF] Started\n");
+        NewLog("20260917", "2026-09-17 09:00:00.000 [INF] Started\n");
+        NewLog("20260916", "2026-09-16 09:00:00.000 [INF] Started\n");
+        // Older than NewestLogFiles reaches: its whole copy is NOT in the zip, but its error must
+        // still surface somewhere — that is the entire point of errors.txt (#2861).
+        NewLog("20260915", string.Join('\n',
+        [
+            "2026-09-15 09:00:00.000 [INF] Started",
+            "2026-09-15 09:00:01.000 [ERR] A failure only the oldest log recorded",
+            "",
+        ]));
+        var zipPath = Path.Combine(_outDir, "bundle-with-errors.zip");
+
+        await NewService().PackAsync(zipPath, "env", CannedReport);
+
+        using var zip = ZipFile.OpenRead(zipPath);
+        var names = zip.Entries.Select(e => e.FullName).ToList();
+        Assert.DoesNotContain("logs/sysmanager-20260915.log", names);
+        Assert.Contains("A failure only the oldest log recorded", ReadEntry(zip, "errors.txt"), StringComparison.Ordinal);
     }
 
     [Fact]

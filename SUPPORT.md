@@ -36,13 +36,14 @@ A few quick things that make bug reports land faster:
    graphics card and driver, each drive's size and free space, and display
    resolution. Read it before you paste it somewhere public.
 4. **Attach the logs** — **Save diagnostics bundle** on the About tab puts the
-   newest three log files, the system report (with your network adapters' MAC
-   addresses left out and the last two parts of your IP address masked) and the environment
-   info into one zip, saved where you choose; nothing is sent. To pick a log
-   yourself instead, `%LOCALAPPDATA%\SysManager\logs\` holds rolling daily
-   logs — attach the one around the time the bug happened. **Report a problem**
-   on the same tab opens the bug form with your version and elevation already
-   filled in.
+   newest three log files, every `[ERR]`/`[FTL]` line from every log still kept
+   (so an older error is not left out), the system report (with your network
+   adapters' MAC addresses left out and the last two parts of your IP address
+   masked) and the environment info into one zip, saved where you choose;
+   nothing is sent. To pick a log yourself instead,
+   `%LOCALAPPDATA%\SysManager\logs\` holds rolling daily logs — attach the one
+   around the time the bug happened. **Report a problem** on the same tab opens
+   the bug form with your version and elevation already filled in.
 
 ## What to expect
 

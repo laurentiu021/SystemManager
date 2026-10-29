@@ -100,11 +100,14 @@ public sealed class ClosePreferenceService
 
     private readonly string _path;
 
+    /// <summary>The file name, also registered in <see cref="ProfileService"/>'s catalog.</summary>
+    internal const string FileName = "close-preference.json";
+
     /// <summary>Creates the service. <paramref name="configDir"/> is overridable for tests.</summary>
     public ClosePreferenceService(string? configDir = null)
     {
         var dir = configDir ?? AppDataFolders.Local;
-        _path = Path.Combine(dir, "close-preference.json");
+        _path = Path.Combine(dir, FileName);
     }
 
     /// <summary>The stored state to serialize. A record so the JSON shape stays explicit.</summary>

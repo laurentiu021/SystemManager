@@ -46,6 +46,9 @@ public sealed partial class WindowsThemeService : IWindowsThemeService
     private bool _unreadAtLoad;
     private bool _unparsableAtLoad;
 
+    /// <summary>The file name, also registered in <see cref="ProfileService"/>'s catalog.</summary>
+    internal const string FileName = "darkmode-schedule.json";
+
     /// <summary>
     /// Creates the service.
     /// </summary>
@@ -56,9 +59,7 @@ public sealed partial class WindowsThemeService : IWindowsThemeService
     /// </param>
     public WindowsThemeService(string? configDir = null)
     {
-        _schedulePath = Path.Combine(
-            configDir ?? AppDataFolders.Roaming,
-            "darkmode-schedule.json");
+        _schedulePath = Path.Combine(configDir ?? AppDataFolders.Roaming, FileName);
     }
 
     /// <summary>Read the current Windows app theme (absent value = Light, the OS default).</summary>

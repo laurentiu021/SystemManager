@@ -54,11 +54,14 @@ public sealed class StandbyPreferenceService
     private bool _unreadAtLoad;
     private bool _unparsableAtLoad;
 
+    /// <summary>The file name, also registered in <see cref="ProfileService"/>'s catalog.</summary>
+    internal const string FileName = "standby-preference.json";
+
     /// <summary>Creates the service. <paramref name="configDir"/> is overridable for tests.</summary>
     public StandbyPreferenceService(string? configDir = null)
     {
         var dir = configDir ?? AppDataFolders.Local;
-        _path = Path.Combine(dir, "standby-preference.json");
+        _path = Path.Combine(dir, FileName);
     }
 
     /// <summary>The safe default: auto-purge off, threshold at 1 GB.</summary>

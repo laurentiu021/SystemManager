@@ -5,6 +5,7 @@
 using System.Globalization;
 using System.IO;
 using System.Reflection;
+using System.Runtime.CompilerServices;
 using System.Text.RegularExpressions;
 using System.Xml.Linq;
 using NetArchTest.Rules;
@@ -3949,12 +3950,23 @@ public partial class ArchitectureTests
                 "a browser extension's own manifest, read by the extension list and never written",
             ["extensions.json"] =
                 "Firefox's own list of a profile's add-ons, read by the extension list and never written",
+            ["privacy-profile.json"] =
+                "the file name the privacy section carries INSIDE an exported profile; ProfileService never writes a file of that name to disk",
         };
 
         var services = Path.Combine(TestPaths.AppProject(), "Services");
-        var catalog = File.ReadAllText(Path.Combine(services, "ProfileService.cs"));
-        var carried = JsonStateFile().Matches(catalog).Cast<Match>()
-            .Select(m => m.Groups[1].Value)
+
+        // Read off the compiled Catalog field, not a text scan of ProfileService.cs: each entry's file
+        // name is a service's own FileName constant now (#2860), not a literal in this file, so a text
+        // scan here would see only the one literal ProfileService still declares for itself (the
+        // privacy section's placeholder) and nothing the catalog actually carries.
+        var catalogField = typeof(ProfileService).GetField("Catalog", BindingFlags.NonPublic | BindingFlags.Static);
+        Assert.True(catalogField is not null,
+            "ProfileService has no Catalog field. If the section list moved, point this guard at it.");
+        var entries = catalogField!.GetValue(null) as Array;
+        Assert.True(entries is { Length: > 0 }, "The catalog is empty, so this guard would measure nothing.");
+        var carried = entries!.Cast<object>()
+            .Select(e => (string)Assert.IsAssignableFrom<ITuple>(e)[2]!)
             .ToHashSet(StringComparer.Ordinal);
 
         var excluded = typeof(ProfileServiceTests)

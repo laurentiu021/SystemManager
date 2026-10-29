@@ -45,6 +45,9 @@ public sealed class AppIconService
     /// </summary>
     public bool NetworkFetchEnabled { get; private set; }
 
+    /// <summary>The fetch-preference file name, also registered in <see cref="ProfileService"/>'s catalog.</summary>
+    internal const string FileName = "icon-fetch.json";
+
     /// <summary>
     /// Creates the service. Pass a custom <paramref name="handler"/> (e.g. a stub)
     /// to redirect the download transport in tests; production uses the default
@@ -60,7 +63,7 @@ public sealed class AppIconService
     {
         var root = configDir ?? AppDataFolders.Local;
         _cacheDir = Path.Combine(root, "IconCache");
-        _settingsPath = Path.Combine(root, "icon-fetch.json");
+        _settingsPath = Path.Combine(root, FileName);
 
         _http = handler is null ? new HttpClient() : new HttpClient(handler);
         _http.Timeout = TimeSpan.FromSeconds(5);

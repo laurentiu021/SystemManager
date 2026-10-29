@@ -1753,7 +1753,10 @@ Key services:
   build still imports it, and `Deserialize` drops a section with no key or no
   content, where the import used to throw. The gaming section is handed to
   `IGamingProfileService.ImportConfiguration` rather than written over the store, which holds this PC's game
-  mode session record beside the configuration (#2801).
+  mode session record beside the configuration (#2801). Each entry's file name now reads its owning
+  service's own `FileName` constant (`ThemeService.FileName`, `GamingProfileService.FileName`, …)
+  instead of restating the literal, so a service that renames its own file cannot silently drift from
+  what the catalog expects to find (#2860).
 - `AppIconService` — downloads and caches application favicons for the Bulk Installer, only once the user
   turns it on: the switch is off by default, kept in `icon-fetch.json` and carried by a profile export.
   `SetNetworkFetchEnabled` returns whether the choice was saved, and the tab says when it was not (#2833).

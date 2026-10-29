@@ -42,6 +42,9 @@ public sealed class SpeedTestHistoryService : IDisposable
     // finally block and log an error on a clean exit.
     private bool _disposed;
 
+    /// <summary>The file name, also registered in <see cref="ProfileService"/>'s catalog.</summary>
+    internal const string FileName = "speedtest-history.json";
+
     /// <summary>
     /// Creates the service. <paramref name="configDir"/> is overridable so tests exercise the real
     /// save/load/clear paths against a temp directory instead of the user's own history file — same
@@ -55,7 +58,7 @@ public sealed class SpeedTestHistoryService : IDisposable
     public SpeedTestHistoryService(string? configDir = null)
     {
         var dir = configDir ?? AppDataFolders.Local;
-        _historyPath = Path.Join(dir, "speedtest-history.json");
+        _historyPath = Path.Join(dir, FileName);
     }
 
     /// <inheritdoc />

@@ -383,6 +383,8 @@ public class ProfileServiceTests : IDisposable
     [InlineData("last-crash.json")]
     [InlineData("activity.json")]
     [InlineData("resource-history-config.json")]
+    [InlineData("resource-history.ndjson")]   // bandwidth/CPU/RAM samples on THIS PC; meaningless on another
+    [InlineData("bandwidth-history.ndjson")]   // per-app bandwidth samples on THIS PC; meaningless on another
     [InlineData("disk-analyzer-preference.json")]   // one yes or no for the map; not worth a section of its own
     [InlineData("disk-scan-history.json")]   // folder paths + sizes on THIS disk; meaningless on another PC
     // A count of how many times the main toggle was written on THIS machine, used to decide whether a

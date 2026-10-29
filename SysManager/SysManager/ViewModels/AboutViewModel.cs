@@ -12,7 +12,6 @@ using System.Text;
 using System.Windows;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
-using Microsoft.Win32;
 using Serilog;
 using SysManager.Helpers;
 using SysManager.Services;
@@ -45,6 +44,7 @@ public sealed partial class AboutViewModel : ViewModelBase
 
     /// <summary>Closes SysManager once that build has started. A test records the call instead.</summary>
     private readonly Action _shutdown;
+    private readonly IDialogService _dialog;
 
     private UpdateService.ReleaseInfo? _latest;
 
@@ -184,10 +184,10 @@ public sealed partial class AboutViewModel : ViewModelBase
                updatesDir: configDir)
     { }
 
-    public AboutViewModel(IUpdateService updates, SystemReportService reportService, string? configDir = null)
+    public AboutViewModel(IUpdateService updates, SystemReportService reportService, string? configDir = null, IDialogService? dialog = null)
         : this(updates, reportService, autoCheck: true,
                preferences: configDir is null ? null : new UpdateCheckPreferenceService(configDir),
-               updatesDir: configDir)
+               updatesDir: configDir, dialog: dialog)
     { }
 
     /// <summary>
@@ -212,7 +212,8 @@ public sealed partial class AboutViewModel : ViewModelBase
         string? updatesDir = null,
         DiagnosticsBundleService? bundle = null,
         Action<ProcessStartInfo>? launch = null,
-        Action? shutdown = null)
+        Action? shutdown = null,
+        IDialogService? dialog = null)
     {
         _updates = updates;
         _reportService = reportService;
@@ -220,6 +221,7 @@ public sealed partial class AboutViewModel : ViewModelBase
         _updatesDir = updatesDir;
         _launch = launch ?? (static startInfo => Process.Start(startInfo)?.Dispose());
         _shutdown = shutdown ?? App.RequestShutdown;
+        _dialog = dialog ?? DialogService.Instance;
         // Overridable for the same reason as `preferences` and `updatesDir`: the default reads the real log
         // directory under %LocalAppData%, and a test must be able to point it at a temp folder rather than
         // read whatever is in the developer's own profile.
@@ -837,21 +839,18 @@ public sealed partial class AboutViewModel : ViewModelBase
         // both differed from those tabs and failed outright when the Desktop is redirected
         // to OneDrive or locked down by policy — with no way for the user to choose another
         // location. The dialog is shown before any work starts so cancelling costs nothing.
-        var dlg = new SaveFileDialog
-        {
-            FileName = $"SysManager-Report-{DateTime.Now.ToString("yyyy-MM-dd-HHmmss", CultureInfo.InvariantCulture)}.txt",
-            Filter = "Text file (*.txt)|*.txt|All files (*.*)|*.*"
-        };
-        if (dlg.ShowDialog() != true) return;
+        var fileName = $"SysManager-Report-{DateTime.Now.ToString("yyyy-MM-dd-HHmmss", CultureInfo.InvariantCulture)}.txt";
+        var path = _dialog.PickSaveFile(fileName, "Text file (*.txt)|*.txt|All files (*.*)|*.*");
+        if (path is null) return;
 
         IsGeneratingReport = true;
         ReportStatus = "Generating system report...";
         try
         {
             var report = await _reportService.GenerateReportAsync();
-            await File.WriteAllTextAsync(dlg.FileName, report, Encoding.UTF8);
-            ReportStatus = $"Report saved: {Path.GetFileName(dlg.FileName)}";
-            ToastService.Instance.Show("Report exported", Path.GetFileName(dlg.FileName));
+            await File.WriteAllTextAsync(path, report, Encoding.UTF8);
+            ReportStatus = $"Report saved: {Path.GetFileName(path)}";
+            ToastService.Instance.Show("Report exported", Path.GetFileName(path));
         }
         catch (IOException ex)
         {
@@ -888,19 +887,16 @@ public sealed partial class AboutViewModel : ViewModelBase
     {
         if (IsGeneratingReport) return;
 
-        var dlg = new SaveFileDialog
-        {
-            FileName = $"SysManager-diagnostics-{DateTime.Now.ToString("yyyy-MM-dd-HHmmss", CultureInfo.InvariantCulture)}.zip",
-            Filter = "Zip archive (*.zip)|*.zip|All files (*.*)|*.*"
-        };
-        if (dlg.ShowDialog() != true) return;
+        var fileName = $"SysManager-diagnostics-{DateTime.Now.ToString("yyyy-MM-dd-HHmmss", CultureInfo.InvariantCulture)}.zip";
+        var path = _dialog.PickSaveFile(fileName, "Zip archive (*.zip)|*.zip|All files (*.*)|*.*");
+        if (path is null) return;
 
         IsGeneratingReport = true;
         ReportStatus = "Collecting diagnostics…";
         try
         {
             var environment = await Task.Run(CollectEnvironmentInfo).ConfigureAwait(true);
-            var contents = await _bundle.WriteAsync(dlg.FileName, environment).ConfigureAwait(true);
+            var contents = await _bundle.WriteAsync(path, environment).ConfigureAwait(true);
 
             var logs = contents.LogFilesIncluded switch
             {
@@ -909,8 +905,8 @@ public sealed partial class AboutViewModel : ViewModelBase
                 var n => string.Create(CultureInfo.InvariantCulture, $"{n} log files"),
             };
             ReportStatus = string.Create(CultureInfo.InvariantCulture,
-                $"Saved {Path.GetFileName(dlg.FileName)} — report, environment info and {logs}. Nothing was sent anywhere.");
-            ToastService.Instance.Show("Diagnostics bundle saved", Path.GetFileName(dlg.FileName));
+                $"Saved {Path.GetFileName(path)} — report, environment info and {logs}. Nothing was sent anywhere.");
+            ToastService.Instance.Show("Diagnostics bundle saved", Path.GetFileName(path));
         }
         catch (IOException ex)
         {

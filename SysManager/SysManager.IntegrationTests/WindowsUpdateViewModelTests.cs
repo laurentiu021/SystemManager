@@ -29,6 +29,24 @@ public class WindowsUpdateViewModelTests
         }
 
         public void Inform(string message, string title) => Prompts++;
+
+        public string? PickSaveFile(string suggestedFileName, string filter)
+        {
+            Prompts++;
+            return null;
+        }
+
+        public IReadOnlyList<string> PickOpenFiles(string title, string filter, bool multiselect = false, bool checkFileExists = true)
+        {
+            Prompts++;
+            return [];
+        }
+
+        public string? PickFolder(string title)
+        {
+            Prompts++;
+            return null;
+        }
     }
 
     private static WindowsUpdateViewModel NewVm() => new(new PowerShellRunner(), new WindowsUpdateService(), new WindowsUpdatePolicyService());

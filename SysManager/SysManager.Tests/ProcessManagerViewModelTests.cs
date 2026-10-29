@@ -491,4 +491,39 @@ public class ProcessManagerViewModelTests
         Assert.False(rowGone);
         Assert.Equal("Could not kill SomeApp.exe — may need admin rights.", status);
     }
+
+    // ── ExportCsvAsync: the picker, not just ToCsv (#2860) ──
+
+    [Fact]
+    public async Task ExportCsvAsync_WhenCancelled_WritesNothing()
+    {
+        var dialog = Substitute.For<IDialogService>();
+        dialog.PickSaveFile(Arg.Any<string>(), Arg.Any<string>()).Returns((string?)null);
+        var vm = new ProcessManagerViewModel(new Services.ProcessManagerService(), dialog);
+        await vm.InitializationComplete;
+        var before = vm.StatusMessage;
+
+        await vm.ExportCsvCommand.ExecuteAsync(null);
+
+        Assert.Equal(before, vm.StatusMessage);
+    }
+
+    [Fact]
+    public async Task ExportCsvAsync_WhenAPathIsPicked_WritesTheCsvThere()
+    {
+        var path = Path.Combine(Path.GetTempPath(), "smtest_processmanager_" + Guid.NewGuid().ToString("N") + ".csv");
+        var dialog = Substitute.For<IDialogService>();
+        dialog.PickSaveFile(Arg.Any<string>(), Arg.Any<string>()).Returns(path);
+        var vm = new ProcessManagerViewModel(new Services.ProcessManagerService(), dialog);
+        await vm.InitializationComplete;
+
+        try
+        {
+            await vm.ExportCsvCommand.ExecuteAsync(null);
+
+            Assert.True(File.Exists(path));
+            Assert.Contains(Path.GetFileName(path), vm.StatusMessage, StringComparison.Ordinal);
+        }
+        finally { File.Delete(path); }
+    }
 }

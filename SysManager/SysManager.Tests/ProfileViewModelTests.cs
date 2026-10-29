@@ -12,8 +12,9 @@ namespace SysManager.Tests;
 
 /// <summary>
 /// Tests for <see cref="ProfileViewModel"/>: the import and export reports (#2454), what an export writes
-/// (#2477), and where an import's privacy choices go (#1530). Import and export run behind file dialogs, so what
-/// is tested is what the view-model builds and says around them. Runs against a temp config directory and
+/// (#2477), and where an import's privacy choices go (#1530). Import and export run through a substituted
+/// <see cref="IDialogService"/> (#2860), so the commands themselves — picker and write together — are
+/// exercised here, not only the strings built around them. Runs against a temp config directory and
 /// substituted privacy toggles, so neither the real SysManager settings nor this PC's privacy settings are read.
 /// </summary>
 [Collection("ProcessWideStatics")]
@@ -40,11 +41,11 @@ public class ProfileViewModelTests : IDisposable
     /// The tab over the temp folder, its first read settled. Every privacy protection is off unless the test
     /// passes the toggles it wants, so a profile carries privacy choices only where a test asks for them.
     /// </summary>
-    private async Task<ProfileViewModel> NewVmAsync(IPrivacyService? privacy = null)
+    private async Task<ProfileViewModel> NewVmAsync(IPrivacyService? privacy = null, IDialogService? dialog = null)
     {
         var vm = new ProfileViewModel(
             new ProfileService(privacy ?? FakePrivacy.AllOff(), Substitute.For<IGamingProfileService>(), _dir),
-            _handoff, _navigation);
+            _handoff, _navigation, dialog);
         await vm.InitializationComplete;
         return vm;
     }
@@ -105,6 +106,69 @@ public class ProfileViewModelTests : IDisposable
         var profile = await vm.BuildExportAsync(vm.SelectedKeys());
 
         Assert.Equal(["theme"], profile.Sections.Select(s => s.Key));
+    }
+
+    // ── ExportAsync / ImportAsync: the picker, not just the strings around it (#2860) ──
+
+    [Fact]
+    public async Task ExportAsync_WhenCancelled_WritesNothing()
+    {
+        WriteConfig("theme.json", "{\"preset\":\"midnight\"}");
+        var dialog = Substitute.For<IDialogService>();
+        dialog.PickSaveFile(Arg.Any<string>(), Arg.Any<string>()).Returns((string?)null);
+        var vm = await NewVmAsync(dialog: dialog);
+        var before = vm.StatusMessage;
+
+        await vm.ExportCommand.ExecuteAsync(null);
+
+        Assert.Equal(before, vm.StatusMessage);
+    }
+
+    [Fact]
+    public async Task ExportAsync_WhenAPathIsPicked_WritesTheProfileThere()
+    {
+        WriteConfig("theme.json", "{\"preset\":\"midnight\"}");
+        var path = Path.Combine(_dir, "exported-" + Guid.NewGuid().ToString("N") + ".json");
+        var dialog = Substitute.For<IDialogService>();
+        dialog.PickSaveFile(Arg.Any<string>(), Arg.Any<string>()).Returns(path);
+        var vm = await NewVmAsync(dialog: dialog);
+
+        await vm.ExportCommand.ExecuteAsync(null);
+
+        Assert.True(File.Exists(path));
+        Assert.Contains(Path.GetFileName(path), vm.StatusMessage, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task ImportAsync_WhenCancelled_WritesNothing()
+    {
+        var dialog = Substitute.For<IDialogService>();
+        dialog.PickOpenFiles(Arg.Any<string>(), Arg.Any<string>(), Arg.Any<bool>(), Arg.Any<bool>()).Returns([]);
+        var vm = await NewVmAsync(dialog: dialog);
+        var before = vm.StatusMessage;
+
+        await vm.ImportCommand.ExecuteAsync(null);
+
+        Assert.Equal(before, vm.StatusMessage);
+    }
+
+    [Fact]
+    public async Task ImportAsync_WhenAFileIsPicked_ImportsFromIt()
+    {
+        WriteConfig("theme.json", "{\"preset\":\"midnight\"}");
+        var exporter = await NewVmAsync();
+        var exported = await exporter.BuildExportAsync(exporter.SelectedKeys());
+        var path = Path.Combine(_dir, "to-import-" + Guid.NewGuid().ToString("N") + ".json");
+        await File.WriteAllTextAsync(path, ProfileService.Serialize(exported));
+
+        var dialog = Substitute.For<IDialogService>();
+        dialog.PickOpenFiles(Arg.Any<string>(), Arg.Any<string>(), Arg.Any<bool>(), Arg.Any<bool>()).Returns([path]);
+        var importer = await NewVmAsync(dialog: dialog);
+        using var confirm = new DialogAnswer(confirm: true);
+
+        await importer.ImportCommand.ExecuteAsync(null);
+
+        Assert.StartsWith("Imported", importer.StatusMessage, StringComparison.Ordinal);
     }
 
     [Fact]

@@ -8,7 +8,6 @@ using System.Windows;
 using System.Windows.Threading;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
-using Microsoft.Win32;
 using Serilog;
 using SysManager.Helpers;
 using SysManager.Models;
@@ -33,6 +32,7 @@ public sealed partial class AppAlertsViewModel : ViewModelBase
     private readonly AppAlertService _service;
     private readonly IAppAlertHistory _history;
     private readonly Dispatcher _dispatcher;
+    private readonly IDialogService _dialog;
 
     public BulkObservableCollection<AppInstallEntry> Alerts { get; } = new();
 
@@ -43,11 +43,14 @@ public sealed partial class AppAlertsViewModel : ViewModelBase
     [ObservableProperty] private int _alertCount;
     [ObservableProperty] private int _unacknowledgedCount;
 
-    public AppAlertsViewModel(AppAlertService service, IAppAlertHistory history)
+    /// <summary>Monitors for new application installations and keeps a timestamped history of them.</summary>
+    /// <param name="dialog">Defaults to <see cref="DialogService.Instance"/> (#2860).</param>
+    public AppAlertsViewModel(AppAlertService service, IAppAlertHistory history, IDialogService? dialog = null)
     {
         _service = service;
         _history = history ?? throw new ArgumentNullException(nameof(history));
         _dispatcher = Application.Current?.Dispatcher ?? Dispatcher.CurrentDispatcher;
+        _dialog = dialog ?? DialogService.Instance;
         _service.NewAppDetected += OnNewAppDetected;
         _service.AppIdentified += OnAppIdentified;
         InitializeAsync(() => { LoadHistory(); return Task.CompletedTask; });
@@ -230,19 +233,16 @@ public sealed partial class AppAlertsViewModel : ViewModelBase
     [RelayCommand(CanExecute = nameof(HasAlerts))]
     private async Task ExportCsvAsync()
     {
-        var dlg = new SaveFileDialog
-        {
-            FileName = $"SysManager-AppAlerts-{DateTime.Now.ToString("yyyy-MM-dd-HHmmss", CultureInfo.InvariantCulture)}.csv",
-            Filter = "CSV file (*.csv)|*.csv|All files (*.*)|*.*"
-        };
-        if (dlg.ShowDialog() != true) return;
+        var fileName = $"SysManager-AppAlerts-{DateTime.Now.ToString("yyyy-MM-dd-HHmmss", CultureInfo.InvariantCulture)}.csv";
+        var path = _dialog.PickSaveFile(fileName, "CSV file (*.csv)|*.csv|All files (*.*)|*.*");
+        if (path is null) return;
 
         try
         {
             var csv = AppAlertService.ToCsv(Alerts, CultureInfo.CurrentCulture);
-            await Csv.WriteAsync(dlg.FileName, csv);
-            StatusMessage = $"Exported {Alerts.Count} alert(s) to {Path.GetFileName(dlg.FileName)}.";
-            ToastService.Instance.Show("App alerts exported", Path.GetFileName(dlg.FileName));
+            await Csv.WriteAsync(path, csv);
+            StatusMessage = $"Exported {Alerts.Count} alert(s) to {Path.GetFileName(path)}.";
+            ToastService.Instance.Show("App alerts exported", Path.GetFileName(path));
         }
         catch (IOException ex) { StatusMessage = $"Export failed: {ex.Message}"; }
         catch (UnauthorizedAccessException ex) { StatusMessage = $"Export failed (access denied): {ex.Message}"; }

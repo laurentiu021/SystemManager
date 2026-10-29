@@ -50,9 +50,9 @@ public class AboutViewModelTests
     /// directory so the check it starts stops at the switch — see
     /// <see cref="ConstructingTheViewModel_DoesNotTouchTheRealPreferenceFile"/>.
     /// </remarks>
-    private static AboutViewModel NewVmNoAutoCheck() =>
+    private static AboutViewModel NewVmNoAutoCheck(IDialogService? dialog = null) =>
         new(new UpdateService(), new SystemReportService(new SystemInfoService(), new DiskHealthService(), new BatteryService(), new EventLogService()),
-            autoCheck: false, preferences: new UpdateCheckPreferenceService(ConfigDir), updatesDir: ConfigDir);
+            autoCheck: false, preferences: new UpdateCheckPreferenceService(ConfigDir), updatesDir: ConfigDir, dialog: dialog);
 
     // ---------- the taskbar button (#2596) ----------
 
@@ -461,18 +461,60 @@ public class AboutViewModelTests
     // Export used to write straight to the Desktop with no prompt, unlike every other
     // export in the app (System Report, Logs, Resource History and Profile all use
     // SaveFileDialog). It now asks first.
-    //
-    // Deliberately NOT unit-tested by invoking the command: SaveFileDialog is constructed
-    // directly, and calling it headlessly opens a real dialog that blocks forever waiting
-    // for input rather than returning false. A test that executed ExportToFileCommand
-    // would hang CI. Verified by running the command in a console harness, which printed
-    // its first line and then stopped at ShowDialog() until the process was killed.
-    //
-    // The same limitation applies to the four sibling exports, none of which are unit
-    // tested either. Covering this properly needs the dialog behind an injectable seam
-    // (an IFileDialogService), which is a broader refactor than a bug fix should carry.
-    // Tracked separately; until then the guarantee is enforced by code review: this method
-    // must not write anywhere the user did not pick.
+
+    [Fact]
+    public async Task ExportToFileAsync_WhenCancelled_WritesNothing()
+    {
+        var dialog = Substitute.For<IDialogService>();
+        dialog.PickSaveFile(Arg.Any<string>(), Arg.Any<string>()).Returns((string?)null);
+        var vm = NewVmNoAutoCheck(dialog);
+
+        await vm.ExportToFileCommand.ExecuteAsync(null);
+
+        Assert.Empty(vm.ReportStatus);
+        Assert.False(vm.IsGeneratingReport);
+    }
+
+    [Fact]
+    public async Task ExportToFileAsync_WhenAPathIsPicked_WritesTheReportThere()
+    {
+        var path = Path.Combine(ConfigDir, "about-report-" + Guid.NewGuid().ToString("N") + ".txt");
+        var dialog = Substitute.For<IDialogService>();
+        dialog.PickSaveFile(Arg.Any<string>(), Arg.Any<string>()).Returns(path);
+        var vm = NewVmNoAutoCheck(dialog);
+
+        await vm.ExportToFileCommand.ExecuteAsync(null);
+
+        Assert.True(File.Exists(path));
+        Assert.Contains(Path.GetFileName(path), vm.ReportStatus, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task SaveDiagnosticsBundleAsync_WhenCancelled_WritesNothing()
+    {
+        var dialog = Substitute.For<IDialogService>();
+        dialog.PickSaveFile(Arg.Any<string>(), Arg.Any<string>()).Returns((string?)null);
+        var vm = NewVmNoAutoCheck(dialog);
+
+        await vm.SaveDiagnosticsBundleCommand.ExecuteAsync(null);
+
+        Assert.Empty(vm.ReportStatus);
+        Assert.False(vm.IsGeneratingReport);
+    }
+
+    [Fact]
+    public async Task SaveDiagnosticsBundleAsync_WhenAPathIsPicked_WritesTheBundleThere()
+    {
+        var path = Path.Combine(ConfigDir, "about-diagnostics-" + Guid.NewGuid().ToString("N") + ".zip");
+        var dialog = Substitute.For<IDialogService>();
+        dialog.PickSaveFile(Arg.Any<string>(), Arg.Any<string>()).Returns(path);
+        var vm = NewVmNoAutoCheck(dialog);
+
+        await vm.SaveDiagnosticsBundleCommand.ExecuteAsync(null);
+
+        Assert.True(File.Exists(path));
+        Assert.Contains("Nothing was sent anywhere.", vm.ReportStatus, StringComparison.Ordinal);
+    }
     [Fact]
     public async Task ConstructingTheViewModel_DoesNotTouchTheRealPreferenceFile()
     {

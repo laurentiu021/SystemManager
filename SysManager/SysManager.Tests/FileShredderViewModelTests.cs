@@ -20,8 +20,8 @@ namespace SysManager.Tests;
 [Collection("ProcessWideStatics")]
 public class FileShredderViewModelTests
 {
-    private static FileShredderViewModel NewVm() =>
-        new(new FileShredderService());
+    private static FileShredderViewModel NewVm(IDialogService? dialog = null) =>
+        new(new FileShredderService(), dialog);
 
     [Fact]
     public void Constructor_ItemsStartsEmpty()
@@ -60,6 +60,80 @@ public class FileShredderViewModelTests
 
         vm.RemoveItemCommand.Execute(item);
         Assert.Empty(vm.Items);
+    }
+
+    // ── AddFiles / AddFolder: the pickers the issue named by hand, now substitutable (#2860) ──
+
+    [Fact]
+    public void AddFiles_WhenCancelled_QueuesNothing()
+    {
+        var dialog = Substitute.For<IDialogService>();
+        dialog.PickOpenFiles(Arg.Any<string>(), Arg.Any<string>(), Arg.Any<bool>(), Arg.Any<bool>()).Returns([]);
+        var vm = NewVm(dialog);
+
+        vm.AddFilesCommand.Execute(null);
+
+        Assert.Empty(vm.Items);
+    }
+
+    [Fact]
+    public void AddFiles_WhenFilesArePicked_QueuesEachOne()
+    {
+        var a = Path.Combine(Path.GetTempPath(), "smtest_shredder_" + Guid.NewGuid().ToString("N") + "_a.txt");
+        var b = Path.Combine(Path.GetTempPath(), "smtest_shredder_" + Guid.NewGuid().ToString("N") + "_b.txt");
+        File.WriteAllText(a, "a");
+        File.WriteAllText(b, "bb");
+        try
+        {
+            var dialog = Substitute.For<IDialogService>();
+            dialog.PickOpenFiles(Arg.Any<string>(), Arg.Any<string>(), Arg.Any<bool>(), Arg.Any<bool>()).Returns([a, b]);
+            var vm = NewVm(dialog);
+
+            vm.AddFilesCommand.Execute(null);
+
+            Assert.Equal(2, vm.Items.Count);
+            Assert.Contains(vm.Items, i => i.Path == a && i.SizeBytes == 1);
+            Assert.Contains(vm.Items, i => i.Path == b && i.SizeBytes == 2);
+            dialog.Received(1).PickOpenFiles("Select files to shred", "All files (*.*)|*.*", multiselect: true, checkFileExists: true);
+        }
+        finally
+        {
+            File.Delete(a);
+            File.Delete(b);
+        }
+    }
+
+    [Fact]
+    public void AddFolder_WhenCancelled_QueuesNothing()
+    {
+        var dialog = Substitute.For<IDialogService>();
+        dialog.PickFolder(Arg.Any<string>()).Returns((string?)null);
+        var vm = NewVm(dialog);
+
+        vm.AddFolderCommand.Execute(null);
+
+        Assert.Empty(vm.Items);
+    }
+
+    [Fact]
+    public void AddFolder_WhenAFolderIsPicked_QueuesIt()
+    {
+        var folder = Directory.CreateTempSubdirectory("smtest_shredder_").FullName;
+        File.WriteAllText(Path.Combine(folder, "inside.txt"), "12345");
+        try
+        {
+            var dialog = Substitute.For<IDialogService>();
+            dialog.PickFolder(Arg.Any<string>()).Returns(folder);
+            var vm = NewVm(dialog);
+
+            vm.AddFolderCommand.Execute(null);
+
+            var queued = Assert.Single(vm.Items);
+            Assert.Equal(folder, queued.Path);
+            Assert.True(queued.IsFolder);
+            Assert.Equal(5, queued.SizeBytes);
+        }
+        finally { Directory.Delete(folder, recursive: true); }
     }
 
     [Fact]

@@ -601,4 +601,37 @@ public class SettingsWatchdogViewModelTests
 
         Assert.False(Assert.Single(vm.Drifts).CanRestore);
     }
+
+    // ── ExportCsvAsync: the picker, not just ToCsv (#2860) ──
+
+    [Fact]
+    public async Task ExportCsvAsync_WhenCancelled_WritesNothing()
+    {
+        var dialog = Substitute.For<IDialogService>();
+        dialog.PickSaveFile(Arg.Any<string>(), Arg.Any<string>()).Returns((string?)null);
+        var vm = new SettingsWatchdogViewModel(NewService(Drift("ads")), dialog);
+        var before = vm.StatusMessage;
+
+        await vm.ExportCsvCommand.ExecuteAsync(null);
+
+        Assert.Equal(before, vm.StatusMessage);
+    }
+
+    [Fact]
+    public async Task ExportCsvAsync_WhenAPathIsPicked_WritesTheCsvThere()
+    {
+        var path = Path.Combine(Path.GetTempPath(), "smtest_settingswatchdog_" + Guid.NewGuid().ToString("N") + ".csv");
+        var dialog = Substitute.For<IDialogService>();
+        dialog.PickSaveFile(Arg.Any<string>(), Arg.Any<string>()).Returns(path);
+        var vm = new SettingsWatchdogViewModel(NewService(Drift("ads")), dialog);
+
+        try
+        {
+            await vm.ExportCsvCommand.ExecuteAsync(null);
+
+            Assert.True(File.Exists(path));
+            Assert.Contains(Path.GetFileName(path), vm.StatusMessage, StringComparison.Ordinal);
+        }
+        finally { File.Delete(path); }
+    }
 }

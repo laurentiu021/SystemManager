@@ -7,7 +7,6 @@ using System.Globalization;
 using System.IO;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
-using Microsoft.Win32;
 using Serilog;
 using SysManager.Helpers;
 using SysManager.Models;
@@ -26,6 +25,7 @@ public sealed partial class ProcessManagerViewModel : ElevatedViewModelBase
 
     private readonly ProcessManagerService _service;
     private readonly Func<int, DateTime, ProcessManagerService.KillOutcome> _killProcess;
+    private readonly IDialogService _dialog;
     private CancellationTokenSource? _autoRefreshCts;
 
     public BulkObservableCollection<ProcessEntry> Processes { get; } = new();
@@ -41,8 +41,8 @@ public sealed partial class ProcessManagerViewModel : ElevatedViewModelBase
     partial void OnFilterTextChanged(string value) => ApplyFilter();
     partial void OnShowOnlyAppsChanged(bool value) => ApplyFilter();
 
-    public ProcessManagerViewModel(ProcessManagerService service)
-        : this(service, ProcessManagerService.KillProcess) { }
+    public ProcessManagerViewModel(ProcessManagerService service, IDialogService? dialog = null)
+        : this(service, ProcessManagerService.KillProcess, dialog) { }
 
     /// <summary>Test seam: the same view-model with the call that ends a process supplied.</summary>
     /// <param name="service">The process list source.</param>
@@ -50,11 +50,14 @@ public sealed partial class ProcessManagerViewModel : ElevatedViewModelBase
     /// Ends a process by ID and listed start time. Injected so a test can drive each outcome of a confirmed kill
     /// without ending anything real.
     /// </param>
+    /// <param name="dialog">Defaults to <see cref="DialogService.Instance"/> (#2860).</param>
     internal ProcessManagerViewModel(ProcessManagerService service,
-                                     Func<int, DateTime, ProcessManagerService.KillOutcome> killProcess)
+                                     Func<int, DateTime, ProcessManagerService.KillOutcome> killProcess,
+                                     IDialogService? dialog = null)
     {
         _service = service;
         _killProcess = killProcess ?? throw new ArgumentNullException(nameof(killProcess));
+        _dialog = dialog ?? DialogService.Instance;
         InitializeAsync(InitAsync);
     }
 
@@ -530,19 +533,16 @@ public sealed partial class ProcessManagerViewModel : ElevatedViewModelBase
     [RelayCommand(CanExecute = nameof(HasProcesses))]
     private async Task ExportCsvAsync()
     {
-        var dlg = new SaveFileDialog
-        {
-            FileName = $"SysManager-Processes-{DateTime.Now.ToString("yyyy-MM-dd-HHmmss", CultureInfo.InvariantCulture)}.csv",
-            Filter = "CSV file (*.csv)|*.csv|All files (*.*)|*.*"
-        };
-        if (dlg.ShowDialog() != true) return;
+        var fileName = $"SysManager-Processes-{DateTime.Now.ToString("yyyy-MM-dd-HHmmss", CultureInfo.InvariantCulture)}.csv";
+        var path = _dialog.PickSaveFile(fileName, "CSV file (*.csv)|*.csv|All files (*.*)|*.*");
+        if (path is null) return;
 
         try
         {
             var csv = ProcessManagerService.ToCsv(FilteredProcesses, CultureInfo.CurrentCulture);
-            await Csv.WriteAsync(dlg.FileName, csv);
-            StatusMessage = $"Exported {FilteredProcesses.Count} process(es) to {Path.GetFileName(dlg.FileName)}.";
-            ToastService.Instance.Show("Process list exported", Path.GetFileName(dlg.FileName));
+            await Csv.WriteAsync(path, csv);
+            StatusMessage = $"Exported {FilteredProcesses.Count} process(es) to {Path.GetFileName(path)}.";
+            ToastService.Instance.Show("Process list exported", Path.GetFileName(path));
         }
         catch (IOException ex) { StatusMessage = $"Export failed: {ex.Message}"; }
         catch (UnauthorizedAccessException ex) { StatusMessage = $"Export failed (access denied): {ex.Message}"; }

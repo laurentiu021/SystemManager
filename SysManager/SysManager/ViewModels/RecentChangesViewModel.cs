@@ -7,7 +7,6 @@ using System.IO;
 using System.Text;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
-using Microsoft.Win32;
 using Serilog;
 using SysManager.Helpers;
 using SysManager.Models;
@@ -36,6 +35,7 @@ public sealed partial class RecentChangesViewModel : ViewModelBase
 
     private readonly IRecentChangesService _service;
     private readonly INavigationService _navigation;
+    private readonly IDialogService _dialog;
     private readonly CancellationTokenSource _cts = new();
     private RecentChangesLook? _look;
     private bool _lookAgain;
@@ -88,10 +88,13 @@ public sealed partial class RecentChangesViewModel : ViewModelBase
     /// <summary>The look the tab started when it was last shown. Internal so a test can await it.</summary>
     internal Task ShownLook { get; private set; } = Task.CompletedTask;
 
-    public RecentChangesViewModel(IRecentChangesService service, INavigationService navigation)
+    /// <summary>Builds the Recent Changes tab over one look at the longest period.</summary>
+    /// <param name="dialog">Defaults to <see cref="DialogService.Instance"/> (#2860).</param>
+    public RecentChangesViewModel(IRecentChangesService service, INavigationService navigation, IDialogService? dialog = null)
     {
         _service = service ?? throw new ArgumentNullException(nameof(service));
         _navigation = navigation ?? throw new ArgumentNullException(nameof(navigation));
+        _dialog = dialog ?? DialogService.Instance;
         StatusMessage = "Looking at what changed…";
         PropertyChanged += OnVmPropertyChanged;
         InitializeAsync(LookAsync);
@@ -216,20 +219,17 @@ public sealed partial class RecentChangesViewModel : ViewModelBase
     private async Task ExportCsvAsync()
     {
         if (_look is not { } look) return;
-        var dlg = new SaveFileDialog
-        {
-            FileName = $"SysManager-RecentChanges-{DateTime.Now.ToString("yyyy-MM-dd-HHmmss", CultureInfo.InvariantCulture)}.csv",
-            Filter = "CSV file (*.csv)|*.csv|All files (*.*)|*.*"
-        };
-        if (dlg.ShowDialog() != true) return;
+        var fileName = $"SysManager-RecentChanges-{DateTime.Now.ToString("yyyy-MM-dd-HHmmss", CultureInfo.InvariantCulture)}.csv";
+        var path = _dialog.PickSaveFile(fileName, "CSV file (*.csv)|*.csv|All files (*.*)|*.*");
+        if (path is null) return;
 
         var since = look.LookedAt.AddDays(-PeriodDays(SelectedPeriod));
         var shown = look.Changes.Where(c => c.When >= since && Matches(c, SelectedCategory)).ToList();
         try
         {
-            await Csv.WriteAsync(dlg.FileName, ToCsv(shown, CultureInfo.CurrentCulture));
-            StatusMessage = $"Exported {shown.Count} change(s) to {Path.GetFileName(dlg.FileName)}.";
-            ToastService.Instance.Show("Recent changes exported", Path.GetFileName(dlg.FileName));
+            await Csv.WriteAsync(path, ToCsv(shown, CultureInfo.CurrentCulture));
+            StatusMessage = $"Exported {shown.Count} change(s) to {Path.GetFileName(path)}.";
+            ToastService.Instance.Show("Recent changes exported", Path.GetFileName(path));
         }
         catch (IOException ex) { StatusMessage = $"Export failed: {ex.Message}"; }
         catch (UnauthorizedAccessException ex) { StatusMessage = $"Export failed (access denied): {ex.Message}"; }

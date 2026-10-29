@@ -58,10 +58,14 @@ public sealed partial class AppBlockerViewModel : ElevatedViewModelBase
         : "Block an app above to stop it from launching.";
 
     private readonly IAppBlockerService _blocker;
+    private readonly IDialogService _dialog;
 
-    public AppBlockerViewModel(IAppBlockerService blocker)
+    /// <summary>Blocks and unblocks applications from running, via Image File Execution Options.</summary>
+    /// <param name="dialog">Defaults to <see cref="DialogService.Instance"/> (#2860).</param>
+    public AppBlockerViewModel(IAppBlockerService blocker, IDialogService? dialog = null)
     {
         _blocker = blocker;
+        _dialog = dialog ?? DialogService.Instance;
         // Walk the IFEO registry tree off the UI thread so the eagerly-built VM doesn't
         // block startup; the UI update runs back on the UI thread (ConfigureAwait true).
         InitializeAsync(RefreshListAsync);
@@ -353,15 +357,10 @@ public sealed partial class AppBlockerViewModel : ElevatedViewModelBase
     [RelayCommand]
     private void BrowseForExe()
     {
-        var dialog = new Microsoft.Win32.OpenFileDialog
+        var files = _dialog.PickOpenFiles("Select application to block", "Executables (*.exe)|*.exe");
+        if (files.Count > 0)
         {
-            Title = "Select application to block",
-            Filter = "Executables (*.exe)|*.exe",
-            CheckFileExists = true
-        };
-        if (dialog.ShowDialog() == true)
-        {
-            NewExeName = System.IO.Path.GetFileName(dialog.FileName);
+            NewExeName = System.IO.Path.GetFileName(files[0]);
         }
     }
 

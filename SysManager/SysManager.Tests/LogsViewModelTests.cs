@@ -2,7 +2,9 @@
 // Author: laurentiu021 · https://github.com/laurentiu021/SystemManager
 // License: MIT
 
+using System.IO;
 using System.Reflection;
+using NSubstitute;
 using SysManager.Models;
 using SysManager.Services;
 using SysManager.ViewModels;
@@ -831,5 +833,39 @@ public class LogsViewModelTests
         vm.IsBusy = true;
 
         Assert.Same(vm.CancelCommand, vm.EscapeCancel);
+    }
+
+    // ── ExportCsv: the picker, not just ToCsv (#2860) ──
+
+    [Fact]
+    public void ExportCsv_WhenCancelled_WritesNothing()
+    {
+        var dialog = Substitute.For<IDialogService>();
+        dialog.PickSaveFile(Arg.Any<string>(), Arg.Any<string>()).Returns((string?)null);
+        var vm = new LogsViewModel(new EventLogService(), dialog: dialog);
+        var before = vm.StatusMessage;
+
+        vm.ExportCsvCommand.Execute(null);
+
+        Assert.Equal(before, vm.StatusMessage);
+    }
+
+    [Fact]
+    public void ExportCsv_WhenAPathIsPicked_WritesTheCsvThere()
+    {
+        var path = Path.Combine(Path.GetTempPath(), "smtest_logs_" + Guid.NewGuid().ToString("N") + ".csv");
+        var dialog = Substitute.For<IDialogService>();
+        dialog.PickSaveFile(Arg.Any<string>(), Arg.Any<string>()).Returns(path);
+        var vm = new LogsViewModel(new EventLogService(), dialog: dialog);
+        vm.Entries.Add(new FriendlyEventEntry { Severity = EventSeverity.Error, Message = "Boom", ProviderName = "X", EventId = 1 });
+
+        try
+        {
+            vm.ExportCsvCommand.Execute(null);
+
+            Assert.True(File.Exists(path));
+            Assert.Contains(path, vm.StatusMessage, StringComparison.Ordinal);
+        }
+        finally { File.Delete(path); }
     }
 }

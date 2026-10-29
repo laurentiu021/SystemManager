@@ -6,7 +6,6 @@ using System.Globalization;
 using System.IO;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
-using Microsoft.Win32;
 using Serilog;
 using SysManager.Helpers;
 using SysManager.Models;
@@ -26,6 +25,7 @@ public sealed partial class FileLockViewModel : ElevatedViewModelBase
     protected internal override IRelayCommand? RefreshOnF5 => ScanCommand;
 
     private readonly IFileLockService _service;
+    private readonly IDialogService _dialog;
 
     public BulkObservableCollection<FileLocker> Lockers { get; } = new();
 
@@ -46,9 +46,12 @@ public sealed partial class FileLockViewModel : ElevatedViewModelBase
 
     [ObservableProperty] private FileLocker? _selectedLocker;
 
-    public FileLockViewModel(IFileLockService service)
+    /// <summary>Builds the File Lock Detector tab.</summary>
+    /// <param name="dialog">Defaults to <see cref="DialogService.Instance"/> (#2860).</param>
+    public FileLockViewModel(IFileLockService service, IDialogService? dialog = null)
     {
         _service = service;
+        _dialog = dialog ?? DialogService.Instance;
         StatusMessage = "Enter a file or folder path, then scan to see what's using it.";
         PropertyChanged += OnVmPropertyChanged;
     }
@@ -71,14 +74,9 @@ public sealed partial class FileLockViewModel : ElevatedViewModelBase
     [RelayCommand]
     private void Browse()
     {
-        var dialog = new Microsoft.Win32.OpenFileDialog
-        {
-            Title = "Select a file to check",
-            CheckFileExists = false,
-            Filter = "All files (*.*)|*.*"
-        };
-        if (dialog.ShowDialog() == true)
-            Path = dialog.FileName;
+        var files = _dialog.PickOpenFiles("Select a file to check", "All files (*.*)|*.*", checkFileExists: false);
+        if (files.Count > 0)
+            Path = files[0];
     }
 
     [RelayCommand(CanExecute = nameof(CanScan))]
@@ -206,20 +204,17 @@ public sealed partial class FileLockViewModel : ElevatedViewModelBase
     [RelayCommand(CanExecute = nameof(HasLockers))]
     private async Task ExportCsvAsync()
     {
-        var dlg = new SaveFileDialog
-        {
-            FileName = $"SysManager-FileLocks-{DateTime.Now.ToString("yyyy-MM-dd-HHmmss", CultureInfo.InvariantCulture)}.csv",
-            Filter = "CSV file (*.csv)|*.csv|All files (*.*)|*.*"
-        };
-        if (dlg.ShowDialog() != true) return;
+        var fileName = $"SysManager-FileLocks-{DateTime.Now.ToString("yyyy-MM-dd-HHmmss", CultureInfo.InvariantCulture)}.csv";
+        var path = _dialog.PickSaveFile(fileName, "CSV file (*.csv)|*.csv|All files (*.*)|*.*");
+        if (path is null) return;
 
         try
         {
             var csv = FileLockService.ToCsv(Lockers, CultureInfo.CurrentCulture);
-            await Csv.WriteAsync(dlg.FileName, csv);
+            await Csv.WriteAsync(path, csv);
             // System.IO.Path in full: this view-model has its own `Path` property — the file being
             // scanned — which shadows the static class, so the unqualified call binds to a string.
-            var saved = System.IO.Path.GetFileName(dlg.FileName);
+            var saved = System.IO.Path.GetFileName(path);
             StatusMessage = $"Exported {Lockers.Count} process(es) to {saved}.";
             ToastService.Instance.Show("Lock list exported", saved);
         }

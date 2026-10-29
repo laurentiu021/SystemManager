@@ -68,4 +68,37 @@ public sealed class DialogService : IDialogService
         if (Application.Current == null) return;
         MessageBox.Show(message, title, MessageBoxButton.OK, MessageBoxImage.Information);
     }
+
+    /// <inheritdoc/>
+    public string? PickSaveFile(string suggestedFileName, string filter)
+    {
+        if (Application.Current == null) return null;
+
+        var dialog = new Microsoft.Win32.SaveFileDialog { FileName = suggestedFileName, Filter = filter };
+        return dialog.ShowDialog() == true ? dialog.FileName : null;
+    }
+
+    /// <inheritdoc/>
+    public IReadOnlyList<string> PickOpenFiles(string title, string filter, bool multiselect = false, bool checkFileExists = true)
+    {
+        if (Application.Current == null) return [];
+
+        var dialog = new Microsoft.Win32.OpenFileDialog
+        {
+            Title = title,
+            Filter = filter,
+            Multiselect = multiselect,
+            CheckFileExists = checkFileExists
+        };
+        return dialog.ShowDialog() == true ? dialog.FileNames : [];
+    }
+
+    /// <inheritdoc/>
+    public string? PickFolder(string title)
+    {
+        if (Application.Current == null) return null;
+
+        var dialog = new Microsoft.Win32.OpenFolderDialog { Title = title };
+        return dialog.ShowDialog() == true ? dialog.FolderName : null;
+    }
 }

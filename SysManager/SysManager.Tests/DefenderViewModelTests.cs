@@ -4,6 +4,7 @@
 
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
+using System.IO;
 using System.Management.Automation;
 using NSubstitute;
 using SysManager.Helpers;
@@ -39,14 +40,14 @@ public class DefenderViewModelTests
         return rp;
     }
 
-    private static DefenderViewModel NewVm()
+    private static DefenderViewModel NewVm(IDialogService? dialog = null)
     {
         // Runner returns an empty result set, so GetStatusAsync produces a default
         // (unavailable) status without touching real PowerShell/Defender.
         var ps = Substitute.For<IPowerShellRunner>();
         ps.RunAsync(Arg.Any<string>(), Arg.Any<IDictionary<string, object?>?>(), Arg.Any<System.Threading.CancellationToken>())
           .Returns(new Collection<PSObject>());
-        var vm = new DefenderViewModel(new DefenderService(ps), NoRestorePoint());
+        var vm = new DefenderViewModel(new DefenderService(ps), NoRestorePoint(), dialog);
         vm.InitializationComplete.GetAwaiter().GetResult();
         return vm;
     }
@@ -421,5 +422,39 @@ public class DefenderViewModelTests
         Assert.Equal("Off", vm.RealtimeDisplay);
         Assert.Equal("Real-time protection is off: another antivirus is in charge, and Windows runs Defender in passive mode.",
             vm.StatusMessage);
+    }
+
+    // ── AddExclusionAsync: the picker, not just the confirmation (#2860) ──
+
+    [Fact]
+    public async Task AddExclusionAsync_WhenCancelled_NeverAsksToConfirm()
+    {
+        var picker = Substitute.For<IDialogService>();
+        picker.PickFolder(Arg.Any<string>()).Returns((string?)null);
+        var vm = NewVm(picker);
+        using var confirm = new DialogAnswer(confirm: true);
+
+        await vm.AddExclusionCommand.ExecuteAsync(null);
+
+        Assert.Equal(0, confirm.Calls);
+    }
+
+    [Fact]
+    public async Task AddExclusionAsync_WhenAFolderIsPicked_AsksToConfirmThatFolder()
+    {
+        var folder = Directory.CreateTempSubdirectory("smtest_defender_").FullName;
+        try
+        {
+            var picker = Substitute.For<IDialogService>();
+            picker.PickFolder(Arg.Any<string>()).Returns(folder);
+            var vm = NewVm(picker);
+            using var confirm = new DialogAnswer(confirm: false);
+
+            await vm.AddExclusionCommand.ExecuteAsync(null);
+
+            Assert.Equal(1, confirm.Calls);
+            Assert.Contains(confirm.Messages, m => m.Contains(folder, StringComparison.Ordinal));
+        }
+        finally { Directory.Delete(folder, recursive: true); }
     }
 }

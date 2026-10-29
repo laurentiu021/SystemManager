@@ -6,7 +6,6 @@ using System.Globalization;
 using System.IO;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
-using Microsoft.Win32;
 using Serilog;
 using SysManager.Helpers;
 using SysManager.Models;
@@ -26,6 +25,7 @@ public sealed partial class SettingsWatchdogViewModel : ElevatedViewModelBase
     protected internal override IRelayCommand? RefreshOnF5 => RefreshCommand;
 
     private readonly ISettingsWatchdogService _service;
+    private readonly IDialogService _dialog;
 
     public BulkObservableCollection<DriftRow> Drifts { get; } = new();
 
@@ -62,9 +62,12 @@ public sealed partial class SettingsWatchdogViewModel : ElevatedViewModelBase
     // over it without asking replaced a baseline the user could not see (#2521).
     private bool _baselineUnusable;
 
-    public SettingsWatchdogViewModel(ISettingsWatchdogService service)
+    /// <summary>Builds the Settings Watchdog tab over the baseline the service already holds.</summary>
+    /// <param name="dialog">Defaults to <see cref="DialogService.Instance"/> (#2860).</param>
+    public SettingsWatchdogViewModel(ISettingsWatchdogService service, IDialogService? dialog = null)
     {
         _service = service;
+        _dialog = dialog ?? DialogService.Instance;
         InitializeAsync(() => { Refresh(); return System.Threading.Tasks.Task.CompletedTask; });
     }
 
@@ -229,19 +232,16 @@ public sealed partial class SettingsWatchdogViewModel : ElevatedViewModelBase
     [RelayCommand(CanExecute = nameof(HasDrift))]
     private async Task ExportCsvAsync()
     {
-        var dlg = new SaveFileDialog
-        {
-            FileName = $"SysManager-SettingsDrift-{DateTime.Now.ToString("yyyy-MM-dd-HHmmss", CultureInfo.InvariantCulture)}.csv",
-            Filter = "CSV file (*.csv)|*.csv|All files (*.*)|*.*"
-        };
-        if (dlg.ShowDialog() != true) return;
+        var fileName = $"SysManager-SettingsDrift-{DateTime.Now.ToString("yyyy-MM-dd-HHmmss", CultureInfo.InvariantCulture)}.csv";
+        var path = _dialog.PickSaveFile(fileName, "CSV file (*.csv)|*.csv|All files (*.*)|*.*");
+        if (path is null) return;
 
         try
         {
             var csv = SettingsWatchdogService.ToCsv(Drifts.Select(r => r.Drift), CultureInfo.CurrentCulture);
-            await Csv.WriteAsync(dlg.FileName, csv);
-            StatusMessage = $"Exported {Drifts.Count} change(s) to {Path.GetFileName(dlg.FileName)}.";
-            ToastService.Instance.Show("Settings drift exported", Path.GetFileName(dlg.FileName));
+            await Csv.WriteAsync(path, csv);
+            StatusMessage = $"Exported {Drifts.Count} change(s) to {Path.GetFileName(path)}.";
+            ToastService.Instance.Show("Settings drift exported", Path.GetFileName(path));
         }
         catch (IOException ex) { StatusMessage = $"Export failed: {ex.Message}"; }
         catch (UnauthorizedAccessException ex) { StatusMessage = $"Export failed (access denied): {ex.Message}"; }

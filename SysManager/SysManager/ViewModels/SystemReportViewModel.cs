@@ -8,7 +8,6 @@ using System.Text;
 using System.Windows;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
-using Microsoft.Win32;
 using Serilog;
 using SysManager.Services;
 
@@ -27,14 +26,18 @@ public sealed partial class SystemReportViewModel : ViewModelBase
         IsBusy ? CancelCommand : null;
 
     private readonly SystemReportService _service;
+    private readonly IDialogService _dialog;
     private CancellationTokenSource? _cts;
 
     [ObservableProperty] private string _reportText = "";
     [ObservableProperty] private bool _hasReport;
 
-    public SystemReportViewModel(SystemReportService service)
+    /// <summary>Builds the System Report tab, with nothing generated yet.</summary>
+    /// <param name="dialog">Defaults to <see cref="DialogService.Instance"/> (#2860).</param>
+    public SystemReportViewModel(SystemReportService service, IDialogService? dialog = null)
     {
         _service = service;
+        _dialog = dialog ?? DialogService.Instance;
         StatusMessage = "Click Generate to build a full system report.";
         // Generate / the three exports / Copy all run a fresh gather; disable them while one
         // runs so a second click can't dispose the cancellation source the first is awaiting.
@@ -91,12 +94,9 @@ public sealed partial class SystemReportViewModel : ViewModelBase
 
     private async Task ExportAsync(string extension, string filter, Func<CancellationToken, Task<string>> generate)
     {
-        var dlg = new SaveFileDialog
-        {
-            FileName = $"SysManager-Report-{DateTime.Now.ToString("yyyy-MM-dd-HHmmss", CultureInfo.InvariantCulture)}.{extension}",
-            Filter = filter + "|All files (*.*)|*.*"
-        };
-        if (dlg.ShowDialog() != true) return;
+        var fileName = $"SysManager-Report-{DateTime.Now.ToString("yyyy-MM-dd-HHmmss", CultureInfo.InvariantCulture)}.{extension}";
+        var path = _dialog.PickSaveFile(fileName, filter + "|All files (*.*)|*.*");
+        if (path is null) return;
 
         IsBusy = true;
         // Busy alone left the footer's bar empty and still while the report was generated again for the file (#2812).
@@ -108,9 +108,9 @@ public sealed partial class SystemReportViewModel : ViewModelBase
         try
         {
             var content = await generate(_cts.Token);
-            await File.WriteAllTextAsync(dlg.FileName, content, new UTF8Encoding(encoderShouldEmitUTF8Identifier: false), _cts.Token);
-            StatusMessage = $"Saved {Path.GetFileName(dlg.FileName)}.";
-            ToastService.Instance.Show("Report exported", Path.GetFileName(dlg.FileName));
+            await File.WriteAllTextAsync(path, content, new UTF8Encoding(encoderShouldEmitUTF8Identifier: false), _cts.Token);
+            StatusMessage = $"Saved {Path.GetFileName(path)}.";
+            ToastService.Instance.Show("Report exported", Path.GetFileName(path));
         }
         catch (OperationCanceledException) { StatusMessage = "Export cancelled."; }
         catch (IOException ex) { StatusMessage = $"Export failed: {ex.Message}"; }

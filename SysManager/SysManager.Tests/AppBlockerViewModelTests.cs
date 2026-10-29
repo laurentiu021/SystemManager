@@ -27,13 +27,13 @@ public class AppBlockerViewModelTests
 
     // The VM loads the blocked list asynchronously off the UI thread; wait for that init to
     // finish so the background load can't race a test that mutates BlockedApps afterwards.
-    private static AppBlockerViewModel NewVm(IAppBlockerService blocker)
+    private static AppBlockerViewModel NewVm(IAppBlockerService blocker, IDialogService? dialog = null)
     {
         blocker.GetBlockedApps().Returns([]);
         // Not blocked unless a test says otherwise. IsBlocked returns bool?, whose default is null: the answer for
         // a read that failed, which is not what these tests are about.
         blocker.IsBlocked(Arg.Any<string>()).Returns(false);
-        var vm = new AppBlockerViewModel(blocker);
+        var vm = new AppBlockerViewModel(blocker, dialog);
         vm.InitializationComplete.GetAwaiter().GetResult();
         return vm;
     }
@@ -622,5 +622,33 @@ public class AppBlockerViewModelTests
         Assert.Equal(1, dialog.Calls);
         blocker.Received(1).TryBlockApp(name);
         Assert.Equal($"Blocked {name}.", vm.BlockStatus);
+    }
+
+    // ── BrowseForExe: the picker, not just the string it fills (#2860) ──
+
+    [Fact]
+    public void BrowseForExe_WhenCancelled_LeavesNewExeNameUnchanged()
+    {
+        var picker = Substitute.For<IDialogService>();
+        picker.PickOpenFiles(Arg.Any<string>(), Arg.Any<string>(), Arg.Any<bool>(), Arg.Any<bool>()).Returns([]);
+        var vm = NewVm(Substitute.For<IAppBlockerService>(), picker);
+        vm.NewExeName = "before.exe";
+
+        vm.BrowseForExeCommand.Execute(null);
+
+        Assert.Equal("before.exe", vm.NewExeName);
+    }
+
+    [Fact]
+    public void BrowseForExe_WhenAFileIsPicked_SetsNewExeNameToItsFileName()
+    {
+        var picker = Substitute.For<IDialogService>();
+        picker.PickOpenFiles(Arg.Any<string>(), Arg.Any<string>(), Arg.Any<bool>(), Arg.Any<bool>())
+            .Returns([@"D:\Games\game.exe"]);
+        var vm = NewVm(Substitute.For<IAppBlockerService>(), picker);
+
+        vm.BrowseForExeCommand.Execute(null);
+
+        Assert.Equal("game.exe", vm.NewExeName);
     }
 }

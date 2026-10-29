@@ -24,6 +24,7 @@ public sealed partial class FileShredderViewModel : ViewModelBase
         IsShredding ? CancelCommand : null;
 
     private readonly FileShredderService _service;
+    private readonly IDialogService _dialog;
     private CancellationTokenSource? _cts;
 
     public BulkObservableCollection<ShredItem> Items { get; } = new();
@@ -31,29 +32,26 @@ public sealed partial class FileShredderViewModel : ViewModelBase
     [ObservableProperty] private ShredMethod _selectedMethod = ShredMethod.Standard;
     [ObservableProperty] private bool _isShredding;
 
-    public FileShredderViewModel(FileShredderService service)
+    /// <summary>Builds the File Shredder tab over an empty queue.</summary>
+    /// <param name="dialog">Defaults to <see cref="DialogService.Instance"/> (#2860).</param>
+    public FileShredderViewModel(FileShredderService service, IDialogService? dialog = null)
     {
         _service = service;
+        _dialog = dialog ?? DialogService.Instance;
         Items.CollectionChanged += (_, _) => ShredAllCommand.NotifyCanExecuteChanged();
     }
 
     [RelayCommand(CanExecute = nameof(CanEditQueue))]
     private void AddFiles()
     {
-        var dialog = new Microsoft.Win32.OpenFileDialog
-        {
-            Title = "Select files to shred",
-            Multiselect = true,
-            Filter = "All files (*.*)|*.*"
-        };
-
-        if (dialog.ShowDialog() != true) return;
+        var files = _dialog.PickOpenFiles("Select files to shred", "All files (*.*)|*.*", multiselect: true);
+        if (files.Count == 0) return;
 
         var skipped = new List<string>();
         var underCloudSync = new List<string>();
         var cloudRoots = OneDriveRoots();
 
-        foreach (var filePath in dialog.FileNames)
+        foreach (var filePath in files)
         {
             if (Items.Any(i => i.Path.Equals(filePath, StringComparison.OrdinalIgnoreCase)))
                 continue;
@@ -138,14 +136,9 @@ public sealed partial class FileShredderViewModel : ViewModelBase
     [RelayCommand(CanExecute = nameof(CanEditQueue))]
     private void AddFolder()
     {
-        var dialog = new Microsoft.Win32.OpenFolderDialog
-        {
-            Title = "Select folder to shred"
-        };
+        var folderPath = _dialog.PickFolder("Select folder to shred");
+        if (folderPath is null) return;
 
-        if (dialog.ShowDialog() != true) return;
-
-        var folderPath = dialog.FolderName;
         if (Items.Any(i => i.Path.Equals(folderPath, StringComparison.OrdinalIgnoreCase)))
             return;
 

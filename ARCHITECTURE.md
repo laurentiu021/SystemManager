@@ -467,8 +467,13 @@ Changes tab), `IPutBackSignal` (PutBackSignal, which tells a tab that Undo Chang
 `IDialogService`, `IOperationLock`, `IToastService` and `IActivityLog` are migrated one view model at a
 time (#2860) rather than all at once: `BrowserCleanerViewModel` is the first. The rest still call
 `DialogService.Instance`, `OperationLockService.Instance`, `ToastService.Instance` and
-`ActivityLogService.Instance` directly — 38, 31, 33 and 20 view models respectively, re-measured rather
-than quoted, since the point of migrating incrementally is that this number only ever shrinks.
+`ActivityLogService.Instance` directly — 37, 30, 32 and 19 view models respectively, re-measured rather
+than quoted, since the point of migrating incrementally is that this number only ever shrinks. The 18
+view models whose `SaveFileDialog`, `OpenFileDialog` or `OpenFolderDialog` construction moved behind
+`IDialogService.PickSaveFile`/`PickOpenFiles`/`PickFolder` (below) now take the interface through their
+constructor too, but most still call `DialogService.Instance.Confirm`/`Inform` directly elsewhere in the
+same file — picking a file and confirming a destructive action are migrated independently, so a view
+model can appear in this count and still have taken the step below.
 
 `INavigationService` is the seam a tab uses to send the user to another tab, so a tab that diagnoses
 something can offer the tab that fixes it. It is **late-bound**: the shell builds the tab view models and
@@ -485,12 +490,18 @@ A tab opened from the sidebar search that implements `ISearchDestination` is tol
 which is how a search for "tweaks" or "tune windows" opens Privacy & Telemetry grouped by reach (#1517),
 and one for "extensions" or "browser ads" opens Browser Cleaner on its Extensions view (#1526).
 
-Four further seams exist but are reached differently, so grepping `ServiceRegistration.cs` for them
+`IDialogService` also carries `PickSaveFile`, `PickOpenFiles` and `PickFolder` (#2860): the 23 sites
+across those 18 view models that used to construct a `SaveFileDialog`, `OpenFileDialog` or
+`OpenFolderDialog` directly, which made the command they sat in untestable — File Shredder's `AddFiles`
+and `AddFolder` included, the two the issue called out by name. `DialogService`'s implementation still
+shows the real WPF dialog; a test substitutes the interface and returns a path, as it already did for
+`Confirm`. The CSV encoding question the same issue raised was already settled before this: `Helpers/Csv`
+has written every export with one BOM'd UTF-8 encoding since #2920, so no new writer was needed, only the
+picker that chooses where the file goes.
+
+Three further seams exist but are reached differently, so grepping `ServiceRegistration.cs` for them
 finds nothing:
 
-- `IDialogService` — consumed through the static `DialogService.Instance`, which tests swap for a
-  stub. That is why the swapping tests must sit in the serialized `ProcessWideStatics` xUnit collection;
-  a fitness function in `ArchitectureTests` enforces it.
 - `IBandwidthMonitorService` — the one seam with two shipping implementations
   (`ConnectionBandwidthSource` and `EtwBandwidthSource`), injected as factories so the Bandwidth
   Monitor can switch source at runtime. See the sources note further down.
@@ -834,6 +845,8 @@ Key services:
   formula is shown as text instead (OWASP's CSV injection guidance) — except a genuine signed number in the
   sheet's culture, which stays a number rather than losing its sort order (#2794).
   `ArchitectureTests.EveryCsvExport_IsWrittenThroughCsv_InTheUsersRegion` keeps every tab with a CSV export on it.
+  Where the file goes is a separate question from how it is written: every export chooses its path through
+  `IDialogService.PickSaveFile` (#2860), not through `Csv` itself, which only ever receives the path once chosen.
 - `Helpers/StorageLabels` — the one name for each `MSFT_PhysicalDisk` bus and media type, used by
   `SystemInfoService`, `DiskHealthService`, `FixedDriveService` and the System Report. Those three
   services each had a table, and the tables had drifted, so one disk on a RAID controller or an SD card

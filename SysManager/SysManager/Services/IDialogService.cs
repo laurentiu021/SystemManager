@@ -50,4 +50,28 @@ public interface IDialogService
     /// gate something destructive.
     /// </remarks>
     void Inform(string message, string title);
+
+    /// <summary>
+    /// Show a save-file dialog suggesting <paramref name="suggestedFileName"/>, filtered by
+    /// <paramref name="filter"/>. Returns the chosen path, or null if the user cancelled.
+    /// </summary>
+    /// <remarks>
+    /// One of three picker methods added so the 23 view-model commands that used to construct a
+    /// <c>SaveFileDialog</c>, <c>OpenFileDialog</c> or <c>OpenFolderDialog</c> directly can be exercised
+    /// in a test by substituting this interface instead (#2860).
+    /// </remarks>
+    string? PickSaveFile(string suggestedFileName, string filter);
+
+    /// <summary>
+    /// Show an open-file dialog titled <paramref name="title"/> and filtered by <paramref name="filter"/>.
+    /// Returns the chosen paths — more than one only when <paramref name="multiselect"/> is true — or an
+    /// empty list if the user cancelled.
+    /// </summary>
+    IReadOnlyList<string> PickOpenFiles(string title, string filter, bool multiselect = false, bool checkFileExists = true);
+
+    /// <summary>
+    /// Show a folder picker titled <paramref name="title"/>. Returns the chosen folder, or null if the
+    /// user cancelled.
+    /// </summary>
+    string? PickFolder(string title);
 }

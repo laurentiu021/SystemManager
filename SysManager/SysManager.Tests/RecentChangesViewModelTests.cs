@@ -2,6 +2,7 @@
 // Author: laurentiu021 · https://github.com/laurentiu021/SystemManager
 // License: MIT
 
+using System.IO;
 using CommunityToolkit.Mvvm.Input;
 using NSubstitute;
 using SysManager.Models;
@@ -30,10 +31,10 @@ public sealed class RecentChangesViewModelTests
                                       string who = "Who", string detail = "") =>
         new(when, since, kind, subject, who, detail);
 
-    private RecentChangesViewModel NewVm(RecentChangesLook look)
+    private RecentChangesViewModel NewVm(RecentChangesLook look, IDialogService? dialog = null)
     {
         _service.LookAsync(Arg.Any<int>(), Arg.Any<CancellationToken>()).Returns(Task.FromResult(look));
-        return new RecentChangesViewModel(_service, _navigation);
+        return new RecentChangesViewModel(_service, _navigation, dialog);
     }
 
     // ── Looking ────────────────────────────────────────────────────────────
@@ -586,5 +587,40 @@ public sealed class RecentChangesViewModelTests
             + "2026-10-08 09:12,SysManager,\"Freed 1,2 GB\",\"You, in SysManager\",Deep Cleanup\r\n"
             + "between 2026-10-02 09:00 and 2026-10-05 15:20,Programs,New program: Search Pro Toolbar,An installer,\r\n",
             csv);
+    }
+
+    // ── ExportCsvAsync: the picker, not just ToCsv (#2860) ──
+
+    [Fact]
+    public async Task ExportCsvAsync_WhenCancelled_WritesNothing()
+    {
+        var dialog = Substitute.For<IDialogService>();
+        dialog.PickSaveFile(Arg.Any<string>(), Arg.Any<string>()).Returns((string?)null);
+        using var vm = NewVm(Look([Change(ChangeKind.SysManagerAction, "Did a thing", Now)]), dialog);
+        await vm.InitializationComplete;
+        var before = vm.StatusMessage;
+
+        await vm.ExportCsvCommand.ExecuteAsync(null);
+
+        Assert.Equal(before, vm.StatusMessage);
+    }
+
+    [Fact]
+    public async Task ExportCsvAsync_WhenAPathIsPicked_WritesTheCsvThere()
+    {
+        var path = Path.Combine(Path.GetTempPath(), "smtest_recentchanges_" + Guid.NewGuid().ToString("N") + ".csv");
+        var dialog = Substitute.For<IDialogService>();
+        dialog.PickSaveFile(Arg.Any<string>(), Arg.Any<string>()).Returns(path);
+        using var vm = NewVm(Look([Change(ChangeKind.SysManagerAction, "Did a thing", Now)]), dialog);
+        await vm.InitializationComplete;
+
+        try
+        {
+            await vm.ExportCsvCommand.ExecuteAsync(null);
+
+            Assert.True(File.Exists(path));
+            Assert.Contains(Path.GetFileName(path), vm.StatusMessage, StringComparison.Ordinal);
+        }
+        finally { File.Delete(path); }
     }
 }

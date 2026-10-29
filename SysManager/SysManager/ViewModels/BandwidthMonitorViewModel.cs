@@ -11,7 +11,6 @@ using LiveChartsCore;
 using LiveChartsCore.Defaults;
 using LiveChartsCore.SkiaSharpView;
 using LiveChartsCore.SkiaSharpView.Painting;
-using Microsoft.Win32;
 using Serilog;
 using SkiaSharp;
 using SysManager.Helpers;
@@ -58,6 +57,7 @@ public sealed partial class BandwidthMonitorViewModel : ElevatedViewModelBase
     private readonly Func<IBandwidthMonitorService> _connectionSourceFactory;
     private readonly Func<IBandwidthMonitorService>? _etwSourceFactory;
     private readonly TimeProvider _time;
+    private readonly IDialogService _dialog;
 
     private IBandwidthMonitorService? _source;
     private CancellationTokenSource? _pollCts;
@@ -165,8 +165,8 @@ public sealed partial class BandwidthMonitorViewModel : ElevatedViewModelBase
     private readonly SemaphoreSlim _reloadGate = new(1, 1);
 
     /// <summary>Production constructor — safe source always available; ETW source built on demand when elevated.</summary>
-    public BandwidthMonitorViewModel(BandwidthHistoryService history)
-        : this(history, () => new ConnectionBandwidthSource(), () => new EtwBandwidthSource())
+    public BandwidthMonitorViewModel(BandwidthHistoryService history, IDialogService? dialog = null)
+        : this(history, () => new ConnectionBandwidthSource(), () => new EtwBandwidthSource(), dialog)
     {
     }
 
@@ -178,8 +178,9 @@ public sealed partial class BandwidthMonitorViewModel : ElevatedViewModelBase
     public BandwidthMonitorViewModel(
         BandwidthHistoryService history,
         Func<IBandwidthMonitorService> connectionSourceFactory,
-        Func<IBandwidthMonitorService>? etwSourceFactory)
-        : this(history, connectionSourceFactory, etwSourceFactory, history.LoadAsync)
+        Func<IBandwidthMonitorService>? etwSourceFactory,
+        IDialogService? dialog = null)
+        : this(history, connectionSourceFactory, etwSourceFactory, history.LoadAsync, dialog: dialog)
     {
     }
 
@@ -187,18 +188,21 @@ public sealed partial class BandwidthMonitorViewModel : ElevatedViewModelBase
     /// Loads the stored ranges through <paramref name="loadHistory"/> instead of the history service, so a test
     /// decides when a load finishes, before or after the tab closes.
     /// </summary>
+    /// <param name="dialog">Defaults to <see cref="DialogService.Instance"/> (#2860).</param>
     internal BandwidthMonitorViewModel(
         BandwidthHistoryService history,
         Func<IBandwidthMonitorService> connectionSourceFactory,
         Func<IBandwidthMonitorService>? etwSourceFactory,
         Func<TimeSpan, CancellationToken, Task<IReadOnlyList<BandwidthSample>>> loadHistory,
-        TimeProvider? timeProvider = null)
+        TimeProvider? timeProvider = null,
+        IDialogService? dialog = null)
     {
         _history = history;
         _loadHistory = loadHistory;
         _connectionSourceFactory = connectionSourceFactory;
         _etwSourceFactory = etwSourceFactory;
         _time = timeProvider ?? TimeProvider.System;
+        _dialog = dialog ?? DialogService.Instance;
         _selectedRange = RangeOptions[0]; // Live — the tab's job is the current moment first.
 
         ThroughputXAxes = [BuildTimeAxis()];
@@ -717,19 +721,16 @@ public sealed partial class BandwidthMonitorViewModel : ElevatedViewModelBase
     [RelayCommand(CanExecute = nameof(HasProcesses))]
     private async Task ExportCsvAsync()
     {
-        var dlg = new SaveFileDialog
-        {
-            FileName = $"SysManager-Bandwidth-{DateTime.Now.ToString("yyyy-MM-dd-HHmmss", CultureInfo.InvariantCulture)}.csv",
-            Filter = "CSV file (*.csv)|*.csv|All files (*.*)|*.*"
-        };
-        if (dlg.ShowDialog() != true) return;
+        var fileName = $"SysManager-Bandwidth-{DateTime.Now.ToString("yyyy-MM-dd-HHmmss", CultureInfo.InvariantCulture)}.csv";
+        var path = _dialog.PickSaveFile(fileName, "CSV file (*.csv)|*.csv|All files (*.*)|*.*");
+        if (path is null) return;
 
         try
         {
             var csv = BandwidthHistoryService.ToCsv(Processes, CultureInfo.CurrentCulture);
-            await Csv.WriteAsync(dlg.FileName, csv);
-            StatusMessage = $"Exported {Processes.Count} app(s) to {Path.GetFileName(dlg.FileName)}.";
-            ToastService.Instance.Show("Bandwidth usage exported", Path.GetFileName(dlg.FileName));
+            await Csv.WriteAsync(path, csv);
+            StatusMessage = $"Exported {Processes.Count} app(s) to {Path.GetFileName(path)}.";
+            ToastService.Instance.Show("Bandwidth usage exported", Path.GetFileName(path));
         }
         catch (IOException ex) { StatusMessage = $"Export failed: {ex.Message}"; }
         catch (UnauthorizedAccessException ex) { StatusMessage = $"Export failed (access denied): {ex.Message}"; }

@@ -7,7 +7,6 @@ using System.Globalization;
 using System.IO;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
-using Microsoft.Win32;
 using Serilog;
 using SysManager.Helpers;
 using SysManager.Models;
@@ -31,6 +30,7 @@ public sealed partial class DiskAnalyzerViewModel : ViewModelBase
     private readonly DiskAnalyzerService _service;
     private readonly DiskScanHistoryService _history;
     private readonly DiskAnalyzerPreferenceService _preferences;
+    private readonly IDialogService _dialog;
     private readonly bool _loadingPreferences;
     private CancellationTokenSource? _cts;
 
@@ -159,12 +159,16 @@ public sealed partial class DiskAnalyzerViewModel : ViewModelBase
         ", plus any junction or symbolic link (following one would double-count, or lead outside the " +
         "folder you asked about).";
 
+    /// <summary>Builds the Disk Analyzer tab over the chosen folder's preset history.</summary>
+    /// <param name="dialog">Defaults to <see cref="DialogService.Instance"/> (#2860).</param>
     public DiskAnalyzerViewModel(
-        DiskAnalyzerService service, DiskScanHistoryService history, DiskAnalyzerPreferenceService? preferences = null)
+        DiskAnalyzerService service, DiskScanHistoryService history, DiskAnalyzerPreferenceService? preferences = null,
+        IDialogService? dialog = null)
     {
         _service = service;
         _history = history;
         _preferences = preferences ?? new DiskAnalyzerPreferenceService();
+        _dialog = dialog ?? DialogService.Instance;
 
         _loadingPreferences = true;
         ShowMap = _preferences.Load().ShowMap;
@@ -462,19 +466,16 @@ public sealed partial class DiskAnalyzerViewModel : ViewModelBase
     [RelayCommand(CanExecute = nameof(HasEntries))]
     private async Task ExportCsvAsync()
     {
-        var dlg = new SaveFileDialog
-        {
-            FileName = $"SysManager-DiskUsage-{DateTime.Now.ToString("yyyy-MM-dd-HHmmss", CultureInfo.InvariantCulture)}.csv",
-            Filter = "CSV file (*.csv)|*.csv|All files (*.*)|*.*"
-        };
-        if (dlg.ShowDialog() != true) return;
+        var fileName = $"SysManager-DiskUsage-{DateTime.Now.ToString("yyyy-MM-dd-HHmmss", CultureInfo.InvariantCulture)}.csv";
+        var path = _dialog.PickSaveFile(fileName, "CSV file (*.csv)|*.csv|All files (*.*)|*.*");
+        if (path is null) return;
 
         try
         {
             var csv = DiskAnalyzerService.ToCsv(Entries, CultureInfo.CurrentCulture);
-            await Csv.WriteAsync(dlg.FileName, csv);
-            StatusMessage = $"Exported {Entries.Count} folder(s) to {Path.GetFileName(dlg.FileName)}.";
-            ToastService.Instance.Show("Disk usage exported", Path.GetFileName(dlg.FileName));
+            await Csv.WriteAsync(path, csv);
+            StatusMessage = $"Exported {Entries.Count} folder(s) to {Path.GetFileName(path)}.";
+            ToastService.Instance.Show("Disk usage exported", Path.GetFileName(path));
         }
         catch (IOException ex) { StatusMessage = $"Export failed: {ex.Message}"; }
         catch (UnauthorizedAccessException ex) { StatusMessage = $"Export failed (access denied): {ex.Message}"; }
@@ -501,13 +502,10 @@ public sealed partial class DiskAnalyzerViewModel : ViewModelBase
     [RelayCommand]
     private void BrowseFolder()
     {
-        var dialog = new Microsoft.Win32.OpenFolderDialog
+        var folder = _dialog.PickFolder("Select folder to analyze");
+        if (folder is not null)
         {
-            Title = "Select folder to analyze"
-        };
-        if (dialog.ShowDialog() == true)
-        {
-            SelectedPath = dialog.FolderName;
+            SelectedPath = folder;
             if (!PresetPaths.Contains(SelectedPath))
                 PresetPaths.Add(SelectedPath);
         }

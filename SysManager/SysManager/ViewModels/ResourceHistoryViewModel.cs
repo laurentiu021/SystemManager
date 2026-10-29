@@ -12,7 +12,6 @@ using LiveChartsCore;
 using LiveChartsCore.Defaults;
 using LiveChartsCore.SkiaSharpView;
 using LiveChartsCore.SkiaSharpView.Painting;
-using Microsoft.Win32;
 using Serilog;
 using SkiaSharp;
 using SysManager.Helpers;
@@ -37,6 +36,7 @@ public sealed partial class ResourceHistoryViewModel : ViewModelBase
     private const int MaxChartPoints = 400;
 
     private readonly ResourceHistoryService _service;
+    private readonly IDialogService _dialog;
     private IReadOnlyList<ResourceSample> _loaded = [];
 
     public IReadOnlyList<HistoryRange> RangeOptions { get; } =
@@ -95,9 +95,12 @@ public sealed partial class ResourceHistoryViewModel : ViewModelBase
     // only ever read on the UI thread (after ConfigureAwait(true)), so no interlocking is needed.
     private bool _disposed;
 
-    public ResourceHistoryViewModel(ResourceHistoryService service)
+    /// <summary>Builds the Resource History tab over the stored samples.</summary>
+    /// <param name="dialog">Defaults to <see cref="DialogService.Instance"/> (#2860).</param>
+    public ResourceHistoryViewModel(ResourceHistoryService service, IDialogService? dialog = null)
     {
         _service = service;
+        _dialog = dialog ?? DialogService.Instance;
         _retentionDays = service.RetentionDays;
         _selectedRange = RangeOptions[2]; // Last 24 hours
 
@@ -217,21 +220,18 @@ public sealed partial class ResourceHistoryViewModel : ViewModelBase
     [RelayCommand(CanExecute = nameof(HasData))]
     private async Task ExportCsvAsync()
     {
-        var dlg = new SaveFileDialog
-        {
-            FileName = $"SysManager-Resources-{DateTime.Now.ToString("yyyy-MM-dd-HHmmss", CultureInfo.InvariantCulture)}.csv",
-            Filter = "CSV file (*.csv)|*.csv|All files (*.*)|*.*"
-        };
-        if (dlg.ShowDialog() != true) return;
+        var fileName = $"SysManager-Resources-{DateTime.Now.ToString("yyyy-MM-dd-HHmmss", CultureInfo.InvariantCulture)}.csv";
+        var path = _dialog.PickSaveFile(fileName, "CSV file (*.csv)|*.csv|All files (*.*)|*.*");
+        if (path is null) return;
 
         IsBusy = true;
         IsProgressIndeterminate = true;
         try
         {
             var csv = ResourceHistoryService.ToCsv(_loaded, CultureInfo.CurrentCulture);
-            await Csv.WriteAsync(dlg.FileName, csv);
-            StatusMessage = $"Exported {_loaded.Count} sample(s) to {Path.GetFileName(dlg.FileName)}.";
-            ToastService.Instance.Show("Resource history exported", Path.GetFileName(dlg.FileName));
+            await Csv.WriteAsync(path, csv);
+            StatusMessage = $"Exported {_loaded.Count} sample(s) to {Path.GetFileName(path)}.";
+            ToastService.Instance.Show("Resource history exported", Path.GetFileName(path));
         }
         catch (IOException ex) { StatusMessage = $"Export failed: {ex.Message}"; }
         catch (UnauthorizedAccessException ex) { StatusMessage = $"Export failed (access denied): {ex.Message}"; }

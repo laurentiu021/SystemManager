@@ -27,6 +27,8 @@ public class FileLockViewModelTests
 
     private static FileLockViewModel NewVm(IFileLockService service) => new(service);
 
+    private static FileLockViewModel NewVm(IDialogService? dialog) => new(new FileLockService(), dialog);
+
     [Fact]
     public void Constructor_Succeeds_WithInitialState()
     {
@@ -347,5 +349,63 @@ public class FileLockViewModelTests
 
         Assert.StartsWith("No file or folder exists at that path.", vm.StatusMessage);
         Assert.False(vm.IsBusy);
+    }
+
+    // ── The picker commands, not just the business logic behind them (#2860) ──
+
+    [Fact]
+    public void Browse_WhenCancelled_LeavesPathUnchanged()
+    {
+        var dialog = Substitute.For<IDialogService>();
+        dialog.PickOpenFiles(Arg.Any<string>(), Arg.Any<string>(), Arg.Any<bool>(), Arg.Any<bool>()).Returns([]);
+        var vm = NewVm(dialog);
+
+        vm.BrowseCommand.Execute(null);
+
+        Assert.Equal("", vm.Path);
+    }
+
+    [Fact]
+    public void Browse_WhenAFileIsPicked_SetsPath()
+    {
+        var dialog = Substitute.For<IDialogService>();
+        dialog.PickOpenFiles(Arg.Any<string>(), Arg.Any<string>(), Arg.Any<bool>(), Arg.Any<bool>())
+            .Returns([@"D:\picked\file.txt"]);
+        var vm = NewVm(dialog);
+
+        vm.BrowseCommand.Execute(null);
+
+        Assert.Equal(@"D:\picked\file.txt", vm.Path);
+    }
+
+    [Fact]
+    public async Task ExportCsvAsync_WhenCancelled_WritesNothing()
+    {
+        var dialog = Substitute.For<IDialogService>();
+        dialog.PickSaveFile(Arg.Any<string>(), Arg.Any<string>()).Returns((string?)null);
+        var vm = NewVm(dialog);
+        var before = vm.StatusMessage;
+
+        await vm.ExportCsvCommand.ExecuteAsync(null);
+
+        Assert.Equal(before, vm.StatusMessage);
+    }
+
+    [Fact]
+    public async Task ExportCsvAsync_WhenAPathIsPicked_WritesTheCsvThere()
+    {
+        var path = Path.Combine(Path.GetTempPath(), "smtest_filelock_" + Guid.NewGuid().ToString("N") + ".csv");
+        var dialog = Substitute.For<IDialogService>();
+        dialog.PickSaveFile(Arg.Any<string>(), Arg.Any<string>()).Returns(path);
+        var vm = NewVm(dialog);
+
+        try
+        {
+            await vm.ExportCsvCommand.ExecuteAsync(null);
+
+            Assert.True(File.Exists(path));
+            Assert.Contains(Path.GetFileName(path), vm.StatusMessage, StringComparison.Ordinal);
+        }
+        finally { File.Delete(path); }
     }
 }

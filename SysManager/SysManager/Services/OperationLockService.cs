@@ -92,7 +92,7 @@ public enum OperationCategory
 /// ViewModels acquire a lock before starting long operations and release it when done.
 /// Conflicting operations (same category) are blocked while one is active.
 /// </summary>
-public sealed partial class OperationLockService : ObservableObject
+public sealed partial class OperationLockService : ObservableObject, IOperationLock
 {
     private static readonly Lazy<OperationLockService> _instance = new(() => new OperationLockService());
     public static OperationLockService Instance => _instance.Value;

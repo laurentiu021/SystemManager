@@ -21,6 +21,15 @@ public static class ServiceRegistration
         // to avoid LineReceived event cross-talk between tabs. All consumers
         // depend on IPowerShellRunner (substitutable in tests via NSubstitute).
         services.AddTransient<IPowerShellRunner, PowerShellRunner>();
+        // These four already manage their own process-wide singleton behind a static Instance,
+        // used directly at hundreds of call sites that do not go through this container — a
+        // factory that resolves to that SAME instance, not AddSingleton<TInterface, TImplementation>(),
+        // which would build a second, disconnected one (fatal for OperationLockService specifically:
+        // two separate lock tables would let two operations run that are each other's exclusion) (#2860).
+        services.AddSingleton<IDialogService>(_ => DialogService.Instance);
+        services.AddSingleton<IOperationLock>(_ => OperationLockService.Instance);
+        services.AddSingleton<IToastService>(_ => ToastService.Instance);
+        services.AddSingleton<IActivityLog>(_ => ActivityLogService.Instance);
         services.AddSingleton<SystemInfoService>();
         // WingetService is Transient so each consuming ViewModel gets its own
         // IPowerShellRunner instance — avoids LineReceived cross-talk when

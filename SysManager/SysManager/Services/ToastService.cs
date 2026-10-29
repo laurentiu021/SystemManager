@@ -8,7 +8,7 @@ using SysManager.Helpers;
 
 namespace SysManager.Services;
 
-public sealed class ToastService
+public sealed class ToastService : IToastService
 {
     private static ToastService? _instance;
     public static ToastService Instance => _instance ??= new ToastService();

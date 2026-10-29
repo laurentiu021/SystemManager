@@ -10,7 +10,7 @@ using SysManager.Models;
 
 namespace SysManager.Services;
 
-public sealed class ActivityLogService
+public sealed class ActivityLogService : IActivityLog
 {
     /// <summary>
     /// How many entries are kept. Raised from 20 once the destructive operations started logging:

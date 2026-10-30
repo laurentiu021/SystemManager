@@ -10,6 +10,19 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.136.22] - 2026-10-30
+
+**Bandwidth Monitor no longer lists every app at 0 bps when SysManager runs without administrator
+rights.**
+
+### Fixed
+- Without administrator rights, which is how SysManager starts, Bandwidth Monitor showed every
+  app's Download and Upload as "0 bps" and its Session total as "0 B", which read as measurements.
+  Those figures come only from precise mode, which needs administrator rights, and the three
+  columns were meant to stay hidden without it. The setting that hides them never reached them,
+  so they showed in every mode. They now show only while precise mode is running. Present since
+  the tab was added in 1.54.0.
+
 ## [1.136.21] - 2026-10-30
 
 **DNS presets and Reset to DHCP work again on a network adapter with IPv6 turned off.**

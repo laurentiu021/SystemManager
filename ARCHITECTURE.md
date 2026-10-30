@@ -2055,6 +2055,13 @@ Key utility classes that don't fit neatly into Services or ViewModels (not an ex
   the same words, which the toast calls. `ArchitectureTests.EveryLiveLine_IsAnnouncedWhenItChanges`
   fails on a line marked live that does not announce, on one that announces without being marked,
   and on a live setting on an element with no automation peer, as the toast's Border was.
+- `BindingProxy` — carries a view's data context, through a resource, to a `DataGridColumn`, which
+  is not in the visual tree and inherits none, so a `RelativeSource`, `ElementName` or data-context
+  binding on one never attaches (#2705). A Freezable in an element's resources does inherit it, so
+  `Data="{Binding}"` there and `Source={StaticResource …}` on the column reach the view model.
+  `ArchitectureTests.EveryBindingOnAColumnItself_ReadsItsSourceThroughAResource` fails on a column
+  property bound any other way; a column's per-row bindings, its `BindingBase` properties, are not
+  read.
 - `WingetTableParser` — parses the fixed-width table output from `winget`
   CLI commands into structured objects. A table ends at the caller's summary
   line, or where a second table starts below it, without that table's heading

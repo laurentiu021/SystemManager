@@ -10,6 +10,23 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.136.11] - 2026-10-30
+
+**Defender's scan exclusions can no longer cover a whole drive, the Windows folder or your own
+files.**
+
+### Fixed
+- The exclusion check accepted any rooted path without wildcards, and `C:\` is one. The folder
+  picker offers a drive, so one confirmation turned off scanning for the whole system drive, and
+  the Windows folder, Program Files, Users, your own folder or Downloads were as easy. Refused
+  now, with the reason on the status line and before any confirmation: a whole drive or network
+  share, the Windows folder and anything in it, and a folder that is or holds Program Files,
+  Program Files (x86), ProgramData, the Users folder, your own folder, Documents, Desktop,
+  Downloads, Pictures, Music, Videos or your temp folder. A folder inside them, such as one game's
+  folder in Program Files, is still allowed. `C:` and `\Windows`, which are rooted but mean
+  "wherever the current folder is", are refused too. The tab and the service share the one rule,
+  and the tab adds only that the folder must exist.
+
 ## [1.136.10] - 2026-10-30
 
 **Undo Changes no longer offers to turn back on a service SysManager's record has outlived.**

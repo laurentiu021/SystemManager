@@ -130,23 +130,77 @@ public sealed class DefenderService
     public Task<DefenderStatus> AddExclusionPathAsync(string path, CancellationToken ct = default)
     {
         // Trust-boundary validation at the service (the UI validates too, but the service
-        // is public): reject empty, non-rooted, and wildcard paths so an over-broad
-        // exclusion ("*", "C:\?") can never weaken Defender, even via a non-UI caller.
-        if (!IsValidExclusionPath(path))
-            throw new ArgumentException("Exclusion path must be a rooted path without wildcards.", nameof(path));
+        // is public), so an over-broad exclusion can never weaken Defender, even via a non-UI caller.
+        if (ExclusionRefusal(path) is { } why)
+            throw new ArgumentException($"\"{path}\" cannot be excluded from scanning: it {why}.", nameof(path));
         return ApplyAndVerifyAsync("param([string]$Path) Add-MpPreference -ExclusionPath $Path", new() { ["Path"] = path }, ct);
     }
 
+    /// <summary>True when <paramref name="path"/> may be excluded from scanning: see <see cref="ExclusionRefusal(string)"/>.</summary>
+    internal static bool IsValidExclusionPath(string path) => ExclusionRefusal(path) is null;
+
     /// <summary>
-    /// A valid exclusion path is non-empty, rooted, free of wildcards, and within the
-    /// Win32 path length limit. Existence is intentionally NOT required here — the path
-    /// may legitimately not exist yet on the service boundary; the UI checks existence.
+    /// Why <paramref name="path"/> may not be excluded from scanning, as the end of a sentence, or null when it may.
+    /// Existence is intentionally not required: the path may not exist yet at the service boundary; the tab checks it.
     /// </summary>
-    internal static bool IsValidExclusionPath(string path)
-        => !string.IsNullOrWhiteSpace(path)
-           && System.IO.Path.IsPathRooted(path)
-           && !path.Contains('*') && !path.Contains('?')
-           && path.Length <= 260;
+    /// <remarks>
+    /// The check used to be only "rooted, no wildcards, at most 260 characters", and <c>C:\</c> passes all of it. The
+    /// folder picker offers a drive, so one confirmation turned off scanning for the whole system drive, and the Windows
+    /// folder, Program Files, Users, the profile or Downloads were as easy (#2773). Refused now: a path that is not
+    /// fully qualified (<c>C:</c> and <c>\Windows</c> are rooted but mean "wherever the current directory is"), a whole
+    /// drive or share, the Windows folder and anything in it, and any folder that is or holds Program Files, ProgramData,
+    /// the folder every account's files are in, the user's own folder, Documents, Desktop, Downloads, Pictures, Music,
+    /// Videos or either temp folder. A folder inside those last ones, such as a game's own folder in Program Files, is
+    /// still allowed: that is what exclusions are for.
+    /// </remarks>
+    internal static string? ExclusionRefusal(string path) => ExclusionRefusal(path, ProtectedFromExclusion());
+
+    /// <summary><see cref="ExclusionRefusal(string)"/> over a given list of folders, so a test can name its own.</summary>
+    internal static string? ExclusionRefusal(
+        string path, IReadOnlyList<(string Name, string? Path, bool ContentsToo)> protectedFolders)
+    {
+        if (string.IsNullOrWhiteSpace(path) || path.Length > 260 || path.Contains('*') || path.Contains('?')
+            || !System.IO.Path.IsPathFullyQualified(path))
+            return "is not a full folder path without wildcards";
+
+        string full;
+        try { full = System.IO.Path.TrimEndingDirectorySeparator(System.IO.Path.GetFullPath(path)); }
+        catch (Exception ex) when (ex is ArgumentException or NotSupportedException or System.IO.PathTooLongException)
+        {
+            return "is not a full folder path without wildcards";
+        }
+
+        if (string.Equals(System.IO.Path.GetPathRoot(full), full, StringComparison.OrdinalIgnoreCase))
+            return "is a whole drive or network share";
+
+        foreach (var (name, folder, contentsToo) in protectedFolders)
+        {
+            if (string.IsNullOrWhiteSpace(folder)) continue;
+            if (Helpers.SystemPaths.IsInsideSubtree(folder, full)) return $"is or holds {name}";
+            if (contentsToo && Helpers.SystemPaths.IsInsideSubtree(full, folder)) return $"is inside {name}";
+        }
+        return null;
+    }
+
+    /// <summary>The folders <see cref="ExclusionRefusal(string)"/> protects, read from this machine on each call.</summary>
+    private static IReadOnlyList<(string Name, string? Path, bool ContentsToo)> ProtectedFromExclusion()
+    {
+        var windows = Environment.GetFolderPath(Environment.SpecialFolder.Windows);
+        var profile = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
+        List<(string, string?, bool)> folders =
+        [
+            ("the Windows folder", windows, true),
+            ("Program Files", Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles), false),
+            ("Program Files (x86)", Environment.GetFolderPath(Environment.SpecialFolder.ProgramFilesX86), false),
+            ("ProgramData", Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData), false),
+            ("the folder every account's files are in",
+                string.IsNullOrEmpty(profile) ? null : System.IO.Path.GetDirectoryName(profile), false),
+            ("your account's folder", profile, false),
+            ("your temp folder", Helpers.SystemPaths.UserTempRoot, false),
+        ];
+        folders.AddRange(Helpers.KnownFolders.UserFolders().Select(f => (f.Name, (string?)f.Path, false)));
+        return folders;
+    }
 
     /// <summary>Remove a folder exclusion. Verifies.</summary>
     public Task<DefenderStatus> RemoveExclusionPathAsync(string path, CancellationToken ct = default)

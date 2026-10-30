@@ -457,4 +457,24 @@ public class DefenderViewModelTests
         }
         finally { Directory.Delete(folder, recursive: true); }
     }
+
+    /// <summary>
+    /// The folder picker offers a drive, and one confirmation used to turn off scanning for the whole system drive
+    /// (#2773). Refused before the confirmation, saying why.
+    /// </summary>
+    [Fact]
+    public async Task AddExclusionAsync_ForAWholeDrive_IsRefused_WithoutAsking()
+    {
+        var drive = Path.GetPathRoot(Environment.GetFolderPath(Environment.SpecialFolder.Windows))!;
+        var picker = Substitute.For<IDialogService>();
+        picker.PickFolder(Arg.Any<string>()).Returns(drive);
+        var vm = NewVm(picker);
+        using var confirm = new DialogAnswer(confirm: true);
+
+        await vm.AddExclusionCommand.ExecuteAsync(null);
+
+        Assert.Equal(0, confirm.Calls);
+        Assert.Equal($"SysManager won't exclude \"{drive}\" from scanning: it is a whole drive or network share, so the "
+            + "files in it would no longer be checked for malware.", vm.StatusMessage);
+    }
 }

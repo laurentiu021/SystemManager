@@ -1799,7 +1799,11 @@ Manage Microsoft Defender without digging through Windows Security:
   allow one
 - **Scan exclusions** — add or remove folders Defender should skip (handy for
   big game libraries); paths are validated and additions never replace your
-  existing exclusions. Windows shows the list only to an administrator, so
+  existing exclusions. A whole drive, the Windows folder or anything in it, and a
+  folder that is or holds Program Files, ProgramData, Users, your own folder,
+  Documents, Desktop, Downloads, Pictures, Music, Videos or a temp folder are
+  refused, and the tab says why; a folder inside them, such as one game's folder
+  in Program Files, is still allowed. Windows shows the list only to an administrator, so
   without elevation the card says the exclusions are hidden rather than showing
   an empty list
 - **Honest about Tamper Protection** — if it's on, Windows can silently ignore

@@ -50,6 +50,20 @@ internal static partial class KnownFolders
     /// <summary>Gets the actual Videos folder path (respects user relocation).</summary>
     public static string GetVideosPath() => GetPath(Videos);
 
+    /// <summary>
+    /// The folders that hold the current user's own files, each with the name Windows gives it: Documents, Desktop,
+    /// Downloads, Pictures, Music and Videos. Read again on each call, so a folder moved during the session counts.
+    /// </summary>
+    internal static IReadOnlyList<(string Name, string Path)> UserFolders() =>
+    [
+        ("Documents", GetDocumentsPath()),
+        ("Desktop", GetDesktopPath()),
+        ("Downloads", GetDownloadsPath()),
+        ("Pictures", GetPicturesPath()),
+        ("Music", GetMusicPath()),
+        ("Videos", GetVideosPath()),
+    ];
+
     private static string GetPath(Guid folderId) => TryGetPath(folderId) ?? Fallback(folderId);
 
     /// <summary>The path of any known folder, by its GUID, or null when Windows does not resolve it.</summary>

@@ -1725,7 +1725,10 @@ Key services:
 - `DefenderService` — Microsoft Defender via the Defender PowerShell module
   (`Get-MpPreference` / `Set-MpPreference` / `Add`/`Remove-MpPreference`) through
   `IPowerShellRunner`. Normalizes the inverted `Disable*` booleans; exclusion paths are
-  bound parameters (never interpolated); every change is verified by reading the value
+  bound parameters (never interpolated) and pass `ExclusionRefusal`, the one rule the tab
+  shares, which refuses a drive or share root, the Windows folder and anything in it, and a
+  folder that is or holds Program Files, ProgramData, Users, the profile, a temp folder or one
+  of `KnownFolders.UserFolders` (#2773); every change is verified by reading the value
   back (Tamper Protection can silently reject). The status read stops if either cmdlet
   fails, so an unread status is reported as unavailable rather than as protection "On".
   Real-time protection is read as set (`Get-MpPreference`) and as it runs

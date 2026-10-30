@@ -152,9 +152,16 @@ public sealed partial class DefenderViewModel : ElevatedViewModelBase
         if (folder is null) return;
 
         string path = folder;
-        if (!IsValidExclusionPath(path))
+        // The service's rule, so the two cannot drift apart; this tab adds only that the folder must exist (#2773).
+        if (DefenderService.ExclusionRefusal(path) is { } why)
         {
-            StatusMessage = "That folder path is not valid.";
+            StatusMessage = $"SysManager won't exclude \"{path}\" from scanning: it {why}, so the files in it would no "
+                + "longer be checked for malware.";
+            return;
+        }
+        if (!Directory.Exists(path))
+        {
+            StatusMessage = $"\"{path}\" was not found, so it was not excluded.";
             return;
         }
         if (!Confirm($"Exclude \"{path}\" from Defender scanning?\n\nFiles in an excluded folder are not scanned for malware.")) return;
@@ -181,13 +188,9 @@ public sealed partial class DefenderViewModel : ElevatedViewModelBase
     private bool CanRemoveExclusion => NotBusy && HasSelectedExclusion;
     partial void OnSelectedExclusionChanged(string? value) => RemoveExclusionCommand.NotifyCanExecuteChanged();
 
-    /// <summary>A valid exclusion is a rooted, existing folder with no wildcards.</summary>
+    /// <summary>A valid exclusion is one the service allows (<see cref="DefenderService.ExclusionRefusal(string)"/>) and an existing folder.</summary>
     internal static bool IsValidExclusionPath(string path)
-        => !string.IsNullOrWhiteSpace(path)
-           && Path.IsPathRooted(path)
-           && !path.Contains('*') && !path.Contains('?')
-           && path.Length <= 260
-           && Directory.Exists(path);
+        => DefenderService.IsValidExclusionPath(path) && Directory.Exists(path);
 
     /// <summary>
     /// The shape all four Defender changes share: gate the UI, take the session restore point before

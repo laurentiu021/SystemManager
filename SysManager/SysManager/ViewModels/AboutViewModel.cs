@@ -413,6 +413,10 @@ public sealed partial class AboutViewModel : ViewModelBase
                 return;
             }
 
+            // Another release than the card held: what was downloaded for that one, or failed to download, is not this
+            // one's. Kept, its file was checked against this release's hash and refused on every Install, while Download
+            // stayed hidden (#2728). A download still running sees the change itself when it ends.
+            if (_latest is { } previous && previous.Tag != latest.Tag && !IsDownloading) ForgetDownload();
             _latest = latest;
             LatestVersionLabel = $"v{latest.Version.ToString(3)}";
             LatestPublishedLabel = latest.PublishedAt == DateTimeOffset.MinValue
@@ -514,6 +518,21 @@ public sealed partial class AboutViewModel : ViewModelBase
     /// <summary>What the tab says about a download the user stopped. Not a failure: nothing went wrong with it.</summary>
     private const string CancelledLine = "Download cancelled. Press Download to start again.";
 
+    /// <summary>What the tab says when a check found another release while a download for the previous one ran.</summary>
+    internal const string NewerReleaseWhileDownloadingLine =
+        "A newer version was found while this one downloaded. Press Download to get it.";
+
+    /// <summary>Lets go of the download for a release the card no longer names, so Download is offered again.</summary>
+    private void ForgetDownload()
+    {
+        DownloadedPath = null;
+        DownloadStatus = string.Empty;
+        DownloadProgressLine = string.Empty;
+        DownloadPercent = 0;
+        AutoDownloadFailed = false;
+        InstallFailed = false;
+    }
+
     /// <summary>Stops the download in flight.</summary>
     [RelayCommand]
     private void CancelDownload()
@@ -530,7 +549,7 @@ public sealed partial class AboutViewModel : ViewModelBase
         // The actual safety boundary, not just ShowDownloadButton hiding the button: a winget-managed copy
         // must never acquire a downloaded file to install, since the whole point is that this copy's exe
         // is winget's to replace, not About's (#2889).
-        if (IsManagedByWinGet || _latest is null || IsDownloading) return;
+        if (IsManagedByWinGet || _latest is not { } release || IsDownloading) return;
         IsDownloading = true;
         AutoDownloadFailed = false;
         InstallFailed = false;
@@ -558,12 +577,19 @@ public sealed partial class AboutViewModel : ViewModelBase
                 }
             });
 
-            var path = await progress.SettleAfterAsync(reporter => _updates.DownloadAsync(_latest, reporter, token));
+            var path = await progress.SettleAfterAsync(reporter => _updates.DownloadAsync(release, reporter, token));
             if (token.IsCancellationRequested)
             {
                 // The service answers a cancellation with null rather than throwing, so this is the live path and
                 // the catch below is for one that throws instead.
                 DownloadStatus = CancelledLine;
+                return;
+            }
+
+            if (!Equals(release, _latest))
+            {
+                // A check found another release while this one downloaded, so the file is not the one the card names.
+                DownloadStatus = NewerReleaseWhileDownloadingLine;
                 return;
             }
 

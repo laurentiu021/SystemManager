@@ -215,12 +215,22 @@ public sealed class UpdateService : IUpdateService
             {
                 var dto = await _http.GetFromJsonAsync<GhRelease>(url, ct).ConfigureAwait(false);
                 if (dto is null) { LastError = "GitHub returned an empty response."; return null; }
+                // A retry that got an answer leaves nothing to report from the attempt before it.
+                LastError = string.Empty;
                 return Map(dto);
             }
-            catch (OperationCanceledException)
+            catch (OperationCanceledException) when (ct.IsCancellationRequested)
             {
                 LastError = "Check cancelled.";
                 return null;
+            }
+            // Not the caller's token, so the client's own timeout, which arrives as the same exception. It read as
+            // "Check cancelled." with no retry, and no caller passes a token, so a timeout was the only way here (#2728).
+            catch (OperationCanceledException)
+            {
+                LastError = "GitHub did not answer in time.";
+                if (attempt == 2) return null;
+                await Task.Delay(800, ct).ConfigureAwait(false);
             }
             catch (HttpRequestException ex)
             {

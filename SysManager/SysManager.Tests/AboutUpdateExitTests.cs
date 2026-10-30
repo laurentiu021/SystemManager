@@ -226,6 +226,85 @@ public sealed class AboutUpdateExitTests : IDisposable
         Assert.StartsWith("Download complete.", vm.DownloadStatus, StringComparison.Ordinal);
     }
 
+    // ── A check that finds another release lets go of the old one's download (#2728) ──────────────
+    //
+    // The card named the newer release while still holding the older one's file. Install checked that file against
+    // the newer release's hash and reported a mismatch every time, while Download and Manual download stayed hidden.
+
+    private static readonly UpdateService.ReleaseInfo Newer =
+        Release with { Version = new Version(99, 0, 1), Tag = "v99.0.1", Name = "SysManager 99.0.1" };
+
+    private void GitHubNowAnswers(UpdateService.ReleaseInfo release) =>
+        _updates.GetLatestAsync(Arg.Any<CancellationToken>()).Returns(Task.FromResult<UpdateService.ReleaseInfo?>(release));
+
+    [Fact]
+    public async Task ACheckThatFindsANewerRelease_LetsGoOfTheOldDownload_AndOffersDownloadAgain()
+    {
+        var vm = await ReadyToInstallAsync();
+        GitHubNowAnswers(Newer);
+
+        await vm.CheckForUpdatesCommand.ExecuteAsync(null);
+
+        Assert.Equal("v99.0.1", vm.LatestVersionLabel);
+        Assert.Null(vm.DownloadedPath);
+        Assert.True(vm.ShowDownloadButton);
+        Assert.False(vm.AutoDownloadFailed);
+        Assert.Equal("", vm.DownloadStatus);
+    }
+
+    [Fact]
+    public async Task ACheckThatFindsANewerRelease_ClearsAFailedDownloadOfTheOldOne()
+    {
+        var vm = NewVm();
+        await vm.CheckForUpdatesCommand.ExecuteAsync(null);
+        _updates.DownloadAsync(Release, Arg.Any<IProgress<(long, long?)>>(), Arg.Any<CancellationToken>())
+            .Returns(Task.FromResult<string?>(null));
+        await vm.DownloadCommand.ExecuteAsync(null);
+        Assert.True(vm.AutoDownloadFailed);   // the premise: the old release's download failed
+        GitHubNowAnswers(Newer);
+
+        await vm.CheckForUpdatesCommand.ExecuteAsync(null);
+
+        Assert.False(vm.AutoDownloadFailed);
+        Assert.Equal("", vm.DownloadStatus);
+        Assert.True(vm.ShowDownloadButton);
+    }
+
+    [Fact]
+    public async Task ACheckThatFindsTheSameRelease_KeepsTheDownload()
+    {
+        var vm = await ReadyToInstallAsync();
+        var file = vm.DownloadedPath;
+
+        await vm.CheckForUpdatesCommand.ExecuteAsync(null);
+
+        Assert.Equal(file, vm.DownloadedPath);
+        Assert.False(vm.ShowDownloadButton);
+    }
+
+    [Fact]
+    public async Task ADownloadThatEndsAfterANewerReleaseWasFound_IsNotOfferedForInstall()
+    {
+        var vm = NewVm();
+        await vm.CheckForUpdatesCommand.ExecuteAsync(null);
+        var file = Path.Combine(_dir, "SysManager-v99.0.0.exe");
+        await File.WriteAllBytesAsync(file, "not a signed PE, just bytes"u8.ToArray());
+        var parked = new TaskCompletionSource<string?>(TaskCreationOptions.RunContinuationsAsynchronously);
+        _updates.DownloadAsync(Release, Arg.Any<IProgress<(long, long?)>>(), Arg.Any<CancellationToken>())
+            .Returns(parked.Task);
+
+        var download = vm.DownloadCommand.ExecuteAsync(null);
+        GitHubNowAnswers(Newer);
+        await vm.CheckForUpdatesCommand.ExecuteAsync(null);
+        parked.SetResult(file);
+        await download;
+
+        Assert.Equal("v99.0.1", vm.LatestVersionLabel);
+        Assert.Equal(AboutViewModel.NewerReleaseWhileDownloadingLine, vm.DownloadStatus);
+        Assert.Null(vm.DownloadedPath);
+        Assert.True(vm.ShowDownloadButton);
+    }
+
     [Fact]
     public async Task AFileThatIsGone_IsLetGo_AndDownloadComesBack()
     {

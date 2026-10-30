@@ -10,6 +10,26 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.136.14] - 2026-10-30
+
+**A newer release found after a download no longer makes Install fail with a SHA256 mismatch,
+and an update check that times out says so instead of "Check cancelled."**
+
+### Fixed
+- About kept the file downloaded for one release after a later check found a newer one. The
+  card named the new release, Download stayed hidden because a file was already there, and
+  Install checked the old file against the new release's published hash and reported "SHA256
+  mismatch — file may be corrupted" every time, until SysManager was restarted. A check that
+  finds another release now lets that download go, and a failed download of the old one too,
+  so Download is offered again. A download that was still running when the newer release was
+  found says so when it ends instead of offering its file for Install. Present since the About
+  tab gained Download and Install in 0.5.0.
+- An update check that GitHub did not answer within 15 seconds read "Check cancelled." and was
+  not tried again, although the check promises one retry for a failure like that. It is now
+  tried once more, and if that times out too it says GitHub did not answer in time. Only a
+  check that was really cancelled still says so. A check that succeeded on its second try no
+  longer keeps the first try's error.
+
 ## [1.136.13] - 2026-10-30
 
 **The Ookla speed test runs again. Its program is now checked against Ookla's exact release

@@ -2328,7 +2328,10 @@ offers, "rate us" prompts:
 - Discreet banner in the main window when a check finds a newer version.
 - **A check that cannot reach GitHub keeps what the last one found.** An update already found,
   with its Download or Install button, stays where it is and the failure is reported beside it,
-  instead of the whole card disappearing until a later check succeeds.
+  instead of the whole card disappearing until a later check succeeds. A check that GitHub does
+  not answer in time is tried once more, and then says GitHub did not answer.
+- **A check that finds a newer release than the one downloaded lets the old file go**, so Download
+  is offered for the new one. The same happens when a newer release is found while a download runs.
 - **Download** fetches the new build in the background with a progress bar, and **Cancel**
   beside it stops one you no longer want. A download that stops receiving data gives up after
   thirty seconds rather than leaving the bar frozen, and either way SysManager says what

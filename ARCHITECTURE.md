@@ -1850,8 +1850,11 @@ Key services:
   cannot be read or used is not taken as 7 days: `PruneWindowDays` keeps what the longest option
   would until the user chooses again. Strictly local — no system writes, nothing leaves the machine.
 - Bandwidth Monitor sources — `IBandwidthMonitorService` is the seam with two implementations:
-  `ConnectionBandwidthSource` (default, no admin) sums `NetworkInterface` byte counters for total
-  throughput and reads the extended TCP tables for IPv4 and IPv6 via iphlpapi P/Invoke
+  `ConnectionBandwidthSource` (default, no admin) takes total throughput from `GetIfTable2`: the
+  pure `CountedAdapters` keeps the hardware adapters that are up, so a VPN, Hyper-V or hotspot
+  adapter does not count their traffic again, and `Transferred` adds each adapter's own difference,
+  so one that reconnects is only remembered (#2706). It reads the extended TCP tables for IPv4 and
+  IPv6 via iphlpapi P/Invoke
   (`GetExtendedTcpTable`, connected sockets only) to attribute connections to other machines to PIDs.
   The pure `ReadTcpTable` parses both row layouts and leaves out listeners and connections to this PC;
   UDP is not read, since it has no connections to count (#2706). `EtwBandwidthSource` (admin) opens

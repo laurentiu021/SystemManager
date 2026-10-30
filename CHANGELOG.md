@@ -10,6 +10,23 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.136.25] - 2026-10-30
+
+**Bandwidth Monitor's download and upload figures no longer double while a VPN is on, and no
+longer jump when Wi-Fi reconnects.**
+
+### Fixed
+- Without administrator rights, the download and upload figures added up every network adapter
+  that was on. A VPN adapter carries the same traffic as the Wi-Fi or Ethernet adapter it runs
+  over, and so does the virtual adapter of Hyper-V, WSL or Mobile hotspot, so while one was in use
+  the figures, the chart, the saved history and the speed alert showed about twice the real speed.
+  They now count the PC's physical adapters, which carry every byte that leaves it.
+- When an adapter came back, a cable plugged in, Wi-Fi or a VPN reconnecting, everything it had
+  ever carried was counted in one second, so the download figure jumped to gigabytes, the chart
+  rescaled around it, the alert could go off, and the spike could be saved as the peak of the
+  range. Each adapter now counts only what it moved since the last reading. Both were present
+  since the tab was added in 1.54.0.
+
 ## [1.136.24] - 2026-10-30
 
 **The diagnostic log keeps error messages whole again, and no longer lets a user name through

@@ -4,6 +4,7 @@
 
 using System.Buffers.Binary;
 using System.Net;
+using System.Runtime.InteropServices;
 using SysManager.Services;
 
 namespace SysManager.Tests;
@@ -166,5 +167,144 @@ public class ConnectionBandwidthSourceTests
         Assert.Equal([(300, 443)], ConnectionBandwidthSource.ReadTcpTable(Table(3, row), ipv6));
         Assert.Empty(ConnectionBandwidthSource.ReadTcpTable([], ipv6));
         Assert.Empty(ConnectionBandwidthSource.ReadTcpTable([1, 0], ipv6));
+    }
+
+    // ── the totals: each hardware adapter's own difference (#2706) ──
+    //
+    // The totals were the difference between two sums over every adapter that was up. A VPN, Hyper-V or hotspot
+    // adapter counted again what the physical one carried, and an adapter that came back brought its whole lifetime
+    // counter into one second.
+
+    private static ConnectionBandwidthSource.AdapterCounters Adapter(
+        ulong luid, uint type = 6, bool up = true, bool hardware = false, bool filter = false,
+        ulong received = 0, ulong sent = 0) =>
+        new(luid, type, up, hardware, filter, received, sent);
+
+    [Fact]
+    public void TheTotals_CountTheHardwareAdapter_AndNothingThatCarriesItsTrafficAgain()
+    {
+        var ethernet = Adapter(1, type: 6, hardware: true, received: 9_000);
+        IReadOnlyList<ConnectionBandwidthSource.AdapterCounters> adapters =
+        [
+            ethernet,
+            Adapter(2, type: 6, filter: true, received: 9_000),     // a filter layer over the Ethernet adapter
+            Adapter(3, type: 53, received: 4_000),                  // OpenVPN TAP or WireGuard (Wintun)
+            Adapter(4, type: 23, received: 4_000),                  // Windows' own VPN (PPP)
+            Adapter(5, type: 6, received: 2_000),                   // vEthernet for Hyper-V or WSL
+            Adapter(6, type: 24),                                   // loopback
+            Adapter(7, type: 71, up: false, hardware: true),        // Wi-Fi, not connected
+        ];
+
+        Assert.Equal([ethernet], ConnectionBandwidthSource.CountedAdapters(adapters));
+    }
+
+    [Fact]
+    public void OnAPcWithNoHardwareAdapterUp_TheTotalsCountTheOtherAdaptersThatAreUp()
+    {
+        var guestNic = Adapter(1, type: 6, received: 1_000);
+        IReadOnlyList<ConnectionBandwidthSource.AdapterCounters> adapters =
+        [
+            guestNic,
+            Adapter(2, type: 6, filter: true, received: 1_000),
+            Adapter(3, type: 24),
+            Adapter(4, type: 131),
+            Adapter(5, type: 6, up: false),
+        ];
+
+        Assert.Equal([guestNic], ConnectionBandwidthSource.CountedAdapters(adapters));
+    }
+
+    [Fact]
+    public void Transferred_IsEachAdaptersOwnDifference_AndNothingForOneThatJustAppeared()
+    {
+        var before = new Dictionary<ulong, (ulong Received, ulong Sent)> { [1] = (1_000, 500) };
+        var after = new Dictionary<ulong, (ulong Received, ulong Sent)>
+        {
+            [1] = (1_600, 700),
+            [2] = (5_000_000_000, 4_000_000_000),   // reconnected: its lifetime counter
+        };
+
+        Assert.Equal((600L, 200L), ConnectionBandwidthSource.Transferred(before, after));
+    }
+
+    [Fact]
+    public void Transferred_ForACounterThatWentDown_OrAnAdapterThatLeft_CountsNothingForIt()
+    {
+        var before = new Dictionary<ulong, (ulong Received, ulong Sent)>
+        {
+            [1] = (5_000, 5_000),
+            [2] = (8_000, 8_000),
+        };
+        var after = new Dictionary<ulong, (ulong Received, ulong Sent)> { [1] = (100, 6_000) };
+
+        Assert.Equal((0L, 1_000L), ConnectionBandwidthSource.Transferred(before, after));
+    }
+
+    /// <summary>A clock that moves only when told to.</summary>
+    private sealed class TestClock : TimeProvider
+    {
+        private long _ticks;
+
+        public override long TimestampFrequency => TimeSpan.TicksPerSecond;
+        public override long GetTimestamp() => _ticks;
+
+        public void Advance(TimeSpan by) => _ticks += by.Ticks;
+    }
+
+    /// <summary>A source whose adapters are what the test says, with no connections.</summary>
+    private sealed class FakeAdapters(TimeProvider clock) : ConnectionBandwidthSource(clock)
+    {
+        public List<AdapterCounters> Adapters { get; set; } = [];
+
+        protected override IReadOnlyList<AdapterCounters> ReadAdapters() => Adapters;
+
+        protected override IReadOnlyList<ConnectionRow> EnumerateConnections() => [];
+    }
+
+    [Fact]
+    public async Task ASecond_InWhichAWifiAdapterReconnects_ReadsWhatTheAdaptersMoved_NotTheirLifetime()
+    {
+        var clock = new TestClock();
+        var source = new FakeAdapters(clock);
+        source.Adapters = [Adapter(1, hardware: true, received: 10_000, sent: 4_000)];
+        source.Start();
+
+        clock.Advance(TimeSpan.FromSeconds(1));
+        source.Adapters =
+        [
+            Adapter(1, hardware: true, received: 12_000, sent: 5_000),
+            Adapter(2, type: 71, hardware: true, received: 7_000_000_000, sent: 3_000_000_000),
+        ];
+        var reconnected = await source.SampleAsync();
+
+        clock.Advance(TimeSpan.FromSeconds(1));
+        source.Adapters =
+        [
+            Adapter(1, hardware: true, received: 13_000, sent: 5_500),
+            Adapter(2, type: 71, hardware: true, received: 7_000_004_000, sent: 3_000_001_000),
+        ];
+        var next = await source.SampleAsync();
+
+        Assert.Equal((2_000.0, 1_000.0), (reconnected.TotalDownBytesPerSec, reconnected.TotalUpBytesPerSec));
+        Assert.Equal((5_000.0, 1_500.0), (next.TotalDownBytesPerSec, next.TotalUpBytesPerSec));
+    }
+
+    [Fact]
+    public void TheAdapterRow_HasTheLayoutWindowsGivesIt()
+    {
+        // MIB_IF_ROW2 from netioapi.h: the counters and flags are read by position, so a field out of place reads
+        // another field's bytes.
+        Assert.Equal(1352, Marshal.SizeOf<ConnectionBandwidthSource.NativeAdapters.MibIfRow2>());
+        Assert.Equal([1128, 1152, 1156, 1208, 1280],
+        [
+            Offset(nameof(ConnectionBandwidthSource.NativeAdapters.MibIfRow2.Type)),
+            Offset(nameof(ConnectionBandwidthSource.NativeAdapters.MibIfRow2.InterfaceAndOperStatusFlags)),
+            Offset(nameof(ConnectionBandwidthSource.NativeAdapters.MibIfRow2.OperStatus)),
+            Offset(nameof(ConnectionBandwidthSource.NativeAdapters.MibIfRow2.InOctets)),
+            Offset(nameof(ConnectionBandwidthSource.NativeAdapters.MibIfRow2.OutOctets)),
+        ]);
+
+        static int Offset(string field) =>
+            (int)Marshal.OffsetOf<ConnectionBandwidthSource.NativeAdapters.MibIfRow2>(field);
     }
 }

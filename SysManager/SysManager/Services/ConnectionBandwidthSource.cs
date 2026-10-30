@@ -4,7 +4,6 @@
 
 using System.Buffers.Binary;
 using System.Net;
-using System.Net.NetworkInformation;
 using System.Runtime.InteropServices;
 using Serilog;
 using SysManager.Models;
@@ -14,9 +13,9 @@ namespace SysManager.Services;
 /// <summary>
 /// The default, no-administrator bandwidth source. It combines two OS signals:
 /// <list type="bullet">
-/// <item><b>Accurate machine-wide throughput</b> — summed byte counters across all operational,
-/// non-loopback network interfaces (<see cref="NetworkInterface.GetIPStatistics"/>), turned into
-/// per-second rates by delta between polls.</item>
+/// <item><b>Accurate machine-wide throughput</b> — the byte counters of the hardware network adapters
+/// (<c>GetIfTable2</c>, iphlpapi), each adapter's own difference between polls, turned into per-second
+/// rates.</item>
 /// <item><b>Per-process attribution by connection</b> — the extended TCP tables for IPv4 and IPv6
 /// (<c>GetExtendedTcpTable</c>, iphlpapi) map every connected socket to its owning PID, so the tab can
 /// show WHICH apps are talking, to which remote ports, and how many connections each holds.</item>
@@ -39,16 +38,24 @@ public class ConnectionBandwidthSource : IBandwidthMonitorService
     public BandwidthMode Mode => BandwidthMode.Connections;
     public bool IsAvailable { get; private set; }
 
-    private long _prevBytesReceived;
-    private long _prevBytesSent;
+    /// <summary>
+    /// The clock the rates are timed by. Injectable so a test decides how much time a sample covers; production
+    /// passes nothing and gets <see cref="TimeProvider.System"/>, as <see cref="EtwBandwidthSource"/> does.
+    /// </summary>
+    private readonly TimeProvider _time;
+    private Dictionary<ulong, (ulong Received, ulong Sent)> _prevCounters = [];
     private long _prevTimestampTicks;
     private bool _primed;
+
+    /// <summary>Creates the source; nothing is read until <see cref="Start"/>.</summary>
+    /// <param name="timeProvider">Test seam; defaults to the system clock.</param>
+    public ConnectionBandwidthSource(TimeProvider? timeProvider = null) => _time = timeProvider ?? TimeProvider.System;
 
     public bool Start()
     {
         // Prime the counters so the first SampleAsync reports a real delta rather than a spike
         // from process start. Always available — no admin, no external dependency.
-        (_prevBytesReceived, _prevBytesSent) = ReadInterfaceTotals();
+        _prevCounters = CountedCounters();
         _prevTimestampTicks = NowTicks();
         _primed = true;
         IsAvailable = true;
@@ -61,9 +68,9 @@ public class ConnectionBandwidthSource : IBandwidthMonitorService
     /// <remarks>
     /// <para>Getting this off the UI thread is the point, and it now happens ONCE, in
     /// <c>BandwidthMonitorViewModel.PollOnceAsync</c>. The work here is not bounded by a small constant:
-    /// enumerating all network interfaces and reading per-interface IP statistics, two native TCP
-    /// table queries, one per address family, and a <c>Process.GetProcessById</c> for each PID not yet
-    /// in the name cache. A machine with many adapters or a browser holding dozens of sockets pays for
+    /// the table of every adapter's counters, two native TCP table queries, one per address family, and a
+    /// <c>Process.GetProcessById</c> for each PID not yet in the name cache. A machine with many adapters
+    /// or a browser holding dozens of sockets pays for
     /// all of it, so running it inline made the window stutter continuously for as long as the tab was
     /// open (1.61.9).</para>
     /// <para>This method used to wrap itself in <c>Task.Run</c>. That fixed this source and left its
@@ -87,15 +94,15 @@ public class ConnectionBandwidthSource : IBandwidthMonitorService
     /// </summary>
     private BandwidthSnapshot SampleCore()
     {
-        var (rx, tx) = ReadInterfaceTotals();
+        var counters = CountedCounters();
         long nowTicks = NowTicks();
         double elapsed = Math.Max(0, (nowTicks - _prevTimestampTicks) / (double)TimeSpan.TicksPerSecond);
 
-        double down = BandwidthFormat.RatePerSecond(_prevBytesReceived, rx, elapsed);
-        double up = BandwidthFormat.RatePerSecond(_prevBytesSent, tx, elapsed);
+        var (received, sent) = Transferred(_prevCounters, counters);
+        double down = BandwidthFormat.RatePerSecond(0, received, elapsed);
+        double up = BandwidthFormat.RatePerSecond(0, sent, elapsed);
 
-        _prevBytesReceived = rx;
-        _prevBytesSent = tx;
+        _prevCounters = counters;
         _prevTimestampTicks = nowTicks;
 
         var processes = AggregateConnections(EnumerateConnections());
@@ -161,28 +168,76 @@ public class ConnectionBandwidthSource : IBandwidthMonitorService
         return rows;
     }
 
-    /// <summary>Sums received/sent byte counters across all up, non-loopback interfaces.</summary>
-    private static (long Rx, long Tx) ReadInterfaceTotals()
+    /// <summary>One network interface as <c>GetIfTable2</c> reports it, with what the totals need.</summary>
+    protected internal readonly record struct AdapterCounters(
+        ulong Luid, uint Type, bool IsUp, bool IsHardware, bool IsFilter, ulong Received, ulong Sent);
+
+    /// <summary>
+    /// Every network interface and its byte counters. Virtual so tests can substitute a fixed set without the native
+    /// table; never throws, and a failed read is no interfaces.
+    /// </summary>
+    protected virtual IReadOnlyList<AdapterCounters> ReadAdapters() => NativeAdapters.Read();
+
+    /// <summary>The counters of the adapters <see cref="CountedAdapters"/> picks, by interface.</summary>
+    private Dictionary<ulong, (ulong Received, ulong Sent)> CountedCounters()
     {
-        long rx = 0, tx = 0;
-        try
-        {
-            foreach (var nic in NetworkInterface.GetAllNetworkInterfaces())
-            {
-                if (nic.OperationalStatus != OperationalStatus.Up) continue;
-                if (nic.NetworkInterfaceType is NetworkInterfaceType.Loopback or NetworkInterfaceType.Tunnel) continue;
-                var stats = nic.GetIPStatistics();
-                rx += stats.BytesReceived;
-                tx += stats.BytesSent;
-            }
-        }
-        catch (NetworkInformationException ex) { Log.Debug("Bandwidth: interface totals read failed: {Error}", ex.Message); }
-        return (rx, tx);
+        var counters = new Dictionary<ulong, (ulong Received, ulong Sent)>();
+        foreach (var adapter in CountedAdapters(ReadAdapters()))
+            counters[adapter.Luid] = (adapter.Received, adapter.Sent);
+        return counters;
     }
 
-    // Monotonic clock for the rate window. Environment.TickCount64 (not DateTime.Now) so a system
-    // clock change or DST shift can't produce a negative/huge elapsed and thus a bogus rate.
-    private static long NowTicks() => Environment.TickCount64 * TimeSpan.TicksPerMillisecond;
+    // IF_TYPE_SOFTWARE_LOOPBACK and IF_TYPE_TUNNEL.
+    private const uint LoopbackType = 24;
+    private const uint TunnelType = 131;
+
+    /// <summary>
+    /// The adapters whose counters make up the machine's totals: the hardware ones that are up, or, on a PC with none,
+    /// every one that is up other than a loopback, a tunnel or a filter.
+    /// </summary>
+    /// <remarks>
+    /// Every adapter that was up was counted. A VPN adapter carries, decrypted, the traffic the Wi-Fi or Ethernet
+    /// adapter carries encrypted, and a Hyper-V or WSL adapter, or Mobile hotspot, carries again what the physical one
+    /// carries, so while one was in use the totals, the chart, the saved history and the alert showed about twice the
+    /// real rate (#2706). The hardware adapter carries every byte on the wire. A filter interface is a layer Windows
+    /// stacks on an adapter, with the adapter's own counters, so it is never counted.
+    /// </remarks>
+    internal static IReadOnlyList<AdapterCounters> CountedAdapters(IReadOnlyList<AdapterCounters> adapters)
+    {
+        var hardware = adapters.Where(a => a.IsUp && a.IsHardware && !a.IsFilter).ToList();
+        return hardware.Count > 0
+            ? hardware
+            : [.. adapters.Where(a => a.IsUp && !a.IsFilter && a.Type is not (LoopbackType or TunnelType))];
+    }
+
+    /// <summary>
+    /// The bytes received and sent between two readings of the counted adapters: each adapter's own difference, for an
+    /// adapter counted in both.
+    /// </summary>
+    /// <remarks>
+    /// The rate was the difference between two sums over the adapters up at the time. An adapter that came back, a
+    /// cable plugged in, Wi-Fi or a VPN reconnecting, brought its whole lifetime counter into the sum at once, and that
+    /// second read gigabytes, which rescaled the chart, set off the alert and could be saved as the range's peak
+    /// (#2706). An adapter seen for the first time is only remembered, and one whose counter went down, because it was
+    /// reset, counts nothing that time.
+    /// </remarks>
+    internal static (long Received, long Sent) Transferred(
+        IReadOnlyDictionary<ulong, (ulong Received, ulong Sent)> before,
+        IReadOnlyDictionary<ulong, (ulong Received, ulong Sent)> after)
+    {
+        ulong received = 0, sent = 0;
+        foreach (var (luid, now) in after)
+        {
+            if (!before.TryGetValue(luid, out var then)) continue;
+            if (now.Received > then.Received) received += now.Received - then.Received;
+            if (now.Sent > then.Sent) sent += now.Sent - then.Sent;
+        }
+        return ((long)Math.Min(received, long.MaxValue), (long)Math.Min(sent, long.MaxValue));
+    }
+
+    // The monotonic reading of the clock, as EtwBandwidthSource takes it: a wall clock steps back on a
+    // correction and would make a negative or huge window.
+    private long NowTicks() => _time.GetElapsedTime(0, _time.GetTimestamp()).Ticks;
 
     // Nothing unmanaged to release — the interface totals and native tables are read per-poll and
     // freed immediately. Present to satisfy IBandwidthMonitorService : IDisposable.
@@ -273,6 +328,103 @@ public class ConnectionBandwidthSource : IBandwidthMonitorService
         int lo = raw & 0xFF;
         int hi = (raw >> 8) & 0xFF;
         return (lo << 8) | hi;
+    }
+
+    // ── Native adapter counters (iphlpapi) ───────────────────────────────────
+    internal static class NativeAdapters
+    {
+        private const int IfOperStatusUp = 1;
+        // InterfaceAndOperStatusFlags: HardwareInterface is bit 0, FilterInterface bit 1.
+        private const byte HardwareInterface = 0x01;
+        private const byte FilterInterface = 0x02;
+        // MIB_IF_TABLE2 is a ULONG count and then the rows, which the 64-bit counters align to 8.
+        private const int RowsOffset = 8;
+
+        /// <summary>Every interface in <c>GetIfTable2</c>, or none when Windows does not give the table.</summary>
+        internal static List<AdapterCounters> Read()
+        {
+            var adapters = new List<AdapterCounters>();
+            try
+            {
+                if (NativeMethods.GetIfTable2(out var table) != 0) return adapters;
+                try
+                {
+                    var count = Marshal.ReadInt32(table);
+                    var size = Marshal.SizeOf<MibIfRow2>();
+                    for (var i = 0; i < count; i++)
+                    {
+                        var row = Marshal.PtrToStructure<MibIfRow2>(table + RowsOffset + (i * size));
+                        adapters.Add(new AdapterCounters(row.InterfaceLuid, row.Type, row.OperStatus == IfOperStatusUp,
+                            (row.InterfaceAndOperStatusFlags & HardwareInterface) != 0,
+                            (row.InterfaceAndOperStatusFlags & FilterInterface) != 0,
+                            row.InOctets, row.OutOctets));
+                    }
+                }
+                finally { NativeMethods.FreeMibTable(table); }
+            }
+            catch (Exception ex) when (ex is DllNotFoundException or EntryPointNotFoundException)
+            {
+                Log.Debug("Bandwidth: adapter counters could not be read: {Error}", ex.Message);
+            }
+            return adapters;
+        }
+
+        /// <summary><c>MIB_IF_ROW2</c>, field for field, 1352 bytes.</summary>
+        [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)]
+        internal struct MibIfRow2
+        {
+            public ulong InterfaceLuid;
+            public uint InterfaceIndex;
+            public Guid InterfaceGuid;
+            [MarshalAs(UnmanagedType.ByValTStr, SizeConst = 257)] public string Alias;
+            [MarshalAs(UnmanagedType.ByValTStr, SizeConst = 257)] public string Description;
+            public uint PhysicalAddressLength;
+            [MarshalAs(UnmanagedType.ByValArray, SizeConst = 32)] public byte[] PhysicalAddress;
+            [MarshalAs(UnmanagedType.ByValArray, SizeConst = 32)] public byte[] PermanentPhysicalAddress;
+            public uint Mtu;
+            public uint Type;
+            public int TunnelType;
+            public int MediaType;
+            public int PhysicalMediumType;
+            public int AccessType;
+            public int DirectionType;
+            public byte InterfaceAndOperStatusFlags;
+            public int OperStatus;
+            public int AdminStatus;
+            public int MediaConnectState;
+            public Guid NetworkGuid;
+            public int ConnectionType;
+            public ulong TransmitLinkSpeed;
+            public ulong ReceiveLinkSpeed;
+            public ulong InOctets;
+            public ulong InUcastPkts;
+            public ulong InNUcastPkts;
+            public ulong InDiscards;
+            public ulong InErrors;
+            public ulong InUnknownProtos;
+            public ulong InUcastOctets;
+            public ulong InMulticastOctets;
+            public ulong InBroadcastOctets;
+            public ulong OutOctets;
+            public ulong OutUcastPkts;
+            public ulong OutNUcastPkts;
+            public ulong OutDiscards;
+            public ulong OutErrors;
+            public ulong OutUcastOctets;
+            public ulong OutMulticastOctets;
+            public ulong OutBroadcastOctets;
+            public ulong OutQLen;
+        }
+
+        private static class NativeMethods
+        {
+            // No A/W variants (not string functions) → no EntryPoint suffix needed.
+            [DllImport("iphlpapi.dll")]
+            public static extern int GetIfTable2(out IntPtr table);
+
+            [DllImport("iphlpapi.dll")]
+            public static extern void FreeMibTable(IntPtr memory);
+        }
     }
 
     // ── Native TCP table enumeration (iphlpapi) ─────────────────────────────

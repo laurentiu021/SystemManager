@@ -1182,7 +1182,9 @@ Answers "what is actually using my space?" by listing the biggest files in one p
 ### Bandwidth Monitor
 - **See your network usage at a glance** — live total download and upload speed
   with a rolling throughput chart (the last ~2 minutes), so you can spot a sudden
-  upload (a background sync, an update, something unexpected) the moment it starts
+  upload (a background sync, an update, something unexpected) the moment it starts. The
+  figures come from the PC's physical network adapters, so a VPN or a virtual machine's adapter
+  does not count the same traffic twice
 - **Who's using the network** — a per-app list showing which programs are talking (the 40 busiest),
   how many connections to other machines each holds, over IPv4 and IPv6, and the remote ports
   involved. A program that is only listening, or only talking to another program on the same PC,

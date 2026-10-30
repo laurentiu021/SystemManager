@@ -1562,7 +1562,8 @@ Answers "what is actually using my space?" by listing the biggest files in one p
   **ad/malware/family-blocking variants**
   (Cloudflare 1.1.1.2 malware / 1.1.1.3 family, AdGuard DNS ad-blocking + family,
   OpenDNS FamilyShield), each with a description of what it blocks. **IPv6
-  resolvers** are configured automatically alongside IPv4. The change goes to the adapter
+  resolvers** are configured automatically alongside IPv4, and on an adapter with IPv6 turned
+  off, only the IPv4 pair is set. The change goes to the adapter
   Windows sends its traffic through, the one whose DNS servers it asks, and the confirmation
   names it as Windows does, such as "Wi-Fi". Preset changes and
   reset to automatic (DHCP) are confirmed, then verify the captured adapter and

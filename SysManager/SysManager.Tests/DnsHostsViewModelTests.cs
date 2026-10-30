@@ -158,6 +158,21 @@ public class DnsHostsViewModelGateTests
             PSObject.AsPSObject("IDENTITY=Verified"),
         };
 
+    // An adapter with IPv6 turned off, which has no IPv6 DNS settings at all (#2709).
+    private static Collection<PSObject> Ipv6OffCaptureResult() =>
+        new()
+        {
+            PSObject.AsPSObject("IFINDEX=12"),
+            PSObject.AsPSObject($"IFGUID={TestInterfaceGuid}"),
+            PSObject.AsPSObject("IFNAME=Ethernet"),
+            PSObject.AsPSObject("SOURCE_IPv4=Static"),
+            PSObject.AsPSObject("IPv4=8.8.8.8"),
+            PSObject.AsPSObject("COMPLETE=IPv4"),
+            PSObject.AsPSObject("SOURCE_IPv6=Absent"),
+            PSObject.AsPSObject("COMPLETE=IPv6"),
+            PSObject.AsPSObject("IDENTITY=Verified"),
+        };
+
     private static (DnsHostsViewModel vm, string hostsPath, string dir, IPowerShellRunner runner) NewVm()
     {
         var dir = Path.Combine(Path.GetTempPath(), "smtest_dnsgate_" + Guid.NewGuid().ToString("N"));
@@ -1555,6 +1570,123 @@ public class DnsHostsViewModelGateTests
                     message.Contains("IPv4 automatic (DHCP)") &&
                     !message.Contains("192.0.2.53")),
                 "Confirm DNS Reset");
+        }
+        finally
+        {
+            DialogService.Instance = previousDialog;
+            DeleteTestDirectory(dir);
+        }
+    }
+
+    // ── an adapter with IPv6 turned off (#2709) ───────────────────────────
+    //
+    // Its snapshot stopped at the IPv6 read, so a preset ended in "Failed to set DNS", Reset to DHCP in "Failed to
+    // reset DNS", and neither changed anything.
+
+    [StaFact]
+    public async Task ApplyDns_OnAnAdapterWithIpv6TurnedOff_SaysOnlyTheIpv4ServersAreSet()
+    {
+        var (vm, _, dir, runner) = NewVm();
+        runner.RunAsync(
+                Arg.Any<string>(), Arg.Any<IDictionary<string, object?>?>(), Arg.Any<CancellationToken>())
+            .Returns(Task.FromResult(Ipv6OffCaptureResult()));
+        var previousDialog = DialogService.Instance;
+        var dialog = Substitute.For<IDialogService>();
+        dialog.Confirm(Arg.Any<string>(), Arg.Any<string>()).Returns(false);
+        DialogService.Instance = dialog;
+        try
+        {
+            vm.SelectedPreset = vm.Presets.First(p => p.Name == "Cloudflare");
+
+            await vm.ApplyDnsCommand.ExecuteAsync(null);
+
+            dialog.Received(1).Confirm(
+                Arg.Is<string>(message => message != null &&
+                    message.StartsWith(
+                        "Change DNS on the network adapter \"Ethernet\" to Cloudflare (1.1.1.1, 1.0.0.1)?",
+                        StringComparison.Ordinal) &&
+                    message.Contains("IPv6 is turned off on this adapter, so only the IPv4 servers are set.") &&
+                    message.Contains("Previous setting: IPv4 static: 8.8.8.8; IPv6 turned off.") &&
+                    !message.Contains("+ IPv6")),
+                "Confirm DNS Change");
+        }
+        finally
+        {
+            DialogService.Instance = previousDialog;
+            DeleteTestDirectory(dir);
+        }
+    }
+
+    [StaFact]
+    public async Task ApplyDns_OnAnAdapterWithIpv6TurnedOff_SetsIpv4_AndUndoRestoresIpv4Alone()
+    {
+        var (vm, _, dir, runner) = NewVm();
+        runner.RunAsync(
+                Arg.Any<string>(), Arg.Any<IDictionary<string, object?>?>(), Arg.Any<CancellationToken>())
+            .Returns(callInfo => Task.FromResult(
+                callInfo.ArgAt<string>(0).Contains("IFGUID=", StringComparison.Ordinal)
+                    ? Ipv6OffCaptureResult()
+                    : new Collection<PSObject>()));
+        var previousDialog = DialogService.Instance;
+        var dialog = Substitute.For<IDialogService>();
+        dialog.Confirm(Arg.Any<string>(), Arg.Any<string>()).Returns(true);
+        DialogService.Instance = dialog;
+        try
+        {
+            vm.SelectedPreset = vm.Presets.First(p => p.Name == "Cloudflare");
+
+            await vm.ApplyDnsCommand.ExecuteAsync(null);
+
+            Assert.Equal("DNS set to Cloudflare (1.1.1.1, 1.0.0.1).", vm.StatusMessage);
+            Assert.True(vm.CanRestorePreviousDns);
+
+            await vm.RestorePreviousDnsCommand.ExecuteAsync(null);
+
+            Assert.StartsWith("DNS restored to previous setting", vm.StatusMessage, StringComparison.Ordinal);
+            var mutations = runner.ReceivedCalls()
+                .Select(call => call.GetArguments()[0] as string)
+                .Where(script => script?.Contains(
+                    "Set-DnsClientServerAddress", StringComparison.Ordinal) == true)
+                .ToList();
+            Assert.Equal(2, mutations.Count);
+            Assert.Contains("-ServerAddresses @(\"1.1.1.1\",\"1.0.0.1\")", mutations[0]);
+            Assert.DoesNotContain("2606:4700", mutations[0]);
+            Assert.Contains(
+                "-AddressFamily IPv4 -ErrorAction Stop | Set-DnsClientServerAddress -ResetServerAddresses",
+                mutations[1]);
+            Assert.Contains("| Set-DnsClientServerAddress -ServerAddresses @(\"8.8.8.8\")", mutations[1]);
+        }
+        finally
+        {
+            DialogService.Instance = previousDialog;
+            DeleteTestDirectory(dir);
+        }
+    }
+
+    [StaFact]
+    public async Task ResetDns_OnAnAdapterWithIpv6TurnedOff_Resets()
+    {
+        var (vm, _, dir, runner) = NewVm();
+        runner.RunAsync(
+                Arg.Any<string>(), Arg.Any<IDictionary<string, object?>?>(), Arg.Any<CancellationToken>())
+            .Returns(callInfo => Task.FromResult(
+                callInfo.ArgAt<string>(0).Contains("IFGUID=", StringComparison.Ordinal)
+                    ? Ipv6OffCaptureResult()
+                    : new Collection<PSObject>()));
+        var previousDialog = DialogService.Instance;
+        var dialog = Substitute.For<IDialogService>();
+        dialog.Confirm(Arg.Any<string>(), Arg.Any<string>()).Returns(true);
+        DialogService.Instance = dialog;
+        try
+        {
+            await vm.ResetDnsCommand.ExecuteAsync(null);
+
+            dialog.Received(1).Confirm(
+                Arg.Is<string>(message => message != null &&
+                    message.Contains("Current setting: IPv4 static: 8.8.8.8; IPv6 turned off.")),
+                "Confirm DNS Reset");
+            Assert.Equal("DNS reset to automatic (DHCP).", vm.StatusMessage);
+            Assert.True(vm.CanRestorePreviousDns);
         }
         finally
         {

@@ -1267,8 +1267,12 @@ Key services:
   `Set-DnsClientServerAddress` with preset support (plain resolvers plus
   ad/malware/family-blocking variants), IPv4 + IPv6, and reversible snapshots.
   Every script stops on an error, so a failed read is "Unavailable" rather than an answer:
-  `CurrentDnsScript` and `ActiveInterfaceIndexScript` are internal so the integration suite runs
-  them in real Windows PowerShell with the cmdlets shadowed (`DnsScriptTests`).
+  `CurrentDnsScript`, `ActiveInterfaceIndexScript`, `CaptureScript` and `FamiliesPresentScript` are
+  internal so the integration suite runs them in real Windows PowerShell with the cmdlets shadowed
+  (`DnsScriptTests`). An adapter with IPv6 turned off has no IPv6 DNS settings at all (#2709):
+  `FamiliesPresentScript` reads which families the adapter has from one whole read, the snapshot
+  records IPv6 as `Absent`, a change sets IPv4 alone once the guard has checked IPv6 is still off,
+  and Undo resets and restores IPv4 through its own entry, so it never reaches IPv6.
 - `HostsFileService` — parses and edits the Windows hosts file with
   add/remove/toggle operations; keeps a one-time pristine backup and can
   restore it (`HasBackup` / `RestoreBackup`); `ReadBackupState` says whether the file still differs from

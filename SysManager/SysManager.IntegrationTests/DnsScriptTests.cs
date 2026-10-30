@@ -2,6 +2,7 @@
 // Author: laurentiu021 · https://github.com/laurentiu021/SystemManager
 // License: MIT
 
+using Microsoft.Win32;
 using SysManager.Services;
 
 namespace SysManager.IntegrationTests;
@@ -195,5 +196,113 @@ public class DnsScriptTests
 
         Assert.Contains("9.9.9.9", output, StringComparison.Ordinal);
         Assert.DoesNotContain("1.1.1.3", output, StringComparison.Ordinal);
+    }
+
+    // ---------- an adapter with IPv6 turned off (#2709) ----------
+
+    /// <summary>
+    /// The active adapter at interface 7, under <paramref name="interfaceGuid"/>, with a DNS client entry for each
+    /// address family in <paramref name="families"/> (2 is IPv4, 23 is IPv6).
+    /// </summary>
+    /// <remarks>
+    /// <c>Get-DnsClientServerAddress</c> answers as Windows does for an adapter with IPv6 turned off: an entry for each
+    /// family it has, and "No matching MSFT_DNSClientServerAddress objects found" for one it has not.
+    /// </remarks>
+    private static string AdapterWith(Guid interfaceGuid, params int[] families) =>
+        "function Get-NetAdapter { [CmdletBinding()] param($InterfaceIndex, [switch] $IncludeHidden) " +
+        "[PSCustomObject]@{ Name = 'Ethernet'; Status = 'Up'; Virtual = $false; ifIndex = 7; " +
+        $"InterfaceGuid = [Guid]'{interfaceGuid:D}' }} }} ; " +
+        "function Get-DnsClientServerAddress { [CmdletBinding()] param($InterfaceIndex, $AddressFamily) " +
+        "$entries = @(" + string.Join(", ", families.Select(family =>
+            $"[PSCustomObject]@{{ InterfaceIndex = 7; AddressFamily = [uint16]{family}; ServerAddresses = @() }}")) +
+        "); $codes = @{ IPv4 = 2; IPv6 = 23 }; " +
+        "$found = @($entries | Where-Object { -not $AddressFamily -or $_.AddressFamily -eq $codes[[string]$AddressFamily] }); " +
+        "if ($found.Count -eq 0) { Write-Error -Message 'No matching MSFT_DNSClientServerAddress objects found' " +
+        "-Category ObjectNotFound } else { $found } } ; ";
+
+    /// <summary>
+    /// A network interface this machine has a key for under both Tcpip and Tcpip6, which the capture reads, and only
+    /// reads, to tell automatic DNS from static.
+    /// </summary>
+    private static Guid AnInterfaceKeyOfThisMachine()
+    {
+        static string Interfaces(string service) => $@"SYSTEM\CurrentControlSet\Services\{service}\Parameters\Interfaces";
+        using var v4 = Registry.LocalMachine.OpenSubKey(Interfaces("Tcpip"));
+        using var v6 = Registry.LocalMachine.OpenSubKey(Interfaces("Tcpip6"));
+        var guid = (v4?.GetSubKeyNames() ?? [])
+            .Intersect(v6?.GetSubKeyNames() ?? [], StringComparer.OrdinalIgnoreCase)
+            .Select(name => Guid.TryParse(name, out var parsed) ? parsed : Guid.Empty)
+            .FirstOrDefault(parsed => parsed != Guid.Empty);
+        if (guid == Guid.Empty)
+            Assert.Skip("This machine has no network interface key under both Tcpip and Tcpip6 for the capture to read.");
+        return guid;
+    }
+
+    private static string[] Lines(string output) =>
+        output.Split(["\r\n", "\n"], StringSplitOptions.RemoveEmptyEntries);
+
+    [Fact]
+    public async Task FamiliesProbe_WhenTheReadFails_StopsTheScript()
+    {
+        // A failed read that carried on would leave both families looking absent, and what a snapshot leaves out,
+        // Undo does not put back.
+        var (_, output, _) = await WindowsPowerShellScript.RunAsync(
+            ServerReadFails + WindowsPowerShellScript.StubsInEffect("Get-DnsClientServerAddress")
+            + "$ErrorActionPreference = 'Stop'; $dnsIfIndex = 7; " + DnsService.FamiliesPresentScript + After);
+
+        Assert.DoesNotContain("__SM_AFTER_READ__", output, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task FamiliesProbe_OnAnAdapterWithIpv6TurnedOff_FindsIpv4Alone()
+    {
+        // The positive control for the test above, in the same PowerShell.
+        var (_, output, _) = await WindowsPowerShellScript.RunAsync(
+            AdapterWith(Guid.Empty, 2) + WindowsPowerShellScript.StubsInEffect("Get-DnsClientServerAddress")
+            + "$ErrorActionPreference = 'Stop'; $dnsIfIndex = 7; " + DnsService.FamiliesPresentScript
+            + "; \"IPv4=$($familiesPresent.IPv4) IPv6=$($familiesPresent.IPv6)\"" + After);
+
+        Assert.Contains("IPv4=True IPv6=False", output, StringComparison.Ordinal);
+        Assert.Contains("__SM_AFTER_READ__", output, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task Capture_OnAnAdapterWithIpv6TurnedOff_RecordsIpv6AsAbsent_AndCompletes()
+    {
+        // Reading IPv6 alone stopped the script, so every DNS change on the tab failed at its snapshot.
+        var (_, output, _) = await WindowsPowerShellScript.RunAsync(
+            AdapterWith(AnInterfaceKeyOfThisMachine(), 2) + NoRoute + Guard + DnsService.CaptureScript + After);
+
+        var lines = Lines(output);
+        Assert.Contains("COMPLETE=IPv4", lines);
+        Assert.Contains("SOURCE_IPv6=Absent", lines);
+        Assert.Contains("COMPLETE=IPv6", lines);
+        Assert.Contains("IDENTITY=Verified", lines);
+        Assert.Contains("__SM_AFTER_READ__", lines);
+    }
+
+    [Fact]
+    public async Task Capture_OnAnAdapterWithBothFamilies_ReadsIpv6()
+    {
+        // The positive control: an adapter that has IPv6 has it read, never called absent.
+        var (_, output, _) = await WindowsPowerShellScript.RunAsync(
+            AdapterWith(AnInterfaceKeyOfThisMachine(), 2, 23) + NoRoute + Guard + DnsService.CaptureScript + After);
+
+        var lines = Lines(output);
+        Assert.Contains(lines, line => line.StartsWith("SOURCE_IPv6=", StringComparison.Ordinal));
+        Assert.DoesNotContain("SOURCE_IPv6=Absent", lines);
+        Assert.Contains("COMPLETE=IPv6", lines);
+        Assert.Contains("__SM_AFTER_READ__", lines);
+    }
+
+    [Fact]
+    public async Task Capture_WhenTheDnsReadFails_StopsTheScript_RatherThanCallingIpv6Absent()
+    {
+        var (_, output, _) = await WindowsPowerShellScript.RunAsync(
+            AdapterWith(AnInterfaceKeyOfThisMachine(), 2) + ServerReadFails + NoRoute + Guard + DnsService.CaptureScript
+            + After);
+
+        Assert.DoesNotContain("SOURCE_IPv6=Absent", output, StringComparison.Ordinal);
+        Assert.DoesNotContain("__SM_AFTER_READ__", output, StringComparison.Ordinal);
     }
 }

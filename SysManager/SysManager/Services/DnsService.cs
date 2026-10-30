@@ -168,13 +168,40 @@ public sealed class DnsService : IDisposable
     }
 
     /// <summary>
-    /// Identifies whether a DNS address family uses automatic configuration or a static override.
+    /// Sets <c>$familiesPresent</c> to the address families the adapter at <c>$dnsIfIndex</c> has DNS settings for,
+    /// from one read of all of them, or stops on a failed read.
+    /// </summary>
+    /// <remarks>
+    /// Windows keeps a DNS client entry for each address family an adapter has. Turning IPv6 off on the adapter, a
+    /// common tweak, leaves it none for IPv6, and reading that family alone then fails with "No matching
+    /// MSFT_DNSClientServerAddress objects found" (#2709). A family is taken as absent only from a read that came back
+    /// whole, never from one that failed: what a snapshot leaves out, Undo does not put back.
+    /// <para>Internal so the integration suite can run it in a real Windows PowerShell 5.1 with the cmdlet
+    /// shadowed.</para>
+    /// </remarks>
+    internal const string FamiliesPresentScript = """
+        $familiesPresent = @{ IPv4 = $false; IPv6 = $false }
+        foreach ($dnsEntry in @(Get-DnsClientServerAddress -InterfaceIndex $dnsIfIndex -ErrorAction Stop)) {
+            switch ([int]$dnsEntry.AddressFamily) {
+                2 { $familiesPresent.IPv4 = $true }
+                23 { $familiesPresent.IPv6 = $true }
+            }
+        }
+        """;
+
+    /// <summary>
+    /// Identifies whether a DNS address family uses automatic configuration or a static override, or is not there.
     /// </summary>
     public enum DnsConfigurationSource
     {
         Unknown,
         Automatic,
         Static,
+
+        /// <summary>
+        /// IPv6 only: the protocol is turned off on the adapter, so it has no IPv6 DNS servers to read or set.
+        /// </summary>
+        Absent,
     }
 
     /// <summary>
@@ -185,6 +212,8 @@ public sealed class DnsService : IDisposable
     /// recycled index from targeting a different adapter. Zero means "not captured" and falls
     /// back to dynamic lookup for legacy callers. <paramref name="AdapterName"/> is the name
     /// Windows shows for it, such as "Wi-Fi", for the confirmation to say; it identifies nothing.
+    /// <paramref name="V6Source"/> is <see cref="DnsConfigurationSource.Absent"/> for an adapter with IPv6 turned off:
+    /// the snapshot then has no IPv6 servers, and nothing done with it touches IPv6.
     /// </summary>
     public sealed record DnsSnapshot(
         IReadOnlyList<string> V4,
@@ -225,92 +254,113 @@ public sealed class DnsService : IDisposable
     }
 
     /// <summary>
+    /// Prints the active adapter's identity, and for each address family its DNS configuration source, its servers and
+    /// a line saying the family was read whole, or stops on a failed read.
+    /// </summary>
+    /// <remarks>
+    /// NameServer is the per-adapter static override; an absent/empty value means the effective addresses came from
+    /// automatic configuration. The source is captured explicitly because DHCP can still report non-empty DNS
+    /// addresses.
+    /// <para>An adapter with IPv6 turned off has no IPv6 DNS settings to read, and reading them stopped this script, so
+    /// a preset and Reset to DHCP both failed before changing anything (#2709). <see cref="FamiliesPresentScript"/>
+    /// says which families the adapter has, and a missing IPv6 is printed as <c>SOURCE_IPv6=Absent</c>. A missing IPv4
+    /// still stops the script: a preset needs it.</para>
+    /// <para>Internal so the integration suite can run this exact text in a real Windows PowerShell 5.1 with the
+    /// cmdlets shadowed.</para>
+    /// </remarks>
+    internal const string CaptureScript = "$ErrorActionPreference = 'Stop'; " + ActiveAdapterSelector + """
+
+        if ($adapter) {
+            $ifIndex = [int]$adapter.ifIndex
+            $interfaceGuid = [Guid]$adapter.InterfaceGuid
+            "IFINDEX=$ifIndex"
+            "IFGUID=$($interfaceGuid.ToString('D'))"
+            "IFNAME=$($adapter.Name)"
+            $dnsIfIndex = $ifIndex
+        """ + "\n" + FamiliesPresentScript + "\n" + """
+            $guidKey = $interfaceGuid.ToString('B')
+            $registryPaths = @{
+                IPv4 = "SYSTEM\CurrentControlSet\Services\Tcpip\Parameters\Interfaces\$guidKey"
+                IPv6 = "SYSTEM\CurrentControlSet\Services\Tcpip6\Parameters\Interfaces\$guidKey"
+            }
+            $registry = [Microsoft.Win32.RegistryKey]::OpenBaseKey(
+                [Microsoft.Win32.RegistryHive]::LocalMachine,
+                [Microsoft.Win32.RegistryView]::Default)
+            try {
+                foreach ($fam in @('IPv4','IPv6')) {
+                    if (-not $familiesPresent[$fam]) {
+                        if ($fam -eq 'IPv4') { throw 'The network adapter has no IPv4 DNS settings.' }
+                        "SOURCE_IPv6=Absent"
+                        "COMPLETE=IPv6"
+                        continue
+                    }
+                    $key = $registry.OpenSubKey($registryPaths[$fam], $false)
+                    if ($null -eq $key) {
+                        throw "DNS registry state for $fam is unavailable."
+                    }
+                    try {
+                        $nameServerBefore = $key.GetValue(
+                            'NameServer',
+                            $null,
+                            [Microsoft.Win32.RegistryValueOptions]::DoNotExpandEnvironmentNames)
+                        if ($null -ne $nameServerBefore -and $nameServerBefore -isnot [string]) {
+                            throw "DNS registry state for $fam has an unexpected value type."
+                        }
+
+                        $dns = Get-DnsClientServerAddress -InterfaceIndex $ifIndex -AddressFamily $fam -ErrorAction Stop
+
+                        $nameServerAfter = $key.GetValue(
+                            'NameServer',
+                            $null,
+                            [Microsoft.Win32.RegistryValueOptions]::DoNotExpandEnvironmentNames)
+                        if ($null -ne $nameServerAfter -and $nameServerAfter -isnot [string]) {
+                            throw "DNS registry state for $fam has an unexpected value type."
+                        }
+                    }
+                    finally {
+                        $key.Dispose()
+                    }
+                    if (-not [string]::Equals(
+                        [string]$nameServerBefore,
+                        [string]$nameServerAfter,
+                        [System.StringComparison]::Ordinal)) {
+                        throw "DNS registry state for $fam changed while it was being captured."
+                    }
+                    $source = if ([string]::IsNullOrWhiteSpace([string]$nameServerAfter)) {
+                        'Automatic'
+                    } else {
+                        'Static'
+                    }
+                    "SOURCE_${fam}=$source"
+
+                    foreach ($a in $dns.ServerAddresses) { "$fam=$a" }
+                    "COMPLETE=$fam"
+                }
+
+                $adapterAfterCapture = Get-NetAdapter -InterfaceIndex $ifIndex -ErrorAction Stop
+                if ([Guid]($adapterAfterCapture.InterfaceGuid) -ne $interfaceGuid) {
+                    throw 'The active network adapter changed while its DNS configuration was being captured.'
+                }
+                "IDENTITY=Verified"
+            }
+            finally {
+                $registry.Dispose()
+            }
+        }
+        """;
+
+    /// <summary>
     /// Captures the current DNS server addresses and configuration source of the active
     /// adapter for BOTH IPv4 and IPv6, so a change can be fully reverted without turning
-    /// DHCP-provided addresses into persistent static DNS.
+    /// DHCP-provided addresses into persistent static DNS. On an adapter with IPv6 turned off,
+    /// IPv6 is captured as <see cref="DnsConfigurationSource.Absent"/>.
     /// </summary>
     public async Task<DnsSnapshot> CaptureSnapshotAsync(CancellationToken ct = default)
     {
         await _gate.WaitAsync(ct).ConfigureAwait(false);
         try
         {
-            // NameServer is the per-adapter static override; an absent/empty value means
-            // the effective addresses came from automatic configuration. Capture this
-            // source explicitly because DHCP can still report non-empty DNS addresses.
-            const string script = "$ErrorActionPreference = 'Stop'; " + ActiveAdapterSelector + """
-
-                if ($adapter) {
-                    $ifIndex = [int]$adapter.ifIndex
-                    $interfaceGuid = [Guid]$adapter.InterfaceGuid
-                    "IFINDEX=$ifIndex"
-                    "IFGUID=$($interfaceGuid.ToString('D'))"
-                    "IFNAME=$($adapter.Name)"
-                    $guidKey = $interfaceGuid.ToString('B')
-                    $registryPaths = @{
-                        IPv4 = "SYSTEM\CurrentControlSet\Services\Tcpip\Parameters\Interfaces\$guidKey"
-                        IPv6 = "SYSTEM\CurrentControlSet\Services\Tcpip6\Parameters\Interfaces\$guidKey"
-                    }
-                    $registry = [Microsoft.Win32.RegistryKey]::OpenBaseKey(
-                        [Microsoft.Win32.RegistryHive]::LocalMachine,
-                        [Microsoft.Win32.RegistryView]::Default)
-                    try {
-                        foreach ($fam in @('IPv4','IPv6')) {
-                            $key = $registry.OpenSubKey($registryPaths[$fam], $false)
-                            if ($null -eq $key) {
-                                throw "DNS registry state for $fam is unavailable."
-                            }
-                            try {
-                                $nameServerBefore = $key.GetValue(
-                                    'NameServer',
-                                    $null,
-                                    [Microsoft.Win32.RegistryValueOptions]::DoNotExpandEnvironmentNames)
-                                if ($null -ne $nameServerBefore -and $nameServerBefore -isnot [string]) {
-                                    throw "DNS registry state for $fam has an unexpected value type."
-                                }
-
-                                $dns = Get-DnsClientServerAddress -InterfaceIndex $ifIndex -AddressFamily $fam -ErrorAction Stop
-
-                                $nameServerAfter = $key.GetValue(
-                                    'NameServer',
-                                    $null,
-                                    [Microsoft.Win32.RegistryValueOptions]::DoNotExpandEnvironmentNames)
-                                if ($null -ne $nameServerAfter -and $nameServerAfter -isnot [string]) {
-                                    throw "DNS registry state for $fam has an unexpected value type."
-                                }
-                            }
-                            finally {
-                                $key.Dispose()
-                            }
-                            if (-not [string]::Equals(
-                                [string]$nameServerBefore,
-                                [string]$nameServerAfter,
-                                [System.StringComparison]::Ordinal)) {
-                                throw "DNS registry state for $fam changed while it was being captured."
-                            }
-                            $source = if ([string]::IsNullOrWhiteSpace([string]$nameServerAfter)) {
-                                'Automatic'
-                            } else {
-                                'Static'
-                            }
-                            "SOURCE_${fam}=$source"
-
-                            foreach ($a in $dns.ServerAddresses) { "$fam=$a" }
-                            "COMPLETE=$fam"
-                        }
-
-                        $adapterAfterCapture = Get-NetAdapter -InterfaceIndex $ifIndex -ErrorAction Stop
-                        if ([Guid]($adapterAfterCapture.InterfaceGuid) -ne $interfaceGuid) {
-                            throw 'The active network adapter changed while its DNS configuration was being captured.'
-                        }
-                        "IDENTITY=Verified"
-                    }
-                    finally {
-                        $registry.Dispose()
-                    }
-                }
-                """;
-
-            Collection<PSObject> results = await _ps.RunAsync(script, cancellationToken: ct)
+            Collection<PSObject> results = await _ps.RunAsync(CaptureScript, cancellationToken: ct)
                 .ConfigureAwait(false);
 
             List<string> v4 = [], v6 = [];
@@ -362,7 +412,7 @@ public sealed class DnsService : IDisposable
                 if (tag == "SOURCE_IPv4")
                 {
                     if (v4Source != DnsConfigurationSource.Unknown ||
-                        !TryParseConfigurationSource(value, out v4Source))
+                        !TryParseConfigurationSource(value, allowAbsent: false, out v4Source))
                     {
                         sourceMetadataValid = false;
                     }
@@ -371,7 +421,7 @@ public sealed class DnsService : IDisposable
                 if (tag == "SOURCE_IPv6")
                 {
                     if (v6Source != DnsConfigurationSource.Unknown ||
-                        !TryParseConfigurationSource(value, out v6Source))
+                        !TryParseConfigurationSource(value, allowAbsent: true, out v6Source))
                     {
                         sourceMetadataValid = false;
                     }
@@ -407,7 +457,8 @@ public sealed class DnsService : IDisposable
                 v4Source == DnsConfigurationSource.Unknown ||
                 v6Source == DnsConfigurationSource.Unknown ||
                 (v4Source == DnsConfigurationSource.Static && v4.Count == 0) ||
-                (v6Source == DnsConfigurationSource.Static && v6.Count == 0))
+                (v6Source == DnsConfigurationSource.Static && v6.Count == 0) ||
+                (v6Source == DnsConfigurationSource.Absent && v6.Count > 0))
             {
                 throw new InvalidOperationException(
                     "The network adapter's DNS configuration could not be captured completely.");
@@ -427,12 +478,14 @@ public sealed class DnsService : IDisposable
 
     private static bool TryParseConfigurationSource(
         string value,
+        bool allowAbsent,
         out DnsConfigurationSource source)
     {
         source = value switch
         {
             "Automatic" => DnsConfigurationSource.Automatic,
             "Static" => DnsConfigurationSource.Static,
+            "Absent" when allowAbsent => DnsConfigurationSource.Absent,
             _ => DnsConfigurationSource.Unknown,
         };
         return source != DnsConfigurationSource.Unknown;
@@ -440,6 +493,10 @@ public sealed class DnsService : IDisposable
 
     private static bool IsCapturedConfigurationSource(DnsConfigurationSource source) =>
         source is DnsConfigurationSource.Automatic or DnsConfigurationSource.Static;
+
+    // IPv6 alone may be absent. A preset needs IPv4 servers, so an adapter without IPv4 is never captured.
+    private static bool IsCapturedV6Source(DnsConfigurationSource source) =>
+        IsCapturedConfigurationSource(source) || source == DnsConfigurationSource.Absent;
 
     private static void ValidateCapturedTarget(DnsSnapshot snapshot)
     {
@@ -454,7 +511,7 @@ public sealed class DnsService : IDisposable
                 "The DNS operation has no valid captured network adapter.");
         }
         if (!IsCapturedConfigurationSource(snapshot.V4Source) ||
-            !IsCapturedConfigurationSource(snapshot.V6Source))
+            !IsCapturedV6Source(snapshot.V6Source))
         {
             throw new InvalidOperationException(
                 "The DNS operation has no valid captured configuration source.");
@@ -486,6 +543,12 @@ public sealed class DnsService : IDisposable
     {
         ValidateAddressFamily(snapshot.V4, AddressFamily.InterNetwork, nameof(snapshot.V4));
         ValidateAddressFamily(snapshot.V6, AddressFamily.InterNetworkV6, nameof(snapshot.V6));
+        if (snapshot.V6Source == DnsConfigurationSource.Absent && snapshot.V6.Count > 0)
+        {
+            throw new ArgumentException(
+                "A DNS snapshot of an adapter without IPv6 cannot carry IPv6 servers.",
+                nameof(snapshot.V6));
+        }
     }
 
     private static void ValidateAddressFamily(
@@ -544,6 +607,14 @@ public sealed class DnsService : IDisposable
     {
         AppendCapturedAdapterLookup(script, snapshot, allowIndexDrift: false);
 
+        // Still off, or the change would land beside IPv6 servers the snapshot knows nothing of.
+        var ipv6Absent = snapshot.V6Source == DnsConfigurationSource.Absent;
+        if (ipv6Absent)
+        {
+            script.AppendLine("$dnsIfIndex = $targetIfIndex");
+            script.AppendLine(FamiliesPresentScript);
+        }
+
         var expectedV4 = FormatPowerShellAddresses(snapshot.V4);
         var expectedV6 = FormatPowerShellAddresses(snapshot.V6);
         var expectedGuid = snapshot.InterfaceGuid!.Value;
@@ -564,6 +635,12 @@ public sealed class DnsService : IDisposable
             "[Microsoft.Win32.RegistryView]::Default)");
         script.AppendLine("try {");
         script.AppendLine("    foreach ($fam in @('IPv4','IPv6')) {");
+        if (ipv6Absent)
+        {
+            script.AppendLine(
+                "        if ($expectedSources[$fam] -eq 'Absent') { if ($familiesPresent[$fam]) " +
+                "{ throw \"$fam was turned on for the network adapter before mutation.\" }; continue }");
+        }
         script.AppendLine("        $key = $registry.OpenSubKey($registryPaths[$fam], $false)");
         script.AppendLine(
             "        if ($null -eq $key) { throw \"DNS registry state for $fam is unavailable.\" }");
@@ -678,7 +755,9 @@ public sealed class DnsService : IDisposable
         ArgumentNullException.ThrowIfNull(snapshot.V6);
 
         var v4Source = ResolveConfigurationSource(snapshot, snapshot.V4Source, snapshot.V4);
-        var v6Source = ResolveConfigurationSource(snapshot, snapshot.V6Source, snapshot.V6);
+        var v6Source = snapshot.V6Source == DnsConfigurationSource.Absent
+            ? DnsConfigurationSource.Absent
+            : ResolveConfigurationSource(snapshot, snapshot.V6Source, snapshot.V6);
         if ((v4Source == DnsConfigurationSource.Static && snapshot.V4.Count == 0) ||
             (v6Source == DnsConfigurationSource.Static && snapshot.V6.Count == 0))
         {
@@ -713,18 +792,25 @@ public sealed class DnsService : IDisposable
                 targetIndex = ifIndex.ToString(System.Globalization.CultureInfo.InvariantCulture);
             }
 
-            // Clear BOTH families first so any servers applied since (incl. IPv6) are removed.
-            script.AppendLine(
-                $"Set-DnsClientServerAddress -InterfaceIndex {targetIndex} " +
-                "-ResetServerAddresses -ErrorAction Stop");
+            // Clear BOTH families first so any servers applied since (incl. IPv6) are removed. When IPv6 was off at
+            // capture, nothing done since touched it: IPv4 is reset and restored through its own entry alone, so an
+            // IPv6 turned back on since keeps the servers it has (#2709). The adapter's own call would also reach IPv6.
+            var ipv4Only = v6Source == DnsConfigurationSource.Absent;
+            var ipv4Entry =
+                $"Get-DnsClientServerAddress -InterfaceIndex {targetIndex} -AddressFamily IPv4 -ErrorAction Stop | ";
+            script.AppendLine(ipv4Only
+                ? ipv4Entry + "Set-DnsClientServerAddress -ResetServerAddresses -ErrorAction Stop"
+                : $"Set-DnsClientServerAddress -InterfaceIndex {targetIndex} " +
+                  "-ResetServerAddresses -ErrorAction Stop");
             if (v4Source == DnsConfigurationSource.Static)
             {
                 if (snapshot.IfIndex > 0)
                     AppendCapturedAdapterLookup(script, snapshot, allowIndexDrift: true);
                 var v4 = FormatPowerShellAddresses(snapshot.V4);
-                script.AppendLine(
-                    $"Set-DnsClientServerAddress -InterfaceIndex {targetIndex} " +
-                    $"-ServerAddresses @({v4}) -ErrorAction Stop");
+                script.AppendLine(ipv4Only
+                    ? ipv4Entry + $"Set-DnsClientServerAddress -ServerAddresses @({v4}) -ErrorAction Stop"
+                    : $"Set-DnsClientServerAddress -InterfaceIndex {targetIndex} " +
+                      $"-ServerAddresses @({v4}) -ErrorAction Stop");
             }
             if (v6Source == DnsConfigurationSource.Static)
             {
@@ -854,7 +940,9 @@ public sealed class DnsService : IDisposable
                 $"Set-DnsClientServerAddress -InterfaceIndex {targetIndex} " +
                 $"-ServerAddresses @(\"{primaryAddress}\",\"{secondaryAddress}\") " +
                 "-ErrorAction Stop");
-            if (hasV6)
+
+            // An adapter with IPv6 turned off has none to set servers on; the guard above checks it is still off (#2709).
+            if (hasV6 && target?.V6Source != DnsConfigurationSource.Absent)
             {
                 if (target is not null)
                 {

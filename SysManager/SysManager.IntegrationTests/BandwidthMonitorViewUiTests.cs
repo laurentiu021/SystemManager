@@ -91,6 +91,38 @@ public sealed class BandwidthMonitorViewUiTests : IDisposable
         });
     }
 
+    /// <summary>
+    /// The "Alert over" box keeps what is typed in it, decimal point included, while the threshold follows (#2706).
+    /// </summary>
+    /// <remarks>
+    /// It bound the number and wrote it back on every key, so typing "2." showed "2" and the next key made it 25.
+    /// Typed through the box's own binding, on the thread that owns it.
+    /// </remarks>
+    [Fact]
+    public async Task TheAlertBox_KeepsWhatIsTyped_AndTheThresholdFollows()
+    {
+        using var vm = await VmAsync();
+
+        StaHelper.Run(() =>
+        {
+            var view = Laid(vm);
+            var box = Named<TextBox>(view, "Alert threshold in megabits per second");
+
+            box.Text = "2.";
+            Assert.Equal("2.", box.Text);
+            Assert.Equal(2.0, vm.AlertThresholdMbps);
+
+            box.Text = "2.5";
+            Assert.Equal("2.5", box.Text);
+            Assert.Equal(2.5, vm.AlertThresholdMbps);
+
+            box.Text = "";
+            Assert.Equal("", box.Text);
+            Assert.Equal(0.0, vm.AlertThresholdMbps);
+            Assert.False(Validation.GetHasError(box));
+        });
+    }
+
     private static DataGridColumn Column(DataGrid grid, string header) =>
         Assert.Single(grid.Columns, column => Equals(column.Header, header));
 

@@ -87,7 +87,7 @@
                     </StackPanel>
                     <StackPanel Orientation="Horizontal" Margin="0,10,0,0" HorizontalAlignment="Right">
                         <TextBlock Text="Alert over" Style="{StaticResource Subtle}" VerticalAlignment="Center"/>
-                        <TextBox Text="{Binding AlertThresholdMbps, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                        <TextBox Text="{Binding AlertThresholdText, UpdateSourceTrigger=PropertyChanged}"
                                  Width="64" Margin="8,0,6,0" VerticalContentAlignment="Center"
                                  AutomationProperties.Name="Alert threshold in megabits per second"
                                  ToolTip="Warn when total download or upload exceeds this many Mbps. 0 turns the alert off."/>

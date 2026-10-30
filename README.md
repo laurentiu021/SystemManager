@@ -1202,9 +1202,10 @@ Answers "what is actually using my space?" by listing the biggest files in one p
   bytes-per-second and byte totals beside the readable figures — a file whose only numbers are
   "1.2 MB/s" cannot be sorted or added up. What it says afterwards stays on screen: the
   once-a-second refresh does not write over it
-- **Threshold alert** — set a Mbps limit and the tab warns you when total download
-  or upload goes over it (handy for catching a runaway background upload); set it to
-  0 to turn the alert off
+- **Threshold alert** — set a Mbps limit, with a point or a comma before the decimals
+  (2.5 or 2,5), and the tab warns you when total download or upload goes over it (handy
+  for catching a runaway background upload); set it to 0, or empty the box, to turn the
+  alert off
 - **Look back over the last hour, day, or week** — pick a range and the chart shows
   the throughput it recorded, with how much you actually downloaded and uploaded over
   that period and the fastest speed you hit. That answers "where did my data cap go?"

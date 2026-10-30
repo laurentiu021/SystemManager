@@ -1184,9 +1184,11 @@ Answers "what is actually using my space?" by listing the biggest files in one p
   with a rolling throughput chart (the last ~2 minutes), so you can spot a sudden
   upload (a background sync, an update, something unexpected) the moment it starts
 - **Who's using the network** — a per-app list showing which programs are talking (the 40 busiest),
-  how many connections each holds, and the remote ports involved. This works with
-  **no administrator rights and no setup** — it reads the same connection tables
-  Windows exposes to any user
+  how many connections to other machines each holds, over IPv4 and IPv6, and the remote ports
+  involved. A program that is only listening, or only talking to another program on the same PC,
+  is not listed. This works with **no administrator rights and no setup** — it reads the same
+  connection tables Windows exposes to any user; an app that uses only UDP, as some games and
+  calls do, shows in precise mode
 - **Precise per-app speeds (optional)** — for exact upload/download rates and
   session data totals per app (like Task Manager's Network column), enable precise
   mode; it uses a Windows kernel trace and so **needs administrator**. The tab

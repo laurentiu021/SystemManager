@@ -2,6 +2,8 @@
 // Author: laurentiu021 · https://github.com/laurentiu021/SystemManager
 // License: MIT
 
+using System.Buffers.Binary;
+using System.Net;
 using System.Net.NetworkInformation;
 using System.Runtime.InteropServices;
 using Serilog;
@@ -15,11 +17,15 @@ namespace SysManager.Services;
 /// <item><b>Accurate machine-wide throughput</b> — summed byte counters across all operational,
 /// non-loopback network interfaces (<see cref="NetworkInterface.GetIPStatistics"/>), turned into
 /// per-second rates by delta between polls.</item>
-/// <item><b>Per-process attribution by active connection</b> — the extended TCP/UDP tables
-/// (<c>GetExtendedTcpTable</c>/<c>GetExtendedUdpTable</c>, iphlpapi) map every open socket to its
-/// owning PID, so the tab can show WHICH apps are talking, to which remote ports, and how many
-/// connections each holds.</item>
+/// <item><b>Per-process attribution by connection</b> — the extended TCP tables for IPv4 and IPv6
+/// (<c>GetExtendedTcpTable</c>, iphlpapi) map every connected socket to its owning PID, so the tab can
+/// show WHICH apps are talking, to which remote ports, and how many connections each holds.</item>
 /// </list>
+/// A connection counts when it reaches another machine. The tables used to be read for IPv4 alone, so an app talking
+/// over IPv6 was missing, and to hold every listening socket and every bound UDP endpoint, so the Windows services that
+/// always listen were always listed as using the network (#2706). Listeners and connections to this PC itself are left
+/// out, and UDP is not read: it has no connections to count, and an app on UDP alone, such as a browser on QUIC, shows
+/// in precise mode.
 /// This deliberately does NOT report exact per-process byte rates — Windows only exposes those
 /// through an elevated ETW session (see <c>EtwBandwidthSource</c>). Everything here works for a
 /// standard user with no elevation and no extra dependency, and is strictly read-only.
@@ -55,10 +61,11 @@ public class ConnectionBandwidthSource : IBandwidthMonitorService
     /// <remarks>
     /// <para>Getting this off the UI thread is the point, and it now happens ONCE, in
     /// <c>BandwidthMonitorViewModel.PollOnceAsync</c>. The work here is not bounded by a small constant:
-    /// enumerating all network interfaces and reading per-interface IP statistics, two native TCP/UDP
-    /// table queries, and a <c>Process.GetProcessById</c> for each PID not yet in the name cache. A
-    /// machine with many adapters or a browser holding dozens of sockets pays for all of it, so running
-    /// it inline made the window stutter continuously for as long as the tab was open (1.61.9).</para>
+    /// enumerating all network interfaces and reading per-interface IP statistics, two native TCP
+    /// table queries, one per address family, and a <c>Process.GetProcessById</c> for each PID not yet
+    /// in the name cache. A machine with many adapters or a browser holding dozens of sockets pays for
+    /// all of it, so running it inline made the window stutter continuously for as long as the tab was
+    /// open (1.61.9).</para>
     /// <para>This method used to wrap itself in <c>Task.Run</c>. That fixed this source and left its
     /// ETW sibling — which returned <c>Task.FromResult</c> — running inline, an asymmetry no test
     /// enforced and the interface did not document. The offload moved to the consumer so both modes are
@@ -127,15 +134,15 @@ public class ConnectionBandwidthSource : IBandwidthMonitorService
             .ToList();
     }
 
-    /// <summary>A single active socket mapped to its owning process. Protected-internal so tests
+    /// <summary>A single TCP connection mapped to its owning process. Protected-internal so tests
     /// (via InternalsVisibleTo) and subclasses that override <see cref="EnumerateConnections"/> can
     /// build rows, while matching the accessibility of the protected enumeration seam.</summary>
-    protected internal readonly record struct ConnectionRow(int ProcessId, string ProcessName, int RemotePort, bool IsTcp);
+    protected internal readonly record struct ConnectionRow(int ProcessId, string ProcessName, int RemotePort);
 
     /// <summary>
-    /// Enumerates current TCP and UDP connections mapped to owning PIDs. Virtual so tests can
-    /// substitute a fixed set without the native tables. Never throws — a P/Invoke failure logs
-    /// and yields an empty set (the tab then shows total throughput with no per-app rows).
+    /// Enumerates the current TCP connections to other machines, over IPv4 and IPv6, mapped to owning PIDs. Virtual so
+    /// tests can substitute a fixed set without the native tables. Never throws — a P/Invoke failure logs and yields an
+    /// empty set (the tab then shows total throughput with no per-app rows).
     /// </summary>
     protected virtual IReadOnlyList<ConnectionRow> EnumerateConnections()
     {
@@ -143,10 +150,9 @@ public class ConnectionBandwidthSource : IBandwidthMonitorService
         try
         {
             // One name cache per enumeration, owned here — see ResolveName for why it is not static.
-            // Shared across the TCP and UDP passes so a PID with both is resolved once, not twice.
+            // Shared across the IPv4 and IPv6 passes so a PID with both is resolved once, not twice.
             var nameCache = new Dictionary<int, string>();
             NativeTables.CollectTcp(rows, nameCache);
-            NativeTables.CollectUdp(rows, nameCache);
         }
         catch (Exception ex) when (ex is DllNotFoundException or EntryPointNotFoundException or OutOfMemoryException)
         {
@@ -210,83 +216,107 @@ public class ConnectionBandwidthSource : IBandwidthMonitorService
         return name;
     }
 
-    // ── Native TCP/UDP table enumeration (iphlpapi) ─────────────────────────
+    /// <summary>
+    /// The connections to other machines in a TCP table as <c>GetExtendedTcpTable</c> fills it with
+    /// <c>MIB_TCPROW_OWNER_PID</c> rows, or <c>MIB_TCP6ROW_OWNER_PID</c> ones when <paramref name="ipv6"/> is set: the
+    /// owning PID and remote port of each.
+    /// </summary>
+    /// <remarks>
+    /// A listening socket, one with no remote address and one connected to this PC itself are left out: none of them
+    /// is network use. A table shorter than its own count says is read as far as it goes. Pure, so the row layouts
+    /// are unit-tested on bytes laid out as Windows lays them.
+    /// </remarks>
+    internal static List<(int Pid, int RemotePort)> ReadTcpTable(ReadOnlySpan<byte> table, bool ipv6)
+    {
+        var connections = new List<(int Pid, int RemotePort)>();
+        if (table.Length < 4) return connections;
+
+        var row = ipv6 ? TcpRow.V6 : TcpRow.V4;
+        var count = BinaryPrimitives.ReadInt32LittleEndian(table);
+        for (var i = 0; i < count; i++)
+        {
+            var start = 4 + (i * row.Size);
+            if (start + row.Size > table.Length) break;
+            var fields = table.Slice(start, row.Size);
+
+            if (BinaryPrimitives.ReadInt32LittleEndian(fields[row.State..]) == TcpStateListen) continue;
+            var remote = new IPAddress(fields.Slice(row.RemoteAddress, ipv6 ? 16 : 4));
+            if (!IsAnotherMachine(remote)) continue;
+
+            connections.Add((BinaryPrimitives.ReadInt32LittleEndian(fields[row.Pid..]),
+                NetworkToHostPort(BinaryPrimitives.ReadInt32LittleEndian(fields[row.RemotePort..]))));
+        }
+        return connections;
+    }
+
+    // MIB_TCP_STATE_LISTEN.
+    private const int TcpStateListen = 2;
+
+    /// <summary>Where the fields of one row sit, in bytes from its start.</summary>
+    private readonly record struct TcpRow(int Size, int State, int RemoteAddress, int RemotePort, int Pid)
+    {
+        // MIB_TCPROW_OWNER_PID: state, local address, local port, remote address, remote port, PID.
+        public static readonly TcpRow V4 = new(Size: 24, State: 0, RemoteAddress: 12, RemotePort: 16, Pid: 20);
+
+        // MIB_TCP6ROW_OWNER_PID: local address (16), local scope, local port, remote address (16), remote scope,
+        // remote port, state, PID.
+        public static readonly TcpRow V6 = new(Size: 56, State: 48, RemoteAddress: 24, RemotePort: 44, Pid: 52);
+    }
+
+    // IsLoopback covers an IPv4 loopback address mapped into IPv6 as well, which a dual-mode socket reports.
+    private static bool IsAnotherMachine(IPAddress remote) =>
+        !remote.Equals(IPAddress.Any) && !remote.Equals(IPAddress.IPv6Any) && !IPAddress.IsLoopback(remote);
+
+    // The extended tables store ports in network byte order in the low 16 bits.
+    private static int NetworkToHostPort(int raw)
+    {
+        int lo = raw & 0xFF;
+        int hi = (raw >> 8) & 0xFF;
+        return (lo << 8) | hi;
+    }
+
+    // ── Native TCP table enumeration (iphlpapi) ─────────────────────────────
     // Classic [DllImport] with a NativeMethods class: GetExtendedTcpTable returns a
     // variable-length table into a caller-sized buffer (the same idiom CpuAffinityService
     // documents for GetLogicalProcessorInformationEx). Read-only OS query, no admin.
     private static class NativeTables
     {
         private const int AfInet = 2;                       // IPv4
-        private const int ErrorInsufficientBuffer = 122;
-        // TCP_TABLE_OWNER_PID_ALL / UDP_TABLE_OWNER_PID: rows carry the owning PID.
-        private const int TcpTableOwnerPidAll = 5;
-        private const int UdpTableOwnerPid = 1;
+        private const int AfInet6 = 23;                     // IPv6
+        // TCP_TABLE_OWNER_PID_CONNECTIONS: connected sockets with the owning PID, and no listeners.
+        private const int TcpTableOwnerPidConnections = 4;
 
         internal static void CollectTcp(
             List<ConnectionBandwidthSource.ConnectionRow> rows, Dictionary<int, string> nameCache)
         {
-            foreach (var (pid, remotePort) in QueryTable(isTcp: true))
-                rows.Add(new ConnectionBandwidthSource.ConnectionRow(pid, ResolveName(pid, nameCache), remotePort, IsTcp: true));
+            foreach (var family in (ReadOnlySpan<int>)[AfInet, AfInet6])
+            {
+                foreach (var (pid, remotePort) in ReadTcpTable(QueryTable(family), ipv6: family == AfInet6))
+                    rows.Add(new ConnectionBandwidthSource.ConnectionRow(pid, ResolveName(pid, nameCache), remotePort));
+            }
         }
 
-        internal static void CollectUdp(
-            List<ConnectionBandwidthSource.ConnectionRow> rows, Dictionary<int, string> nameCache)
-        {
-            foreach (var (pid, remotePort) in QueryTable(isTcp: false))
-                rows.Add(new ConnectionBandwidthSource.ConnectionRow(pid, ResolveName(pid, nameCache), remotePort, IsTcp: false));
-        }
-
-        private static IEnumerable<(int Pid, int RemotePort)> QueryTable(bool isTcp)
+        /// <summary>The table for one address family, or none when Windows does not give it.</summary>
+        private static byte[] QueryTable(int family)
         {
             int size = 0;
-            int tableClass = isTcp ? TcpTableOwnerPidAll : UdpTableOwnerPid;
 
             // First call sizes the buffer.
-            _ = isTcp
-                ? NativeMethods.GetExtendedTcpTable(IntPtr.Zero, ref size, false, AfInet, tableClass, 0)
-                : NativeMethods.GetExtendedUdpTable(IntPtr.Zero, ref size, false, AfInet, tableClass, 0);
-            if (size <= 0) yield break;
+            _ = NativeMethods.GetExtendedTcpTable(IntPtr.Zero, ref size, false, family, TcpTableOwnerPidConnections, 0);
+            if (size <= 0) return [];
 
             IntPtr buffer = Marshal.AllocHGlobal(size);
             try
             {
-                int result = isTcp
-                    ? NativeMethods.GetExtendedTcpTable(buffer, ref size, false, AfInet, tableClass, 0)
-                    : NativeMethods.GetExtendedUdpTable(buffer, ref size, false, AfInet, tableClass, 0);
-                if (result == ErrorInsufficientBuffer) yield break; // table grew between calls; skip this poll
-                if (result != 0) yield break;
+                // Anything but success, including a table that grew between the calls, skips this poll for the family.
+                if (NativeMethods.GetExtendedTcpTable(buffer, ref size, false, family, TcpTableOwnerPidConnections, 0) != 0)
+                    return [];
 
-                int count = Marshal.ReadInt32(buffer);              // dwNumEntries (first DWORD)
-                // Rows begin after the leading DWORD; each row's layout differs by protocol.
-                // TCP row (MIB_TCPROW_OWNER_PID): state(4) local(4) localport(4) remote(4) remoteport(4) pid(4) = 24
-                // UDP row (MIB_UDPROW_OWNER_PID): local(4) localport(4) pid(4) = 12  (no remote endpoint)
-                int rowSize = isTcp ? 24 : 12;
-                IntPtr rowPtr = buffer + 4;
-                for (int i = 0; i < count; i++)
-                {
-                    if (isTcp)
-                    {
-                        int remotePortRaw = Marshal.ReadInt32(rowPtr, 16); // remote port, network byte order
-                        int pid = Marshal.ReadInt32(rowPtr, 20);
-                        yield return (pid, NetworkToHostPort(remotePortRaw));
-                    }
-                    else
-                    {
-                        int pid = Marshal.ReadInt32(rowPtr, 8);
-                        yield return (pid, 0); // UDP has no remote port in this table
-                    }
-                    rowPtr += rowSize;
-                }
+                var table = new byte[size];
+                Marshal.Copy(buffer, table, 0, size);
+                return table;
             }
             finally { Marshal.FreeHGlobal(buffer); }
-        }
-
-        // The extended tables store ports in network byte order in the low 16 bits.
-        private static int NetworkToHostPort(int raw)
-        {
-            int lo = raw & 0xFF;
-            int hi = (raw >> 8) & 0xFF;
-            return (lo << 8) | hi;
         }
 
         private static class NativeMethods
@@ -294,10 +324,6 @@ public class ConnectionBandwidthSource : IBandwidthMonitorService
             // No A/W variant (not a string function) → no EntryPoint suffix needed.
             [DllImport("iphlpapi.dll", SetLastError = true)]
             public static extern int GetExtendedTcpTable(IntPtr pTcpTable, ref int pdwSize,
-                [MarshalAs(UnmanagedType.Bool)] bool bOrder, int ulAf, int tableClass, int reserved);
-
-            [DllImport("iphlpapi.dll", SetLastError = true)]
-            public static extern int GetExtendedUdpTable(IntPtr pUdpTable, ref int pdwSize,
                 [MarshalAs(UnmanagedType.Bool)] bool bOrder, int ulAf, int tableClass, int reserved);
         }
     }

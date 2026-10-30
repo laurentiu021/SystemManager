@@ -24,7 +24,7 @@ namespace SysManager.ViewModels;
 /// history graph, plus a per-process list of who's using the network. Two measurement modes:
 /// <list type="bullet">
 /// <item><b>Connections (default, no admin):</b> accurate total throughput + per-app attribution
-/// by active TCP/UDP connections. Works for everyone with zero friction.</item>
+/// by TCP connections to other machines. Works for everyone with zero friction.</item>
 /// <item><b>Precise (ETW, admin):</b> true per-app download/upload rates and session totals from a
 /// kernel trace. Offered only when the app is already elevated; falls back automatically if the
 /// kernel session can't start.</item>

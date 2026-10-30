@@ -10,12 +10,12 @@ namespace SysManager.Tests;
 /// <summary>
 /// Tests for <see cref="ConnectionBandwidthSource.AggregateConnections"/> — folding a flat list of
 /// PID→connection rows into one per-process row with a connection count and port summary. Pure, so
-/// it runs without the native TCP/UDP tables.
+/// it runs without the native TCP tables.
 /// </summary>
 public class BandwidthAggregationTests
 {
-    private static ConnectionBandwidthSource.ConnectionRow Row(int pid, string name, int port, bool tcp = true)
-        => new(pid, name, port, tcp);
+    private static ConnectionBandwidthSource.ConnectionRow Row(int pid, string name, int port)
+        => new(pid, name, port);
 
     [Fact]
     public void Aggregate_GroupsByPid_AndCountsConnections()
@@ -91,9 +91,9 @@ public class BandwidthAggregationTests
     {
         var src = new FakeConnectionSource(
         [
-            new(100, "chrome.exe", 443, true),
-            new(100, "chrome.exe", 443, true),
-            new(200, "game.exe", 27015, false),
+            new(100, "chrome.exe", 443),
+            new(100, "chrome.exe", 443),
+            new(200, "game.exe", 27015),
         ]);
         src.Start();
 
@@ -129,7 +129,7 @@ public class BandwidthAggregationTests
         protected override IReadOnlyList<ConnectionRow> EnumerateConnections()
         {
             Ran = true;
-            return [new(100, "chrome.exe", 443, true)];
+            return [new(100, "chrome.exe", 443)];
         }
     }
 

@@ -2,6 +2,7 @@
 // Author: laurentiu021 · https://github.com/laurentiu021/SystemManager
 // License: MIT
 
+using System.Net;
 using SysManager.Services;
 
 namespace SysManager.Tests;
@@ -282,5 +283,50 @@ public class EtwBandwidthSourceTests
         src.Add(1234, down: 1_000, up: 0, "Process(1234)");
 
         Assert.Equal("chrome", Assert.Single((await src.SampleAsync()).Processes).ProcessName);
+    }
+
+    // ── loopback is not network traffic (#2706) ──
+    //
+    // The kernel raises its TCP and UDP events for 127.0.0.1 and ::1 too, so a byte sent to a helper on the same PC was
+    // counted twice, as upload for the sender and download for the receiver.
+
+    public static TheoryData<string, string> LoopbackEnds => new()
+    {
+        { "127.0.0.1", "127.0.0.1" },
+        { "127.0.0.1", "127.44.0.9" },
+        { "::1", "::1" },
+        { "93.184.216.34", "127.0.0.1" },
+    };
+
+    [Theory]
+    [MemberData(nameof(LoopbackEnds))]
+    public async Task ALoopbackEvent_ChangesNeitherARowNorTheTotals(string source, string destination)
+    {
+        var clock = new TestClock();
+        using var src = new EtwBandwidthSource(clock);
+
+        src.AddUnlessLoopback(4321, down: 0, up: 200_000, "Discord", IPAddress.Parse(source), IPAddress.Parse(destination));
+        src.AddUnlessLoopback(4321, down: 200_000, up: 0, "Discord", IPAddress.Parse(destination), IPAddress.Parse(source));
+        clock.Advance(TimeSpan.FromSeconds(1));
+        var snap = await src.SampleAsync();
+
+        Assert.Empty(snap.Processes);
+        Assert.Equal((0.0, 0.0), (snap.TotalDownBytesPerSec, snap.TotalUpBytesPerSec));
+    }
+
+    [Fact]
+    public async Task AnEventWithAnotherMachine_Counts()
+    {
+        // The positive control: the filter leaves real traffic alone, in both families.
+        var clock = new TestClock();
+        using var src = new EtwBandwidthSource(clock);
+
+        src.AddUnlessLoopback(4321, down: 3_000, up: 0, "chrome",
+            IPAddress.Parse("93.184.216.34"), IPAddress.Parse("192.168.1.20"));
+        src.AddUnlessLoopback(4321, down: 0, up: 1_000, "chrome",
+            IPAddress.Parse("2001:db8::20"), IPAddress.Parse("2606:4700:4700::1111"));
+        var row = Assert.Single((await src.SampleAsync()).Processes);
+
+        Assert.Equal((3_000L, 1_000L), (row.TotalDownBytes, row.TotalUpBytes));
     }
 }

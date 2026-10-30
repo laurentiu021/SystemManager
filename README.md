@@ -1193,9 +1193,10 @@ Answers "what is actually using my space?" by listing the biggest files in one p
   calls do, shows in precise mode
 - **Precise per-app speeds (optional)** — for exact upload/download rates and
   session data totals per app (like Task Manager's Network column), enable precise
-  mode; it uses a Windows kernel trace and so **needs administrator**. The tab
-  offers it only when you're already running as administrator and falls back to the
-  no-admin view automatically if the trace can't start — it never breaks the tab
+  mode; it uses a Windows kernel trace and so **needs administrator**. Traffic between
+  programs on the same PC is left out, as in the default view. The tab offers it only
+  when you're already running as administrator and falls back to the no-admin view
+  automatically if the trace can't start — it never breaks the tab
 - The Download, Upload and Session total columns appear only in precise mode, and sort by the
   figure itself, so 800 KB/s comes before 1.2 MB/s
 - **Export CSV** saves the per-app list to a file you choose the location for, with the raw

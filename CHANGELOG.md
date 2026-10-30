@@ -10,6 +10,23 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.136.27] - 2026-10-30
+
+**Bandwidth Monitor's precise mode no longer counts traffic between programs on the same PC, and
+names an app it first listed by its number.**
+
+### Fixed
+- In precise mode, data a program sent to another program on the same PC was counted as network
+  traffic, once as upload for the sender and again as download for the receiver. Programs that
+  talk to a helper of their own that way, such as Discord, Steam or a local proxy, were listed as
+  top network users, the figures and the chart rose with them, and the speed alert could go off,
+  while the default view, which leaves that traffic out, showed other figures. Precise mode now
+  leaves it out too.
+- An app that was already busy when precise mode started was listed as "PID 1234" until Windows
+  named it, and then kept that label and the generic icon for as long as it used the network. Its
+  row now takes the app's name and icon as soon as they are known. Both were present since the
+  tab was added in 1.54.0.
+
 ## [1.136.26] - 2026-10-30
 
 **Bandwidth Monitor's "Alert over" box takes a decimal the way you type it.**

@@ -14792,6 +14792,45 @@ public partial class ArchitectureTests
     private static partial Regex NextMemberDeclaration();
 
     /// <summary>
+    /// Every kernel TCP and UDP event precise mode counts reaches the loopback filter with both of its addresses.
+    /// </summary>
+    /// <remarks>
+    /// The eight handlers added the bytes of every event, and the kernel raises them for 127.0.0.1 and ::1 too, so
+    /// traffic between programs on the same PC was counted twice as network traffic (#2706). The handlers run only
+    /// inside a kernel trace session, which a unit test cannot open, so <c>EtwBandwidthSourceTests</c> covers the
+    /// filter and this covers that each handler calls it with the event's source and destination. Comments are
+    /// stripped, and the floor of eight handlers keeps a pattern that stops matching from reading as health.
+    /// </remarks>
+    [Fact]
+    public void EveryPreciseModeHandler_FiltersLoopbackByBothAddresses()
+    {
+        var source = WithoutComments(File.ReadAllText(
+            Path.Combine(TestPaths.AppProject(), "Services", "EtwBandwidthSource.cs")));
+        var handlers = KernelNetworkHandler().Matches(source);
+
+        Assert.True(handlers.Count >= 8,
+            $"only {handlers.Count} kernel TCP/UDP handlers found in EtwBandwidthSource — the guard is measuring "
+            + "nothing, fix it rather than trusting its pass");
+
+        var offenders = handlers
+            .Where(h => !FiltersLoopback().IsMatch(h.Groups["body"].Value))
+            .Select(h => h.Groups["event"].Value)
+            .ToList();
+
+        Assert.True(offenders.Count == 0,
+            "these precise-mode handlers count an event without passing its source and destination to "
+            + "AddUnlessLoopback, so traffic between programs on the same PC counts as network traffic again:\n  "
+            + string.Join("\n  ", offenders));
+    }
+
+    // One subscription: the kernel event, and what its handler does up to the end of the statement.
+    [GeneratedRegex(@"kernel\.(?<event>(?:TcpIp|UdpIp)(?:Recv|Send)(?:IPV6)?)\s*\+=\s*d\s*=>\s*(?<body>[^;]*);")]
+    private static partial Regex KernelNetworkHandler();
+
+    [GeneratedRegex(@"^\s*AddUnlessLoopback\(\s*d\.ProcessID\s*,[^;]*,\s*d\.saddr\s*,\s*d\.daddr\s*\)\s*$")]
+    private static partial Regex FiltersLoopback();
+
+    /// <summary>
     /// Every sentence a UI test waits for must be copy the app actually ships. A UI test that quotes
     /// wording nothing renders can never pass — it is a permanently red assertion masquerading as
     /// coverage.

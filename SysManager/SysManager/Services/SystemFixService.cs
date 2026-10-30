@@ -72,14 +72,20 @@ public sealed class SystemFixService : IDisposable
     /// print its success sentence, so the tab said the reset was done and asked for a reboot that would change
     /// nothing. The services restart in a <c>finally</c>, so a failed rename does not also leave Windows Update
     /// stopped. Stopping keeps <c>SilentlyContinue</c>: a service that is not running has nothing to stop.
+    /// <para>The stop loop itself is INSIDE the <c>try</c>, not before it: Cancel reaches this script by stopping
+    /// the PowerShell pipeline, and <c>Stop-Service -Force</c> waits for each service — the wait is longest when
+    /// Windows Update is stuck, which is exactly what this fix is for. A cancel landing mid-loop used to end the
+    /// script before the <c>try</c> was ever entered, so the services already stopped stayed stopped despite the
+    /// <c>finally</c>'s own promise (#2789). PowerShell gives <c>try</c>/<c>finally</c> no separate variable
+    /// scope, so <c>$services</c> set inside the <c>try</c> is still visible to the <c>finally</c> below it.</para>
     /// <para>Internal so the integration suite can run this exact text in Windows PowerShell with the cmdlets
     /// that would change the machine shadowed by functions.</para>
     /// </remarks>
     internal const string ResetWindowsUpdateScript = """
         $ErrorActionPreference = 'Stop'
-        $services = 'wuauserv','cryptSvc','bits','msiserver'
-        foreach ($s in $services) { Stop-Service -Name $s -Force -ErrorAction SilentlyContinue }
         try {
+            $services = 'wuauserv','cryptSvc','bits','msiserver'
+            foreach ($s in $services) { Stop-Service -Name $s -Force -ErrorAction SilentlyContinue }
             $sd = Join-Path $env:SystemRoot 'SoftwareDistribution'
             $cr = Join-Path $env:SystemRoot 'System32\catroot2'
             $stamp = (Get-Date).ToString('yyyyMMddHHmmss')

@@ -68,6 +68,48 @@ public class SystemFixScriptTests
         Assert.Contains("catroot2", output, StringComparison.Ordinal);
     }
 
+    /// <summary>
+    /// Cancel reaches this script by stopping the PowerShell pipeline, which can land anywhere — including
+    /// partway through the stop loop itself, the wait being longest exactly when Windows Update is stuck
+    /// (#2789). Simulated here as a hard <c>exit</c> right after the second service's own
+    /// <c>Stop-Service</c> call, standing in for the pipeline being torn down right after the first two
+    /// services stopped but before the third and fourth were reached.
+    /// </summary>
+    /// <remarks>
+    /// A stub that instead <c>throw</c>s does NOT work here — measured, not assumed: the product script
+    /// calls <c>Stop-Service -Name $s -Force -ErrorAction SilentlyContinue</c>, and probed directly in
+    /// Windows PowerShell, <c>-ErrorAction SilentlyContinue</c> on the call site swallows a bare
+    /// <c>throw</c> from inside an advanced ([CmdletBinding()]) function entirely — execution continues
+    /// past it as if nothing happened, so a reverted (unfixed) script would pass this test too. The REAL
+    /// mechanism, <c>PowerShellRunner</c>'s <c>ps.Stop()</c> on cancellation, is a hard pipeline abort, not
+    /// a script-level error subject to <c>-ErrorAction</c> at all — <c>exit</c> is the closest a plain
+    /// script string can get to that: it unwinds through an enclosing <c>try</c>/<c>finally</c> exactly
+    /// like a real pipeline stop does, also confirmed directly, rather than being suppressed like a throw.
+    /// </remarks>
+    private const string StopExitsRightAfterTheSecondService =
+        "function Stop-Service { [CmdletBinding()] param($Name, [switch]$Force) \"STOPPED:$Name\" ; " +
+        "if ($Name -eq 'cryptSvc') { exit 7 } } ; " +
+        "function Start-Service { [CmdletBinding()] param($Name) \"STARTED:$Name\" } ; " +
+        "function Test-Path     { param($Path) $true } ; ";
+
+    [Fact]
+    public async Task WhenTheStopLoopItselfIsInterrupted_TheServicesAlreadyStoppedStillRestart()
+    {
+        var (exitCode, output, _) = await WindowsPowerShellScript.RunAsync(
+            StopExitsRightAfterTheSecondService + RenameSucceeds + Guard + SystemFixService.ResetWindowsUpdateScript);
+
+        Assert.Equal(7, exitCode);
+        Assert.DoesNotContain(SuccessSentence, output, StringComparison.Ordinal);
+        // The two services that stopped before the interruption — and every other named service, since the
+        // finally loop restarts all four unconditionally — must still be started again. Before the fix,
+        // this exit happened outside any try block, so the finally below was never entered at all and
+        // wuauserv/cryptSvc stayed stopped.
+        foreach (var service in new[] { "wuauserv", "cryptSvc", "bits", "msiserver" })
+            Assert.Contains($"STARTED:{service}", output, StringComparison.Ordinal);
+        // Neither rename ran: the interruption happened before the try's original body was ever reached.
+        Assert.DoesNotContain("RENAMED:", output, StringComparison.Ordinal);
+    }
+
     // ---------- Reinstall WinGet (#2835) ----------
 
     // Registering only writes the manifest it was given.

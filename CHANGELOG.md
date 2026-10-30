@@ -10,6 +10,18 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.136.4] - 2026-10-30
+
+**Cancelling Reset Windows Update early no longer leaves Windows Update's own services stopped.**
+
+### Fixed
+- `ResetWindowsUpdateScript` stopped `wuauserv`, `cryptSvc`, `bits` and `msiserver` BEFORE its own
+  `try`, so a cancel landing during that stop loop — the wait is longest exactly when Windows Update
+  is stuck, which is the case this fix exists for — ended the script before the `finally` that
+  restarts them was ever entered. The services already stopped stayed stopped, with the tab saying
+  only "Cancelled." Moved the stop loop inside the `try`, so the `finally` now covers it regardless of
+  where a cancellation lands.
+
 ## [1.136.3] - 2026-10-30
 
 **Performance Mode's Game Bar switch now reaches the signed-in person's own profile when SysManager

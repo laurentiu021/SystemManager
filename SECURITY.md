@@ -173,10 +173,14 @@ What the app can and cannot do by design:
   preinstalled apps and uninstalled programs cannot be put back.
 - **External CLI downloads**: the Ookla speed-test CLI is downloaded from
   `install.speedtest.net` the first time it's used. If that URL changes,
-  the feature fails safely rather than substituting an alternative. The CLI must
-  carry a valid Authenticode signature from Ookla whose chain validates with online
-  revocation, and it is checked again on every run, because it is cached in a folder
-  your account can write to.
+  the feature fails safely rather than substituting an alternative. Ookla's 1.2.0 CLI
+  carries no signature, so SysManager pins the SHA-256 of the zip and of `speedtest.exe`:
+  nothing is extracted from a zip that does not match, and the exe is checked again on
+  every run, because it is cached in a folder your account can write to. The check reads
+  the exe through a handle that stays open, refusing writes and deletes, until the test
+  ends, so the file that was checked is the file that runs. The CLI does not run while
+  SysManager is running as administrator: Windows loads a DLL from the exe's own folder
+  first, and that folder is yours to write to.
 - **A kernel driver for temperatures, only as administrator, and only if you installed it**:
   when SysManager runs elevated, the Dashboard and Resource History read temperatures through
   the bundled LibreHardwareMonitor library. It reaches the CPU and motherboard sensors only
@@ -196,10 +200,9 @@ What the app can and cannot do by design:
   Recent activity.
 - **Signature checks on lists, and what they cost**: the Signature columns in the Startup Manager and
   the Process Manager ask Windows for its verdict, through the same `WinVerifyTrust` API that Explorer's
-  *Digital Signatures* tab uses. That is a different job from the two gates in this section — the Ookla
-  CLI check above and the update check below — which compare a specific publisher and so build a
-  certificate chain themselves, using the network to look up revocation and to fetch a missing
-  intermediate certificate (the update check does so only once a publisher is pinned). A column covering
+  *Digital Signatures* tab uses. That is a different job from the update check below, which compares
+  a specific publisher and so builds a certificate chain itself, using the network to look up
+  revocation and to fetch a missing intermediate certificate (only once a publisher is pinned). A column covering
   every startup entry, or every program running right now, cannot do that — it would mean a request per
   file, and on a disconnected PC a wait per file — so it asks for **no revocation check** and tells
   Windows to answer from this machine's caches only. No network request is made for a column.
@@ -238,8 +241,7 @@ What the app can and cannot do by design:
   certificate exists, so no publisher is pinned yet: today a signed build is accepted
   on the strength of the SHA256 comparison alone. Once that constant is filled in, a
   present signature has to match the pinned publisher AND its certificate chain has to
-  validate to a trusted root with online revocation, or the update is refused — the same
-  policy already applied to the third-party Ookla CLI. Writing both halves now is what
+  validate to a trusted root with online revocation, or the update is refused. Writing both halves now is what
   stops the check from quietly becoming a no-op the day signing is switched on: without
   the pin, merely *carrying* a signature would pass, and a binary signed by an attacker's
   own self-issued certificate would be accepted like a legitimate build. Note that
@@ -369,8 +371,8 @@ starts:
   Traceroute tab when you press Trace now or Start auto-trace; traceroute also looks up
   each hop's name through your DNS server. The speed test's own engine always uses Cloudflare
   (`speed.cloudflare.com`). The Ookla engine downloads Ookla's CLI from
-  `install.speedtest.net` the first time you use it, checks its certificate with the
-  issuing certificate authority on every run, and accepts Ookla's licence and privacy
+  `install.speedtest.net` the first time you use it, checks it against the pinned
+  SHA-256 on this PC, without a request to anyone, and accepts Ookla's licence and privacy
   notice for you when it runs the test against an Ookla server.
 - **Apps through winget** — searching for, installing, updating and uninstalling apps
   (Bulk Installer, App Updates, Uninstaller) runs winget, which talks to Microsoft's

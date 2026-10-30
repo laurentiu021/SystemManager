@@ -3,15 +3,18 @@
 // License: MIT
 
 using System.IO;
+using System.IO.Compression;
+using System.Net;
+using System.Net.Http;
 using System.Net.NetworkInformation;
+using System.Security.Cryptography;
 using SysManager.Services;
 
 namespace SysManager.Tests;
 
 /// <summary>
-/// Tests for <see cref="SpeedTestService"/>'s Zip Slip containment check, which
-/// guards the Ookla CLI extraction against crafted archive entries escaping the
-/// target tools directory.
+/// Tests for <see cref="SpeedTestService"/>: the Zip Slip containment check on the Ookla CLI extraction, how the
+/// CLI is downloaded, checked against its pinned release and held while it runs, and the ping and upload readings.
 /// </summary>
 public class SpeedTestServiceTests
 {
@@ -59,8 +62,10 @@ public class SpeedTestServiceTests
         // bypassing the ViewModel's dedicated "Cancelled" handler and misreporting a
         // clean user cancel as an error. A pre-cancelled token makes the first
         // Task.Run(..., ct) inside EnsureOoklaAsync throw before any network or
-        // filesystem work, so this test is deterministic and offline.
-        var svc = new SpeedTestService();
+        // filesystem work, so this test is deterministic and offline. Not elevated, or the run would be refused
+        // before it got that far, as it is on an elevated host.
+        using var http = new HttpClient(new Serving([]));
+        var svc = new SpeedTestService(http, toolsDir: null, SpeedTestService.OoklaRelease.Pinned, isElevated: () => false);
         using var cts = new CancellationTokenSource();
         cts.Cancel();
 
@@ -114,30 +119,219 @@ public class SpeedTestServiceTests
         finally { try { Directory.Delete(dir, recursive: true); } catch { /* ignore */ } }
     }
 
-    [Fact]
-    public void PinAndVerify_UnsignedBinary_ThrowsAndDeletesIt()
+    // ---------- the pinned Ookla release (#2701) ----------
+    // Ookla's 1.2.0 CLI carries no signature, so the signature check rejected and deleted the real file on every run,
+    // and the Ookla test never ran. It is checked against the SHA-256 of the pinned release instead.
+
+    /// <summary>A stand-in for speedtest.exe: "MZ" and padding, unsigned, as the real one is, and over 1 KB.</summary>
+    private static byte[] FakeCli(byte fill = 0x41)
     {
-        // Regression for a defect the pin itself introduced and that had to be designed out.
-        //
-        // VerifyOoklaSignature is fail-closed and used to delete the rejected binary itself, through
-        // TryDeleteExe — which swallows IOException at Debug level. Pinning the file against deletion
-        // during verification made every one of those deletes fail silently: the exception still said
-        // "Binary deleted for security" while the rejected file stayed in the cache indefinitely.
-        //
-        // The delete now happens in PinAndVerify's finally, after the pin is released. Reverse that order
-        // and this test goes red.
-        var dir = Path.Combine(Path.GetTempPath(), "smtest_pinverify_" + Guid.NewGuid().ToString("N"));
+        var bytes = new byte[4096];
+        Array.Fill(bytes, fill);
+        bytes[0] = 0x4D;
+        bytes[1] = 0x5A;
+        return bytes;
+    }
+
+    private static string Sha256(byte[] bytes) => Convert.ToHexString(SHA256.HashData(bytes));
+
+    /// <summary>A zip shaped like Ookla's: the exe and its readme, dated so the same input gives the same bytes.</summary>
+    private static byte[] ZipOf(byte[] exe)
+    {
+        var dated = new DateTimeOffset(2022, 9, 1, 0, 0, 0, TimeSpan.Zero);
+        using var buffer = new MemoryStream();
+        using (var zip = new ZipArchive(buffer, ZipArchiveMode.Create, leaveOpen: true))
+        {
+            var cli = zip.CreateEntry("speedtest.exe");
+            cli.LastWriteTime = dated;
+            using (var body = cli.Open()) body.Write(exe);
+            var readme = zip.CreateEntry("speedtest.md");
+            readme.LastWriteTime = dated;
+            using (var text = new StreamWriter(readme.Open())) text.Write("# Speedtest CLI");
+        }
+        return buffer.ToArray();
+    }
+
+    /// <summary>Answers every request with <paramref name="body"/>, counting the requests.</summary>
+    private sealed class Serving(byte[] body) : HttpMessageHandler
+    {
+        public int Requests { get; private set; }
+
+        protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken ct)
+        {
+            Requests++;
+            return Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK)
+            {
+                Content = new ByteArrayContent(body),
+                RequestMessage = request,
+            });
+        }
+    }
+
+    private static string NewToolsDir()
+    {
+        var dir = Path.Combine(Path.GetTempPath(), "smtest_ookla_" + Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(dir);
+        return dir;
+    }
+
+    [Fact]
+    public void PinAndVerify_AnUnsignedFileWithThePinnedHash_IsAccepted_AndHeld()
+    {
+        var dir = NewToolsDir();
         var file = Path.Combine(dir, "speedtest.exe");
-        File.WriteAllBytes(file, [0x4D, 0x5A, 0x00, 0x01, 0x02, 0x03]);   // "MZ" and nothing else: no signature
+        var cli = FakeCli();
+        File.WriteAllBytes(file, cli);
 
         try
         {
-            Assert.Throws<InvalidOperationException>(() => SpeedTestService.PinAndVerify(file));
-            Assert.False(File.Exists(file),
-                "verification rejected the binary but it is still on disk — the pin was not released before the delete");
+            using (var pinned = SpeedTestService.PinAndVerify(file, Sha256(cli)))
+            {
+                Assert.Equal(file, pinned.Path);
+                Assert.ThrowsAny<IOException>(() => File.WriteAllBytes(file, FakeCli(0x42)));
+            }
+            Assert.Equal(cli, File.ReadAllBytes(file));
         }
-        finally { try { Directory.Delete(dir, recursive: true); } catch { /* ignore */ } }
+        finally { Directory.Delete(dir, recursive: true); }
+    }
+
+    [Fact]
+    public void PinAndVerify_OneChangedByte_IsRejected_AndTheFileDeleted()
+    {
+        // The delete happens after the pin is released: the pin denies deletion, and the delete swallows that
+        // failure, so in the other order the rejected file would stay in the cache while the message said it was gone.
+        var dir = NewToolsDir();
+        var file = Path.Combine(dir, "speedtest.exe");
+        var cli = FakeCli();
+        var pinned = Sha256(cli);
+        cli[2048] ^= 0x01;
+        File.WriteAllBytes(file, cli);
+
+        try
+        {
+            var ex = Assert.Throws<InvalidOperationException>(() => SpeedTestService.PinAndVerify(file, pinned));
+            Assert.Equal("The saved Ookla program was not the release SysManager checks for, so it was deleted. Run the "
+                + "test again to download it again.", ex.Message);
+            Assert.False(File.Exists(file), "the rejected file is still on disk");
+        }
+        finally { Directory.Delete(dir, recursive: true); }
+    }
+
+    [Fact]
+    public async Task AMissingCli_IsDownloaded_Checked_AndTheZipRemoved()
+    {
+        // The run that downloaded the CLI used to fail on deleting the zip, which the extraction still held open.
+        var dir = NewToolsDir();
+        var cli = FakeCli();
+        var zip = ZipOf(cli);
+        var server = new Serving(zip);
+        using var http = new HttpClient(server);
+        var release = new SpeedTestService.OoklaRelease("https://ookla.test/cli.zip", Sha256(zip), Sha256(cli));
+        var svc = new SpeedTestService(http, dir, release, isElevated: () => false);
+
+        try
+        {
+            using (var pinned = await svc.EnsureOoklaAsync(progress: null, CancellationToken.None))
+                Assert.Equal(Path.Combine(dir, "speedtest.exe"), pinned.Path);
+
+            Assert.Equal(1, server.Requests);
+            Assert.Equal(cli, File.ReadAllBytes(Path.Combine(dir, "speedtest.exe")));
+            Assert.False(File.Exists(Path.Combine(dir, "ookla.zip")), "the downloaded zip was left behind");
+        }
+        finally { Directory.Delete(dir, recursive: true); }
+    }
+
+    [Fact]
+    public async Task ADownloadThatIsNotThePinnedZip_ExtractsNothing()
+    {
+        var dir = NewToolsDir();
+        var cli = FakeCli();
+        var zip = ZipOf(cli);
+        using var http = new HttpClient(new Serving(zip));
+        var release = new SpeedTestService.OoklaRelease("https://ookla.test/cli.zip", Sha256(ZipOf(FakeCli(0x42))), Sha256(cli));
+        var svc = new SpeedTestService(http, dir, release, isElevated: () => false);
+
+        try
+        {
+            var ex = await Assert.ThrowsAsync<InvalidOperationException>(
+                () => svc.EnsureOoklaAsync(progress: null, CancellationToken.None));
+            Assert.Equal("The Ookla download was not the release SysManager checks for, so it was not used.", ex.Message);
+            Assert.Empty(Directory.EnumerateFileSystemEntries(dir));
+        }
+        finally { Directory.Delete(dir, recursive: true); }
+    }
+
+    [Fact]
+    public async Task ACachedCli_IsCheckedOnEveryRun_AndUsedWithoutADownload()
+    {
+        var dir = NewToolsDir();
+        var cli = FakeCli();
+        File.WriteAllBytes(Path.Combine(dir, "speedtest.exe"), cli);
+        var server = new Serving([]);
+        using var http = new HttpClient(server);
+        var svc = new SpeedTestService(http, dir, new("https://ookla.test/cli.zip", "", Sha256(cli)), isElevated: () => false);
+
+        try
+        {
+            using (await svc.EnsureOoklaAsync(progress: null, CancellationToken.None)) { }
+            Assert.Equal(0, server.Requests);
+        }
+        finally { Directory.Delete(dir, recursive: true); }
+    }
+
+    [Fact]
+    public async Task ACachedCliWithAChangedByte_IsDeleted_SoTheNextRunDownloadsItAgain()
+    {
+        var dir = NewToolsDir();
+        var cli = FakeCli();
+        var exe = Path.Combine(dir, "speedtest.exe");
+        File.WriteAllBytes(exe, FakeCli(0x42));
+        var zip = ZipOf(cli);
+        var server = new Serving(zip);
+        using var http = new HttpClient(server);
+        var svc = new SpeedTestService(http, dir, new("https://ookla.test/cli.zip", Sha256(zip), Sha256(cli)), isElevated: () => false);
+
+        try
+        {
+            await Assert.ThrowsAsync<InvalidOperationException>(() => svc.EnsureOoklaAsync(progress: null, CancellationToken.None));
+            Assert.False(File.Exists(exe), "the changed CLI is still cached");
+            Assert.Equal(0, server.Requests);
+
+            using (await svc.EnsureOoklaAsync(progress: null, CancellationToken.None)) { }
+            Assert.Equal(1, server.Requests);
+            Assert.Equal(cli, File.ReadAllBytes(exe));
+        }
+        finally { Directory.Delete(dir, recursive: true); }
+    }
+
+    [Fact]
+    public async Task WhileElevated_TheOoklaRun_IsRefused_BeforeAnythingIsDownloaded()
+    {
+        var dir = NewToolsDir();
+        var server = new Serving(ZipOf(FakeCli()));
+        using var http = new HttpClient(server);
+        var svc = new SpeedTestService(http, dir, SpeedTestService.OoklaRelease.Pinned, isElevated: () => true);
+
+        try
+        {
+            var ex = await Assert.ThrowsAsync<InvalidOperationException>(
+                () => svc.RunOoklaAsync(progress: null, CancellationToken.None));
+            Assert.Equal(SpeedTestService.OoklaNeedsStandardRunMessage, ex.Message);
+            Assert.Equal(0, server.Requests);
+            Assert.Empty(Directory.EnumerateFileSystemEntries(dir));
+        }
+        finally { Directory.Delete(dir, recursive: true); }
+    }
+
+    [Fact]
+    public void ThePinnedRelease_Is_Ooklas64BitWindowsBuild_WithBothHashesWhole()
+    {
+        var pinned = SpeedTestService.OoklaRelease.Pinned;
+
+        Assert.Equal("https://install.speedtest.net/app/cli/ookla-speedtest-1.2.0-win64.zip", pinned.ZipUrl);
+        Assert.Matches("^[0-9A-F]{64}$", pinned.ZipSha256);
+        Assert.Matches("^[0-9A-F]{64}$", pinned.ExeSha256);
+        Assert.NotEqual(pinned.ZipSha256, pinned.ExeSha256);
     }
 
     // ---------- a ping or upload that was not measured is not a number (#2504) ----------

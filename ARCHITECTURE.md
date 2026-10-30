@@ -535,7 +535,12 @@ Key services:
   `DateTime.UtcNow` sitting next to it unused — otherwise a test faking the clock for the delay still
   saw the real wall clock in the sample it actually asserts on (#2855).
 - `SpeedTestService` — HTTP speed test against Cloudflare plus the Ookla CLI,
-  auto-downloaded on first use. Behind `ISpeedTestService` for the Dashboard's quick test. A ping nobody
+  auto-downloaded on first use. The CLI is one pinned release, `OoklaRelease.Pinned`: nothing is extracted
+  from a zip whose SHA-256 differs, and the exe's SHA-256 is read through the handle that stays open, denying
+  writes, until the process exits, on every run. It never runs elevated, since it is kept in a folder the
+  user's account can write to. The internal constructor takes the download client, tools folder, release and
+  elevation probe, so the whole preparation is tested without a network. Behind `ISpeedTestService` for the
+  Dashboard's quick test. A ping nobody
   answered and an upload the server refused are null, not 0: `MeasurePingAsync` is handed the single ping and
   `UploadMbps` is pure, so both are tested without a network. `SpeedTestResult` formats them, "—" when missing.
 - `PowerShellRunner` — wraps `System.Management.Automation` to run scripts
@@ -875,13 +880,13 @@ Key services:
   one anyway and, with no network, waited out `UrlRetrievalTimeout` for each. The two settings
   are therefore derived from the one argument rather than offered separately —
   `DisableCertificateDownloads` is on exactly when revocation is `Offline`.
-  Deliberately holds no policy about what an answer MEANS: an unsigned file is fatal for the
-  Ookla download and expected for our own build, so each caller keeps that decision. Two
-  calls rather than one because both fail-closed callers compare the subject BEFORE building
-  a chain, and a single "inspect" would add a revocation fetch on the path where the subject
-  already failed.
-  **Its chain validation has only those two gates as callers**, and `SignatureVerdict` calls
-  `ReadSigner` for the publisher's name alone. The informational columns used it for their
+  Deliberately holds no policy about what an answer MEANS: an unsigned file is expected for our
+  own build, and each caller keeps that decision. Two calls rather than one because the update
+  check compares the subject BEFORE building a chain, and a single "inspect" would add a
+  revocation fetch on the path where the subject already failed.
+  **Its chain validation has only the update check as a caller**, and `SignatureVerdict` calls
+  `ReadSigner` for the publisher's name alone. The Ookla CLI was checked here too, until it turned
+  out to carry no signature at all: `SpeedTestService` now pins the SHA-256 of its zip and exe (#2701). The informational columns used it for their
   verdict and moved off it, because an offline managed chain cannot answer for an arbitrary
   file: measured over 82 running process images it verified 1 and reported failure for 47, on
   `RevocationStatusUnknown` (46 of 48, no cached CRL) and `PartialChain` (29, intermediate not
@@ -2376,8 +2381,7 @@ it is empty until a code-signing certificate exists, so today a signed build pas
 the SHA256 comparison alone and its signer is only logged. Writing the check now is
 what stops it quietly becoming a no-op the day signing is switched on — without the
 pin, merely *carrying* a signature would pass, and an attacker's self-issued
-certificate would be accepted like a legitimate build. The policy deliberately mirrors
-`SpeedTestService.VerifyOoklaSignature`, which already pinned subject + chain for a third-party download.
+certificate would be accepted like a legitimate build.
 
 SHA256 remains the integrity gate rather than a fallback: `CreateFromSignedFile`
 reads the signer certificate without validating the file against it, so it cannot

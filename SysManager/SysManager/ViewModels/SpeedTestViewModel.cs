@@ -225,6 +225,12 @@ public sealed partial class SpeedTestViewModel : ViewModelBase
     private async Task RunOoklaSpeedAsync()
     {
         if (IsSpeedTesting) return;
+        // Said before anything starts, and not as an error: elevated, the service does not run the CLI at all (#2701).
+        if (AdminHelper.IsElevated())
+        {
+            OoklaStatus = SpeedTestService.OoklaNeedsStandardRunMessage;
+            return;
+        }
         using var opLock = OperationLockService.Instance.TryAcquire(OperationCategory.Network, "Ookla Speed Test");
         if (opLock is null)
         {

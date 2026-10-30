@@ -20,6 +20,10 @@ public sealed class SpeedTestViewModelTests : IDisposable
 {
     private readonly string _dir;
 
+    // Pinned, not read from the host: the Ookla run does not start while SysManager is elevated (#2701), and the
+    // machines that run this suite usually are. A test about the elevated side forces it inside its own scope.
+    private readonly IDisposable _notElevated = Helpers.AdminHelper.ForceElevation(false);
+
     public SpeedTestViewModelTests()
     {
         _dir = System.IO.Path.Combine(
@@ -31,6 +35,7 @@ public sealed class SpeedTestViewModelTests : IDisposable
     {
         try { System.IO.Directory.Delete(_dir, recursive: true); }
         catch (System.IO.DirectoryNotFoundException) { /* already gone */ }
+        _notElevated.Dispose();
     }
 
     private static NetworkSharedState NewShared() => new(
@@ -428,6 +433,24 @@ public sealed class SpeedTestViewModelTests : IDisposable
         var saved = await history.LoadAsync();
         Assert.NotNull(saved);
         Assert.Equal(measured, Assert.Single(saved));
+    }
+
+    [Fact]
+    public async Task WhileElevated_TheOoklaRun_SaysWhyItDoesNotRun_WithoutStartingIt()
+    {
+        using var elevated = Helpers.AdminHelper.ForceElevation(true);
+        var measured = new Models.SpeedTestResult("Ookla", 480.2, 95.1, 7.4, "Bucharest", new DateTime(2026, 9, 29, 9, 5, 0));
+        var engine = EngineReturning(measured);
+        var vm = new SpeedTestViewModel(NewShared(), NewHistory(), engine);
+        await vm.InitializationComplete;
+
+        await vm.RunOoklaSpeedCommand.ExecuteAsync(null);
+
+        Assert.Equal(Services.SpeedTestService.OoklaNeedsStandardRunMessage, vm.OoklaStatus);
+        Assert.False(vm.IsSpeedTesting);
+        Assert.Null(vm.OoklaResult);
+        await engine.DidNotReceive().RunOoklaAsync(
+            Arg.Any<IProgress<(int Percent, string Message)>?>(), Arg.Any<CancellationToken>(), Arg.Any<int?>());
     }
 
     [Theory]

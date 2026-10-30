@@ -31,18 +31,17 @@ internal enum SignerState
 /// certificate, and validating that certificate's chain under a single policy.
 /// </summary>
 /// <remarks>
-/// Extracted because the chain policy was written out twice — in
-/// <c>SpeedTestService.VerifyOoklaSignature</c> for a third-party download and in
-/// <c>UpdateService.VerifyAuthenticode</c> for our own installer — and the two copies are the kind that
+/// Extracted because the chain policy was written out twice — for the Ookla CLI, a third-party download, and
+/// in <c>UpdateService.VerifyAuthenticode</c> for our own installer — and the two copies are the kind that
 /// drift silently: a weakened revocation mode in one of them changes a security posture while every test
 /// stays green. The Startup Manager needs the same reading for a third purpose, which would have made it
-/// three.
+/// three. The Ookla CLI turned out to carry no signature, and is checked against pinned SHA-256s instead (#2701).
 /// <para><b>What is deliberately NOT shared: the policy that decides what the answer MEANS.</b> The two
-/// existing callers disagree on the most important case — an unsigned file is fatal for the Ookla binary
-/// and expected for our own — and they disagree on whether to throw or return false. Folding those
+/// callers it was extracted for disagreed on the most important case — an unsigned file was fatal for the
+/// Ookla binary and is expected for our own — and on whether to throw or return false. Folding those
 /// together is how a fail-closed gate quietly becomes permissive, so each caller keeps its own decision
 /// and this type answers only the mechanical question.</para>
-/// <para><b>Why two calls rather than one.</b> Both callers check the certificate's subject BEFORE
+/// <para><b>Why two calls rather than one.</b> The update check compares the certificate's subject BEFORE
 /// building the chain, and building a chain with online revocation makes a network request. A single
 /// "inspect" call would therefore have to build the chain first, adding a revocation fetch on exactly the
 /// path where the subject already failed. Keeping the steps separate preserves both the ordering and the

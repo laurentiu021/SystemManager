@@ -632,13 +632,11 @@ public sealed class UpdateService : IUpdateService
     /// tampered signed binary — the SHA256 comparison is what catches a modified download.
     /// </summary>
     /// <remarks>
-    /// The signed branch pins the publisher and builds a chain, mirroring
-    /// <c>SpeedTestService.VerifyOoklaSignature</c> — which already does this for a THIRD-PARTY
-    /// download, and whose own comment notes that "subject alone is forgeable (anyone can issue a
-    /// self-signed 'Ookla' cert)". Without the pin, merely *having* a signature passed this gate, so
-    /// the day a certificate arrives, a binary signed by an attacker's self-issued cert would have
-    /// been accepted identically to a legitimate build — while the natural assumption would be "we
-    /// sign now, so the signature check protects us". Keeping the two paths symmetric is the point.
+    /// The signed branch pins the publisher and builds a chain, because a subject alone is forgeable:
+    /// anyone can issue a self-signed certificate with any name. Without the pin, merely *having* a
+    /// signature passed this gate, so the day a certificate arrives, a binary signed by an attacker's
+    /// self-issued cert would have been accepted identically to a legitimate build — while the natural
+    /// assumption would be "we sign now, so the signature check protects us".
     /// </remarks>
     public static bool VerifyAuthenticode(string filePath)
     {
@@ -686,7 +684,7 @@ public sealed class UpdateService : IUpdateService
 
             // Subject alone is forgeable — anyone can issue a self-signed certificate carrying any
             // subject string — so validate the whole chain to a trusted root, with online revocation, and
-            // fail closed. Same policy as VerifyOoklaSignature, which is now the same code.
+            // fail closed.
             if (!Helpers.Authenticode.ValidateChain(
                     cert, System.Security.Cryptography.X509Certificates.X509RevocationMode.Online, out var statuses))
             {

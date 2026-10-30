@@ -12,12 +12,13 @@ namespace SysManager.Tests;
 /// Tests for <see cref="Authenticode"/>, the shared signer-certificate reader and chain validator.
 /// </summary>
 /// <remarks>
-/// The chain policy used to be written out twice — once in <c>SpeedTestService.VerifyOoklaSignature</c> for
-/// a third-party download and once in <c>UpdateService.VerifyAuthenticode</c> for our own installer. Two
-/// copies of a security policy drift in the way that matters least visibly: a weakened revocation mode in
-/// one of them changes the posture while every test stays green, because nothing compares them.
+/// The chain policy used to be written out twice — once for the Ookla CLI, a third-party download, and once in
+/// <c>UpdateService.VerifyAuthenticode</c> for our own installer. Two copies of a security policy drift in the way
+/// that matters least visibly: a weakened revocation mode in one of them changes the posture while every test
+/// stays green, because nothing compares them. The Ookla CLI carries no signature, and is now checked against
+/// pinned SHA-256s instead (#2701).
 /// <para>What can be asserted by execution here is the three-way split
-/// <see cref="SysManager.Helpers.Authenticode.ReadSigner"/> returns, which is the part both callers depend on and
+/// <see cref="SysManager.Helpers.Authenticode.ReadSigner"/> returns, which is the part its callers depend on and
 /// disagree about. Chain validation itself needs a genuinely signed file with a controllable publisher — a test
 /// certificate and signtool, which this project does not have — so that half is pinned against the source,
 /// with the limitation stated rather than papered over.</para>
@@ -31,7 +32,7 @@ public class AuthenticodeTests
         return path;
     }
 
-    // ── ReadSigner: the three-way split the two callers disagree about ──
+    // ── ReadSigner: the three-way split its callers disagree about ──
 
     [Fact]
     public void ReadSigner_FileWithNoSignature_ReportsUnsigned()
@@ -165,18 +166,17 @@ public class AuthenticodeTests
     }
 
     /// <summary>
-    /// Both fail-closed gates ask for online revocation, and the helper does not decide that for them.
+    /// The fail-closed gate asks for online revocation, and the helper does not decide that for it.
     /// </summary>
     /// <remarks>
     /// The revocation mode is a parameter precisely so a scan of many files can pass <c>Offline</c> without
-    /// a network request per file. That flexibility is also the way the strict callers could be weakened
+    /// a network request per file. That flexibility is also the way a strict caller could be weakened
     /// invisibly — passing <c>NoCheck</c> compiles, runs, and silently stops checking revocation on the
-    /// installer we download and the third-party binary we execute. So the call sites are pinned, not just
-    /// the helper.
+    /// installer we download. So the call site is pinned, not just the helper. The Ookla CLI was the second
+    /// gate until its hashes replaced the certificate check (#2701).
     /// </remarks>
     [Theory]
     [InlineData("UpdateService.cs")]
-    [InlineData("SpeedTestService.cs")]
     public void EveryFailClosedGate_AsksForOnlineRevocation(string serviceFile)
     {
         var source = File.ReadAllText(TestPaths.AppFile("Services", serviceFile));
@@ -201,7 +201,7 @@ public class AuthenticodeTests
     /// demands a revocation answer with no cached CRL and an intermediate it may not fetch. The
     /// informational columns now ask Windows through <c>WinVerifyTrust</c>.
     /// <para>So what is worth asserting has inverted: not "which revocation mode", but that the verdict is
-    /// no longer derived from a chain we build. The two fail-closed gates still do, which is what
+    /// no longer derived from a chain we build. The fail-closed gate still is, which is what
     /// <see cref="EveryFailClosedGate_AsksForOnlineRevocation"/> covers — this is the other half, and
     /// keeping both here is what stops a future change from quietly giving the columns the gates' mechanism
     /// back.</para>

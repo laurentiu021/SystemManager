@@ -20,8 +20,15 @@ namespace SysManager.Tests;
 /// Set-MpPreference operations can't race the read-back verification.
 /// </summary>
 [Collection("ProcessWideStatics")]
-public class DefenderViewModelTests
+public sealed class DefenderViewModelTests : IDisposable
 {
+    // Pinned, not read from the host: every change refuses to start without administrator rights (#2730), so a test
+    // that read the host would pass only where the suite runs elevated. A test about a standard user forces that
+    // inside its own scope.
+    private readonly IDisposable _elevated = AdminHelper.ForceElevation(true);
+
+    public void Dispose() => _elevated.Dispose();
+
     /// <summary>
     /// A seam that answers "no point was created" — the common case, since System Restore ships
     /// disabled on many consumer PCs and Windows grants roughly one point per 24 hours.
@@ -477,4 +484,88 @@ public class DefenderViewModelTests
         Assert.Equal($"SysManager won't exclude \"{drive}\" from scanning: it is a whole drive or network share, so the "
             + "files in it would no longer be checked for malware.", vm.StatusMessage);
     }
+
+    // ---------- without administrator rights (#2730) ----------
+    // Windows lets a standard user read Defender but not change it, and on a default install that read says Tamper
+    // Protection is on. Every change asked to confirm, tried for a restore point, failed, and then told the user to
+    // turn Tamper Protection off, which changed nothing.
+
+    private static IPowerShellRunner RunnerReporting(int pua, bool tamperProtected)
+    {
+        var projection = new PSObject();
+        projection.Properties.Add(new PSNoteProperty("PUAProtection", pua));
+        projection.Properties.Add(new PSNoteProperty("IsTamperProtected", tamperProtected));
+        var ps = Substitute.For<IPowerShellRunner>();
+        ps.RunAsync(Arg.Any<string>(), Arg.Any<IDictionary<string, object?>?>(), Arg.Any<System.Threading.CancellationToken>())
+          .Returns(new Collection<PSObject> { projection });
+        return ps;
+    }
+
+    [Theory]
+    [InlineData("TogglePua", "Changing PUA protection")]
+    [InlineData("ToggleCfa", "Changing Controlled Folder Access")]
+    [InlineData("AddExclusion", "Adding an exclusion")]
+    [InlineData("RemoveExclusion", "Removing an exclusion")]
+    public async Task ForAStandardUser_EveryChange_SaysItNeedsAdministrator_BeforeAskingAnything(string change, string what)
+    {
+        using var notElevated = AdminHelper.ForceElevation(false);
+        // A folder the exclusion rules accept, so only the missing rights can stop the add before it asks.
+        var folder = Directory.CreateTempSubdirectory("smtest_defender_").FullName;
+        try
+        {
+            var ps = RunnerReporting(pua: 1, tamperProtected: true);
+            var restorePoint = RestorePointTaken();
+            var picker = Substitute.For<IDialogService>();
+            picker.PickFolder(Arg.Any<string>()).Returns(folder);
+            var vm = new DefenderViewModel(new DefenderService(ps), restorePoint, picker);
+            await vm.InitializationComplete;
+            Assert.True(vm.IsTamperProtected);   // the read that used to be blamed
+            vm.SelectedExclusion = @"C:\Games";
+            using var confirm = new DialogAnswer(confirm: true);
+
+            var command = change switch
+            {
+                "TogglePua" => vm.TogglePuaCommand,
+                "ToggleCfa" => vm.ToggleCfaCommand,
+                "AddExclusion" => vm.AddExclusionCommand,
+                _ => vm.RemoveExclusionCommand,
+            };
+            await command.ExecuteAsync(null);
+
+            Assert.Equal($"{what} needs administrator rights — use \"Run as administrator\" above.", vm.StatusMessage);
+            Assert.Equal(0, confirm.Calls);
+            picker.DidNotReceive().PickFolder(Arg.Any<string>());
+            await restorePoint.DidNotReceive().EnsureAsync(Arg.Any<string>(), Arg.Any<System.Threading.CancellationToken>());
+            await ps.DidNotReceive().RunAsync(Arg.Is<string>(script => script != DefenderService.StatusScript),
+                Arg.Any<IDictionary<string, object?>?>(), Arg.Any<System.Threading.CancellationToken>());
+        }
+        finally { Directory.Delete(folder, recursive: true); }
+    }
+
+    /// <summary>
+    /// With administrator rights, a change the read-back does not show was put down to missing rights whenever
+    /// Tamper Protection was off, to a session that had them.
+    /// </summary>
+    [Theory]
+    [InlineData(false, "PUA protection was not changed — Windows did not apply it.")]
+    [InlineData(true, "PUA protection was not changed — Tamper Protection blocked it. Turn it off in Windows Security first.")]
+    public async Task AnElevatedChange_TheReadBackDoesNotShow_IsNotPutDownToRights(bool tamperProtected, string expected)
+    {
+        var vm = new DefenderViewModel(new DefenderService(RunnerReporting(pua: 1, tamperProtected)), NoRestorePoint());
+        await vm.InitializationComplete;
+        Assert.True(vm.PuaEnabled);   // so the toggle asks for off, and the read-back still says on
+        using var dialog = new DialogAnswer(confirm: true);
+
+        await vm.TogglePuaCommand.ExecuteAsync(null);
+
+        Assert.Equal(expected, vm.StatusMessage);
+    }
+
+    [Theory]
+    [InlineData(false, true, "PUA protection was not changed — this needs administrator rights. Use \"Run as administrator\" above.")]
+    [InlineData(false, false, "PUA protection was not changed — this needs administrator rights. Use \"Run as administrator\" above.")]
+    [InlineData(true, true, "PUA protection was not changed — Tamper Protection blocked it. Turn it off in Windows Security first.")]
+    [InlineData(true, false, "PUA protection was not changed — Windows did not apply it.")]
+    public void NotChangedMessage_NamesTamperProtectionOnlyWithAdministratorRights(bool elevated, bool tamperProtected, string expected)
+        => Assert.Equal(expected, DefenderViewModel.NotChangedMessage("PUA protection", elevated, tamperProtected));
 }

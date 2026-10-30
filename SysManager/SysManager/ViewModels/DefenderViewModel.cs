@@ -15,8 +15,9 @@ namespace SysManager.ViewModels;
 /// <summary>
 /// ViewModel for the Defender Tweaks tab. Shows the current Microsoft Defender status,
 /// toggles PUA protection and Controlled Folder Access, and manages scan exclusion
-/// folders. Every change requires admin and is verified by reading the value back
-/// (Tamper Protection can silently reject it); changes are confirmed first. All four changes run
+/// folders. Every change requires admin, so without it a change is refused before anything is asked; with it,
+/// the change is confirmed first and verified by reading the value back
+/// (Tamper Protection can silently reject it). All four changes run
 /// through one funnel, which takes the shared session restore point before the first of them.
 /// </summary>
 public sealed partial class DefenderViewModel : ElevatedViewModelBase
@@ -118,6 +119,7 @@ public sealed partial class DefenderViewModel : ElevatedViewModelBase
     [RelayCommand(CanExecute = nameof(NotBusy))]
     private async Task TogglePuaAsync()
     {
+        if (!RequireElevation("Changing PUA protection")) return;
         if (!Confirm($"{(PuaEnabled ? "Disable" : "Enable")} potentially-unwanted-app (PUA) protection?")) return;
         // Read the target BEFORE the change runs — Apply overwrites PuaEnabled from the read-back.
         int target = PuaEnabled ? 0 : 1;
@@ -128,6 +130,7 @@ public sealed partial class DefenderViewModel : ElevatedViewModelBase
     [RelayCommand(CanExecute = nameof(NotBusy))]
     private async Task ToggleCfaAsync()
     {
+        if (!RequireElevation("Changing Controlled Folder Access")) return;
         // Turning it on is the costly direction: apps Windows does not trust can no longer save into the protected
         // folders, and this tab has no way to allow one (#2505).
         var cfaMessage = CfaEnabled
@@ -148,6 +151,7 @@ public sealed partial class DefenderViewModel : ElevatedViewModelBase
     [RelayCommand(CanExecute = nameof(NotBusy))]
     private async Task AddExclusionAsync()
     {
+        if (!RequireElevation("Adding an exclusion")) return;
         var folder = _dialog.PickFolder("Select a folder to exclude from scanning");
         if (folder is null) return;
 
@@ -174,6 +178,7 @@ public sealed partial class DefenderViewModel : ElevatedViewModelBase
     [RelayCommand(CanExecute = nameof(CanRemoveExclusion))]
     private async Task RemoveExclusionAsync()
     {
+        if (!RequireElevation("Removing an exclusion")) return;
         string? path = SelectedExclusion;
         if (path is null) return;
         if (!Confirm($"Stop excluding \"{path}\"?\n\nThe folder will be scanned for malware again.")) return;
@@ -268,11 +273,23 @@ public sealed partial class DefenderViewModel : ElevatedViewModelBase
         }
         else
         {
-            StatusMessage = IsTamperProtected
-                ? $"{what} was not changed — Tamper Protection blocked it. Turn it off in Windows Security first."
-                : $"{what} was not changed — this needs administrator rights.";
+            StatusMessage = NotChangedMessage(what, IsElevated, IsTamperProtected);
         }
     }
+
+    /// <summary>What the status line says when the read-back does not show the change.</summary>
+    /// <remarks>
+    /// Elevation comes first. Windows lets a standard user read Defender but not change it, and on a default install
+    /// that read says Tamper Protection is on, so asking about it first blamed the protection, and told the user to
+    /// turn it off, for a refusal that was about rights (#2730). The commands now refuse before asking anything when
+    /// SysManager is not elevated, so this is the second check, not the only one.
+    /// </remarks>
+    internal static string NotChangedMessage(string what, bool elevated, bool tamperProtected) => (elevated, tamperProtected) switch
+    {
+        (false, _) => $"{what} was not changed — this needs administrator rights. Use \"Run as administrator\" above.",
+        (true, true) => $"{what} was not changed — Tamper Protection blocked it. Turn it off in Windows Security first.",
+        (true, false) => $"{what} was not changed — Windows did not apply it.",
+    };
 
     // Every change here runs through RunOperationAsync, which takes the session restore point first, so every
     // confirmation says what that attempt does to System Protection when it will make one (#2483).

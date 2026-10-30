@@ -126,22 +126,6 @@ public sealed partial class SystemFixesViewModel : ElevatedViewModelBase
         NotifyFixCommands();
     }
 
-    /// <summary>
-    /// In-body elevation gate. Returns false, and says why, when the repair cannot run.
-    /// </summary>
-    /// <remarks>
-    /// <see cref="CanRunFix"/> is a UI affordance, not a guard: <c>ExecuteAsync</c> runs the command
-    /// body whether or not <c>CanExecute</c> agreed, so a repair that mutates system state cannot
-    /// rely on the button being disabled. No confirmation dialog here — the tab's AdminBanner already
-    /// offers to relaunch elevated, and a modal prompt behind a disabled button is unreachable anyway.
-    /// </remarks>
-    private bool RequireElevation(string what)
-    {
-        if (IsElevated) return true;
-        StatusMessage = $"{what} needs administrator rights — use \"Run as administrator\" above.";
-        return false;
-    }
-
     private void NotifyFixCommands()
     {
         RunSfcCommand.NotifyCanExecuteChanged();

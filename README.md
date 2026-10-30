@@ -1809,8 +1809,9 @@ Manage Microsoft Defender without digging through Windows Security:
 - **Honest about Tamper Protection** — if it's on, Windows can silently ignore
   changes, so the tab detects it, warns you, and only reports a change as done
   after reading it back and confirming Windows actually applied it
-- Changes need administrator and are confirmed first; lowering a protection is
-  always an explicit, reversible choice
+- Changes need administrator. Without it, a change says so before anything is asked;
+  with it, every change is confirmed first. Lowering a protection is always an
+  explicit, reversible choice
 - **A Windows restore point is attempted before the first change of the session**, shared with the
   other tabs that change system settings. All four changes run through one path, so none of them can
   quietly skip it, and it is mentioned only when Windows really made one — never on a change that

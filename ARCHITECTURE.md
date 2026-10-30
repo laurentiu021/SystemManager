@@ -2225,7 +2225,10 @@ DataContext rather than from properties on the control. 28 of the 32 hosts inher
 (#2860). Four hosts still wire elevation by hand, deliberately: `AppUpdatesViewModel` logs
 who asked for elevation before relaunching, and `BootAnalyzerViewModel`, `StartupViewModel`
 and `WindowsUpdateViewModel` take elevation as an injected probe they read more than once,
-which the base's one-shot constructor assignment does not support.
+which the base's one-shot constructor assignment does not support. The base also carries
+`RequireElevation(what)`, the gate a change that needs administrator rights calls first, before
+any picker or confirmation: a command's `CanExecute` only greys out a button, and
+`ExecuteAsync` runs the body regardless.
 
 ## Keyboard accelerators
 

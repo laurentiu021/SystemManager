@@ -30,6 +30,21 @@ public abstract partial class ElevatedViewModelBase : ViewModelBase
 
     protected ElevatedViewModelBase() => IsElevated = AdminHelper.IsElevated();
 
+    /// <summary>
+    /// In-body elevation gate. Returns false, and says why, when the change cannot run.
+    /// </summary>
+    /// <remarks>
+    /// A command's <c>CanExecute</c> is a UI affordance, not a guard: <c>ExecuteAsync</c> runs the command body
+    /// whether or not it agreed, so a change that needs administrator rights checks here, before it asks the user
+    /// anything. No relaunch prompt: the tab's AdminBanner already offers one.
+    /// </remarks>
+    protected bool RequireElevation(string what)
+    {
+        if (IsElevated) return true;
+        StatusMessage = $"{what} needs administrator rights — use \"Run as administrator\" above.";
+        return false;
+    }
+
     // Protected, not private: CleanupViewModel and ContextMenuViewModel also call this directly from an
     // inline relaunch prompt elsewhere in their own file, outside the command the banner binds to.
     [RelayCommand]

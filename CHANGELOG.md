@@ -10,6 +10,22 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.136.12] - 2026-10-30
+
+**Without administrator rights, Defender Tweaks now says so before you change anything, instead of
+telling you to turn off Tamper Protection.**
+
+### Fixed
+- Every Defender change needs administrator rights, but reading Defender's status does not, and
+  on a default install that read says Tamper Protection is on. So without them, each change asked
+  you to confirm, tried for a restore point, failed, and then blamed Tamper Protection and told
+  you to turn it off in Windows Security. Turning it off changed nothing. PUA protection,
+  Controlled Folder Access, adding an exclusion and removing one now stop first, before the
+  folder picker or any confirmation, and say they need administrator rights, as App Blocker and
+  DNS & Hosts already did. The tab has done this since it was added in 1.39.0.
+- With administrator rights, a change Windows did not apply while Tamper Protection was off was
+  put down to missing administrator rights. It now says Windows did not apply it.
+
 ## [1.136.11] - 2026-10-30
 
 **Defender's scan exclusions can no longer cover a whole drive, the Windows folder or your own

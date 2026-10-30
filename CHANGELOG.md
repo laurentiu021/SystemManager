@@ -10,6 +10,18 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.136.19] - 2026-10-30
+
+**Startup Manager's Refresh and Enable All come back after a scan, the tab stops showing as busy,
+and F5 no longer ends in an error.**
+
+### Fixed
+- After Startup Manager listed its programs, Refresh and Enable All stayed greyed out and the
+  sidebar and taskbar progress never stopped. The end of the scan ran away from the screen's
+  own thread, and Windows refused to update the buttons from there, so everything after that
+  was skipped; F5, which still started a scan, ended in the error dialog every time. The end of
+  the scan now runs on the screen's thread again. Present since 1.20.62.
+
 ## [1.136.18] - 2026-10-30
 
 **App Updates, Bulk Installer and the Uninstaller find winget again when SysManager is not run

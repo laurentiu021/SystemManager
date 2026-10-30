@@ -2,6 +2,7 @@
 // Author: laurentiu021 · https://github.com/laurentiu021/SystemManager
 // License: MIT
 
+using System.Collections.Concurrent;
 using NSubstitute;
 using SysManager.Models;
 using SysManager.Services;
@@ -396,6 +397,75 @@ public class StartupViewModelTests
         await vm.InitializationComplete;
 
         Assert.Equal("Found 1 startup items.", vm.StatusMessage);
+    }
+
+    // ── what a scan raises comes back to the UI thread (#2703) ──
+
+    /// <summary>
+    /// Runs what is posted to it on the thread that pumps it, as WPF's dispatcher runs it on the UI thread.
+    /// </summary>
+    private sealed class UiThreadContext : SynchronizationContext
+    {
+        private readonly BlockingCollection<(SendOrPostCallback Work, object? State)?> _work = new();
+
+        public override void Post(SendOrPostCallback d, object? state) => _work.Add((d, state));
+
+        public override void Send(SendOrPostCallback d, object? state) => d(state);
+
+        /// <summary>Runs posted work on this thread until <paramref name="task"/> is done, then surfaces its fault.</summary>
+        public void RunUntil(Task task)
+        {
+            task.ContinueWith(_ => _work.Add(null), TaskScheduler.Default);
+            while (_work.Take() is { } item)
+                item.Work(item.State);
+            task.GetAwaiter().GetResult();
+        }
+    }
+
+    /// <summary>
+    /// Everything a scan raises once its background work is done reaches the thread that started it.
+    /// </summary>
+    /// <remarks>
+    /// The scan awaited with <c>ConfigureAwait(false)</c>, so the rest of it ran on the thread pool: clearing
+    /// <c>IsBusy</c> raised Refresh's <c>CanExecuteChanged</c> there, which WPF refuses because the button belongs to
+    /// the UI thread, and what came after it was skipped. Refresh and Enable All stayed greyed out, the tab stayed
+    /// busy, and the next scan ended in the error dialog. Driven under a context that queues what is posted to it, as
+    /// WPF's does, with a scan that finishes on the pool, as the real one does.
+    /// </remarks>
+    [Fact]
+    public void AScan_RaisesWhatFollowsItsBackgroundWorkOnTheThreadThatStartedIt()
+    {
+        var ui = new UiThreadContext();
+        var previous = SynchronizationContext.Current;
+        SynchronizationContext.SetSynchronizationContext(ui);
+        try
+        {
+            var uiThread = Environment.CurrentManagedThreadId;
+            var entry = new StartupEntry { Name = "Helper", Command = "helper.exe", Location = "HKCU Run" };
+            var vm = NewVm(scan: () => Task.Run(() => new StartupScan([entry], ScheduledTasksListed: true)));
+            ui.RunUntil(vm.InitializationComplete);
+
+            var elsewhere = new ConcurrentQueue<string>();
+            void Note(string what)
+            {
+                if (Environment.CurrentManagedThreadId != uiThread) elsewhere.Enqueue(what);
+            }
+            vm.ScanCommand.CanExecuteChanged += (_, _) => Note("ScanCommand.CanExecuteChanged");
+            vm.EnableAllCommand.CanExecuteChanged += (_, _) => Note("EnableAllCommand.CanExecuteChanged");
+            vm.PropertyChanged += (_, e) => Note(e.PropertyName ?? "");
+
+            ui.RunUntil(vm.ScanCommand.ExecuteAsync(null));
+
+            Assert.Empty(elsewhere);
+            Assert.False(vm.IsBusy);
+            Assert.False(vm.IsProgressIndeterminate);
+            Assert.True(vm.ScanCommand.CanExecute(null));
+            Assert.Equal("Found 1 startup items.", vm.StatusMessage);
+        }
+        finally
+        {
+            SynchronizationContext.SetSynchronizationContext(previous);
+        }
     }
 
     [Fact]

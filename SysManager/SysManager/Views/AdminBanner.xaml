@@ -58,20 +58,28 @@
         <Border Background="{DynamicResource WarningBgSubtle}" BorderBrush="{DynamicResource WarningBg}"
                 BorderThickness="1" CornerRadius="{StaticResource RadiusLg}" Padding="12,8"
                 Visibility="{Binding IsElevated, Converter={StaticResource FlexVis}}">
-            <Grid>
-                <Border Background="{DynamicResource WarningStripe}" Width="4" HorizontalAlignment="Left"
-                        CornerRadius="2" Margin="-12,-8,0,-8"/>
-                <!-- DockPanel for the same reason as above. Three views already used it here. -->
-                <DockPanel Margin="6,0,0,0">
-                    <TextBlock Text="&#xE83D;" DockPanel.Dock="Left"
-                               FontFamily="Segoe Fluent Icons,Segoe MDL2 Assets"
-                               FontSize="13" VerticalAlignment="Center"
-                               Foreground="{DynamicResource WarningText}"/>
-                    <TextBlock Text="{Binding ElevatedMessage, ElementName=Root}"
-                               Foreground="{DynamicResource WarningText}" Style="{StaticResource Body}" FontWeight="SemiBold"
-                               Margin="8,0,0,0" VerticalAlignment="Center" TextWrapping="Wrap"/>
-                </DockPanel>
-            </Grid>
+            <StackPanel>
+                <Grid>
+                    <Border Background="{DynamicResource WarningStripe}" Width="4" HorizontalAlignment="Left"
+                            CornerRadius="2" Margin="-12,-8,0,-8"/>
+                    <!-- DockPanel for the same reason as above. Three views already used it here. -->
+                    <DockPanel Margin="6,0,0,0">
+                        <TextBlock Text="&#xE83D;" DockPanel.Dock="Left"
+                                   FontFamily="Segoe Fluent Icons,Segoe MDL2 Assets"
+                                   FontSize="13" VerticalAlignment="Center"
+                                   Foreground="{DynamicResource WarningText}"/>
+                        <TextBlock Text="{Binding ElevatedMessage, ElementName=Root}"
+                                   Foreground="{DynamicResource WarningText}" Style="{StaticResource Body}" FontWeight="SemiBold"
+                                   Margin="8,0,0,0" VerticalAlignment="Center" TextWrapping="Wrap"/>
+                    </DockPanel>
+                </Grid>
+                <!-- The family-PC case: elevated with a parent's password, not the signed-in person's own.
+                     Shown only then, so the ordinary single-account case never sees an extra line (#2826). -->
+                <TextBlock Text="Running as administrator — but a different account than the one signed in. A setting that applies to your own account may not take effect until you sign in as that administrator, or run SysManager without elevating."
+                           Foreground="{DynamicResource WarningText}" Style="{StaticResource Body}"
+                           Margin="6,6,0,0" TextWrapping="Wrap"
+                           Visibility="{Binding IsElevatedAsAnotherUser, ElementName=Root, Converter={StaticResource FlexVis}}"/>
+            </StackPanel>
         </Border>
     </Grid>
 </UserControl>

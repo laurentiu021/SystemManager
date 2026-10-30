@@ -10,6 +10,22 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.136.3] - 2026-10-30
+
+**Performance Mode's Game Bar switch now reaches the signed-in person's own profile when SysManager
+is elevated as a different administrator, and the admin banner says when that is happening.**
+
+### Fixed
+- Performance Mode's Game Mode and Xbox Game Bar/DVR switches read and wrote `Registry.CurrentUser`
+  directly, so on a family PC where a standard account elevates with a parent's administrator
+  password, the switch changed the administrator's settings instead of the signed-in person's — the
+  tab showed it applied, and a restart without elevating showed it was not. Switched to
+  `AdminHelper.PerUserRegistryRoot()`, the same redirect Privacy & Telemetry, Notification Blocker,
+  Camera/Mic/Location and Scheduled Maintenance already use.
+- The admin banner now adds a line — "Running as administrator — but a different account than the
+  one signed in" — whenever that mismatch is happening, so it is visible even on a tab this release
+  does not change.
+
 ## [1.136.2] - 2026-10-30
 
 **Disk Analyzer, Duplicate File Finder and Large File Scanner now catch a link ANYWHERE above the

@@ -600,7 +600,14 @@ public sealed partial class PerformanceService : IDisposable
     {
         try
         {
-            using var key = Registry.CurrentUser.OpenSubKey(GameBarKey);
+            // The signed-in account's own hive, not necessarily Registry.CurrentUser: elevated as a
+            // different administrator, the two diverge and this switch used to read and write the
+            // administrator's profile while the person who actually plays sees no change (#2826).
+            // Disposed: PerUserRegistryRoot's rare elevated-as-another-user branch opens a real
+            // HKEY_USERS handle rather than the well-known Registry.CurrentUser, whose own Dispose is a
+            // no-op — so this closes that handle without touching the shared static in the common case.
+            using var hkcuRoot = AdminHelper.PerUserRegistryRoot();
+            using var key = hkcuRoot.OpenSubKey(GameBarKey);
             if (key is null) return true; // Windows default = ON
             var val = key.GetValue("AllowAutoGameMode");
             // If key exists but value doesn't, default is ON
@@ -617,7 +624,8 @@ public sealed partial class PerformanceService : IDisposable
     /// </summary>
     public static void SetGameMode(bool enabled)
     {
-        using var key = Registry.CurrentUser.CreateSubKey(GameBarKey);
+        using var hkcuRoot = AdminHelper.PerUserRegistryRoot();
+        using var key = hkcuRoot.CreateSubKey(GameBarKey);
         key.SetValue("AllowAutoGameMode", enabled ? 1 : 0, RegistryValueKind.DWord);
         key.SetValue("AutoGameModeEnabled", enabled ? 1 : 0, RegistryValueKind.DWord);
         Log.Information("Registry: Game Mode {Action} (AllowAutoGameMode={Value})",
@@ -632,7 +640,8 @@ public sealed partial class PerformanceService : IDisposable
     {
         try
         {
-            using var key = Registry.CurrentUser.OpenSubKey(GameDvrKey);
+            using var hkcuRoot = AdminHelper.PerUserRegistryRoot();
+            using var key = hkcuRoot.OpenSubKey(GameDvrKey);
             if (key is null) return true; // default = enabled
             var val = key.GetValue("AppCaptureEnabled");
             if (val is null) return true;
@@ -646,7 +655,8 @@ public sealed partial class PerformanceService : IDisposable
     {
         try
         {
-            using var key = Registry.CurrentUser.OpenSubKey(GameConfigStoreKey);
+            using var hkcuRoot = AdminHelper.PerUserRegistryRoot();
+            using var key = hkcuRoot.OpenSubKey(GameConfigStoreKey);
             if (key is null) return true;
             var val = key.GetValue("GameDVR_Enabled");
             if (val is null) return true;
@@ -671,10 +681,15 @@ public sealed partial class PerformanceService : IDisposable
     /// </summary>
     public static void SetXboxGameBar(bool appCaptureEnabled, bool gameDvrEnabled)
     {
-        using var dvrKey = Registry.CurrentUser.CreateSubKey(GameDvrKey);
+        // Resolved once: both keys belong to the same account, and PerUserRegistryRoot's rare
+        // elevated-as-another-user branch opens a real HKEY_USERS handle that is cheaper to share
+        // between the two writes below than to re-resolve and re-open twice.
+        using var hkcuRoot = AdminHelper.PerUserRegistryRoot();
+
+        using var dvrKey = hkcuRoot.CreateSubKey(GameDvrKey);
         dvrKey.SetValue("AppCaptureEnabled", appCaptureEnabled ? 1 : 0, RegistryValueKind.DWord);
 
-        using var configKey = Registry.CurrentUser.CreateSubKey(GameConfigStoreKey);
+        using var configKey = hkcuRoot.CreateSubKey(GameConfigStoreKey);
         configKey.SetValue("GameDVR_Enabled", gameDvrEnabled ? 1 : 0, RegistryValueKind.DWord);
         Log.Information("Registry: Xbox Game Bar set (AppCaptureEnabled={Bar}, GameDVR_Enabled={Dvr})",
             appCaptureEnabled ? 1 : 0, gameDvrEnabled ? 1 : 0);

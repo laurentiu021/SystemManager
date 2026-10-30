@@ -951,11 +951,7 @@ public sealed partial class ContextMenuService : IContextMenuService
         {
             try
             {
-                var path = command.Trim('"', ' ');
-                var spaceIdx = path.IndexOf(' ');
-                if (spaceIdx > 0 && !System.IO.File.Exists(path))
-                    path = path[..spaceIdx].Trim('"');
-                var exeName = System.IO.Path.GetFileNameWithoutExtension(path);
+                var exeName = System.IO.Path.GetFileNameWithoutExtension(Helpers.CommandLine.Program(command));
                 if (!string.IsNullOrEmpty(exeName) && KnownExeExplanations.TryGetValue(exeName, out var exeExplanation))
                     return exeExplanation;
             }
@@ -1132,16 +1128,7 @@ public sealed partial class ContextMenuService : IContextMenuService
     {
         try
         {
-            // Try to extract executable name
-            var path = command.Trim('"', ' ');
-            var percentIdx = path.IndexOf('%');
-            if (percentIdx > 0) path = path[..percentIdx].Trim();
-
-            var spaceIdx = path.IndexOf(' ');
-            if (spaceIdx > 0 && !File.Exists(path))
-                path = path[..spaceIdx].Trim('"');
-
-            var exeName = Path.GetFileNameWithoutExtension(path);
+            var exeName = Path.GetFileNameWithoutExtension(Helpers.CommandLine.Program(command));
             if (!string.IsNullOrEmpty(exeName) && KnownExeNames.TryGetValue(exeName, out var friendly))
                 return friendly;
         }
@@ -1223,18 +1210,7 @@ public sealed partial class ContextMenuService : IContextMenuService
 
         try
         {
-            // Strip quotes and arguments
-            var path = command.Trim('"', ' ');
-
-            // Handle %1 and other arguments
-            var percentIdx = path.IndexOf('%');
-            if (percentIdx > 0) path = path[..percentIdx].Trim();
-
-            var spaceIdx = path.IndexOf(' ');
-            if (spaceIdx > 0 && !File.Exists(path))
-                path = path[..spaceIdx].Trim('"');
-
-            return DescribeFile(path);
+            return DescribeFile(Helpers.CommandLine.Program(command));
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or SecurityException or ArgumentException)
         {

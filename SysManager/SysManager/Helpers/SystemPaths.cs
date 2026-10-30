@@ -61,9 +61,9 @@ internal static class SystemPaths
             return fileName;
 
         // winget is NOT a System32 tool — it's an MSIX app whose per-user execution alias lives
-        // in the user-WRITABLE %LOCALAPPDATA%\Microsoft\WindowsApps. Resolving it here to its
-        // trusted, admin-only-writable install path (and failing CLOSED, never to the bare name)
-        // is handled separately.
+        // in the user-WRITABLE %LOCALAPPDATA%\Microsoft\WindowsApps. ResolveWinget picks the
+        // admin-only-writable install for an elevated launch and that alias otherwise, and fails
+        // CLOSED, never to the bare name.
         if (fileName.Equals("winget", StringComparison.OrdinalIgnoreCase) ||
             fileName.Equals("winget.exe", StringComparison.OrdinalIgnoreCase))
             return ResolveWinget((isElevated ?? AdminHelper.IsElevated)());

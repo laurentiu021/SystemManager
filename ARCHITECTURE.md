@@ -2097,9 +2097,9 @@ Key utility classes that don't fit neatly into Services or ViewModels (not an ex
   any known folder by its ID, and returns null for one Windows does not resolve.
 - `SystemPaths` — the one place the tools SysManager launches are resolved. A bare tool
   name becomes a full path under System32 (or the Windows PowerShell 5.1 folder), and winget
-  resolves to its admin-only-writable install rather than the per-user alias, so nothing
-  launches by name off the PATH. It also owns the two temp exclusions every wholesale %TEMP%
-  sweep must honour:
+  resolves to its admin-only-writable install for an elevated launch and to the user's own
+  execution alias otherwise (#2699), so nothing launches by name off the PATH. It also owns
+  the two temp exclusions every wholesale %TEMP% sweep must honour:
   `BundleExtractionRoot`, the shared folder single-file apps unpack into, and
   `OwnExtractionDirectory`, this build's own leaf under it. Deleting either
   breaks a running program's later lazy loads, which no in-use check can
@@ -2110,6 +2110,11 @@ Key utility classes that don't fit neatly into Services or ViewModels (not an ex
   administrator rights and a sweep deletes everything under its root (#2700).
   `SystemCleanupRoots.UserTemp` and `TuneUpService.TempRoots` both take it, so Deep Cleanup and
   Quick Cleanup clean the same folder.
+- `CommandLine` — the program a command line starts, read the way `CreateProcess` reads it (#2708). A
+  quoted program runs to its closing quote; an unquoted one is tried at each space, as a file and then
+  with a runnable extension added. Right-click Menu (a verb's source, name and explanation) and Startup
+  Manager (publisher, signature, icon and Open file location) both take it, so the two tabs cannot
+  disagree about which file an entry starts.
 - `RecycleBinHelper` — measures the Recycle Bin (`SHQueryRecycleBin`) and empties it
   (`SHEmptyRecycleBin`) through the shell API, asking first and leaving an empty bin alone, and judging a
   failure code by whether the bin is empty afterwards. Quick Cleanup, Deep Cleanup and the Dashboard's

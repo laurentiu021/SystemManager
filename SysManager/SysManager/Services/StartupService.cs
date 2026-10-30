@@ -845,10 +845,10 @@ public sealed class StartupService
     /// that exists.
     /// </summary>
     /// <remarks>
-    /// A Run value is a command line, not a path: it may be quoted, carry arguments, or both. The
-    /// full-string <c>File.Exists</c> is tried FIRST and deliberately — a program installed under
-    /// "C:\Program Files\Some App\app.exe" with no arguments has a space in the path itself, and truncating
-    /// at the first space would lose it.
+    /// A Run value is a command line, not a path: it may be quoted, carry arguments, or both, and
+    /// <see cref="Helpers.CommandLine.Program"/> reads the program out of it as Windows does. Its own parser
+    /// cut a quoted "C:\Program Files\App\app.exe" --minimized at the first space, inside the path, so most
+    /// Run entries showed no publisher and no signature (#2708).
     /// <para><c>internal</c> and pure so the resolution is testable on its own. It used to be inline in
     /// <see cref="ExtractPublisher"/>, which meant the signature check would have needed its own copy of
     /// the same parsing — two answers to "which file is this entry" is exactly the kind of drift that ends
@@ -856,19 +856,8 @@ public sealed class StartupService
     /// </remarks>
     internal static string ResolveExecutablePath(string command)
     {
-        if (string.IsNullOrWhiteSpace(command)) return "";
-
-        var path = command.Trim('"', ' ');
-        if (System.IO.File.Exists(path)) return path;
-
-        var spaceIdx = path.IndexOf(' ');
-        if (spaceIdx > 0)
-        {
-            path = path[..spaceIdx].Trim('"');
-            if (System.IO.File.Exists(path)) return path;
-        }
-
-        return "";
+        var program = Helpers.CommandLine.Program(command);
+        return program.Length > 0 && System.IO.File.Exists(program) ? program : "";
     }
 
     /// <summary>

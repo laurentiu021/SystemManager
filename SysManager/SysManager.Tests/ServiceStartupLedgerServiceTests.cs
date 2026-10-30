@@ -92,6 +92,30 @@ public class ServiceStartupLedgerServiceTests : IDisposable
     }
 
     [Fact]
+    public void ForgetAll_RemovesTheNamedRecords_AndKeepsTheRest()
+    {
+        var svc = NewService();
+        svc.Remember("wuauserv", "Automatic", At);
+        svc.Remember("Fax", "Manual", At);
+        svc.Remember("RetailDemo", "Manual", At);
+
+        svc.ForgetAll(["fax", "RetailDemo", "NotInTheLedger"]);
+
+        Assert.Equal(["wuauserv"], NewService().Load()!.Keys);
+    }
+
+    [Fact]
+    public void ForgetAll_OnALedgerThatDoesNotParse_LeavesTheFileAsItIs()
+    {
+        // It holds how every other service SysManager turned off was set; nothing was read, so nothing is written.
+        File.WriteAllText(LedgerFile, "{ not valid json");
+
+        NewService().ForgetAll(["Fax"]);
+
+        Assert.Equal("{ not valid json", File.ReadAllText(LedgerFile));
+    }
+
+    [Fact]
     public void Remember_TwiceForOneService_KeepsTheLatest()
     {
         var svc = NewService();

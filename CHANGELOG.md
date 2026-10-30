@@ -10,6 +10,19 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.136.10] - 2026-10-30
+
+**Undo Changes no longer offers to turn back on a service SysManager's record has outlived.**
+
+### Fixed
+- The record of the services SysManager turned off lost an entry only after SysManager's own Enable
+  or Undo, so it only grew. A service turned back on in Windows' own Services console kept its
+  entry, and once something else turned it off again for its own reasons, Undo Changes offered to
+  turn it back on as if SysManager had. Each look now drops the entry of a service that is on again.
+  It does that under the same lock every system change takes and reads each service again once it
+  holds it, because Disable writes its entry just before it turns the service off; while another
+  change holds the lock, nothing is dropped and the next look tries again.
+
 ## [1.136.9] - 2026-10-30
 
 **Settings Watchdog's Restore writes back only a value the watched setting is known to take.**

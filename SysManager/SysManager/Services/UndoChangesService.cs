@@ -192,7 +192,7 @@ public sealed class UndoChangesService : IUndoChangesService
 
         var game = ReadGameMode();
         Keep((await FindPerformanceAsync(game, ct).ConfigureAwait(false)).Found);
-        Keep(FindServices().Found);
+        Keep(FindServices(forgetTurnedBackOn: true).Found);
         Keep(FindHosts());
         Keep(FindEnvironment().Found);
         Keep(FindGaming(game));
@@ -594,7 +594,7 @@ public sealed class UndoChangesService : IUndoChangesService
     // A service SysManager turned off that is still off, with the name Windows shows for it.
     private readonly record struct TurnedOff(ServiceStartupRecord Record, string Name);
 
-    private (Found Found, IReadOnlyList<TurnedOff> Off) FindServices()
+    private (Found Found, IReadOnlyList<TurnedOff> Off) FindServices(bool forgetTurnedBackOn = false)
     {
         var (ledger, unparsable) = _ledger.Read();
         if (ledger is null) return (Problem(UndoChangeKind.Services, UndoProblemKind.Unreadable), []);
@@ -602,22 +602,55 @@ public sealed class UndoChangesService : IUndoChangesService
         if (unparsable) return (Problem(UndoChangeKind.Services, UndoProblemKind.Damaged), []);
 
         List<TurnedOff> off = [];
+        List<string> turnedBackOn = [];
         foreach (var record in ledger.Values)
         {
-            // Disable refuses a name it would not pass to sc.exe, so a record carrying one did not come from here.
+            // Disable refuses a name it would not pass to sc.exe, so a record carrying one did not come from here. A
+            // startup type Enable cannot put back never gets this far: the ledger's parser drops it, as Remember refuses it.
             if (!ServiceManagerService.IsSafeForScExe(record.ServiceName)) continue;
+            if (_readService(record.ServiceName) is not { } entry) continue;
 
             // Only while it is still off: one turned back on outside SysManager has nothing left to put back, and
             // the Services tab ignores its record for the same reason.
-            if (_readService(record.ServiceName) is not { } entry || !ServiceManagerService.IsDisabled(entry)) continue;
+            if (!ServiceManagerService.IsDisabled(entry))
+            {
+                turnedBackOn.Add(record.ServiceName);
+                continue;
+            }
 
             off.Add(new TurnedOff(record, entry.DisplayName.Length > 0 ? entry.DisplayName : record.ServiceName));
         }
+
+        if (forgetTurnedBackOn && turnedBackOn.Count > 0) ForgetTurnedBackOn(turnedBackOn);
 
         if (off.Count == 0) return (new Found(UndoChangeKind.Services, null), off);
 
         off.Sort((a, b) => string.Compare(a.Name, b.Name, StringComparison.OrdinalIgnoreCase));
         return (new Found(UndoChangeKind.Services, ServicesChange(off)), off);
+    }
+
+    /// <summary>
+    /// Drops the records of services that are on again, so a record does not outlive the change it describes.
+    /// </summary>
+    /// <remarks>
+    /// Records went only after SysManager's own Enable or Undo, so the list only grew: a service turned back on in
+    /// Windows' own Services console kept its record, and once something turned it off again for its own reasons, this
+    /// tab offered to turn it back on as if SysManager had (#2747). Done under the lock every system change takes, and
+    /// with each service read again after taking it: Disable writes its record before it turns the service off, so a
+    /// service seen on just before may be one being turned off now, and its fresh record is the one Enable needs. When
+    /// another change holds the lock, nothing is dropped this time; the next look tries again.
+    /// </remarks>
+    private void ForgetTurnedBackOn(IReadOnlyCollection<string> serviceNames)
+    {
+        using var opLock = OperationLockService.Instance.TryAcquire(OperationCategory.SystemModification, "Undo Changes");
+        if (opLock is null) return;
+
+        var stillOn = serviceNames
+            .Where(name => _readService(name) is { } entry && !ServiceManagerService.IsDisabled(entry))
+            .ToList();
+        if (stillOn.Count == 0) return;
+        _ledger.ForgetAll(stillOn);
+        Log.Information("Undo Changes forgot {Count} service record(s) for services that are on again", stillOn.Count);
     }
 
     private UndoChange ServicesChange(IReadOnlyList<TurnedOff> off)

@@ -134,40 +134,38 @@ public sealed partial class StartupViewModel : ViewModelBase
         IsBusy = true;
         IsProgressIndeterminate = true;
         StatusMessage = "Scanning startup items…";
+        var elevated = _isElevatedProbe();
         try
         {
-            var scan = await _scan().ConfigureAwait(false);
-            var sorted = scan.Entries.OrderBy(e => e.Name, StringComparer.OrdinalIgnoreCase).ToList();
-            foreach (var item in sorted)
+            // The scan, the sort, the icons and the boot figures off the UI thread, and everything after them back on
+            // it, as Toggle and Enable All already were. This awaited with ConfigureAwait(false), so the rest ran on
+            // the thread pool: clearing IsBusy raised the buttons' CanExecuteChanged there, which WPF refuses, and what
+            // came after it was skipped. Refresh and Enable All stayed greyed out, the tab stayed busy, and the next
+            // scan ended in the error dialog (#2703).
+            var (scan, sorted) = await Task.Run(async () =>
             {
-                var exePath = ExtractExecutablePath(item.Command);
-                item.Icon = IconExtractorService.GetIcon(exePath ?? item.Command);
-            }
+                var found = await _scan().ConfigureAwait(false);
+                var ordered = found.Entries.OrderBy(e => e.Name, StringComparer.OrdinalIgnoreCase).ToList();
+                foreach (var item in ordered)
+                {
+                    var exePath = ExtractExecutablePath(item.Command);
+                    item.Icon = IconExtractorService.GetIcon(exePath ?? item.Command);
+                }
 
-            // Only when elevated. Reading Diagnostics-Performance needs administrator rights, and without
-            // them the reader catches the access denial and returns nothing — so an unelevated run would pay
-            // for opening an event log on every scan to fill in no figures at all. The banner at the top of
-            // the tab is what tells the user why the column is empty.
-            if (_isElevatedProbe())
-                ApplyBootImpact(sorted, await _readDegradations().ConfigureAwait(false));
+                // Only when elevated. Reading Diagnostics-Performance needs administrator rights, and without
+                // them the reader catches the access denial and returns nothing — so an unelevated run would pay
+                // for opening an event log on every scan to fill in no figures at all. The banner at the top of
+                // the tab is what tells the user why the column is empty.
+                if (elevated)
+                    ApplyBootImpact(ordered, await _readDegradations().ConfigureAwait(false));
+                return (found, ordered);
+            });
 
-            void Publish()
-            {
-                _allEntries.Clear();
-                _allEntries.AddRange(sorted);
-                ApplyFilter();
-            }
+            _allEntries.Clear();
+            _allEntries.AddRange(sorted);
+            ApplyFilter();
 
-            // Awaited rather than posted, because the next line reads _allEntries.Count. Awaiting a
-            // DispatcherOperation keeps that ordering without parking this thread the way the previous
-            // synchronous Invoke did: if nothing ever pumps the dispatcher, an un-resumed continuation
-            // costs nothing while a blocked thread costs a thread (#2152).
-            if (System.Windows.Application.Current?.Dispatcher is { } dispatcher)
-                await dispatcher.InvokeAsync(Publish);
-            else
-                Publish();
-
-            StatusMessage = DescribeScan(_allEntries.Count, scan.ScheduledTasksListed, _isElevatedProbe());
+            StatusMessage = DescribeScan(_allEntries.Count, scan.ScheduledTasksListed, elevated);
             ToastService.Instance.Show("Scan complete", $"{_allEntries.Count} startup items found");
         }
         catch (InvalidOperationException ex)

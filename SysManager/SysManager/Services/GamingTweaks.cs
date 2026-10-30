@@ -39,7 +39,11 @@ internal sealed class PowerPlanTweak(PerformanceService performance, string? ori
 }
 
 /// <summary>Turn off UI visual effects; restore whether they were enabled on revert.</summary>
-internal sealed class VisualEffectsTweak(bool originalEnabled) : IGamingTweak
+/// <remarks>
+/// Through <paramref name="performance"/>'s own write, as the power plan step is, rather than the static one: a service
+/// a test builds over its own writes then cannot change the visual effects of the PC running the suite (#2740).
+/// </remarks>
+internal sealed class VisualEffectsTweak(PerformanceService performance, bool originalEnabled) : IGamingTweak
 {
     public string Label => "Reduce visual effects";
     public bool RequiresAdmin => false;
@@ -48,13 +52,13 @@ internal sealed class VisualEffectsTweak(bool originalEnabled) : IGamingTweak
     {
         // Already reduced → no-op (nothing to change, nothing to restore beyond the captured state).
         if (!originalEnabled) return Task.FromResult(GamingTweakResult.NoChange);
-        PerformanceService.SetUiEffects(false);
+        performance.ApplyUiEffects(false);
         return Task.FromResult(GamingTweakResult.Applied);
     }
 
     public Task RevertAsync(CancellationToken ct)
     {
-        PerformanceService.SetUiEffects(originalEnabled);
+        performance.ApplyUiEffects(originalEnabled);
         return Task.CompletedTask;
     }
 }

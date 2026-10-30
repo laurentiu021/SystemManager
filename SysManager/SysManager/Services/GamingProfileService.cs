@@ -510,7 +510,7 @@ public sealed class GamingProfileService : IGamingProfileService, IDisposable
         // guard. When skipped, the power-plan toggle simply doesn't take effect this session.
         if (profile.UltimatePerformancePlan && !string.IsNullOrEmpty(snapshot.OriginalPowerPlanGuid))
             steps.Add(new PowerPlanTweak(_performance, snapshot.OriginalPowerPlanGuid));
-        if (profile.DisableVisualEffects) steps.Add(new VisualEffectsTweak(snapshot.OriginalUiEffectsEnabled));
+        if (profile.DisableVisualEffects) steps.Add(new VisualEffectsTweak(_performance, snapshot.OriginalUiEffectsEnabled));
         if (profile.FinestTimerResolution) steps.Add(new TimerResolutionTweak(_timer));
         if (profile.PurgeStandbyMemory) steps.Add(new StandbyPurgeTweak(_standby));
         if (profile.PauseSearchIndexing) steps.Add(new SearchIndexingTweak(snapshot.SearchWasRunning ?? false));

@@ -74,19 +74,24 @@ public class LargeFilesViewModelTests
     [Fact]
     public async Task ShowInExplorerCommand_NullPath_DoesNotThrow()
     {
-        var vm = new LargeFilesViewModel(new LargeFileScanner(), new FixedDriveService());
+        // Launches are recorded, not made: a broken check would otherwise open Explorer on the PC running the suite.
+        var launches = new List<string>();
+        var vm = new LargeFilesViewModel(new LargeFileScanner(), new FixedDriveService(), launches.Add);
         await vm.InitializationComplete;
         var ex = Record.Exception(() => vm.ShowInExplorerCommand.Execute(null));
         Assert.Null(ex);
+        Assert.Empty(launches);
     }
 
     [Fact]
     public async Task ShowInExplorerCommand_NonExistent_DoesNotThrow()
     {
-        var vm = new LargeFilesViewModel(new LargeFileScanner(), new FixedDriveService());
+        var launches = new List<string>();
+        var vm = new LargeFilesViewModel(new LargeFileScanner(), new FixedDriveService(), launches.Add);
         await vm.InitializationComplete;
         var ex = Record.Exception(() => vm.ShowInExplorerCommand.Execute(@"C:\no_such_file_" + Guid.NewGuid().ToString("N")));
         Assert.Null(ex);
+        Assert.Empty(launches);
     }
 
     [Fact]

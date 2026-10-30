@@ -266,20 +266,32 @@ public class GamingProfileServiceTests
 
     // ── Persistence round-trip + schema guard (own store file, temp path) ──
 
+    /// <summary>A Performance Mode service over a runner that runs nothing and writes that do nothing.</summary>
+    private static PerformanceService PerformanceOverNothing()
+    {
+        var runner = Substitute.For<IPowerShellRunner>();
+        return new PerformanceService(runner, new RestorePointService(runner),
+            Path.Combine(Path.GetTempPath(), "SysManagerTests", Guid.NewGuid().ToString("N")));
+    }
+
     // Builds a service pointed at a throwaway store file. The composed services are never
     // invoked in these tests (only LoadLastConfig/SaveLastConfig, which touch the file only),
-    // so their construction is inert — no power/timer/registry call fires.
+    // so their construction is inert — no power/timer/registry call fires. The runner runs nothing and the
+    // visual-effects write does nothing unless a test hands in its own: with the real ones, a regressed check in
+    // the lock test below would have run powercfg and changed the visual effects of the PC running the suite (#2740).
     private static GamingProfileService StoreOnlyService(
         string path, Func<string, CancellationToken, Task<bool>>? createRestorePoint = null,
-        ICpuAffinityService? cpu = null, ITimerResolutionService? timer = null)
+        ICpuAffinityService? cpu = null, ITimerResolutionService? timer = null,
+        IPowerShellRunner? runner = null, Action<bool>? setUiEffects = null)
     {
-        var runner = new PowerShellRunner();
+        runner ??= Substitute.For<IPowerShellRunner>();
         var restore = new RestorePointService(runner);
         return new GamingProfileService(
             // A folder of its own even though nothing here calls it: the two-argument constructor resolves the real
             // profile for its snapshot (#2555).
             new PerformanceService(runner, restore,
-                Path.Combine(Path.GetTempPath(), "SysManagerTests", Guid.NewGuid().ToString("N"))),
+                Path.Combine(Path.GetTempPath(), "SysManagerTests", Guid.NewGuid().ToString("N")),
+                setUiEffects: setUiEffects),
             timer ?? new TimerResolutionService(),
             cpu ?? new CpuAffinityService(),
             new StandbyMemoryService(),
@@ -760,7 +772,7 @@ public class GamingProfileServiceTests
         };
         var applied = new IGamingTweak[]
         {
-            new VisualEffectsTweak(true),
+            new VisualEffectsTweak(PerformanceOverNothing(), true),
             new TimerResolutionTweak(Substitute.For<ITimerResolutionService>()),
         };
 
@@ -980,7 +992,9 @@ public class GamingProfileServiceTests
         var path = Path.Combine(Path.GetTempPath(), $"sm-gaming-lock-{Guid.NewGuid():N}.json");
         try
         {
-            var svc = StoreOnlyService(path);
+            var runner = Substitute.For<IPowerShellRunner>();
+            var uiEffectsWrites = new List<bool>();
+            var svc = StoreOnlyService(path, runner: runner, setUiEffects: uiEffectsWrites.Add);
 
             using var held = OperationLockService.Instance.TryAcquire(
                 OperationCategory.SystemModification, "Apply power plan");
@@ -1002,6 +1016,8 @@ public class GamingProfileServiceTests
             // machine: no powercfg, no registry, no restore point.
             Assert.True(StoreOnlyService(path).ReadPendingRecovery().Kind == PendingRecoveryKind.None,
                 "a refused apply must leave no crash-recovery marker behind");
+            Assert.Empty(runner.ReceivedCalls());
+            Assert.Empty(uiEffectsWrites);
         }
         finally { if (File.Exists(path)) File.Delete(path); }
     }

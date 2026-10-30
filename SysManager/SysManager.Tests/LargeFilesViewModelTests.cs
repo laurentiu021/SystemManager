@@ -2,6 +2,7 @@
 // Author: laurentiu021 · https://github.com/laurentiu021/SystemManager
 // License: MIT
 
+using System.IO;
 using SysManager.ViewModels;
 
 namespace SysManager.Tests;
@@ -16,8 +17,16 @@ namespace SysManager.Tests;
 [Collection("ProcessWideStatics")]
 public class LargeFilesViewModelTests
 {
-    private static LargeFilesViewModel NewVm() =>
-        new(new Services.LargeFileScanner(), new Services.FixedDriveService());
+    private static LargeFilesViewModel NewVm() => NewVm(out _);
+
+    // Each Explorer launch is recorded instead of made, so a broken check in front of it fails a test rather than
+    // opening a window on the PC running the suite (#2740).
+    private static LargeFilesViewModel NewVm(out List<string> launches)
+    {
+        var opened = new List<string>();
+        launches = opened;
+        return new(new Services.LargeFileScanner(), new Services.FixedDriveService(), opened.Add);
+    }
 
     [Fact]
     public void AScan_ShowsOnTheTaskbarButton_ForAsLongAsItRuns()
@@ -206,17 +215,35 @@ public class LargeFilesViewModelTests
     [Fact]
     public void ShowInExplorer_NullPath_DoesNotThrow()
     {
-        var vm = NewVm();
+        var vm = NewVm(out var launches);
         var ex = Record.Exception(() => vm.ShowInExplorerCommand.Execute(null));
         Assert.Null(ex);
+        Assert.Empty(launches);
     }
 
     [Fact]
     public void ShowInExplorer_EmptyPath_DoesNotThrow()
     {
-        var vm = NewVm();
+        var vm = NewVm(out var launches);
         var ex = Record.Exception(() => vm.ShowInExplorerCommand.Execute(""));
         Assert.Null(ex);
+        Assert.Empty(launches);
+    }
+
+    [Fact]
+    public void ShowInExplorer_AFileThatExists_OpensExplorerOnIt()
+    {
+        var file = Path.Combine(Path.GetTempPath(), "smtest_largefile_" + Guid.NewGuid().ToString("N") + ".bin");
+        File.WriteAllBytes(file, [1]);
+        try
+        {
+            var vm = NewVm(out var launches);
+
+            vm.ShowInExplorerCommand.Execute(file);
+
+            Assert.Equal([file], launches);
+        }
+        finally { File.Delete(file); }
     }
 
     [Fact]
@@ -225,10 +252,11 @@ public class LargeFilesViewModelTests
         // The scan is a point in time; the file can be gone by the time the user acts on the row. This
         // used to return silently, leaving no way to tell "nothing happened" from "it opened behind
         // another window" (#2859).
-        var vm = NewVm();
+        var vm = NewVm(out var launches);
         vm.ShowInExplorerCommand.Execute(@"C:\no_such_" + Guid.NewGuid().ToString("N"));
 
         Assert.Contains("not found", vm.ScanStatus, StringComparison.OrdinalIgnoreCase);
+        Assert.Empty(launches);
     }
 
     [Fact]

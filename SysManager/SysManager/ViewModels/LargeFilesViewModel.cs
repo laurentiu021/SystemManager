@@ -40,6 +40,7 @@ public sealed partial class LargeFilesViewModel : ViewModelBase
 
     private readonly LargeFileScanner _scanner;
     private readonly FixedDriveService _drives;
+    private readonly Action<string> _selectInExplorer;
     private CancellationTokenSource? _cts;
 
     public BulkObservableCollection<LargeFileEntry> Files { get; } = new();
@@ -61,11 +62,25 @@ public sealed partial class LargeFilesViewModel : ViewModelBase
     public string BytesScannedDisplay => FormatHelper.FormatSize(BytesScanned);
 
     public LargeFilesViewModel(LargeFileScanner scanner, FixedDriveService drives)
+        : this(scanner, drives, selectInExplorer: null)
+    {
+    }
+
+    /// <summary>Builds the tab with its own way of showing a file in File Explorer.</summary>
+    /// <param name="selectInExplorer">
+    /// Opens File Explorer with a file selected: the real launch unless a test passes its own, so a test of the checks
+    /// in front of it cannot open a window on the PC running the suite when one of them breaks (#2740).
+    /// </param>
+    internal LargeFilesViewModel(LargeFileScanner scanner, FixedDriveService drives, Action<string>? selectInExplorer)
     {
         _scanner = scanner;
         _drives = drives;
+        _selectInExplorer = selectInExplorer ?? SelectInExplorer;
         InitializeAsync(InitAsync);
     }
+
+    private static void SelectInExplorer(string path) =>
+        Process.Start(new ProcessStartInfo(SystemPaths.ResolveSystemTool("explorer.exe"), $"/select,\"{path}\"") { UseShellExecute = true })?.Dispose();
 
     private async Task InitAsync()
     {
@@ -189,7 +204,7 @@ public sealed partial class LargeFilesViewModel : ViewModelBase
         }
         try
         {
-            Process.Start(new ProcessStartInfo(SystemPaths.ResolveSystemTool("explorer.exe"), $"/select,\"{path}\"") { UseShellExecute = true })?.Dispose();
+            _selectInExplorer(path);
         }
         catch (InvalidOperationException) { ScanStatus = "Could not open file location."; }
         catch (System.ComponentModel.Win32Exception) { ScanStatus = "Could not open file location."; }

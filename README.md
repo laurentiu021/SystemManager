@@ -1937,12 +1937,15 @@ offers, "rate us" prompts:
   tab, they stay muted, and if SysManager cannot tell whether you did, it switches them back on.
   Likewise, if the fast timer was already on from the Timer Resolution tab, game mode leaves it on
   when it ends
-- **Crash-safe** — the session is recorded on disk, so if SysManager closes mid-game, it asks the
-  next time it starts whether to put the system-wide changes back: once the Dashboard has loaded, or
-  when you open Gaming Profile if that comes first, and only once a run. Until then Undo Changes lists
-  the session as left on. If the record cannot be read when you answer, nothing
+- **Crash-safe** — the session is recorded on disk before the first change, so if SysManager closes
+  mid-game, or while game mode is still starting, it asks the next time it starts whether to put the
+  system-wide changes back: once the Dashboard has loaded, or when you open Gaming Profile if that comes
+  first, and only once a run. Until then Undo Changes lists the session as left on, and Start offers to
+  put it back first rather than start over it, because its record is the only copy of your own
+  settings. If the record cannot be read when you answer, nothing
   is changed and the record is kept, so you are asked again the next time. If SysManager cannot read
-  that record when you press Start, Start changes nothing and says so, rather than writing over it.
+  that record when you press Start, or cannot save a new one, Start changes nothing and says so, rather
+  than writing over it or running without one.
   A record missing part of what it needs is reported as one that cannot be used, and settings saved as
   nothing at all load the defaults
 - **Undo Changes can turn it off too** — while game mode is on, or after a run that did not end

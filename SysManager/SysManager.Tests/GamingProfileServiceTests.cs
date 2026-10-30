@@ -1268,6 +1268,152 @@ public class GamingProfileServiceTests
         finally { DeleteStore(path); }
     }
 
+    // ── The record of what game mode changed: written first, never written over (#2711) ──────────
+    // A session a crash left on was written over by the next Start, which read its changes as the starting point, and
+    // the record of a new session was written only once every step had run, so closing while they ran left nothing to
+    // undo them from. The timer goes to a substitute and the restore point is never made, so nothing here changes the
+    // PC running the suite.
+
+    [Fact]
+    public async Task ApplyAsync_OverASessionAnEarlierRunLeftOn_ChangesNothing_AndKeepsItsRecord()
+    {
+        var path = NewStorePath();
+        try
+        {
+            // The earlier run's record holds the plan the user had, the only copy of it.
+            File.WriteAllText(path, SerializePendingStore(new GamingProfileStore
+            {
+                LastConfig = GamingProfile.Default,
+                ActiveSession = new GamingSessionRecord(
+                    new GamingProfile { UltimatePerformancePlan = true },
+                    new GamingSnapshot { OriginalPowerPlanGuid = PerformanceService.BalancedGuid }),
+            }));
+            var before = File.ReadAllBytes(path);
+            var restorePointAttempts = 0;
+            var timer = TimerThatAccepts();
+            var svc = StoreOnlyService(path, (_, _) =>
+            {
+                restorePointAttempts++;
+                return Task.FromResult(false);
+            }, timer: timer);
+
+            var result = await svc.ApplyAsync(new GamingProfile { FinestTimerResolution = true }, game: null);
+
+            Assert.True(result.LeftOverSession);
+            Assert.Empty(result.Steps);
+            Assert.Equal(0, restorePointAttempts);
+            Assert.False(svc.IsActive);
+            timer.DidNotReceive().Enable();
+            Assert.Equal(before, File.ReadAllBytes(path));
+            Assert.Equal(PendingRecoveryKind.LeftOn, svc.ReadPendingRecovery().Kind);
+        }
+        finally { DeleteStore(path); }
+    }
+
+    [Fact]
+    public async Task ApplyAsync_WritesItsRecordBeforeTheFirstChange_AndIsOnWhileTheStepsRun()
+    {
+        var path = NewStorePath();
+        try
+        {
+            var timer = TimerThatAccepts();
+            GamingProfileService? svc = null;
+            PendingRecovery? onDisk = null, inThisRun = null;
+            bool? on = null;
+            timer.Enable().Returns(_ =>
+            {
+                // What the next launch would find after a crash at this moment, read by an instance of its own.
+                onDisk = StoreOnlyService(path).ReadPendingRecovery();
+                inThisRun = svc!.ReadPendingRecovery();
+                on = svc.IsActive;
+                return new TimerResolutionStatus(5000, 156250, 5000, EnabledByApp: true);
+            });
+            svc = StoreOnlyService(path, timer: timer);
+
+            var result = await svc.ApplyAsync(new GamingProfile { FinestTimerResolution = true }, game: null);
+
+            Assert.Equal(1, result.AppliedCount);
+            Assert.Equal(PendingRecoveryKind.LeftOn, onDisk?.Kind);
+            // Not one an earlier run left on: Undo Changes and Performance Mode see game mode on.
+            Assert.Equal(PendingRecoveryKind.None, inThisRun?.Kind);
+            Assert.True(on);
+            Assert.True(svc.IsActive);
+            Assert.Equal(PendingRecoveryKind.LeftOn, StoreOnlyService(path).ReadPendingRecovery().Kind);
+
+            await svc.RevertAsync();
+            Assert.Equal(PendingRecoveryKind.None, StoreOnlyService(path).ReadPendingRecovery().Kind);
+        }
+        finally { DeleteStore(path); }
+    }
+
+    [Fact]
+    public async Task ApplyAsync_ThatChangesNothing_LeavesNoRecord()
+    {
+        var path = NewStorePath();
+        try
+        {
+            // Windows refuses the request, so the one step fails and nothing is on to undo.
+            var timer = TimerThatAccepts();
+            timer.Enable().Returns(new TimerResolutionStatus(5000, 156250, 156250, EnabledByApp: false));
+            var svc = StoreOnlyService(path, timer: timer);
+
+            var result = await svc.ApplyAsync(new GamingProfile { FinestTimerResolution = true }, game: null);
+
+            Assert.Equal(1, result.FailedCount);
+            Assert.False(svc.IsActive);
+            Assert.Equal(PendingRecoveryKind.None, StoreOnlyService(path).ReadPendingRecovery().Kind);
+        }
+        finally { DeleteStore(path); }
+    }
+
+    [Fact]
+    public async Task ApplyAsync_WhenItsRecordCannotBeSaved_ChangesNothing()
+    {
+        var path = NewStorePath();
+        try
+        {
+            File.WriteAllText(path, SerializePendingStore(new GamingProfileStore { LastConfig = GamingProfile.Default }));
+            var before = File.ReadAllBytes(path);
+            var timer = TimerThatAccepts();
+            var svc = StoreOnlyService(path, timer: timer);
+
+            // Shared for reading only: the store reads, and the write that replaces it is refused.
+            GamingApplyResult result;
+            using (new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read))
+                result = await svc.ApplyAsync(new GamingProfile { FinestTimerResolution = true }, game: null);
+
+            Assert.True(result.RecordNotSaved);
+            Assert.Empty(result.Steps);
+            Assert.False(svc.IsActive);
+            timer.DidNotReceive().Enable();
+            Assert.Equal(before, File.ReadAllBytes(path));
+        }
+        finally { DeleteStore(path); }
+    }
+
+    [Fact]
+    public async Task RecoverPendingAsync_WhenThisRunHasASessionOn_TurnsThatSessionOff()
+    {
+        // The record on disk is the live session's own, as when the session started after the caller looked. Put back
+        // by that record, the session stayed on with nothing left on disk to undo it from.
+        var path = NewStorePath();
+        try
+        {
+            File.WriteAllText(path, PendingStore(new GamingProfile()));
+            var svc = StoreOnlyService(path);
+            var tweak = new FakeTweak("power plan", []);
+            svc.SeedAppliedStepForTest(tweak);
+
+            var result = await svc.RecoverPendingAsync();
+
+            Assert.True(result.FullyRestored);
+            Assert.True(tweak.Reverted);
+            Assert.False(svc.IsActive);
+            Assert.Equal(PendingRecoveryKind.None, StoreOnlyService(path).ReadPendingRecovery().Kind);
+        }
+        finally { DeleteStore(path); }
+    }
+
     // ── Pause search indexing: a stop that outlasts its wait ───────────────────
 
     [Fact]

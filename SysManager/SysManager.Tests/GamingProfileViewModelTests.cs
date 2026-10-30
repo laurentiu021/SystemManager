@@ -258,6 +258,111 @@ public class GamingProfileViewModelTests
         Assert.EndsWith(SessionRestorePointTests.NoticeStandIn, Assert.Single(dialog.Messages), StringComparison.Ordinal);
     }
 
+    // ── Game mode an earlier run left on goes back before Start (#2711) ─────
+    // Start ran over a session a crash had left on: its snapshot read the leftover changes as the starting point and its
+    // record replaced the only copy of the user's own settings, so Stop put game mode's settings back. The question at
+    // startup can be answered no, and Start pressed before it is asked.
+
+    private static IGamingProfileService ServiceWithALeftover()
+    {
+        var service = ServiceWith(new GamingProfile());
+        service.ReadPendingRecovery().Returns(new PendingRecovery(PendingRecoveryKind.LeftOn));
+        // The Dashboard asked when SysManager started, and was answered no.
+        service.ClaimRecoveryQuestion().Returns(false);
+        return service;
+    }
+
+    private const string RevertedThenStart =
+        "Reverted the leftover changes from the previous session. Press Start to start game mode.";
+
+    [Fact]
+    public async Task Start_WithGameModeLeftOnByAnEarlierRun_RevertsItFirst_AndStartsNothing()
+    {
+        var service = ServiceWithALeftover();
+        var vm = NewVm(service);
+        vm.FinestTimerResolution = true;
+        using var dialog = new DialogAnswer(confirm: true);
+
+        await vm.StartCommand.ExecuteAsync(null);
+
+        // Its own question alone: Start's is not asked for a start that cannot happen.
+        Assert.Contains("Game mode is still on from the last time SysManager ran", Assert.Single(dialog.Messages),
+            StringComparison.Ordinal);
+        await service.Received(1).RecoverPendingAsync(Arg.Any<CancellationToken>());
+        await service.DidNotReceive().ApplyAsync(Arg.Any<GamingProfile>(), Arg.Any<GameTarget?>());
+        Assert.Equal(RevertedThenStart, vm.StatusMessage);
+        Assert.False(vm.IsSessionActive);
+    }
+
+    [Fact]
+    public async Task Start_WithGameModeLeftOn_AnsweredNo_RevertsNothing_AndSaysWhy()
+    {
+        var service = ServiceWithALeftover();
+        var vm = NewVm(service);
+        vm.FinestTimerResolution = true;
+        using var dialog = new DialogAnswer(confirm: false);
+
+        await vm.StartCommand.ExecuteAsync(null);
+
+        await service.DidNotReceive().RecoverPendingAsync(Arg.Any<CancellationToken>());
+        await service.DidNotReceive().ApplyAsync(Arg.Any<GamingProfile>(), Arg.Any<GameTarget?>());
+        Assert.Equal(GamingProfileViewModel.LeftoverStillOn, vm.StatusMessage);
+    }
+
+    [Fact]
+    public async Task Start_WithGameModeLeftOn_WhoseRecordCannotBeReadJustNow_SaysToTryAgain()
+    {
+        var service = ServiceWithALeftover();
+        service.RecoverPendingAsync(Arg.Any<CancellationToken>())
+               .Returns(Task.FromException<GamingRevertResult>(new System.IO.IOException("held")));
+        var vm = NewVm(service);
+        vm.FinestTimerResolution = true;
+        using var dialog = new DialogAnswer(confirm: true);
+
+        await vm.StartCommand.ExecuteAsync(null);
+
+        Assert.Contains("could not read its record of the previous session just now", vm.StatusMessage,
+            StringComparison.Ordinal);
+        Assert.False(vm.IsBusy);
+        Assert.False(vm.IsSessionActive);
+    }
+
+    [Fact]
+    public async Task Start_WhenTheServiceFindsGameModeLeftOn_RevertsItFirst()
+    {
+        // The read before the question did not find it, as when the record could not be read just then.
+        var service = ServiceWith(new GamingProfile());
+        service.ApplyAsync(Arg.Any<GamingProfile>(), Arg.Any<GameTarget?>())
+               .Returns(new GamingApplyResult([], false, LeftOverSession: true));
+        var vm = NewVm(service);
+        vm.FinestTimerResolution = true;
+        using var dialog = new DialogAnswer(confirm: true);
+
+        await vm.StartCommand.ExecuteAsync(null);
+
+        Assert.Equal(2, dialog.Calls);
+        await service.Received(1).RecoverPendingAsync(Arg.Any<CancellationToken>());
+        Assert.Equal(RevertedThenStart, vm.StatusMessage);
+        Assert.False(vm.IsSessionActive);
+    }
+
+    [Fact]
+    public async Task Start_WhenTheRecordCannotBeSaved_SaysSo_AndGameModeIsNotOn()
+    {
+        var service = ServiceWith(new GamingProfile());
+        service.ApplyAsync(Arg.Any<GamingProfile>(), Arg.Any<GameTarget?>())
+               .Returns(new GamingApplyResult([], false, RecordNotSaved: true));
+        var vm = NewVm(service);
+        vm.FinestTimerResolution = true;
+        using var dialog = new DialogAnswer(confirm: true);
+
+        await vm.StartCommand.ExecuteAsync(null);
+
+        Assert.StartsWith("Cannot start — SysManager could not save the record it keeps to undo game mode",
+            vm.StatusMessage, StringComparison.Ordinal);
+        Assert.False(vm.IsSessionActive);
+    }
+
     // ── Stop reverts through the service ───────────────────────────────────
 
     [Fact]

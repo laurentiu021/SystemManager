@@ -1771,7 +1771,11 @@ Get Microsoft Edge and OneDrive out of your way — reversibly:
   choice, so no app can switch it for you; the tab opens Windows' default-apps settings
   and guides you instead of pretending to change it
 - Every action confirms first with a plain-language impact summary; disabling Edge and restoring
-  it need administrator (the tab explains why and what it unlocks), removing OneDrive does not
+  it need administrator (the tab explains why and what it unlocks), removing OneDrive does not.
+  OneDrive is removed and restored only with SysManager opened normally: it changes your own
+  account, and run as administrator its setup could be a copy any program can replace in your
+  profile, or reach another administrator's account. As administrator the tab says so and changes
+  nothing
 - **A Windows restore point is attempted before the first change of the session** — shared with
   the other tabs that change system settings, so at most one is made no matter how many tabs you
   use. It is mentioned only when one was really created: System Restore is switched off on many

@@ -7,6 +7,7 @@ using System.Linq;
 using System.Text.RegularExpressions;
 using Microsoft.Win32;
 using Serilog;
+using SysManager.Helpers;
 using SysManager.Models;
 
 namespace SysManager.Services;
@@ -61,6 +62,15 @@ public sealed partial class EdgeOneDriveService
     private readonly string? _oneDriveSetupPath;
     private readonly string? _oneDriveClientPath;
     private readonly Func<bool> _isOneDriveRunning;
+    private readonly Func<bool> _isElevated;
+
+    /// <summary>
+    /// What Remove and Restore OneDrive say when SysManager runs as administrator, which they refuse. Shown by the
+    /// tab before anything else happens, and carried by the refusal the service throws.
+    /// </summary>
+    public const string OneDriveNeedsStandardRunMessage =
+        "OneDrive is changed for your own account only, and SysManager is running as administrator. "
+        + "Close SysManager and open it normally, then try again.";
 
     /// <summary>
     /// Creates the service. <paramref name="hkcuRoot"/> defaults to <see cref="Registry.CurrentUser"/>
@@ -72,11 +82,14 @@ public sealed partial class EdgeOneDriveService
     /// remove/restore outcome can be tested on a machine without OneDrive. The runner is substituted
     /// there, so the file is never launched. <paramref name="oneDriveClientPath"/> does the same for OneDrive.exe,
     /// whose presence is what "installed" means, and <paramref name="isOneDriveRunning"/> replaces the look at the
-    /// running processes, so neither answer depends on the machine running the test.
+    /// running processes, so neither answer depends on the machine running the test. <paramref name="isElevated"/>
+    /// replaces the elevation probe, as <see cref="UninstallerService"/>'s does, so both sides of the refusal in
+    /// <see cref="EnsureStandardRun"/> are testable on any host.
     /// </summary>
     public EdgeOneDriveService(
         IPowerShellRunner ps, RegistryKey? hkcuRoot = null, RegistryKey? hklmRoot = null,
-        string? oneDriveSetupPath = null, string? oneDriveClientPath = null, Func<bool>? isOneDriveRunning = null)
+        string? oneDriveSetupPath = null, string? oneDriveClientPath = null, Func<bool>? isOneDriveRunning = null,
+        Func<bool>? isElevated = null)
     {
         _ps = ps;
         _hkcuRoot = hkcuRoot ?? Registry.CurrentUser;
@@ -84,6 +97,7 @@ public sealed partial class EdgeOneDriveService
         _oneDriveSetupPath = oneDriveSetupPath;
         _oneDriveClientPath = oneDriveClientPath;
         _isOneDriveRunning = isOneDriveRunning ?? IsOneDriveRunning;
+        _isElevated = isElevated ?? AdminHelper.IsElevated;
     }
 
     // OneDrive's File Explorer navigation-pane entry is a shell namespace CLSID; toggling
@@ -165,6 +179,7 @@ public sealed partial class EdgeOneDriveService
     /// </summary>
     public async Task<EdgeOneDriveOutcome> RemoveOneDriveAsync(CancellationToken ct = default)
     {
+        EnsureStandardRun();
         if (!IsOneDriveClientInstalled()) return EdgeOneDriveOutcome.NotApplicable;
         var setup = ResolveOneDriveSetup();
         if (setup is null)
@@ -205,6 +220,7 @@ public sealed partial class EdgeOneDriveService
     /// </summary>
     public async Task<EdgeOneDriveOutcome> RestoreOneDriveAsync(CancellationToken ct = default)
     {
+        EnsureStandardRun();
         var setup = ResolveOneDriveSetup();
         if (setup is null) return EdgeOneDriveOutcome.NotApplicable;
 
@@ -491,13 +507,28 @@ public sealed partial class EdgeOneDriveService
     // ── Filesystem/process probes ───────────────────────────────────────────
 
     /// <summary>
-    /// Resolves the OneDriveSetup.exe to launch, preferring the trusted, admin-only-writable
-    /// System32/SysWOW64 copy (which also survives an uninstall, so restore still works) and
-    /// falling back to the per-user copy under LOCALAPPDATA. Returns null when none exists, which says
-    /// nothing about whether OneDrive is installed. Preferring the System copy also avoids launching a user-writable
-    /// binary should the app ever be elevated for the Edge portion (binary-planting guard, matching
-    /// <see cref="SysManager.Helpers.SystemPaths"/>). A test override replaces the candidates; it is probed the same
-    /// way.
+    /// Refuses a OneDrive change while SysManager runs as administrator.
+    /// </summary>
+    /// <remarks>
+    /// Remove and Restore run OneDriveSetup.exe with SysManager's own token, and when neither System32 nor SysWOW64
+    /// holds a copy, the setup they find is the one under LOCALAPPDATA, which any program running as the user can
+    /// replace. Elevated, that file ran as administrator: the elevated state is the normal one on this tab, since its
+    /// Edge half needs it (#2710). Elevated with another administrator's password, the uninstall and the File
+    /// Explorer pin also reached that administrator's profile instead of the signed-in person's. OneDrive is per
+    /// user and needs no elevation, so the change is refused rather than half-made, as
+    /// <see cref="UninstallerService"/> refuses an uninstall.
+    /// </remarks>
+    private void EnsureStandardRun()
+    {
+        if (_isElevated()) throw new InvalidOperationException(OneDriveNeedsStandardRunMessage);
+    }
+
+    /// <summary>
+    /// Resolves the OneDriveSetup.exe to launch, preferring the System32/SysWOW64 copy (which also survives an
+    /// uninstall, so restore still works) and falling back to the per-user copy under LOCALAPPDATA. Returns null when
+    /// none exists, which says nothing about whether OneDrive is installed. The per-user copy is user-writable, which
+    /// is safe only because both callers refuse to run elevated first: see <see cref="EnsureStandardRun"/>. A test
+    /// override replaces the candidates; it is probed the same way.
     /// </summary>
     private string? ResolveOneDriveSetup()
     {

@@ -8,6 +8,7 @@ using System.IO;
 using System.Management.Automation;
 using Microsoft.Win32;
 using NSubstitute;
+using SysManager.Helpers;
 using SysManager.Models;
 using SysManager.Services;
 using SysManager.ViewModels;
@@ -26,6 +27,10 @@ public sealed class EdgeOneDriveViewModelTests : IDisposable
     private readonly string _rootName = @"Software\SysManagerTests\EdgeOneDriveVm_" + Guid.NewGuid().ToString("N");
     private readonly RegistryKey _root;
 
+    // Pinned, not read from the host: this machine and the CI runner are both elevated, and the OneDrive changes
+    // refuse to run elevated (#2710). A test about the elevated side forces it inside its own scope.
+    private readonly IDisposable _notElevated = AdminHelper.ForceElevation(false);
+
     public EdgeOneDriveViewModelTests()
         => _root = Registry.CurrentUser.CreateSubKey(_rootName, writable: true)!;
 
@@ -33,6 +38,7 @@ public sealed class EdgeOneDriveViewModelTests : IDisposable
     {
         _root.Dispose();
         try { Registry.CurrentUser.DeleteSubKeyTree(_rootName, throwOnMissingSubKey: false); } catch { /* best-effort cleanup */ }
+        _notElevated.Dispose();
     }
 
     private EdgeOneDriveViewModel NewVm()
@@ -292,6 +298,37 @@ public sealed class EdgeOneDriveViewModelTests : IDisposable
         await command.ExecuteAsync(null);
 
         Assert.EndsWith(SessionRestorePointTests.NoticeStandIn, Assert.Single(dialog.Messages), StringComparison.Ordinal);
+    }
+
+    // ── elevated, a OneDrive change says to reopen normally, before anything else (#2710) ──
+
+    /// <summary>
+    /// The service refuses an elevated OneDrive change; the tab says so before its confirmation and before the restore
+    /// point, so nobody is asked to approve a change that cannot run and no restore point is made for it.
+    /// </summary>
+    [Theory]
+    [InlineData("RemoveOneDrive")]
+    [InlineData("RestoreOneDrive")]
+    public async Task OneDriveChange_WhileElevated_SaysToReopenNormally_WithoutAskingOrSnapshotting(string change)
+    {
+        using var elevated = AdminHelper.ForceElevation(true);
+        var ps = Substitute.For<IPowerShellRunner>();
+        ps.RunAsync(Arg.Any<string>(), Arg.Any<IDictionary<string, object?>?>(), Arg.Any<CancellationToken>())
+          .Returns(new Collection<PSObject>());
+        var restorePoint = NoRestorePoint();
+        var vm = new EdgeOneDriveViewModel(new EdgeOneDriveService(ps, hkcuRoot: _root, hklmRoot: _root), restorePoint);
+        await vm.InitializationComplete;
+        Assert.True(vm.IsElevated);   // the premise: the banner binds this, and so does the refusal
+        vm.OneDriveInstalled = true;
+        using var dialog = new DialogAnswer(confirm: true);
+
+        await (change == "RemoveOneDrive" ? vm.RemoveOneDriveCommand : vm.RestoreOneDriveCommand).ExecuteAsync(null);
+
+        Assert.Equal(EdgeOneDriveService.OneDriveNeedsStandardRunMessage, vm.StatusMessage);
+        Assert.Equal(0, dialog.Calls);
+        await restorePoint.DidNotReceive().EnsureAsync(Arg.Any<string>(), Arg.Any<CancellationToken>());
+        await ps.DidNotReceive().RunProcessAsync(
+            Arg.Any<string>(), Arg.Any<string>(), Arg.Any<CancellationToken>(), Arg.Any<System.Text.Encoding?>());
     }
 
     /// <summary>

@@ -21040,7 +21040,9 @@ public partial class ArchitectureTests
             // WPF to shut down, both inside a process whose startup has just failed, so either can surface
             // a fault from anything half-built — and neither may stop the guaranteed exit that is the fix.
             ["App.xaml.cs"] = 5,
-            ["Services/EtwBandwidthSource.cs"] = 1,
+            // 3 rather than 1 since #2707: starting the session and stopping one a previous run left are native ETW
+            // calls too, and a list of exception types let a COMException through and froze the tab.
+            ["Services/EtwBandwidthSource.cs"] = 3,
             ["Services/GamingProfileService.cs"] = 3,
             ["Services/OperationLockService.cs"] = 1,
             ["Services/PowerShellRunner.cs"] = 1,

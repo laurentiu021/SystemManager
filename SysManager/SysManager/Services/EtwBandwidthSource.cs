@@ -24,8 +24,9 @@ namespace SysManager.Services;
 /// elevated and the user opts in. It is defensive by construction: if the session can't start
 /// (missing privilege, a stale same-named session, a locked-down host, or the native
 /// KernelTraceControl helper failing to load), <see cref="Start"/> returns false and
-/// <see cref="IsAvailable"/> stays false so the ViewModel silently falls back to the no-admin
-/// <see cref="ConnectionBandwidthSource"/> — the tab never crashes because ETW was unavailable.
+/// <see cref="IsAvailable"/> stays false so the ViewModel falls back to the no-admin
+/// <see cref="ConnectionBandwidthSource"/> and says so — the tab never crashes because ETW was unavailable.
+/// <see cref="IsAvailable"/> turns false again when the trace ends later, and the ViewModel falls back then too.
 /// </para>
 /// <para>Strictly local and read-only: the trace stays in-process and nothing is written or sent.</para>
 /// </summary>
@@ -33,10 +34,28 @@ public sealed class EtwBandwidthSource : IBandwidthMonitorService
 {
     // A fixed, unique session name so a leftover session from a crashed run can be found and
     // stopped rather than colliding. Not user-supplied.
-    private const string SessionName = "SysManagerBandwidthKernel";
+    internal const string SessionName = "SysManagerBandwidthKernel";
+
+    /// <summary>
+    /// The session's buffer memory, in MB. TraceEvent's default is 64 MB, for a feed that only needs per-second byte
+    /// counts, and a session a killed SysManager left running holds it until something stops it (#2707).
+    /// </summary>
+    internal const int BufferSizeMB = 8;
 
     public BandwidthMode Mode => BandwidthMode.PreciseEtw;
-    public bool IsAvailable { get; private set; }
+
+    /// <inheritdoc />
+    /// <remarks>
+    /// False again once the trace ends, however it ends (#2707). <c>Source.Process()</c> also returns when the session
+    /// is stopped from outside, by its name, and this stayed true, so the tab showed zero rates as a live trace.
+    /// Written on the processing thread and read by the poll, hence volatile.
+    /// </remarks>
+    public bool IsAvailable => _available;
+
+    private volatile bool _available;
+
+    // Opens the kernel session. A seam, so a test can make it fail without touching ETW on the PC running the suite.
+    private readonly Func<TraceEventSession> _openSession;
 
     private TraceEventSession? _session;
     private Task? _processingTask;
@@ -72,6 +91,8 @@ public sealed class EtwBandwidthSource : IBandwidthMonitorService
         public long LastActivityTicks;
     }
 
+    /// <inheritdoc />
+    /// <remarks>Never throws: whatever stops the kernel session from starting, the answer is false (#2707).</remarks>
     public bool Start()
     {
         if (_session is not null) return IsAvailable;
@@ -85,13 +106,7 @@ public sealed class EtwBandwidthSource : IBandwidthMonitorService
 
         try
         {
-            // Stop a stale session left by a previous crashed run (kernel sessions outlive the
-            // process). GetActiveSession + Stop is the documented recovery path.
-            try { TraceEventSession.GetActiveSession(SessionName)?.Stop(); }
-            catch (Exception ex) when (ex is InvalidOperationException or UnauthorizedAccessException)
-            { Log.Debug("Bandwidth ETW: could not stop stale session: {Error}", ex.Message); }
-
-            _session = new TraceEventSession(SessionName);
+            _session = _openSession();
             _session.EnableKernelProvider(KernelTraceEventParser.Keywords.NetworkTCPIP);
 
             var kernel = _session.Source.Kernel;
@@ -105,36 +120,80 @@ public sealed class EtwBandwidthSource : IBandwidthMonitorService
             kernel.UdpIpSendIPV6 += d => AddUnlessLoopback(d.ProcessID, down: 0, up: d.size, d.ProcessName, d.saddr, d.daddr);
 
             // Process the trace on a background thread; Source.Process() blocks until the session
-            // is stopped/disposed. Guard so a mid-stream fault disables the source (the poll then
-            // sees IsAvailable=false and the VM falls back) rather than crashing the app.
-            _processingTask = Task.Run(() =>
-            {
-                try { _session.Source.Process(); }
-                catch (Exception ex)
-                {
-                    // Broad on purpose: TraceEvent's native processing of the kernel session can fail with any
-                    // exception, and whichever it is, the source has ended and the view model falls back.
-                    Log.Debug("Bandwidth ETW: processing ended: {Error}", ex.Message);
-                    IsAvailable = false;
-                }
-            });
-
+            // is stopped/disposed. Available before it starts, so a trace that ends at once cannot be
+            // marked available after it ended.
             _prevTimestampTicks = NowTicks();
-            IsAvailable = true;
+            _available = true;
+            var session = _session;
+            _processingTask = Task.Run(() => Process(session));
             Log.Information("Bandwidth ETW: kernel session started");
             return true;
         }
-        catch (Exception ex) when (ex is UnauthorizedAccessException or InvalidOperationException
-                                     or System.ComponentModel.Win32Exception or TypeInitializationException
-                                     or DllNotFoundException or System.IO.FileNotFoundException)
+        // Broad on purpose: this is the native boundary of the kernel trace, and whatever fails here, precise mode cannot
+        // start. TraceEvent turns most StartTrace errors into a COMException, every logger slot taken by other tools for
+        // one, and can throw ArgumentException or NotSupportedException too, and the list of types this replaced let them
+        // escape the tab's rebuild, which left it with no source and froze it (#2707). The native KernelTraceControl
+        // helper failing to load, blocked from the single-file extraction folder, is one of them as well.
+        catch (Exception ex)
         {
-            // Any failure to start the kernel session → unavailable, and the VM falls back to the
-            // no-admin source. TypeInitialization/DllNotFound cover the native KernelTraceControl
-            // helper failing to load (e.g. blocked from the single-file extraction dir).
             Log.Warning("Bandwidth ETW: could not start kernel session: {Error}", ex.Message);
             SafeStop();
-            IsAvailable = false;
+            _available = false;
             return false;
+        }
+    }
+
+    /// <summary>
+    /// Opens this run's kernel session with a small buffer, after stopping one a previous run left running.
+    /// </summary>
+    private static TraceEventSession OpenSession()
+    {
+        StopLeftoverSession();
+        return new TraceEventSession(SessionName) { BufferSizeMB = BufferSizeMB };
+    }
+
+    /// <summary>
+    /// Stops the kernel session a previous run left running, if there is one. Needs administrator.
+    /// </summary>
+    /// <remarks>
+    /// Kernel sessions outlive their process, and TraceEvent stops one only from <c>Dispose</c> or its finalizer, which
+    /// a killed process runs neither of. This ran only as precise mode next started, so a session a crash left ran on
+    /// until then; SysManager also calls it as it starts as administrator (#2707).
+    /// </remarks>
+    internal static void StopLeftoverSession()
+    {
+        try
+        {
+            using var leftover = TraceEventSession.GetActiveSession(SessionName);
+            if (leftover is not null && leftover.Stop(noThrow: true)) Log.Information("Bandwidth ETW: stopped a leftover kernel session");
+        }
+        // Broad on purpose: the query is a native ETW call, and at startup, where this runs on its own, nothing may escape
+        // it. A leftover that cannot be stopped is only logged.
+        catch (Exception ex)
+        {
+            Log.Debug("Bandwidth ETW: could not stop a leftover session: {Error}", ex.Message);
+        }
+    }
+
+    // Runs on the processing thread until the trace ends.
+    private void Process(TraceEventSession session)
+    {
+        try
+        {
+            session.Source.Process();
+        }
+        // Broad on purpose: TraceEvent's native processing of the kernel session can fail with any exception, and
+        // whichever it is, the source has ended. The session itself would run on with no reader until the tab was
+        // disposed, so it is stopped here (#2707).
+        catch (Exception ex)
+        {
+            Log.Debug("Bandwidth ETW: processing ended: {Error}", ex.Message);
+            session.Stop(noThrow: true);
+        }
+        finally
+        {
+            // However the trace ended, it has, so the view model falls back (#2707).
+            _available = false;
         }
     }
 
@@ -287,7 +346,16 @@ public sealed class EtwBandwidthSource : IBandwidthMonitorService
     /// pay for the trace if the user turns per-process mode on while running elevated.
     /// </summary>
     /// <param name="timeProvider">Test seam; defaults to the system clock.</param>
-    public EtwBandwidthSource(TimeProvider? timeProvider = null) => _time = timeProvider ?? TimeProvider.System;
+    public EtwBandwidthSource(TimeProvider? timeProvider = null) : this(timeProvider, OpenSession) { }
+
+    /// <summary>The source, with the call that opens its kernel session given by a test.</summary>
+    /// <param name="timeProvider">The clock; the system's when null.</param>
+    /// <param name="openSession">Opens the kernel session, before its provider is enabled.</param>
+    internal EtwBandwidthSource(TimeProvider? timeProvider, Func<TraceEventSession> openSession)
+    {
+        _time = timeProvider ?? TimeProvider.System;
+        _openSession = openSession;
+    }
 
     /// <summary>
     /// A MONOTONIC tick count, in <see cref="TimeSpan"/> ticks. Both callers subtract two readings, so this
@@ -324,7 +392,7 @@ public sealed class EtwBandwidthSource : IBandwidthMonitorService
     {
         if (_disposed) return;
         _disposed = true;
-        IsAvailable = false;
+        _available = false;
         // Stopping the session unblocks Source.Process() so the processing task completes.
         SafeStop();
         try { _processingTask?.Wait(TimeSpan.FromSeconds(2)); }

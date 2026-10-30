@@ -212,6 +212,16 @@ public sealed partial class TaskSchedulerViewModel : ElevatedViewModelBase
             : $"{verb} the task \"{task.Name}\"?\n\nIt can be re-enabled at any time.";
         if (!DialogService.Instance.Confirm(message, $"{verb} Task — Confirm")) return;
 
+        // The run-info query for this same row can still be in flight — the confirmation dialog pumps the
+        // dispatcher, so it is often still running once this method resumes. On success, ReplaceTask's own
+        // SelectedTask reassignment already triggers a fresh LoadRunInfoAsync that cancels this as a side
+        // effect — confirmed, not assumed: a build with this line removed behaves identically there. This
+        // stays anyway so the guarantee is explicit rather than borrowed from a different method's side
+        // effect, and because it is the only thing that cancels a still-pending query when the toggle
+        // itself fails (result is null below, so ReplaceTask and its cascade never run) — though a query
+        // that finishes there is harmless too, since nothing about the task actually changed (#2788).
+        _runInfoCts?.Cancel();
+
         var result = await _service.SetEnabledAsync(task.Name, task.Path, enabling).ConfigureAwait(true);
         if (result is not null)
         {
@@ -257,12 +267,22 @@ public sealed partial class TaskSchedulerViewModel : ElevatedViewModelBase
     /// rebuilt the grid from the stale copy in <c>_all</c> and the Last run / Next run columns the user
     /// had just waited for snapped back to "—", taking the selection with them. One method that knows
     /// about both lists is the difference between fixing that and fixing it again later.
+    /// <para>Both lookups are by <c>FullPath</c>, not by the record itself: <see cref="Tasks"/> used
+    /// <c>IndexOf(oldTask)</c>, which is record equality, and a selected row whose Last run / Next run had
+    /// already landed was no longer equal to the stale copy a caller captured before awaiting something
+    /// else — so the grid row was never found, never updated, and the selection (reassigned to a record the
+    /// grid did not contain) disappeared (#2788).</para>
     /// </remarks>
     private void ReplaceInBothLists(ScheduledTaskInfo oldTask, ScheduledTaskInfo newTask)
     {
         int allIdx = _all.FindIndex(t => t.FullPath == oldTask.FullPath);
         if (allIdx >= 0) _all[allIdx] = newTask;
-        int idx = Tasks.IndexOf(oldTask);
+
+        int idx = -1;
+        for (int i = 0; i < Tasks.Count; i++)
+        {
+            if (Tasks[i].FullPath == oldTask.FullPath) { idx = i; break; }
+        }
         if (idx >= 0) Tasks[idx] = newTask;
     }
 

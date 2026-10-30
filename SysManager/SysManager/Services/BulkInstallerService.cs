@@ -39,9 +39,9 @@ public sealed class BulkInstallerService
     /// <summary>
     /// Runs <c>winget list</c> and returns its raw stdout lines. Routed through the
     /// <see cref="IPowerShellRunner"/> seam (not a hand-built ProcessStartInfo) so the launch
-    /// inherits the runner's winget hardening — <see cref="SystemPaths.ResolveWinget"/> pins the
-    /// FileName to the trusted, admin-only-writable WindowsApps install path, closing the
-    /// binary-planting LPE vector a bare <c>FileName="winget"</c> would open. Mirrors
+    /// inherits the runner's winget hardening — <see cref="SystemPaths.ResolveWinget(bool)"/> pins the
+    /// FileName to the trusted, admin-only-writable WindowsApps install path for an elevated launch, and to the
+    /// user's own alias otherwise, closing the binary-planting LPE vector a bare <c>FileName="winget"</c> would open. Mirrors
     /// <see cref="UninstallerService.ListInstalledAsync"/>'s thread-safe capture pattern.
     /// </summary>
     /// <exception cref="InvalidOperationException">The query failed, as opposed to finding nothing.</exception>

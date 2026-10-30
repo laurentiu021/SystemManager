@@ -473,8 +473,9 @@ public sealed partial class PowerShellRunner : IPowerShellRunner, IDisposable
         var psi = new System.Diagnostics.ProcessStartInfo
         {
             // Pin bare Windows tool names to their full System32 path so an attacker-planted
-            // executable in the (possibly user-writable) app directory can't be run elevated.
-            FileName = SysManager.Helpers.SystemPaths.ResolveSystemTool(fileName),
+            // executable in the (possibly user-writable) app directory can't be run elevated. With this
+            // runner's elevation, which decides where winget runs from (#2699).
+            FileName = SysManager.Helpers.SystemPaths.ResolveSystemTool(fileName, _isElevated),
             Arguments = arguments,
             RedirectStandardOutput = true,
             RedirectStandardError = true,
@@ -558,7 +559,7 @@ public sealed partial class PowerShellRunner : IPowerShellRunner, IDisposable
 
         var psi = new System.Diagnostics.ProcessStartInfo
         {
-            FileName = SysManager.Helpers.SystemPaths.ResolveSystemTool(fileName),
+            FileName = SysManager.Helpers.SystemPaths.ResolveSystemTool(fileName, _isElevated),
             Arguments = arguments,
             UseShellExecute = true,
             WorkingDirectory = workingDir

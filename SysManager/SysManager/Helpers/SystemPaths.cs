@@ -43,10 +43,18 @@ internal static class SystemPaths
     public static string ResolveSystemTool(string fileName)
         => ResolveSystemTool(fileName, System32, File.Exists);
 
+    /// <summary>
+    /// The same, for a caller that knows whether its launch is elevated, which decides where winget runs from
+    /// (<see cref="ResolveWinget(bool)"/>). The runner passes its own; a caller that does not know gets the process's.
+    /// </summary>
+    public static string ResolveSystemTool(string fileName, bool isElevated)
+        => ResolveSystemTool(fileName, System32, File.Exists, () => isElevated);
+
     internal static string ResolveSystemTool(
         string fileName,
         string systemDirectory,
-        Func<string, bool> fileExists)
+        Func<string, bool> fileExists,
+        Func<bool>? isElevated = null)
     {
         if (string.IsNullOrEmpty(fileName)) return fileName;
         if (Path.IsPathRooted(fileName) || fileName.Contains('\\') || fileName.Contains('/'))
@@ -58,7 +66,7 @@ internal static class SystemPaths
         // is handled separately.
         if (fileName.Equals("winget", StringComparison.OrdinalIgnoreCase) ||
             fileName.Equals("winget.exe", StringComparison.OrdinalIgnoreCase))
-            return ResolveWinget();
+            return ResolveWinget((isElevated ?? AdminHelper.IsElevated)());
 
         if (fileName.Equals("powershell", StringComparison.OrdinalIgnoreCase) ||
             fileName.Equals("powershell.exe", StringComparison.OrdinalIgnoreCase))
@@ -107,9 +115,10 @@ internal static class SystemPaths
     private const string AppInstallerPackageSuffix = "__8wekyb3d8bbwe";
 
     /// <summary>
-    /// Resolves <c>winget</c> to the App Installer's real, admin-only-writable binary under
+    /// Resolves <c>winget</c> for an elevated launch to the App Installer's real, admin-only-writable binary under
     /// <c>%ProgramFiles%\WindowsApps\Microsoft.DesktopAppInstaller_*__8wekyb3d8bbwe\winget.exe</c>,
-    /// picking the highest package version present.
+    /// picking the highest package version present, and for a launch without administrator rights to the per-user
+    /// execution alias.
     /// <para>
     /// Why this exists: winget is an MSIX execution alias, NOT a System32 tool, so
     /// <see cref="ResolveSystemTool(string)"/>'s System32 probes never match and would return the bare name
@@ -126,26 +135,50 @@ internal static class SystemPaths
     /// missing App Installer surfaces the same <c>Win32Exception</c> the winget callers already
     /// handle, and can never resolve to the app directory.
     /// </para>
+    /// <para>
+    /// Without administrator rights the WindowsApps folder cannot be listed at all, so that lookup always fell back,
+    /// and every winget call failed with "file not found" in the mode SysManager starts in (#2699). Such a launch runs
+    /// the alias in the user's own <c>%LOCALAPPDATA%\Microsoft\WindowsApps</c> instead: a file in the profile of
+    /// the user the process runs as gives it nothing that user could not already do. Rooted, or the same fallback.
+    /// </para>
     /// </summary>
-    public static string ResolveWinget()
+    /// <param name="isElevated">Whether the launch has administrator rights.</param>
+    public static string ResolveWinget(bool isElevated) => ResolveWinget(
+        isElevated,
+        Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles),
+        Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+        Directory.EnumerateDirectories,
+        File.Exists);
+
+    /// <summary>The resolution above, over folders and a file system a test passes.</summary>
+    internal static string ResolveWinget(
+        bool isElevated,
+        string programFiles,
+        string localAppData,
+        Func<string, string, IEnumerable<string>> enumerateDirectories,
+        Func<string, bool> fileExists)
     {
         var rootedFallback = Path.Combine(System32, "winget.exe");
+        if (!isElevated)
+        {
+            return Path.IsPathRooted(localAppData)
+                ? Path.Combine(localAppData, "Microsoft", "WindowsApps", "winget.exe")
+                : rootedFallback;
+        }
+
         try
         {
-            var windowsApps = Path.Combine(
-                Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles),
-                "WindowsApps");
-            if (!Directory.Exists(windowsApps)) return rootedFallback;
+            var windowsApps = Path.Combine(programFiles, "WindowsApps");
 
             // Only Microsoft's App Installer package folders (fixed publisher hash). Folder name is
             // Microsoft.DesktopAppInstaller_<version>_<arch>__<hash>; order by the parsed <version>
             // (numeric, so 1.29 > 1.9) descending, and take the first that actually contains
-            // winget.exe (the _neutral_~_ resources package, e.g., does not).
-            var candidate = Directory
-                .EnumerateDirectories(windowsApps, "Microsoft.DesktopAppInstaller_*" + AppInstallerPackageSuffix)
+            // winget.exe (the _neutral_~_ resources package, e.g., does not). A folder that is not there
+            // throws like one that cannot be listed, and falls back the same way.
+            var candidate = enumerateDirectories(windowsApps, "Microsoft.DesktopAppInstaller_*" + AppInstallerPackageSuffix)
                 .OrderByDescending(ParsePackageVersion)
                 .Select(d => Path.Combine(d, "winget.exe"))
-                .FirstOrDefault(File.Exists);
+                .FirstOrDefault(fileExists);
 
             return candidate ?? rootedFallback;
         }

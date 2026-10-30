@@ -113,7 +113,7 @@ public sealed class SystemFixService : IDisposable
     /// It registers the user's own App Installer again, and when the user has none, the newest one on the PC. It took
     /// whichever package <c>Get-AppxPackage -AllUsers</c> listed first, which with more than one account can be an
     /// older version still registered for another user: <c>Add-AppxPackage -Register</c> then refuses it, because a
-    /// newer one is registered, or registers an old WinGet (#2835). <see cref="Helpers.SystemPaths.ResolveWinget"/>
+    /// newer one is registered, or registers an old WinGet (#2835). <see cref="Helpers.SystemPaths.ResolveWinget(bool)"/>
     /// sorts the package folders by version for the same reason.
     /// <para>Internal so the integration suite can run this exact text in Windows PowerShell with the two Appx cmdlets
     /// shadowed by functions.</para>

@@ -117,7 +117,8 @@ public class SystemPathsTests
     // name "winget" — and launched with UseShellExecute=false, an unrooted name lets CreateProcess
     // search the app's OWN directory first, so an attacker-planted winget.exe beside the portable
     // .exe would run with the app's (possibly elevated) privileges. The resolver must ALWAYS return
-    // a rooted path and NEVER the bare name / the user-writable %LOCALAPPDATA% alias.
+    // a rooted path and NEVER the bare name, and for an elevated launch never the user-writable
+    // %LOCALAPPDATA% alias. Without administrator rights the alias is the one winget there is (#2699).
 
     [Theory]
     [InlineData("winget")]
@@ -134,13 +135,13 @@ public class SystemPathsTests
     }
 
     [Fact]
-    public void ResolveWinget_NeverPointsAtUserWritableLocalAppData()
+    public void ResolveWinget_ForAnElevatedLaunch_NeverPointsAtUserWritableLocalAppData()
     {
         // The per-user execution alias lives in the user-WRITABLE %LOCALAPPDATA%\Microsoft\WindowsApps
         // — trusting it for an elevated launch would defeat the whole hardening. The resolver must
         // point at the admin-only WindowsApps install (or the rooted System32 fail-closed path),
         // never at LocalAppData.
-        var resolved = SystemPaths.ResolveWinget();
+        var resolved = SystemPaths.ResolveWinget(isElevated: true);
         var localAppData = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
         Assert.True(Path.IsPathRooted(resolved));
         Assert.False(
@@ -155,7 +156,7 @@ public class SystemPathsTests
         // binary under %ProgramFiles%\WindowsApps. If a future runner image lacks it, the resolver
         // fails closed to a rooted System32 path (asserted by the theory above), so gate this
         // stronger assertion on the file actually existing.
-        var resolved = SystemPaths.ResolveWinget();
+        var resolved = SystemPaths.ResolveWinget(isElevated: true);
         if (File.Exists(resolved))
         {
             var windowsApps = Path.Combine(
@@ -163,6 +164,75 @@ public class SystemPathsTests
             Assert.StartsWith(windowsApps, resolved, StringComparison.OrdinalIgnoreCase);
             Assert.Contains("Microsoft.DesktopAppInstaller_", resolved, StringComparison.OrdinalIgnoreCase);
         }
+    }
+
+    private const string ProgramFiles = @"C:\Program Files";
+    private const string LocalAppData = @"C:\Users\someone\AppData\Local";
+    private const string Package = "Microsoft.DesktopAppInstaller_*__8wekyb3d8bbwe";
+
+    private static IEnumerable<string> NotListed(string folder, string pattern) =>
+        throw new UnauthorizedAccessException($@"Access to the path '{folder}' is denied.");
+
+    [Fact]
+    public void ResolveWinget_WithoutAdministratorRights_IsTheUsersOwnAlias_AndListsNothing()
+    {
+        // A process without administrator rights may not list WindowsApps, so the lookup always fell back to a
+        // System32 path that does not exist, and winget was "not available" in the mode SysManager starts in (#2699).
+        var listed = false;
+
+        var resolved = SystemPaths.ResolveWinget(false, ProgramFiles, LocalAppData,
+            (_, _) => { listed = true; return []; }, _ => true);
+
+        Assert.Equal(@"C:\Users\someone\AppData\Local\Microsoft\WindowsApps\winget.exe", resolved);
+        Assert.False(listed);
+    }
+
+    [Fact]
+    public void ResolveWinget_WithoutAdministratorRights_AndNoProfileFolder_FailsClosed()
+    {
+        // An unrooted alias path would be looked up from the current directory, which can be anywhere.
+        var resolved = SystemPaths.ResolveWinget(false, ProgramFiles, "", (_, _) => [], _ => true);
+
+        Assert.Equal(Path.Combine(Environment.SystemDirectory, "winget.exe"), resolved);
+    }
+
+    [Fact]
+    public void ResolveWinget_Elevated_WhenWindowsAppsCannotBeListed_FailsClosed_NotToTheAlias()
+    {
+        var resolved = SystemPaths.ResolveWinget(true, ProgramFiles, LocalAppData, NotListed, _ => true);
+
+        Assert.Equal(Path.Combine(Environment.SystemDirectory, "winget.exe"), resolved);
+    }
+
+    [Fact]
+    public void ResolveWinget_Elevated_TakesTheNewestPackageThatHoldsWinget()
+    {
+        var windowsApps = Path.Combine(ProgramFiles, "WindowsApps");
+        var older = Path.Combine(windowsApps, "Microsoft.DesktopAppInstaller_1.9.25200.0_x64__8wekyb3d8bbwe");
+        var newer = Path.Combine(windowsApps, "Microsoft.DesktopAppInstaller_1.29.380.0_x64__8wekyb3d8bbwe");
+        var resources = Path.Combine(windowsApps, "Microsoft.DesktopAppInstaller_1.30.0.0_neutral_~_8wekyb3d8bbwe");
+        string? listedIn = null, listedFor = null;
+
+        var resolved = SystemPaths.ResolveWinget(true, ProgramFiles, LocalAppData,
+            (folder, pattern) => { (listedIn, listedFor) = (folder, pattern); return [older, resources, newer]; },
+            path => path != Path.Combine(resources, "winget.exe"));
+
+        Assert.Equal(Path.Combine(newer, "winget.exe"), resolved);
+        Assert.Equal(windowsApps, listedIn);
+        Assert.Equal(Package, listedFor);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void ResolveSystemTool_Winget_FollowsTheElevationItIsGiven(bool isElevated)
+    {
+        var resolved = SystemPaths.ResolveSystemTool("winget", isElevated);
+        var alias = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+            "Microsoft", "WindowsApps", "winget.exe");
+
+        Assert.True(Path.IsPathRooted(resolved));
+        Assert.Equal(!isElevated, string.Equals(alias, resolved, StringComparison.OrdinalIgnoreCase));
     }
 
     [Fact]

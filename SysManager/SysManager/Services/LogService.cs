@@ -99,29 +99,50 @@ public static partial class LogService
         return AppDataFolders.Logs;
     }
 
-    // Dynamically build regex from the actual user profile parent directory
-    // (e.g. C:\Users) so it works even if Windows is installed on a non-standard
-    // drive or the Users folder has a custom path.
-    private static readonly Regex UserPathRegex = BuildUserPathRegex();
+    // Built from the actual user profile parent directory (e.g. C:\Users) so it works even if Windows is installed
+    // on a non-standard drive or the Users folder has a custom path. The current user's own folder name is matched
+    // as it is, spaces and apostrophes included; any other folder in the Users folder by the one-component rule.
+    private static readonly (Regex? Own, Regex Any) UserPathRegexes = BuildUserPathRegexes(
+        Environment.GetFolderPath(Environment.SpecialFolder.UserProfile));
 
-    private static Regex BuildUserPathRegex()
+    /// <summary>
+    /// The two scrubs for a profile at <paramref name="userProfile"/>: its own folder name, and any folder name in
+    /// the folder that holds it.
+    /// </summary>
+    /// <remarks>
+    /// The scrub was <c>Users\[^\\]+</c>, which runs to the next backslash: through spaces, quotes and line
+    /// breaks, and in the published build, whose stack frames carry no file paths, often to the end of the event.
+    /// "Access to the path 'C:\Users\Bob' is denied." lost "is denied." and the stack trace, and a first path
+    /// with no backslash after it ran on into a second one and took its drive, so the second name was never
+    /// scrubbed and reached the log (#2713). A folder name now ends where a path component does: at a separator, a
+    /// quote, a line break, a character no file name holds, or the end, and at a space too unless a backslash
+    /// follows the words after it. The user's own name is read first as the literal it is, so a name with a space or
+    /// an apostrophe is not cut short.
+    /// <para>Internal so a test can build them for a profile of its choosing.</para>
+    /// </remarks>
+    internal static (Regex? Own, Regex Any) BuildUserPathRegexes(string? userProfile)
     {
-        var userProfile = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
-        if (!string.IsNullOrEmpty(userProfile))
-        {
-            var usersDir = Path.GetDirectoryName(userProfile);
-            if (!string.IsNullOrEmpty(usersDir))
-            {
-                var escaped = Regex.Escape(usersDir + @"\");
-                return new Regex($@"(?i)({escaped})[^\\]+", RegexOptions.Compiled);
-            }
-        }
-        // Fallback: match any drive letter followed by \Users\<username>.
-        // This branch is a constant pattern, so it is source-generated.
-        return FallbackUserPathRegex();
+        var usersDir = string.IsNullOrEmpty(userProfile) ? null : Path.GetDirectoryName(userProfile);
+        var ownName = string.IsNullOrEmpty(userProfile) ? null : Path.GetFileName(userProfile);
+        if (string.IsNullOrEmpty(usersDir))
+            return (null, FallbackUserPathRegex());
+
+        var users = Regex.Escape(usersDir + @"\");
+        var own = string.IsNullOrEmpty(ownName)
+            ? null
+            : new Regex($@"(?i)({users}){Regex.Escape(ownName)}(?![\p{{L}}\p{{N}}_-])", RegexOptions.Compiled);
+        var any = new Regex($@"(?i)({users}){AnotherFolderName}", RegexOptions.Compiled);
+        return (own, any);
     }
 
-    [GeneratedRegex(@"(?i)([A-Z]:\\Users\\)[^\\]+")]
+    // A folder name as one path component: no separator, quote, line break or character a file name cannot hold. A
+    // name with a space in it is read whole when a backslash follows, and otherwise only up to the space, so the
+    // words after a path are kept. One already scrubbed is left as it is.
+    private const string AnotherFolderName = @"(?!\[user\])(?:[^\\/\r\n'""<>|:*?]+(?=\\)|[^\\/\r\n'""<>|:*?\s]+)";
+
+    // Fallback, with no profile folder to read: any drive letter followed by \Users\<name>.
+    // A constant pattern, so it is source-generated.
+    [GeneratedRegex(@"(?i)([A-Z]:\\Users\\)" + AnotherFolderName)]
     private static partial Regex FallbackUserPathRegex();
 
     /// <summary>
@@ -169,7 +190,7 @@ public static partial class LogService
     /// line — message, properties, and exception text alike.
     /// <para>Sanitizing here rather than at each call site means a new <c>Log.Information(... path
     /// ...)</c> anywhere in the app is covered by default, instead of relying on whoever writes it
-    /// to remember <see cref="SanitizePath"/>. It also catches paths inside exception messages,
+    /// to remember <see cref="SanitizePath(string?)"/>. It also catches paths inside exception messages,
     /// which no call-site fix can reach because the exception is rendered by the sink.</para>
     /// </summary>
     private sealed class UserPathScrubbingSink : ILogEventSink, IDisposable
@@ -247,9 +268,13 @@ public static partial class LogService
     /// Replaces the Windows username in file paths with [user] to avoid
     /// logging personal data.
     /// </summary>
-    public static string SanitizePath(string? path)
+    public static string SanitizePath(string? path) => SanitizePath(path, UserPathRegexes);
+
+    /// <summary><see cref="SanitizePath(string?)"/> with the scrubs <see cref="BuildUserPathRegexes"/> built.</summary>
+    internal static string SanitizePath(string? path, (Regex? Own, Regex Any) scrubs)
     {
         if (string.IsNullOrEmpty(path)) return "";
-        return UserPathRegex.Replace(path, "$1[user]");
+        var scrubbed = scrubs.Own?.Replace(path, "$1[user]") ?? path;
+        return scrubs.Any.Replace(scrubbed, "$1[user]");
     }
 }

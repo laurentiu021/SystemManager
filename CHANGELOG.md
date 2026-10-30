@@ -10,6 +10,23 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.136.24] - 2026-10-30
+
+**The diagnostic log keeps error messages whole again, and no longer lets a user name through
+when two paths share a line.**
+
+### Fixed
+- Before writing a line to the diagnostic log, SysManager replaces the folder name after
+  `C:\Users\` with `[user]`. It took everything after `C:\Users\` up to the next backslash, so for a
+  path that ended at a user's folder, as in "Access to the path 'C:\Users\Bob' is denied.", it also
+  removed "is denied.", the error's name on the next line and the list of where it happened, which
+  are what a log you share for a bug report is for. When a line held two such paths, the first
+  replacement could run on into the second and take its drive letter, so the second user name was
+  written to the log as it was. Only the folder name is replaced now, every one of them, and the
+  rest of the line is kept. Your own folder name is matched exactly, so one with a space or an
+  apostrophe in it is replaced whole. Present since 0.17.0, and on every line of the log since
+  1.56.13.
+
 ## [1.136.23] - 2026-10-30
 
 **Bandwidth Monitor's list of apps now includes the ones that talk over IPv6, and no longer shows

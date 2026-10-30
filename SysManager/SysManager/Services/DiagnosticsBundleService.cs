@@ -352,7 +352,7 @@ public sealed partial class DiagnosticsBundleService
     /// shape. Reading everything and filtering here instead keeps the cancellation point where
     /// <see cref="EventLogService.Enumerate"/> already puts it: between records, not inside one blocking call.
     /// <para>Message text, not the XML: this is read-only evidence for a human, not a parser, and the one
-    /// place a Windows user name could appear is the message, which <see cref="LogService.SanitizePath"/>
+    /// place a Windows user name could appear is the message, which <see cref="LogService.SanitizePath(string?)"/>
     /// already strips from every app log line.</para>
     /// </remarks>
     private async Task<string> BuildWindowsEventsTextAsync(CancellationToken ct)

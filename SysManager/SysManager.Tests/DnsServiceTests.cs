@@ -279,9 +279,15 @@ public class DnsServiceTests
     [Theory]
     [InlineData("current")]
     [InlineData("index")]
+    [InlineData("capture")]
     public void TheAdapterScripts_StopBeforeTheFirstCmdlet(string which)
     {
-        var script = which == "current" ? DnsService.CurrentDnsScript : DnsService.ActiveInterfaceIndexScript;
+        var script = which switch
+        {
+            "current" => DnsService.CurrentDnsScript,
+            "index" => DnsService.ActiveInterfaceIndexScript,
+            _ => DnsService.CaptureScript,
+        };
 
         var stop = script.IndexOf("$ErrorActionPreference = 'Stop'", StringComparison.Ordinal);
         var firstCmdlet = script.IndexOf("Get-NetAdapter", StringComparison.Ordinal);
@@ -1408,5 +1414,368 @@ public class DnsServiceTests
                 s.Contains("-ResetServerAddresses")),
             Arg.Any<IDictionary<string, object?>?>(),
             Arg.Any<CancellationToken>());
+    }
+
+    // ---------- an adapter with IPv6 turned off (#2709) ----------
+    //
+    // Windows keeps no IPv6 DNS settings for an adapter with IPv6 turned off, and reading them stopped the capture, so
+    // a preset and Reset to DHCP both failed before changing anything. The snapshot now says IPv6 is absent, a change
+    // sets IPv4 alone once it has checked IPv6 is still off, and Undo resets and restores IPv4 alone.
+
+    [Fact]
+    public async Task CaptureSnapshotAsync_RunsTheCaptureScript()
+    {
+        // The text the integration suite runs in Windows PowerShell is the text the service runs.
+        var runner = Substitute.For<IPowerShellRunner>();
+        runner.RunAsync(Arg.Any<string>(), Arg.Any<IDictionary<string, object?>?>(), Arg.Any<CancellationToken>())
+              .Returns(CaptureResult(12, "IPv4=8.8.8.8"));
+        using var svc = new DnsService(runner);
+
+        await svc.CaptureSnapshotAsync();
+
+        await runner.Received(1).RunAsync(
+            DnsService.CaptureScript,
+            Arg.Any<IDictionary<string, object?>?>(),
+            Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task CaptureSnapshotAsync_AnAdapterWithIpv6TurnedOff_IsCapturedWithIpv6Absent()
+    {
+        var runner = Substitute.For<IPowerShellRunner>();
+        runner.RunAsync(Arg.Any<string>(), Arg.Any<IDictionary<string, object?>?>(), Arg.Any<CancellationToken>())
+              .Returns(CaptureResult(12,
+                  DnsService.DnsConfigurationSource.Static,
+                  DnsService.DnsConfigurationSource.Absent,
+                  "IPv4=8.8.8.8"));
+        using var svc = new DnsService(runner);
+
+        var snapshot = await svc.CaptureSnapshotAsync();
+
+        Assert.Equal(DnsService.DnsConfigurationSource.Static, snapshot.V4Source);
+        Assert.Equal(["8.8.8.8"], snapshot.V4);
+        Assert.Equal(DnsService.DnsConfigurationSource.Absent, snapshot.V6Source);
+        Assert.Empty(snapshot.V6);
+    }
+
+    [Fact]
+    public async Task CaptureSnapshotAsync_Ipv4ReportedAbsent_Throws()
+    {
+        // A preset needs IPv4 servers, so only IPv6 may be missing.
+        var runner = Substitute.For<IPowerShellRunner>();
+        runner.RunAsync(Arg.Any<string>(), Arg.Any<IDictionary<string, object?>?>(), Arg.Any<CancellationToken>())
+              .Returns(CaptureResult(12,
+                  DnsService.DnsConfigurationSource.Absent,
+                  DnsService.DnsConfigurationSource.Automatic));
+        using var svc = new DnsService(runner);
+
+        var ex = await Assert.ThrowsAsync<InvalidOperationException>(() => svc.CaptureSnapshotAsync());
+
+        Assert.Contains("could not be captured completely", ex.Message);
+    }
+
+    [Fact]
+    public async Task CaptureSnapshotAsync_Ipv6AbsentWithAServer_Throws()
+    {
+        var runner = Substitute.For<IPowerShellRunner>();
+        runner.RunAsync(Arg.Any<string>(), Arg.Any<IDictionary<string, object?>?>(), Arg.Any<CancellationToken>())
+              .Returns(CaptureResult(12,
+                  DnsService.DnsConfigurationSource.Static,
+                  DnsService.DnsConfigurationSource.Absent,
+                  "IPv4=8.8.8.8", "IPv6=2606:4700:4700::1111"));
+        using var svc = new DnsService(runner);
+
+        var ex = await Assert.ThrowsAsync<InvalidOperationException>(() => svc.CaptureSnapshotAsync());
+
+        Assert.Contains("could not be captured completely", ex.Message);
+    }
+
+    [Theory]
+    [InlineData("2", true, false)]
+    [InlineData("2,23", true, true)]
+    [InlineData("23", false, true)]
+    public void TheFamiliesProbe_SaysWhichFamiliesTheAdapterHas(string families, bool ipv4, bool ipv6)
+    {
+        using var runspace = RunspaceFactory.CreateRunspace(InitialSessionState.CreateDefault2());
+        runspace.Open();
+        using var probe = PowerShell.Create();
+        probe.Runspace = runspace;
+        var state = probe.AddScript($$"""
+            function Get-DnsClientServerAddress {
+                [CmdletBinding()]
+                param([int] $InterfaceIndex, $AddressFamily)
+                if ($InterfaceIndex -ne 12) { throw "asked about interface $InterfaceIndex" }
+                foreach ($family in @({{families}})) {
+                    [pscustomobject]@{ InterfaceIndex = [uint32]12; AddressFamily = [uint16]$family }
+                }
+            }
+            $ErrorActionPreference = 'Stop'
+            $dnsIfIndex = 12
+            {{DnsService.FamiliesPresentScript}}
+            $familiesPresent.IPv4
+            $familiesPresent.IPv6
+            """).Invoke();
+
+        Assert.Empty(probe.Streams.Error);
+        Assert.Equal(2, state.Count);
+        Assert.Equal(ipv4, (bool)state[0].BaseObject);
+        Assert.Equal(ipv6, (bool)state[1].BaseObject);
+    }
+
+    [Fact]
+    public void TheFamiliesProbe_StopsOnAFailedRead_RatherThanCallingAFamilyAbsent()
+    {
+        // Taking a family for absent leaves it out of the snapshot that Undo restores. The stub also records what the
+        // read was asked to do on an error: the PowerShell these tests host stops on the script's own preference even
+        // when the call passes SilentlyContinue, and the Windows PowerShell SysManager runs does not
+        // (DnsScriptTests shows the stop there).
+        using var runspace = RunspaceFactory.CreateRunspace(InitialSessionState.CreateDefault2());
+        runspace.Open();
+        using var probe = PowerShell.Create();
+        probe.Runspace = runspace;
+        var state = probe.AddScript($$"""
+            function Get-DnsClientServerAddress {
+                [CmdletBinding()]
+                param([int] $InterfaceIndex, $AddressFamily)
+                $script:errorAction = [string]$PSBoundParameters['ErrorAction']
+                Write-Error -Message 'The DNS client did not answer.' -Category ResourceUnavailable
+            }
+            $script:answered = $false
+            $script:stopped = $false
+            try {
+                & {
+                    $ErrorActionPreference = 'Stop'
+                    $dnsIfIndex = 12
+                    {{DnsService.FamiliesPresentScript}}
+                    $script:answered = $true
+                }
+            }
+            catch {
+                $script:stopped = $true
+            }
+            $script:answered
+            $script:stopped
+            $script:errorAction
+            """).Invoke();
+
+        Assert.Equal(3, state.Count);
+        Assert.False((bool)state[0].BaseObject);
+        Assert.True((bool)state[1].BaseObject);
+        Assert.Equal("Stop", (string)state[2].BaseObject);
+    }
+
+    [Fact]
+    public async Task SetDnsAsync_OnAnAdapterWithIpv6TurnedOff_SetsIpv4Alone_OnceIpv6IsStillOff()
+    {
+        var runner = Substitute.For<IPowerShellRunner>();
+        runner.RunAsync(Arg.Any<string>(), Arg.Any<IDictionary<string, object?>?>(), Arg.Any<CancellationToken>())
+              .Returns(new Collection<PSObject>());
+        using var svc = new DnsService(runner);
+        var target = new DnsService.DnsSnapshot(
+            ["8.8.8.8"], [], 12, Guid.Parse(TestInterfaceGuid),
+            DnsService.DnsConfigurationSource.Static,
+            DnsService.DnsConfigurationSource.Absent);
+
+        await svc.SetDnsAsync(target, "1.1.1.1", "1.0.0.1", "2606:4700:4700::1111", "2606:4700:4700::1001");
+
+        var script = runner.ReceivedCalls()
+            .Select(call => call.GetArguments()[0] as string)
+            .Single(value => value?.Contains("Set-DnsClientServerAddress") == true)!;
+        var mutation = script.IndexOf("Set-DnsClientServerAddress", StringComparison.Ordinal);
+        Assert.Equal(mutation, script.LastIndexOf("Set-DnsClientServerAddress", StringComparison.Ordinal));
+        Assert.Contains("-ServerAddresses @(\"1.1.1.1\",\"1.0.0.1\")", script[mutation..]);
+        Assert.DoesNotContain("2606:4700", script);
+        var probe = script.IndexOf(DnsService.FamiliesPresentScript, StringComparison.Ordinal);
+        var check = script.IndexOf("-eq 'Absent'", StringComparison.Ordinal);
+        Assert.True(probe >= 0, "the guard does not read which families the adapter has");
+        Assert.True(check > probe, "the guard does not check IPv6 is still off");
+        Assert.True(mutation > check, "IPv4 is set before the guard checks IPv6 is still off");
+        Assert.Contains("$expectedSources = @{ IPv4 = 'Static'; IPv6 = 'Absent' }", script);
+    }
+
+    [Fact]
+    public async Task ResetToDhcpAsync_OnAnAdapterWithIpv6TurnedOff_ChecksIpv6IsStillOff_BeforeTheReset()
+    {
+        var runner = Substitute.For<IPowerShellRunner>();
+        runner.RunAsync(Arg.Any<string>(), Arg.Any<IDictionary<string, object?>?>(), Arg.Any<CancellationToken>())
+              .Returns(new Collection<PSObject>());
+        using var svc = new DnsService(runner);
+        var target = new DnsService.DnsSnapshot(
+            ["8.8.8.8"], [], 12, Guid.Parse(TestInterfaceGuid),
+            DnsService.DnsConfigurationSource.Static,
+            DnsService.DnsConfigurationSource.Absent);
+
+        await svc.ResetToDhcpAsync(target);
+
+        var script = runner.ReceivedCalls()
+            .Select(call => call.GetArguments()[0] as string)
+            .Single(value => value?.Contains("Set-DnsClientServerAddress") == true)!;
+        var probe = script.IndexOf(DnsService.FamiliesPresentScript, StringComparison.Ordinal);
+        var check = script.IndexOf("-eq 'Absent'", StringComparison.Ordinal);
+        var reset = script.IndexOf("-ResetServerAddresses", StringComparison.Ordinal);
+        Assert.True(probe >= 0, "the guard does not read which families the adapter has");
+        Assert.True(check > probe, "the guard does not check IPv6 is still off");
+        Assert.True(reset > check, "DNS is reset before the guard checks IPv6 is still off");
+    }
+
+    [Theory]
+    [InlineData(false, true)]
+    [InlineData(true, false)]
+    public async Task TheGuard_OnAnAdapterWithIpv6TurnedOff_SkipsIpv6_AndRefusesOnceItIsOn(
+        bool ipv6Present,
+        bool mutationExpected)
+    {
+        var runner = Substitute.For<IPowerShellRunner>();
+        runner.RunAsync(Arg.Any<string>(), Arg.Any<IDictionary<string, object?>?>(), Arg.Any<CancellationToken>())
+              .Returns(new Collection<PSObject>());
+        using var svc = new DnsService(runner);
+        var target = new DnsService.DnsSnapshot(
+            ["8.8.8.8"], [], 12, Guid.Parse(TestInterfaceGuid),
+            DnsService.DnsConfigurationSource.Static,
+            DnsService.DnsConfigurationSource.Absent);
+
+        await svc.SetDnsAsync(target, "1.1.1.1", "1.0.0.1", "", "");
+
+        var script = runner.ReceivedCalls()
+            .Select(call => call.GetArguments()[0] as string)
+            .Single(value => value?.Contains("Set-DnsClientServerAddress") == true)!;
+        var check = script.Split('\n').Single(line => line.Contains("-eq 'Absent'", StringComparison.Ordinal));
+
+        using var runspace = RunspaceFactory.CreateRunspace(InitialSessionState.CreateDefault2());
+        runspace.Open();
+        using var guard = PowerShell.Create();
+        guard.Runspace = runspace;
+        var state = guard.AddScript($$"""
+            $expectedSources = @{ IPv4 = 'Static'; IPv6 = 'Absent' }
+            $familiesPresent = @{ IPv4 = $true; IPv6 = ${{ipv6Present}} }
+            $script:read = @()
+            $script:mutationAttempted = $false
+            $script:guardRejected = $false
+            try {
+                foreach ($fam in @('IPv4','IPv6')) {
+                    {{check}}
+                    $script:read += $fam
+                }
+                $script:mutationAttempted = $true
+            }
+            catch {
+                $script:guardRejected = $true
+            }
+            $script:mutationAttempted
+            $script:guardRejected
+            $script:read -join ','
+            """).Invoke();
+
+        Assert.Empty(guard.Streams.Error);
+        Assert.Equal(3, state.Count);
+        Assert.Equal(mutationExpected, (bool)state[0].BaseObject);
+        Assert.Equal(!mutationExpected, (bool)state[1].BaseObject);
+        if (mutationExpected)
+            Assert.Equal("IPv4", (string)state[2].BaseObject);
+    }
+
+    [Theory]
+    [InlineData("Static", "2:reset|2:9.9.9.9")]
+    [InlineData("Automatic", "2:reset")]
+    public async Task RestoreSnapshotAsync_OfAnAdapterWithIpv6TurnedOff_ResetsAndRestoresIpv4Alone(
+        string v4Source,
+        string expectedCalls)
+    {
+        // The undo runs with IPv6 turned back on since, holding servers of its own: nothing it does reaches them.
+        var runner = Substitute.For<IPowerShellRunner>();
+        runner.RunAsync(Arg.Any<string>(), Arg.Any<IDictionary<string, object?>?>(), Arg.Any<CancellationToken>())
+              .Returns(new Collection<PSObject>());
+        using var svc = new DnsService(runner);
+        var isStatic = v4Source == "Static";
+        var snapshot = new DnsService.DnsSnapshot(
+            isStatic ? ["9.9.9.9"] : [], [], 12, Guid.Parse(TestInterfaceGuid),
+            isStatic ? DnsService.DnsConfigurationSource.Static : DnsService.DnsConfigurationSource.Automatic,
+            DnsService.DnsConfigurationSource.Absent);
+
+        await svc.RestoreSnapshotAsync(snapshot);
+
+        var script = runner.ReceivedCalls()
+            .Select(call => call.GetArguments()[0] as string)
+            .Single(value => value?.Contains("Set-DnsClientServerAddress") == true)!;
+        using var runspace = RunspaceFactory.CreateRunspace(InitialSessionState.CreateDefault2());
+        runspace.Open();
+        using (var setup = PowerShell.Create())
+        {
+            setup.Runspace = runspace;
+            setup.AddScript($$"""
+                $script:calls = @()
+                function Get-NetAdapter {
+                    [CmdletBinding()]
+                    param([switch] $IncludeHidden)
+                    [pscustomobject]@{ InterfaceGuid = [Guid]'{{TestInterfaceGuid}}'; ifIndex = 12 }
+                }
+                function Get-DnsClientServerAddress {
+                    [CmdletBinding()]
+                    param([int] $InterfaceIndex, [string] $AddressFamily)
+                    $codes = @{ IPv4 = 2; IPv6 = 23 }
+                    @(
+                        [pscustomobject]@{ InterfaceIndex = $InterfaceIndex; AddressFamily = [uint16]2 },
+                        [pscustomobject]@{ InterfaceIndex = $InterfaceIndex; AddressFamily = [uint16]23 }
+                    ) | Where-Object { -not $AddressFamily -or $_.AddressFamily -eq $codes[$AddressFamily] }
+                }
+                function Set-DnsClientServerAddress {
+                    [CmdletBinding()]
+                    param(
+                        [Parameter(ValueFromPipeline = $true)] $InputObject,
+                        [int] $InterfaceIndex,
+                        [string[]] $ServerAddresses,
+                        [switch] $ResetServerAddresses)
+                    process {
+                        $target = if ($null -ne $InputObject) { [string]$InputObject.AddressFamily } else { 'adapter' }
+                        $change = if ($ResetServerAddresses) { 'reset' } else { $ServerAddresses -join ',' }
+                        $script:calls += "${target}:$change"
+                    }
+                }
+                """).Invoke();
+        }
+
+        using (var mutation = PowerShell.Create())
+        {
+            mutation.Runspace = runspace;
+            mutation.AddScript(script).Invoke();
+            Assert.Empty(mutation.Streams.Error);
+        }
+
+        using var query = PowerShell.Create();
+        query.Runspace = runspace;
+        var calls = query.AddScript("$script:calls -join '|'").Invoke();
+        Assert.Equal(expectedCalls, (string)calls.Single().BaseObject);
+    }
+
+    [Fact]
+    public async Task RestoreSnapshotAsync_Ipv6AbsentWithAServer_RejectsBeforeAnyScriptRuns()
+    {
+        var runner = Substitute.For<IPowerShellRunner>();
+        using var svc = new DnsService(runner);
+        var snapshot = new DnsService.DnsSnapshot(
+            ["8.8.8.8"], ["2606:4700:4700::1111"], 12, Guid.Parse(TestInterfaceGuid),
+            DnsService.DnsConfigurationSource.Static,
+            DnsService.DnsConfigurationSource.Absent);
+
+        await Assert.ThrowsAsync<ArgumentException>(() => svc.RestoreSnapshotAsync(snapshot));
+
+        await runner.DidNotReceiveWithAnyArgs().RunAsync(default!, default, default);
+    }
+
+    [Fact]
+    public async Task SetDnsAsync_TargetWithIpv4Absent_RejectsBeforeAnyScriptRuns()
+    {
+        var runner = Substitute.For<IPowerShellRunner>();
+        using var svc = new DnsService(runner);
+        var target = new DnsService.DnsSnapshot(
+            ["8.8.8.8"], [], 12, Guid.Parse(TestInterfaceGuid),
+            DnsService.DnsConfigurationSource.Absent,
+            DnsService.DnsConfigurationSource.Automatic);
+
+        var ex = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            svc.SetDnsAsync(target, "1.1.1.1", "1.0.0.1", "", ""));
+
+        Assert.Contains("configuration source", ex.Message);
+        await runner.DidNotReceiveWithAnyArgs().RunAsync(default!, default, default);
     }
 }

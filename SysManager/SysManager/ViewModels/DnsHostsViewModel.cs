@@ -195,10 +195,16 @@ public sealed partial class DnsHostsViewModel : ElevatedViewModelBase
             // so the confirmation names the same adapter identity that mutation will verify.
             var snapshot = await _dnsService.CaptureSnapshotAsync(_cts.Token).ConfigureAwait(true);
 
-            var v6Note = preset.HasIpv6 ? " + IPv6" : "";
+            // With IPv6 turned off on the adapter only the IPv4 pair is set, and the question says so (#2709).
+            var ipv6Off = snapshot.V6Source == DnsService.DnsConfigurationSource.Absent;
+            var v6Note = preset.HasIpv6 && !ipv6Off ? " + IPv6" : "";
+            var ipv6OffNote = preset.HasIpv6 && ipv6Off
+                ? "IPv6 is turned off on this adapter, so only the IPv4 servers are set.\n"
+                : "";
             if (!DialogService.Instance.Confirm(
                     $"Change DNS on {DescribeAdapter(snapshot)} to {preset.Name} " +
                     $"({preset.Primary}, {preset.Secondary}{v6Note})?\n\n" +
+                    ipv6OffNote +
                     $"Previous setting: {DescribeDnsSnapshot(snapshot)}.\n" +
                     "You can restore the previous setting with Undo.",
                     "Confirm DNS Change"))
@@ -458,6 +464,7 @@ public sealed partial class DnsHostsViewModel : ElevatedViewModelBase
                     $"{family} automatic (DHCP)",
                 DnsService.DnsConfigurationSource.Static when addresses.Count > 0 =>
                     $"{family} static: {string.Join(", ", addresses)}",
+                DnsService.DnsConfigurationSource.Absent => $"{family} turned off",
                 _ => $"{family} unavailable",
             };
 

@@ -10,6 +10,19 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.136.21] - 2026-10-30
+
+**DNS presets and Reset to DHCP work again on a network adapter with IPv6 turned off.**
+
+### Fixed
+- On an adapter with IPv6 turned off, a common network tweak, every DNS preset ended in "Failed
+  to set DNS" and Reset to DHCP in "Failed to reset DNS", and neither changed anything. Before a
+  change SysManager reads both address families, so Undo can put them back, and Windows keeps no
+  IPv6 DNS settings to read for such an adapter. SysManager now notes that IPv6 is off and sets
+  the IPv4 servers alone, after checking that IPv6 is still off, and the confirmation says only
+  the IPv4 servers are set. Undo resets and restores IPv4 alone, so an IPv6 turned back on in the
+  meantime keeps its servers. Present since 1.56.4.
+
 ## [1.136.20] - 2026-10-30
 
 **Right-click Menu and Startup Manager read a program path with a space in it correctly, so menu

@@ -185,6 +185,15 @@ public sealed partial class GamingProfileViewModel : ElevatedViewModelBase
             return;
         }
 
+        // Game mode an earlier run left on goes back before a new session starts: its record is the only copy of the
+        // settings it replaced, and a session started over it took its changes for the starting point (#2711). Asked
+        // before the Start question, which would otherwise be answered for nothing. ApplyAsync refuses it as well.
+        if ((await Task.Run(_service.ReadPendingRecovery).ConfigureAwait(true)).Kind == PendingRecoveryKind.LeftOn)
+        {
+            await RevertLeftoverBeforeStartAsync();
+            return;
+        }
+
         var game = SelectedGame is { } g ? new GameTarget(g.ProcessId, g.Name, g.StartTime) : null;
         var targetLine = game is null
             ? "No game selected — CPU affinity/priority are skipped and changes revert when you press Stop."
@@ -221,6 +230,23 @@ public sealed partial class GamingProfileViewModel : ElevatedViewModelBase
                 return;
             }
 
+            if (result.LeftOverSession)
+            {
+                // Nothing was applied: the service found game mode an earlier run left on, which the read before the
+                // question could not (#2711).
+                await RevertLeftoverBeforeStartAsync();
+                return;
+            }
+
+            if (result.RecordNotSaved)
+            {
+                // Nothing was applied either: without its record, game mode could not be undone if SysManager closed
+                // during the game (#2711).
+                StatusMessage = "Cannot start — SysManager could not save the record it keeps to undo game mode "
+                    + "if it closes during a game. Try again in a moment.";
+                return;
+            }
+
             if (result.GameClosed && game is not null)
             {
                 // Nothing was applied: the game closed after the list was read, and its ID may belong to another
@@ -249,6 +275,46 @@ public sealed partial class GamingProfileViewModel : ElevatedViewModelBase
                 $"Started game mode ({result.AppliedCount} optimization(s))");
             Log.Information("Gaming Profile started: {Applied} applied, {Admin} need admin, {Failed} failed",
                 result.AppliedCount, result.SkippedForAdminCount, result.FailedCount);
+        }
+        finally { IsBusy = false; IsProgressIndeterminate = false; }
+    }
+
+    /// <summary>What the status line says when game mode left on by an earlier run is kept, so Start did nothing.</summary>
+    internal const string LeftoverStillOn =
+        "Game mode did not start: what it changed the last time SysManager ran is still on, and is reverted first. "
+        + "Press Start again to revert it, or turn it off in Undo Changes.";
+
+    /// <summary>
+    /// Offers to put back game mode an earlier run left on, which goes before a new session can start (#2711). The
+    /// question at startup can be answered no, and Start pressed before it is asked.
+    /// </summary>
+    private async Task RevertLeftoverBeforeStartAsync()
+    {
+        if (!DialogService.Instance.Confirm(
+                "Game mode is still on from the last time SysManager ran: it closed before game mode ended. What game "
+                + "mode changed then is reverted before it can start again.\n\n"
+                + "Revert the leftover system changes (power plan, visual effects, search indexing, notifications) now?",
+                "Gaming Profile — Restore"))
+        {
+            StatusMessage = LeftoverStillOn;
+            return;
+        }
+
+        IsBusy = true;
+        IsProgressIndeterminate = true;
+        try
+        {
+            var result = await _service.RecoverPendingAsync();
+            StatusMessage = DescribeRevert(result,
+                "Reverted the leftover changes from the previous session. Press Start to start game mode.",
+                "Reverted the leftover changes from the previous session");
+        }
+        catch (System.IO.IOException ex)
+        {
+            // Its record could not be read just now: nothing was reverted, and the record is kept for the next try.
+            Log.Warning(ex, "Gaming Profile could not read the session left on by the previous run");
+            StatusMessage = "SysManager could not read its record of the previous session just now, so nothing was "
+                + "reverted and game mode did not start. Try again in a moment.";
         }
         finally { IsBusy = false; IsProgressIndeterminate = false; }
     }

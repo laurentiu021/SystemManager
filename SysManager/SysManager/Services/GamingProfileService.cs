@@ -58,6 +58,10 @@ public sealed class GamingProfileService : IGamingProfileService, IDisposable
     // 1 once the question about a session a previous run left on has been claimed in this run.
     private int _recoveryQuestionClaimed;
 
+    // True from the moment ApplyAsync writes its session's crash-recovery record, before the first change, until it
+    // returns. The session counts as on from then, so the record never reads as one an earlier run left (#2711).
+    private volatile bool _starting;
+
     /// <summary>The file name, also registered in <see cref="ProfileService"/>'s catalog.</summary>
     internal const string FileName = "gaming-profiles.json";
 
@@ -79,7 +83,7 @@ public sealed class GamingProfileService : IGamingProfileService, IDisposable
         _storePath = storePath ?? Path.Join(AppDataFolders.Local, FileName);
     }
 
-    public bool IsActive => _appliedSteps.Count > 0;
+    public bool IsActive => _appliedSteps.Count > 0 || _starting;
     public int? BoundGamePid { get; private set; }
     /// <inheritdoc />
     public PendingRecovery ReadPendingRecovery()
@@ -192,14 +196,25 @@ public sealed class GamingProfileService : IGamingProfileService, IDisposable
 
     public async Task<GamingApplyResult> ApplyAsync(GamingProfile profile, GameTarget? game, CancellationToken ct = default)
     {
-        // The session's crash-recovery record is written into the store once the steps apply. A store that could not
+        // The session's crash-recovery record is written into the store before the first change. A store that could not
         // be read cannot take it without being written over, and it may hold a leftover session's record, so nothing
         // is changed until it can be read (#2521). Checked first: the revert below, the restore point and the steps
         // are all changes.
-        if (ReadStore().Store is null)
+        var (store, _) = ReadStore();
+        if (store is null)
         {
             Log.Warning("Gaming Profile apply refused: its store could not be read");
             return new GamingApplyResult([], RestorePointCreated: false, StoreUnreadable: true);
+        }
+
+        // A session an earlier run left on still has its changes in place, and its record is the only copy of the
+        // settings they replaced. A session started over it read those changes as the starting point and wrote its
+        // record over the old one, so Stop put game mode's own settings back and the user's were gone (#2711). That
+        // session's changes are put back first; nothing is changed here until they are.
+        if (!IsActive && store.ActiveSession is not null)
+        {
+            Log.Information("Gaming Profile apply refused: a session an earlier run left on is still to be put back");
+            return new GamingApplyResult([], RestorePointCreated: false, LeftOverSession: true);
         }
 
         // The game was picked from a list that can be minutes old, and Windows gives a closed process's ID to the next
@@ -247,6 +262,8 @@ public sealed class GamingProfileService : IGamingProfileService, IDisposable
         // Capture the machine-wide baseline BEFORE any change.
         var snapshot = await CaptureSnapshotAsync(profile, ct).ConfigureAwait(true);
         var steps = BuildMachineWideSteps(profile, snapshot);
+        // The machine-wide steps that are going to be tried: one that needs administrator is skipped in a run without.
+        var planned = EffectiveMachineWideProfile(profile, [.. steps.Where(s => _isElevated || !s.RequiresAdmin)]);
         steps.AddRange(BuildPerGameSteps(profile, game));
 
         List<GamingStepOutcome> outcomes;
@@ -255,6 +272,20 @@ public sealed class GamingProfileService : IGamingProfileService, IDisposable
         await _gate.WaitAsync(ct).ConfigureAwait(false);
         try
         {
+            // The crash-recovery record is written before the first change, for every machine-wide step that is going
+            // to be tried, so SysManager closing while the steps run still leaves what undoes them. It used to be
+            // written once every step had run, and an elevated start waits up to 30 seconds for search indexing to stop
+            // after the power plan has changed: closing in that time, a crash, or "Close anyway?" left the PC on the
+            // gaming plan with nothing to offer it back (#2711). A record that cannot be written means nothing is
+            // changed. It is narrowed to what applied once the steps have run.
+            _starting = true;
+            if (planned.HasAnyEnabled
+                && !UpdateStore(current => current with { ActiveSession = new GamingSessionRecord(planned, snapshot) }))
+            {
+                Log.Warning("Gaming Profile apply refused: its crash-recovery record could not be saved");
+                return new GamingApplyResult([], restorePointCreated, RecordNotSaved: true);
+            }
+
             // ConfigureAwait(false) under the gate (same reason as RevertAsync): nothing here
             // touches the UI thread, and pinning the gate-held continuation to the UI thread is
             // what would let Dispose's blocking _gate.Wait() deadlock at shutdown.
@@ -263,7 +294,7 @@ public sealed class GamingProfileService : IGamingProfileService, IDisposable
 
             // A start that changed nothing has nothing to undo, so it watches nothing. A watch left behind would end the
             // next session when this game exits (#2563).
-            if (IsActive && BindAutoRevert(game))
+            if (_appliedSteps.Count > 0 && BindAutoRevert(game))
             {
                 // The game closed while the restore point, the snapshot and the steps ran. Its exit has already
                 // happened and will not come to end the session, so the session ends now, as that exit would have
@@ -275,17 +306,22 @@ public sealed class GamingProfileService : IGamingProfileService, IDisposable
                 // What the session is actually watching: a game that could not be bound is not (#2559).
                 BoundGamePid = _boundGame is null ? null : game?.ProcessId;
 
-                // Persist the crash-recovery marker ONLY when machine-wide changes actually went live,
-                // and record the EFFECTIVE machine-wide profile (only the steps that applied) so the
-                // next-launch recovery sweep replays exactly those — never a step that was skipped for
-                // admin or was a no-op (which is how a WSearch we never stopped could get restarted).
+                // Narrow the crash-recovery record to the EFFECTIVE machine-wide profile (only the steps that applied)
+                // so the next-launch recovery sweep replays exactly those — never a step that was skipped for admin or
+                // was a no-op (which is how a WSearch we never stopped could get restarted). With none, the record goes.
+                // A narrowing that cannot be written leaves the wider record, which undoes no less.
                 var effective = EffectiveMachineWideProfile(profile, appliedThisRun);
-                if (effective.HasAnyEnabled
-                    && !UpdateStore(store => store with { ActiveSession = new GamingSessionRecord(effective, snapshot) }))
-                    Log.Warning("Gaming Profile is on without its crash-recovery record: the store could not be updated");
+                if (!effective.HasAnyEnabled)
+                    ClearActiveSession();
+                else if (!UpdateStore(current => current with { ActiveSession = new GamingSessionRecord(effective, snapshot) }))
+                    Log.Warning("Gaming Profile's crash-recovery record still names every step it tried: it could not be narrowed");
             }
         }
-        finally { _gate.Release(); }
+        finally
+        {
+            _starting = false;
+            _gate.Release();
+        }
 
         Log.Information("Gaming Profile applied: {Applied} applied, {Admin} need admin, {NoChange} no-op, {Failed} failed",
             outcomes.Count(o => o.Status == GamingStepStatus.Applied),
@@ -413,6 +449,11 @@ public sealed class GamingProfileService : IGamingProfileService, IDisposable
         await _gate.WaitAsync(ct).ConfigureAwait(false);
         try
         {
+            // A session this run started after the caller looked is not one an earlier run left: the record on disk is
+            // its own, and putting back by it would leave the session on with nothing left to undo it from. It is
+            // turned off as RevertAsync turns it off (#2711).
+            if (_appliedSteps.Count > 0) return await RevertLockedAsync(ct).ConfigureAwait(false);
+
             // A record that could not be read is not one with nothing in it: "put back" would be said of a session that
             // is still on, and the record is kept for the next try.
             var (store, _) = ReadStore();

@@ -18,7 +18,10 @@ namespace SysManager.Services;
 /// </summary>
 public interface IGamingProfileService
 {
-    /// <summary>True while a game-mode profile is currently applied (tweaks are in effect).</summary>
+    /// <summary>
+    /// True while a game-mode profile is applied (tweaks are in effect), and while one is being applied: from the moment
+    /// its crash-recovery record is written, before the first change (#2711).
+    /// </summary>
     bool IsActive { get; }
 
     /// <summary>
@@ -85,7 +88,8 @@ public interface IGamingProfileService
 
     /// <summary>
     /// Revert a leftover session found on disk from a previous run (crash recovery). Reports
-    /// what could not be restored, as <see cref="RevertAsync"/> does.
+    /// what could not be restored, as <see cref="RevertAsync"/> does. A session this run has started by the time it
+    /// runs is turned off as <see cref="RevertAsync"/> turns it off, since the record on disk is then that session's.
     /// </summary>
     /// <exception cref="System.IO.IOException">
     /// The record of the session could not be read just now. Nothing was reverted, and the record is kept.
@@ -183,13 +187,24 @@ public sealed record GamingStepOutcome(string Label, GamingStepStatus Status, st
 /// as the game's exit would have ended it, and this is that revert's result. Null otherwise. The exit had already
 /// happened, so there was nothing left to wait for, and the session used to stay on until Stop (#2563).
 /// </param>
+/// <param name="LeftOverSession">
+/// True when a session an earlier run left on is still to be put back, so NOTHING was changed. Its record is the only
+/// copy of the settings its changes replaced, and a session started over it would have taken those changes as the
+/// starting point and written its record over the old one (#2711).
+/// </param>
+/// <param name="RecordNotSaved">
+/// True when the crash-recovery record could not be written before the first change, so NOTHING was changed: a session
+/// without one cannot be undone if SysManager closes during it (#2711).
+/// </param>
 public sealed record GamingApplyResult(
     IReadOnlyList<GamingStepOutcome> Steps,
     bool RestorePointCreated,
     string? BlockedBy = null,
     bool StoreUnreadable = false,
     bool GameClosed = false,
-    GamingRevertResult? EndedAtStart = null)
+    GamingRevertResult? EndedAtStart = null,
+    bool LeftOverSession = false,
+    bool RecordNotSaved = false)
 {
     /// <summary>Count of steps that applied successfully.</summary>
     public int AppliedCount => Steps.Count(s => s.Status == GamingStepStatus.Applied);

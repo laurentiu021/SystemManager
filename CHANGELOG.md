@@ -10,6 +10,22 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.136.28] - 2026-10-30
+
+**Game mode's record of your own settings can no longer be written over or lost.**
+
+### Fixed
+- After SysManager closed while game mode was on, pressing Start in Gaming Profile started a new
+  session over the old one. It took the leftover gaming settings for your own and wrote over the
+  record of the ones you had, so Stop put the gaming power plan, the reduced visual effects, the
+  paused search indexing and the silenced notifications back. Start now offers to revert the
+  leftover changes first, and starts nothing until they are back.
+- Game mode saved its record of your settings only once every change had run, and an elevated
+  start waits up to 30 seconds for search indexing to stop after the power plan has changed.
+  Closing SysManager in that time, or a crash, left the PC on the gaming power plan with nothing to
+  put it back from. The record is now saved before the first change, and game mode does not start
+  when it cannot be saved. Both were present since Gaming Profile was added in 1.52.38.
+
 ## [1.136.27] - 2026-10-30
 
 **Bandwidth Monitor's precise mode no longer counts traffic between programs on the same PC, and

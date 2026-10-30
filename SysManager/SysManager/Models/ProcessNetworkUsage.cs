@@ -25,7 +25,7 @@ public sealed partial class ProcessNetworkUsage : ObservableObject
     /// <summary>Per-app icon when available (from the shared icon service); may be null.</summary>
     [ObservableProperty] private ImageSource? _icon;
 
-    /// <summary>Number of active TCP/UDP connections owned by this process.</summary>
+    /// <summary>Number of TCP connections to other machines owned by this process.</summary>
     [ObservableProperty] private int _connectionCount;
 
     /// <summary>Short human summary of the remote endpoints (e.g. "443, 443, 27015"), for context.</summary>

@@ -13,7 +13,7 @@ public enum BandwidthMode
 {
     /// <summary>
     /// No-admin mode: accurate machine-wide total throughput plus per-process attribution by
-    /// active TCP/UDP connections (which apps are talking, to where, how many connections) —
+    /// TCP connections to other machines (which apps are talking, to where, how many connections) —
     /// but NOT exact per-process byte rates, which Windows only exposes via an elevated ETW
     /// session. This is the default and needs no elevation or extra privileges.
     /// </summary>

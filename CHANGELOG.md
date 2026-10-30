@@ -10,6 +10,23 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.136.23] - 2026-10-30
+
+**Bandwidth Monitor's list of apps now includes the ones that talk over IPv6, and no longer shows
+Windows services that are only waiting for a connection.**
+
+### Fixed
+- Without administrator rights, Bandwidth Monitor's list of apps read only IPv4 connections. On a
+  network with IPv6, which Windows prefers when it has it, an app that talked over IPv6 alone was
+  missing while the totals above the list counted its traffic, and others showed too few
+  connections. The list now reads IPv6 as well.
+- The same list counted every program that was only waiting for a connection, and every UDP
+  socket, as a connection, so Windows services such as svchost, lsass and spoolsv were always
+  listed as using the network, and "No network activity" never showed. It now counts connections
+  to other machines: a program that is only listening, or only talking to another program on the
+  same PC, is left out. An app that uses only UDP, as some games and calls do, shows in precise
+  mode. Both were present since the tab was added in 1.54.0.
+
 ## [1.136.22] - 2026-10-30
 
 **Bandwidth Monitor no longer lists every app at 0 bps when SysManager runs without administrator

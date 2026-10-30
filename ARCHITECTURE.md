@@ -1848,8 +1848,10 @@ Key services:
   would until the user chooses again. Strictly local — no system writes, nothing leaves the machine.
 - Bandwidth Monitor sources — `IBandwidthMonitorService` is the seam with two implementations:
   `ConnectionBandwidthSource` (default, no admin) sums `NetworkInterface` byte counters for total
-  throughput and reads the extended TCP/UDP tables via iphlpapi P/Invoke (`GetExtendedTcpTable`/
-  `GetExtendedUdpTable`) to attribute active connections to PIDs; `EtwBandwidthSource` (admin) opens
+  throughput and reads the extended TCP tables for IPv4 and IPv6 via iphlpapi P/Invoke
+  (`GetExtendedTcpTable`, connected sockets only) to attribute connections to other machines to PIDs.
+  The pure `ReadTcpTable` parses both row layouts and leaves out listeners and connections to this PC;
+  UDP is not read, since it has no connections to count (#2706). `EtwBandwidthSource` (admin) opens
   a kernel ETW session (TraceEvent) for true per-process byte rates and falls back cleanly if the
   session can't start; it drops PIDs idle for ten minutes so the per-tick sort tracks what is
   currently active rather than everything the session has ever seen. Both sources are deliberately

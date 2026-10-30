@@ -10,6 +10,22 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.136.20] - 2026-10-30
+
+**Right-click Menu and Startup Manager read a program path with a space in it correctly, so menu
+entries show the right source and explanation, and startup programs show their publisher and
+signature.**
+
+### Fixed
+- A quoted program path with a space in it, as in `"C:\Program Files\VideoLAN\VLC\vlc.exe" "%1"`,
+  was cut at its first space, inside the path. Right-click Menu then gave "Program" as the source
+  of every entry whose program lives under Program Files, and matched none of its built-in
+  explanations to them. Startup Manager found no file for an entry like
+  `"C:\Program Files\App\app.exe" --minimized`, so its Publisher and Signature stayed empty. Both
+  tabs now find the program the way Windows does. A quoted path runs to its closing quote, and an
+  unquoted one is tried at each space in turn. Present since 0.6.0 in Startup Manager and 1.7.0 in
+  Right-click Menu.
+
 ## [1.136.19] - 2026-10-30
 
 **Startup Manager's Refresh and Enable All come back after a scan, the tab stops showing as busy,

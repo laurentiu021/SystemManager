@@ -37,9 +37,8 @@ public class StartupSignatureTests
     [Fact]
     public void ResolveExecutablePath_PrefersTheWholeString_SoASpaceInThePathSurvives()
     {
-        // The reason the full-string check comes first: "C:\Program Files\App\app.exe" has a space in the
-        // path, and truncating at the first space would resolve to "C:\Program" and find nothing. A real
-        // installer writes exactly this.
+        // "C:\Program Files\App\app.exe" has a space in the path, and truncating at the first space would
+        // resolve to "C:\Program" and find nothing. A real installer writes exactly this.
         var dir = Path.Combine(Path.GetTempPath(), "sysmgr sig probe " + Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(dir);
         var exe = Path.Combine(dir, "app with spaces.exe");
@@ -62,6 +61,24 @@ public class StartupSignatureTests
             Assert.Equal(exe, StartupService.ResolveExecutablePath($"\"{exe}\" --background"));
         }
         finally { File.Delete(exe); }
+    }
+
+    [Fact]
+    public void ResolveExecutablePath_AQuotedPathWithASpace_AndArguments_IsThatPath()
+    {
+        // How most Run entries look. The parser kept the closing quote, found no file, and cut at the first space,
+        // inside the path, so these entries showed no publisher and no signature (#2708). The test above it passed
+        // only because its temp path has no space.
+        var dir = Path.Combine(Path.GetTempPath(), "sysmgr sig probe " + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(dir);
+        var exe = Path.Combine(dir, "app.exe");
+        File.WriteAllBytes(exe, [0x4D, 0x5A]);
+        try
+        {
+            Assert.Equal(exe, StartupService.ResolveExecutablePath($"\"{exe}\" --minimized"));
+            Assert.Equal(exe, StartupService.ResolveExecutablePath($"\"{exe}\" \"%1\""));
+        }
+        finally { Directory.Delete(dir, recursive: true); }
     }
 
     [Theory]

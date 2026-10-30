@@ -390,34 +390,8 @@ public sealed partial class StartupViewModel : ViewModelBase
 
     private static string? ExtractExecutablePath(string command)
     {
-        if (string.IsNullOrWhiteSpace(command)) return null;
-        var cmd = command.Trim();
-
-        if (cmd.StartsWith('"'))
-        {
-            var endQuote = cmd.IndexOf('"', 1);
-            if (endQuote > 1)
-                return cmd[1..endQuote];
-        }
-
-        if (System.IO.File.Exists(cmd)) return cmd;
-
-        var extensions = new[] { ".exe", ".bat", ".cmd", ".com" };
-        for (var i = 0; i < cmd.Length; i++)
-        {
-            if (cmd[i] != ' ') continue;
-            var candidate = cmd[..i];
-            if (System.IO.File.Exists(candidate)) return candidate;
-            foreach (var ext in extensions)
-            {
-                if (candidate.EndsWith(ext, StringComparison.OrdinalIgnoreCase))
-                    break;
-                if (System.IO.File.Exists(candidate + ext))
-                    return candidate + ext;
-            }
-        }
-
-        return null;
+        var program = Helpers.CommandLine.Program(command);
+        return program.Length > 0 && System.IO.File.Exists(program) ? program : null;
     }
 
     private void UpdateCounts()

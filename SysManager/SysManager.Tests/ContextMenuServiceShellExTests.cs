@@ -162,6 +162,22 @@ public sealed class ContextMenuServiceShellExTests : IDisposable
         Assert.Equal("vendor-ext", Assert.Single(Scan()).Source);
     }
 
+    [Theory]
+    [InlineData(@"""C:\Program Files\TestVendor Player\vlc.exe"" --started-from-file ""%1""")]
+    [InlineData(@"""C:\Program Files\TestVendor Player\vlc.exe"" ""%1""")]
+    public void ScanEntries_AVerbUnderProgramFiles_IsNamedAndExplainedByItsProgram(string command)
+    {
+        // The verbs still went through the old parser, which cut the command at its first space, inside the quoted
+        // path: every verb whose program lives under Program Files had "Program" for its source, and no built-in
+        // explanation matched (#2708). The folder is one no PC has, so the source is the program's file name.
+        GivenVerb("*", "TestPlayWithVlc", command);
+
+        var entry = Assert.Single(Scan());
+
+        Assert.Equal("vlc", entry.Source);
+        Assert.Equal("Opens the media file in VLC Media Player", entry.Explanation);
+    }
+
     [Fact]
     public void ScanEntries_ExpandsAnEnvironmentVariableInAHandlerPath()
     {

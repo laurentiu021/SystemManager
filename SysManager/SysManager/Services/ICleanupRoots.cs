@@ -39,7 +39,10 @@ public interface ICleanupRoots
     /// <summary>The Windows directory.</summary>
     string WindowsDirectory { get; }
 
-    /// <summary>The per-user temp directory.</summary>
+    /// <summary>
+    /// The per-user temp directory, or an empty string when it cannot be resolved. Never what TMP or TEMP name: see
+    /// <see cref="SystemPaths.UserTempRoot"/>.
+    /// </summary>
     string UserTemp { get; }
 
     /// <summary><c>%PROGRAMFILES(X86)%</c>.</summary>
@@ -97,7 +100,7 @@ public sealed class SystemCleanupRoots : ICleanupRoots
     public string WindowsDirectory { get; } =
         Environment.GetFolderPath(Environment.SpecialFolder.Windows);
 
-    public string UserTemp { get; } = Path.GetTempPath();
+    public string UserTemp { get; } = SystemPaths.UserTempRoot ?? "";
 
     public string ProgramFilesX86 { get; } =
         Environment.GetFolderPath(Environment.SpecialFolder.ProgramFilesX86);

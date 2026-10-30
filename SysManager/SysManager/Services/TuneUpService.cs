@@ -270,10 +270,13 @@ public sealed class TuneUpService : ITuneUpService
         return (freed, deleted, errors);
     }
 
-    /// <summary>The folders the temp sweep cleans: the user's TEMP and Windows' own.</summary>
+    /// <summary>
+    /// The folders the temp sweep cleans: the user's own temp folder and Windows' own. Never what TMP or TEMP name: see
+    /// <see cref="SystemPaths.UserTempRoot"/>.
+    /// </summary>
     internal static string[] TempRoots() =>
     [
-        Environment.GetEnvironmentVariable("TEMP") ?? "",
+        SystemPaths.UserTempRoot ?? "",
         Path.Join(Environment.GetFolderPath(Environment.SpecialFolder.Windows), "Temp"),
     ];
 

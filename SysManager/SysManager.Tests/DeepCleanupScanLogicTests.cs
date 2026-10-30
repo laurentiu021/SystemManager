@@ -305,6 +305,9 @@ public sealed class DeepCleanupScanLogicTests
     /// <c>DeepCleanupService</c> is a DI singleton built once at startup: caching would freeze the drive
     /// list for the whole session, so a drive plugged in afterwards would silently stop being scanned.
     /// That is the one member where the obvious implementation is the wrong one.
+    /// <para><c>UserTemp</c> is the one root that deliberately no longer matches the old inline read. It was
+    /// <c>Path.GetTempPath()</c>, which follows TMP, a value any program running as the user can point at a drive
+    /// root or Documents; it is now the profile's own <c>AppData\Local\Temp</c> (#2700).</para>
     /// </remarks>
     [Fact]
     public void SystemCleanupRoots_MatchesWhatTheScanUsedToReadInline()
@@ -315,7 +318,7 @@ public sealed class DeepCleanupScanLogicTests
         Assert.Equal(Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData), roots.ProgramData);
         Assert.Equal(Path.GetPathRoot(Environment.SystemDirectory) ?? @"C:\", roots.SystemDrive);
         Assert.Equal(Environment.GetFolderPath(Environment.SpecialFolder.Windows), roots.WindowsDirectory);
-        Assert.Equal(Path.GetTempPath(), roots.UserTemp);
+        Assert.Equal(SystemPaths.UserTempRoot, roots.UserTemp);
         Assert.Equal(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFilesX86), roots.ProgramFilesX86);
         Assert.Equal(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles), roots.ProgramFiles);
 

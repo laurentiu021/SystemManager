@@ -4,6 +4,7 @@
 
 using System.IO;
 using SysManager.Helpers;
+using SysManager.Services;
 
 namespace SysManager.Tests;
 
@@ -282,6 +283,55 @@ public class SystemPathsTests
         // A sibling of the extraction root inside the same temp folder must NOT be excluded, or a sweep
         // would silently spare unrelated temp files.
         Assert.False(SystemPaths.IsInsideSubtree(Path.Join(Path.GetTempPath(), "unrelated.tmp"), root));
+    }
+
+    // ── the temp sweeps' own folder never comes from TMP or TEMP (#2700) ──
+
+    [Theory]
+    [InlineData(@"C:\Users\me", @"C:\Users\me\AppData\Local\Temp")]
+    [InlineData(@"C:\Users\me\", @"C:\Users\me\AppData\Local\Temp")]
+    [InlineData(@"D:\Profiles\me", @"D:\Profiles\me\AppData\Local\Temp")]
+    public void ResolveUserTempRoot_IsAppDataLocalTempUnderTheProfile(string profile, string expected) =>
+        Assert.Equal(expected, SystemPaths.ResolveUserTempRoot(profile));
+
+    /// <summary>
+    /// Every input that cannot be a real profile folder resolves to nothing, so the sweep cleans no user folder at
+    /// all rather than a guessed one. A drive or share root is refused outright: <c>AppData\Local\Temp</c> under it
+    /// is not a temp folder Windows made.
+    /// </summary>
+    [Theory]
+    [InlineData(null)]
+    [InlineData("")]
+    [InlineData("   ")]
+    [InlineData(@"Users\me")]
+    [InlineData(@"C:\")]
+    [InlineData(@"D:\")]
+    [InlineData(@"\\server\share")]
+    [InlineData(@"\\server\share\")]
+    public void ResolveUserTempRoot_RefusesWhatCannotBeAProfile(string? profile) =>
+        Assert.Null(SystemPaths.ResolveUserTempRoot(profile));
+
+    [Fact]
+    public void UserTempRoot_IsThisAccountsOwnProfileTemp()
+    {
+        var profile = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
+        Assert.False(string.IsNullOrEmpty(profile));   // else the comparison below is vacuous
+
+        Assert.Equal(Path.Join(profile, "AppData", "Local", "Temp"), SystemPaths.UserTempRoot, ignoreCase: true);
+    }
+
+    /// <summary>
+    /// Deep Cleanup and Quick Cleanup read two different variables, TMP first through <c>GetTempPath</c> and TEMP
+    /// directly, so they could measure and delete two different folders. Both now take the one resolved root.
+    /// </summary>
+    [Fact]
+    public void DeepCleanupAndQuickCleanup_SweepTheSameUserTempFolder()
+    {
+        var root = SystemPaths.UserTempRoot;
+        Assert.False(string.IsNullOrEmpty(root));   // else both sides could agree on nothing
+
+        Assert.Equal(root, new SystemCleanupRoots().UserTemp);
+        Assert.Equal(root, TuneUpService.TempRoots()[0]);
     }
 
     [Fact]

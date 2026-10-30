@@ -216,6 +216,38 @@ internal static class SystemPaths
         Normalise(string.IsNullOrWhiteSpace(overrideDir) ? Path.Join(tempPath, BundleExtractionFolderName) : overrideDir);
 
     /// <summary>
+    /// The per-user folder the temp sweeps empty: <c>AppData\Local\Temp</c> under the account's own profile folder, or
+    /// null when that folder cannot be used.
+    /// </summary>
+    /// <remarks>
+    /// Not <c>%TEMP%</c> or <c>%TMP%</c>, and not <see cref="Path.GetTempPath"/>, which reads them. Both live in
+    /// <c>HKCU\Environment</c>, so the user, any program running as the user, and this app's own Environment Variables
+    /// tab can point them anywhere without administrator rights, and a sweep deletes every file it finds under its
+    /// root. With TMP set to <c>D:\</c> or to Documents, Clean emptied that tree as "Temporary files", and an elevated
+    /// run let a value any unelevated program can write decide what an administrator process deleted (#2700).
+    /// <para>The profile folder is a fixed known folder. Measured: with USERPROFILE, LOCALAPPDATA, TEMP and TMP all
+    /// overridden in the process, <c>GetFolderPath(UserProfile)</c> still returned the real profile, while
+    /// <c>GetTempPath</c> followed TMP. It is built from the profile rather than from <c>LocalApplicationData</c>,
+    /// which <c>User Shell Folders</c> in HKCU can redirect. <c>AppData\Local\Temp</c> under it is where Windows points
+    /// TEMP by default. A temp folder moved anywhere else is left alone: nothing tells the temporary files in it apart
+    /// from whatever else that folder holds.</para>
+    /// </remarks>
+    internal static string? UserTempRoot { get; } =
+        ResolveUserTempRoot(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile));
+
+    /// <summary>
+    /// <c>AppData\Local\Temp</c> under <paramref name="profile"/>, or null when the profile is blank, relative, or the
+    /// root of a drive or share.
+    /// </summary>
+    internal static string? ResolveUserTempRoot(string? profile)
+    {
+        if (string.IsNullOrWhiteSpace(profile) || !Path.IsPathFullyQualified(profile)) return null;
+        if (Normalise(profile) is not { } full) return null;
+        if (string.Equals(Path.GetPathRoot(full), full, StringComparison.OrdinalIgnoreCase)) return null;
+        return Path.Join(full, "AppData", "Local", "Temp");
+    }
+
+    /// <summary>
     /// True when <paramref name="candidate"/> sits in ANY of <paramref name="subtrees"/>. Nulls and blanks
     /// among them exclude nothing, so a caller can pass a value that may not resolve on this machine.
     /// </summary>

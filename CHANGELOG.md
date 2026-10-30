@@ -10,6 +10,20 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.136.5] - 2026-10-30
+
+**Disabling or enabling a scheduled task right after selecting it no longer loses the row and the
+selection in the grid.**
+
+### Fixed
+- Selecting a task starts a query that fills in Last run / Next run; pressing Disable (or Enable)
+  immediately after captures the row as it was at that moment. If the query's answer landed first —
+  the confirmation dialog pumps the dispatcher, so it usually did — the captured copy no longer
+  equalled, by record equality, the enriched row the grid actually held, and `Tasks.IndexOf` returned
+  -1. The row never updated, the selection (reassigned to a record the grid did not contain)
+  disappeared, and the status line reported the change while the grid still showed the old state.
+  The grid lookup now matches `_all`'s own: by the task's full path, not by record equality.
+
 ## [1.136.4] - 2026-10-30
 
 **Cancelling Reset Windows Update early no longer leaves Windows Update's own services stopped.**

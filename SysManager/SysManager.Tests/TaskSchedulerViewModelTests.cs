@@ -189,6 +189,94 @@ public class TaskSchedulerViewModelTests
             + "the task toggled while the UI shows the old state.");
     }
 
+    // ── a toggle survives a run-info reply landing mid-flight (#2788) ──────
+
+    /// <summary>
+    /// The real race: the run-info query for the selected row is still in flight when Disable is
+    /// pressed, so <c>ToggleEnabledAsync</c> captures the still-unenriched <c>SelectedTask</c> — and
+    /// the reply lands WHILE the confirmation dialog is open (it pumps the dispatcher), enriching
+    /// <c>Tasks</c>/<c>SelectedTask</c> before the dialog returns. By the time the toggle's own result
+    /// comes back, the captured copy no longer equals, by record equality, what the grid actually
+    /// holds — so <c>Tasks.IndexOf(oldTask)</c> returned -1, the row was never updated, and
+    /// <c>SelectedTask</c> was reassigned to a record the grid did not contain.
+    /// </summary>
+    /// <remarks>
+    /// The dialog fake here does the enrichment itself, inside its own <c>Confirm</c> callback — the
+    /// same moment the real dialog pumping the dispatcher lets it happen — rather than a wall-clock
+    /// delay, so the race is deterministic rather than timing-dependent.
+    /// </remarks>
+    [Fact]
+    public async Task ToggleEnabled_StillUpdatesTheRowAndSelection_WhenRunInfoLandsWhileTheDialogIsOpen()
+    {
+        var infoTcs = new TaskCompletionSource<Collection<PSObject>>();
+        var runner = Substitute.For<IPowerShellRunner>();
+        runner.RunAsync(Arg.Any<string>(), Arg.Any<IDictionary<string, object?>?>(), Arg.Any<CancellationToken>())
+              .Returns(ci =>
+              {
+                  var script = (string)ci[0]!;
+                  var ct = (CancellationToken)ci[2];
+                  if (script.Contains(ListMarker, StringComparison.Ordinal))
+                  {
+                      return Task.FromResult(new Collection<PSObject>
+                      {
+                          Row(("TaskName", "Defrag"), ("TaskPath", @"\Microsoft\Windows\Defrag\"),
+                              ("State", "Ready"), ("Author", "Microsoft"), ("Description", "desc")),
+                      });
+                  }
+                  if (script.Contains(InfoParams, StringComparison.Ordinal))
+                  {
+                      ct.Register(() => infoTcs.TrySetCanceled(ct));
+                      return infoTcs.Task;
+                  }
+                  if (script.Contains(SetEnabledMarker, StringComparison.Ordinal))
+                  {
+                      return Task.FromResult(new Collection<PSObject>
+                      {
+                          Row(("TaskName", "Defrag"), ("TaskPath", @"\Microsoft\Windows\Defrag\"),
+                              ("State", "Disabled"), ("Author", "Microsoft"), ("Description", "desc")),
+                      });
+                  }
+                  return Task.FromResult(new Collection<PSObject>());
+              });
+
+        var vm = new TaskSchedulerViewModel(new TaskSchedulerService(runner));
+        await vm.InitializationComplete;
+
+        var defrag = Assert.Single(vm.Tasks);
+        vm.SelectedTask = defrag;                  // starts LoadRunInfoAsync, pending on infoTcs
+        Assert.Null(vm.SelectedTask!.LastRun);      // premise: still unenriched when Disable is pressed
+
+        var previousDialog = DialogService.Instance;
+        var fakeDialog = Substitute.For<IDialogService>();
+        fakeDialog.Confirm(Arg.Any<string>(), Arg.Any<string>()).Returns(_ =>
+        {
+            // Lands HERE, not before or after: exactly where the real dialog's own dispatcher pump
+            // lets the pending reply arrive and get applied, between ToggleEnabledAsync capturing
+            // SelectedTask and Confirm returning.
+            infoTcs.TrySetResult(new Collection<PSObject>
+            {
+                Row(("LastRunTime", new DateTime(2026, 8, 30, 14, 5, 0)),
+                    ("NextRunTime", new DateTime(2026, 9, 3, 6, 0, 0))),
+            });
+            return true;
+        });
+        DialogService.Instance = fakeDialog;
+        try
+        {
+            await vm.ToggleEnabledCommand.ExecuteAsync(null);
+        }
+        finally { DialogService.Instance = previousDialog; }
+
+        // The race actually happened: the enrichment landed and was applied before the toggle's own
+        // result reached ReplaceTask, which is the premise the whole test rests on.
+        fakeDialog.Received(1).Confirm(Arg.Any<string>(), Arg.Any<string>());
+
+        var row = Assert.Single(vm.Tasks);
+        Assert.False(row.IsEnabled, "the grid row was not updated to the disabled state.");
+        Assert.Same(row, vm.SelectedTask);
+        Assert.Equal("Defrag is now disabled.", vm.StatusMessage);
+    }
+
     // ── per-selection run info supersedes rather than queues ───────────────
 
     [Fact]

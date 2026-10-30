@@ -66,9 +66,11 @@ public sealed class LargeFileScanner
         // Guard the traversal ROOT, not just its children. The user picks this folder, so a junction or
         // symlink here walks straight into its target and lists files OUTSIDE the folder they chose — and
         // the results carry a "Show in Explorer" action, so what is listed is what they act on. Every walk
-        // in the cleanup services closes this; this one did not (#2381). SafeFileWalk.IsReparsePoint fails
-        // closed on an unreadable path, which is the same answer as "do not walk it".
-        if (SafeFileWalk.IsReparsePoint(rootPath))
+        // in the cleanup services closes this; this one did not (#2381). IsReachedThroughLink, not
+        // IsReparsePoint: Windows resolves a link in an ANCESTOR folder before reporting attributes, so a
+        // junction one level above the picked root reported False here and the walk silently followed it
+        // (#3001). Fails closed on an unreadable path, which is the same answer as "do not walk it".
+        if (SafeFileWalk.IsReachedThroughLink(rootPath))
             return [];
 
         // A non-positive Top has no meaning (nothing to keep) and would crash the

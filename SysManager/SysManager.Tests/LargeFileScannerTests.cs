@@ -4,6 +4,7 @@
 
 using System.IO;
 using System.Reflection;
+using SysManager.Helpers;
 using SysManager.Models;
 using SysManager.Services;
 
@@ -319,6 +320,41 @@ public class LargeFileScannerTests : IDisposable
             Assert.Empty(results);
         }
         finally { Symlinks.RemoveLinkThenTree(rootLink, baseDir); }
+    }
+
+    /// <summary>
+    /// The gap the plain root check missed: a junction in an ANCESTOR of the picked root, not the root
+    /// itself. Windows resolves a parent link before reporting attributes, so the old
+    /// <c>IsReparsePoint(rootPath)</c> check saw a root reached this way as an ordinary folder and listed
+    /// the biggest files at the link's target, each with a "Show in Explorer" action, while naming the
+    /// folder actually picked (#3001).
+    /// </summary>
+    [Fact]
+    public async Task ScanAsync_RootReachedThroughAJunctionInAParent_FindsNothing()
+    {
+        var baseDir = NewRoot();
+        var real = Path.Combine(baseDir, "real");
+        var bucket = Path.Combine(real, "bucket");
+        Directory.CreateDirectory(bucket);
+        await File.WriteAllBytesAsync(Path.Combine(bucket, "big.bin"), new byte[200_000]);
+
+        var linkParent = Path.Combine(baseDir, "linkparent");
+        Symlinks.RequireJunction(linkParent, real, () => Directory.Delete(baseDir, recursive: true));
+
+        try
+        {
+            var pickedRoot = Path.Combine(linkParent, "bucket");
+            Assert.True(Directory.Exists(pickedRoot));
+            Assert.False(SafeFileWalk.IsReparsePoint(pickedRoot));
+
+            var results = await new LargeFileScanner().ScanAsync(pickedRoot, minSizeBytes: 1, top: 10);
+            Assert.Empty(results);
+        }
+        finally
+        {
+            Directory.Delete(linkParent);
+            Directory.Delete(baseDir, recursive: true);
+        }
     }
 
     [Fact]

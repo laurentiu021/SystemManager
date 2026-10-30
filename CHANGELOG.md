@@ -10,6 +10,20 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.136.2] - 2026-10-30
+
+**Disk Analyzer, Duplicate File Finder and Large File Scanner now catch a link ANYWHERE above the
+folder you pick, not only a link at that folder itself.**
+
+### Fixed
+- The root-link guard in all three read-only scanners switched from `SafeFileWalk.IsReparsePoint`
+  to `SafeFileWalk.IsReachedThroughLink`. Windows resolves a junction or symlink in a PARENT folder
+  before reporting attributes, so a link one level above the folder actually picked reported as an
+  ordinary directory and the scan silently followed it — reporting on, and for Large File Scanner
+  offering "Show in Explorer" for, whatever the link's target held while naming the folder the user
+  chose. All three are read-only, so nothing was deleted, but what they reported and opened was
+  about the wrong folder.
+
 ## [1.136.1] - 2026-10-30
 
 **About no longer offers to replace a winget-installed copy's executable — it now points at

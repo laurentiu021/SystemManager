@@ -110,8 +110,10 @@ public sealed class DiskAnalyzerService
         // skipped one level down, which reads as complete until the root itself is one: the breakdown then
         // describes a tree somewhere else entirely while naming the folder that was chosen. Read-only, so
         // nothing is destroyed — but a size report about the wrong folder is the only thing this tab does
-        // (#2381). SafeFileWalk.IsReparsePoint fails closed, the same answer as "do not walk it".
-        if (SafeFileWalk.IsReparsePoint(rootPath))
+        // (#2381). IsReachedThroughLink, not IsReparsePoint: Windows resolves a link in an ANCESTOR folder
+        // before reporting attributes, so a junction one level above the picked root reported False here and
+        // the walk silently followed it (#3001). Fails closed, the same answer as "do not walk it".
+        if (SafeFileWalk.IsReachedThroughLink(rootPath))
             return new Analysis([], AnalysisFailure.IsLink);
 
         string[] topDirs;

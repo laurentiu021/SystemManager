@@ -6,6 +6,7 @@ using System.IO;
 using System.Reflection;
 using System.Security.AccessControl;
 using System.Security.Principal;
+using SysManager.Helpers;
 using SysManager.Models;
 using SysManager.Services;
 
@@ -417,6 +418,42 @@ public class DiskAnalyzerServiceTests : IDisposable
             Assert.Equal(DiskAnalyzerService.AnalysisFailure.IsLink, result.Failure);
         }
         finally { Symlinks.RemoveLinkThenTree(rootLink, baseDir); }
+    }
+
+    /// <summary>
+    /// The gap the plain root check missed: a junction in an ANCESTOR of the picked root, not the root
+    /// itself. Windows resolves a parent link before reporting attributes, so the old
+    /// <c>IsReparsePoint(rootPath)</c> check saw a root reached this way as an ordinary folder and the
+    /// breakdown described the link's target while naming the folder actually picked (#3001).
+    /// </summary>
+    [Fact]
+    public async Task AnalyzeAsync_RootReachedThroughAJunctionInAParent_IsRefusedAsALink()
+    {
+        var baseDir = NewRoot();
+        var real = Path.Combine(baseDir, "real");
+        var bucket = Path.Combine(real, "bucket");
+        Directory.CreateDirectory(bucket);
+        await File.WriteAllBytesAsync(Path.Combine(bucket, "data.bin"), new byte[100_000]);
+
+        var linkParent = Path.Combine(baseDir, "linkparent");
+        Symlinks.RequireJunction(linkParent, real, () => Directory.Delete(baseDir, recursive: true));
+
+        try
+        {
+            var pickedRoot = Path.Combine(linkParent, "bucket");
+            // Sanity, and the whole reason the old check failed: the root itself looks ordinary.
+            Assert.True(Directory.Exists(pickedRoot));
+            Assert.False(SafeFileWalk.IsReparsePoint(pickedRoot));
+
+            var result = await new DiskAnalyzerService().AnalyzeAsync(pickedRoot);
+            Assert.Empty(result.Entries);
+            Assert.Equal(DiskAnalyzerService.AnalysisFailure.IsLink, result.Failure);
+        }
+        finally
+        {
+            Directory.Delete(linkParent);            // the junction itself, not its target
+            Directory.Delete(baseDir, recursive: true);
+        }
     }
 
     [Fact]

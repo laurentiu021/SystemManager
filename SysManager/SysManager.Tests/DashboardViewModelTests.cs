@@ -25,9 +25,19 @@ namespace SysManager.Tests;
 // Serialized: the confirm-gate tests swap the static DialogService.Instance,
 // which is process-wide shared state.
 [Collection("ProcessWideStatics")]
-public class DashboardViewModelTests
+public sealed class DashboardViewModelTests : IDisposable
 {
-    private static DashboardViewModel NewVm(IWingetService? winget = null,
+    // Every Dashboard a test builds is disposed when the test ends. A Dashboard starts its vitals and sensor loops as
+    // it is built, and only Dispose stops them, so the ones a test never disposed kept polling this PC for the rest
+    // of the run (#2740).
+    private readonly List<DashboardViewModel> _built = [];
+
+    public void Dispose()
+    {
+        foreach (var vm in _built) vm.Dispose();
+    }
+
+    private DashboardViewModel NewVm(IWingetService? winget = null,
                                             INavigationService? navigation = null,
                                             IAppBlockerService? appBlocker = null,
                                             IWindowsUpdateService? windowsUpdate = null,
@@ -42,13 +52,15 @@ public class DashboardViewModelTests
     {
         var sys = new SystemInfoService();
         var diskHealth = new DiskHealthService();
-        return new DashboardViewModel(sys,
+        var vm = new DashboardViewModel(sys,
             // A substitute by default: the real one deletes this machine's temp files, and the Tune-Up also
             // empties its Recycle Bin, from any test that gets past a confirmation.
             tuneUp ?? Substitute.For<ITuneUpService>(),
             new HealthScoreService(sys, diskHealth, new BatteryService()),
             new TemperatureService(diskHealth, skipHardwareInit: true),
-            winget ?? new WingetService(new PowerShellRunner()),
+            // A winget that answers at once by default: the real one ran an actual `winget upgrade` for the app-updates
+            // alert from every test that did not pass its own (#2740).
+            winget ?? QuietWinget(),
             // Redirected on purpose. The constructor's InitAsync reads the crash marker, and reading
             // CONSUMES it — pointed at the real profile (which is what the old optional parameter
             // defaulted to) these tests would delete a genuine crash report before the user was ever
@@ -81,6 +93,8 @@ public class DashboardViewModelTests
             // The system clock by default. A test of the minute Recent activity is read again after passes one
             // whose timers fire when it says.
             clock: clock);
+        _built.Add(vm);
+        return vm;
     }
 
     // ---------- empty states on the cards ----------

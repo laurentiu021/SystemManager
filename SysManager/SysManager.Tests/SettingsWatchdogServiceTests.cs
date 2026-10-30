@@ -163,6 +163,67 @@ public sealed class SettingsWatchdogServiceTests : IDisposable
         Assert.False(svc.Restore(new SettingDrift(known, BaselineValue: null, CurrentValue: 0, CanRestore: true)));
     }
 
+    // ── a baseline value the catalog does not list is never written (#2747) ──
+
+    private const string AdvertisingInfo = @"Software\Microsoft\Windows\CurrentVersion\AdvertisingInfo";
+
+    /// <summary>
+    /// Runs <paramref name="act"/> against a throwaway HKCU root whose advertising ID value starts at 0, and returns
+    /// what the value is afterwards. "advertising-id" is HKCU-rooted in the real catalog, as the hive-seam test below
+    /// relies on too.
+    /// </summary>
+    private object? AdvertisingIdAfter(Action<SettingsWatchdogService, WatchedSetting> act)
+    {
+        var rootName = @"Software\SysManagerTests\WatchdogRestore_" + Guid.NewGuid().ToString("N");
+        var root = Registry.CurrentUser.CreateSubKey(rootName, writable: true)!;
+        try
+        {
+            using (var sub = root.CreateSubKey(AdvertisingInfo, writable: true)!)
+                sub.SetValue("Enabled", 0, RegistryValueKind.DWord);
+            var svc = new SettingsWatchdogService(_dir, hkcuRoot: root, hklmRoot: root);
+            act(svc, svc.Catalog.Single(s => s.Key == "advertising-id"));
+            using var check = root.OpenSubKey(AdvertisingInfo)!;
+            return check.GetValue("Enabled");
+        }
+        finally
+        {
+            root.Dispose();
+            Registry.CurrentUser.DeleteSubKeyTree(rootName, throwOnMissingSubKey: false);
+        }
+    }
+
+    /// <summary>
+    /// The baseline is a file in the user's own profile, so anything running as the user can change the number in it,
+    /// and Restore wrote whatever it held as a DWORD, some of the catalog to HKLM policy keys. A value the catalog does
+    /// not list for the setting is now refused, also when a hand-built drift carries labels that list it.
+    /// </summary>
+    [Theory]
+    [InlineData(7)]
+    [InlineData(-1)]
+    public void Restore_ABaselineValueTheCatalogDoesNotList_IsRefused_AndWritesNothing(int forged)
+    {
+        var after = AdvertisingIdAfter((svc, ads) =>
+        {
+            var permissive = ads with { ValueLabels = new Dictionary<int, string> { [forged] = "Forged" } };
+
+            Assert.False(new SettingDrift(ads, BaselineValue: forged, CurrentValue: 0).CanWriteBack);
+            Assert.False(svc.Restore(new SettingDrift(ads, BaselineValue: forged, CurrentValue: 0)));
+            Assert.False(svc.Restore(new SettingDrift(permissive, BaselineValue: forged, CurrentValue: 0)));
+        });
+
+        Assert.Equal(0, after);
+    }
+
+    /// <summary>The other side: a value the catalog lists is still written, so the check is not an off-switch.</summary>
+    [Fact]
+    public void Restore_ABaselineValueTheCatalogLists_IsWritten()
+    {
+        var after = AdvertisingIdAfter((svc, ads) =>
+            Assert.True(svc.Restore(new SettingDrift(ads, BaselineValue: 1, CurrentValue: 0))));
+
+        Assert.Equal(1, after);
+    }
+
     // ── hive seam (#2860) ───────────────────────────────────────────────────────────────────────
     //
     // Before this, ReadValue and OpenOrCreateKey were private static, hard-wired to Registry.CurrentUser

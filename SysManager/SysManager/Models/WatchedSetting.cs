@@ -40,11 +40,21 @@ public sealed record SettingDrift(
     bool CanRestore = true)
 {
     /// <summary>
-    /// True when Settings Watchdog's Restore can write the baseline back: the value is one it may write, and the
-    /// baseline holds a value. One that was not set when the baseline was saved cannot be put back, because the
-    /// watchdog never deletes a value.
+    /// True when Settings Watchdog's Restore can write the baseline back: the setting is one it may write, and the
+    /// baseline holds one of the values the setting is known to take. One that was not set when the baseline was saved
+    /// cannot be put back, because the watchdog never deletes a value.
     /// </summary>
-    public bool CanWriteBack => CanRestore && BaselineValue is not null;
+    public bool CanWriteBack => CanRestore && BaselineIsAKnownValue;
+
+    /// <summary>
+    /// True when the baseline holds one of the values <see cref="WatchedSetting.ValueLabels"/> lists for the setting.
+    /// </summary>
+    /// <remarks>
+    /// The baseline is a file in the user's own profile, so anything running as the user can change the number in it,
+    /// and Restore writes it, some of it to HKLM policy keys, as a DWORD (#2747). A value the catalog does not list is
+    /// one SysManager never set, so it is not written back.
+    /// </remarks>
+    public bool BaselineIsAKnownValue => BaselineValue is { } value && Setting.ValueLabels.ContainsKey(value);
 
     public string BaselineLabel => Setting.Describe(BaselineValue);
     public string CurrentLabel => Setting.Describe(CurrentValue);

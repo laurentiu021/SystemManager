@@ -10,6 +10,19 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.136.9] - 2026-10-30
+
+**Settings Watchdog's Restore writes back only a value the watched setting is known to take.**
+
+### Fixed
+- Restore checked that a setting was in its own catalog, then wrote whatever number the saved
+  baseline held for it, as a DWORD and for three settings into a machine-wide policy key. The
+  baseline is `settings-baseline.json` in your own profile, so any program running as you could
+  change that number. A value the catalog does not list for the setting, for example 7 for a
+  switch that is only ever 0 or 1, is now left alone: Restore checks it against the catalog's own
+  entry, the "Can restore" column of the CSV says "no", and the tab, the confirmation and the
+  result each say a setting was saved with a value SysManager never sets.
+
 ## [1.136.8] - 2026-10-30
 
 **Uninstaller's list of leftovers waiting for administrator rights can no longer ask the

@@ -1712,8 +1712,10 @@ public sealed class UndoChangesServiceTests
 
     // ── Settings Watchdog ───────────────────────────────────────────────────
 
+    // Labelled as every catalog setting is: Restore writes back only a value the setting lists (#2747).
     private static SettingDrift Drift(string name, bool canRestore = true) =>
-        new(new WatchedSetting(name.ToLowerInvariant(), name, "", "", "", "", new Dictionary<int, string>()), 1, 0, canRestore);
+        new(new WatchedSetting(name.ToLowerInvariant(), name, "", "", "", "",
+            new Dictionary<int, string> { [0] = "Off", [1] = "On" }), 1, 0, canRestore);
 
     [Fact]
     public async Task SettingsChangedSinceTheyWereSaved_AreALink_ToSettingsWatchdog()

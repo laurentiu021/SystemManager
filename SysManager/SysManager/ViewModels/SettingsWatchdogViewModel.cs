@@ -108,6 +108,7 @@ public sealed partial class SettingsWatchdogViewModel : ElevatedViewModelBase
             new WatchedRow(s, current.TryGetValue(s.Key, out var v) ? v : null, drifted.Contains(s.Key))));
 
         var notSet = NotSetCount();
+        var unknown = UnknownValueCount();
         StatusMessage = _baselineUnusable
             ? "Your saved baseline could not be read, so nothing is compared with it. Save a new baseline to replace it."
             : !HasBaseline
@@ -120,6 +121,12 @@ public sealed partial class SettingsWatchdogViewModel : ElevatedViewModelBase
                           1 => " One was not set when you saved it, which Restore cannot put back.",
                           _ => $" {notSet} were not set when you saved it, which Restore cannot put back.",
                       })
+                      + (unknown switch
+                      {
+                          0 => "",
+                          1 => " One was saved with a value SysManager never sets, which Restore does not write.",
+                          _ => $" {unknown} were saved with values SysManager never sets, which Restore does not write.",
+                      })
                     : "All watched settings match your baseline.";
     }
 
@@ -127,7 +134,14 @@ public sealed partial class SettingsWatchdogViewModel : ElevatedViewModelBase
     /// The drifts Restore leaves alone because the baseline holds no value for them: putting "Not set" back would
     /// mean deleting the value, and the watchdog never deletes one (#2594).
     /// </summary>
-    private int NotSetCount() => Drifts.Count(d => d.Drift.CanRestore && !d.Drift.CanWriteBack);
+    private int NotSetCount() => Drifts.Count(d => d.Drift.CanRestore && d.Drift.BaselineValue is null);
+
+    /// <summary>
+    /// The drifts Restore leaves alone because the baseline holds a value the setting is not known to take: the
+    /// baseline is a file in the user's profile, so the number may not be one SysManager wrote (#2747).
+    /// </summary>
+    private int UnknownValueCount() =>
+        Drifts.Count(d => d.Drift.CanRestore && d.Drift.BaselineValue is not null && !d.Drift.BaselineIsAKnownValue);
 
     /// <summary>Captures the current settings as the new baseline (with confirmation).</summary>
     [RelayCommand]
@@ -172,6 +186,7 @@ public sealed partial class SettingsWatchdogViewModel : ElevatedViewModelBase
         var restorable = Drifts.Where(d => d.Drift.CanWriteBack).ToList();
         if (restorable.Count == 0) return;
         var notSet = NotSetCount();
+        var unknown = UnknownValueCount();
 
         if (!DialogService.Instance.Confirm(
                 $"Restore {restorable.Count} setting(s) to your saved baseline?\n\n" +
@@ -183,6 +198,13 @@ public sealed partial class SettingsWatchdogViewModel : ElevatedViewModelBase
                          "so it is left as it is.",
                     _ => $"\n\n{notSet} other settings were not set when you saved the baseline. Restore cannot put " +
                          "that back, so they are left as they are.",
+                }) +
+                (unknown switch
+                {
+                    0 => "",
+                    1 => "\n\nOne other setting was saved with a value SysManager never sets, so it is left as it is.",
+                    _ => $"\n\n{unknown} other settings were saved with values SysManager never sets, so they are left "
+                         + "as they are.",
                 }),
                 "Restore Settings — Confirm"))
             return;
@@ -204,8 +226,9 @@ public sealed partial class SettingsWatchdogViewModel : ElevatedViewModelBase
 
         if (restored > 0)
             ActivityLogService.Instance.Log("Settings Watchdog", $"Restored {restored} setting(s) to baseline");
-        Log.Information("Settings Watchdog restore: {Restored} ok, {Failed} failed, {NotSet} not set in the baseline",
-            restored, failed, notSet);
+        Log.Information(
+            "Settings Watchdog restore: {Restored} ok, {Failed} failed, {NotSet} not set in the baseline, {Unknown} with an unknown value",
+            restored, failed, notSet, unknown);
 
         Refresh();
         StatusMessage = (failed == 0
@@ -217,6 +240,12 @@ public sealed partial class SettingsWatchdogViewModel : ElevatedViewModelBase
                 0 => "",
                 1 => " One that was not set in your baseline was left as it is.",
                 _ => $" {notSet} that were not set in your baseline were left as they are.",
+            })
+            + (unknown switch
+            {
+                0 => "",
+                1 => " One saved with a value SysManager never sets was left as it is.",
+                _ => $" {unknown} saved with values SysManager never sets were left as they are.",
             });
     }
 

@@ -268,6 +268,38 @@ public class SettingsWatchdogViewModelTests
             vm.StatusMessage);
     }
 
+    /// <summary>
+    /// A baseline value the setting is not known to take is left alone, and said so in its own words: it is not a
+    /// value that "was not set", and not a write that failed for want of administrator rights (#2747).
+    /// </summary>
+    [Fact]
+    public void RestoreSelected_LeavesABaselineValueSysManagerNeverSets_AndSaysSoBeforeAndAfter()
+    {
+        var written = Drift("a");
+        var unknown = new SettingDrift(Setting("b"), BaselineValue: 7, CurrentValue: 1);
+        var svc = NewService(written, unknown);
+        svc.Restore(written).Returns(true);
+        var vm = new SettingsWatchdogViewModel(svc);
+
+        Assert.Equal(
+            "2 setting(s) changed since your baseline. One was saved with a value SysManager never sets, which Restore "
+            + "does not write.",
+            vm.StatusMessage);
+
+        using var dialog = new DialogAnswer(confirm: true);
+        vm.RestoreSelectedCommand.Execute(null);
+
+        svc.Received(1).Restore(written);
+        svc.DidNotReceive().Restore(unknown);
+        var asked = Assert.Single(dialog.Messages);
+        Assert.Contains("Restore 1 setting(s)", asked, StringComparison.Ordinal);
+        Assert.Contains("One other setting was saved with a value SysManager never sets", asked, StringComparison.Ordinal);
+        Assert.DoesNotContain("was not set", asked, StringComparison.Ordinal);
+        Assert.Contains("One saved with a value SysManager never sets was left as it is.", vm.StatusMessage,
+            StringComparison.Ordinal);
+        Assert.DoesNotContain("could not be written", vm.StatusMessage, StringComparison.Ordinal);
+    }
+
     /// <summary>The administrator hint is only for a write that failed in a session that is not elevated.</summary>
     [Theory]
     [InlineData(false, true)]

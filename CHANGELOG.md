@@ -10,6 +10,27 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.136.15] - 2026-10-30
+
+**Install and Go back no longer close SysManager for good when it runs from Program Files,
+and Go back offers the version you had before the last update and nothing else.**
+
+### Fixed
+- Install and Go back closed SysManager, and nothing reopened, when it ran from Program Files
+  or another folder Windows protects. The part that replaces SysManager refuses such a folder,
+  but it decides only after SysManager has closed, so its refusal reached the log and nothing
+  else. SysManager now asks the same question before it asks you anything, and says why it
+  can't update itself there; Install offers Manual download in its place. A folder SysManager
+  cannot write a new file to is refused the same way. Present since 1.64.2.
+- An update that failed once SysManager had closed still replaced the kept previous version
+  with the one running, so Go back offered the version already in use. The outgoing version is
+  now kept under a separate name until the update has landed, and dropped if it does not.
+  Present since Go back arrived in 1.61.0.
+- After going back, Go back stayed offered, for the version just restored. Going back now keeps
+  nothing in the kept copy's place and takes Go back away once it has landed. An update that
+  could not keep the version it replaced also takes it away, rather than offering an earlier
+  update's copy as the version before the last update. Present since 1.61.0.
+
 ## [1.136.14] - 2026-10-30
 
 **A newer release found after a download no longer makes Install fail with a SHA256 mismatch,

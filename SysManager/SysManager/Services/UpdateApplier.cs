@@ -186,7 +186,7 @@ internal static class UpdateApplier
         // deterministically reachable instead of being shadowed by the existence check below.
         if (IsUnderSystemRoot(full))
         {
-            reason = "the target is inside a protected system directory";
+            reason = ProtectedFolderReason;
             return false;
         }
 
@@ -217,6 +217,45 @@ internal static class UpdateApplier
         }
 
         return true;
+    }
+
+    /// <summary>The refusal <see cref="IsValidApplyTarget"/> gives for a target under Windows or Program Files.</summary>
+    internal const string ProtectedFolderReason = "the target is inside a protected system directory";
+
+    /// <summary>
+    /// Why the applier would not replace <paramref name="targetExe"/>, as words for the person, or null when it would.
+    /// </summary>
+    /// <remarks>
+    /// The applier runs after SysManager has closed, so its own refusal could only be written to the log: under
+    /// Program Files, Install and Go back closed SysManager for good, every time, with nothing said (#2725). Asked in
+    /// SysManager before it confirms, this is <see cref="IsValidApplyTarget"/>, which <c>Run</c> still applies, and
+    /// whether the folder takes a new file at all, since the new build is staged beside the old one.
+    /// </remarks>
+    /// <param name="canCreateFileIn">Whether a file can be created in a folder; the real attempt unless a test passes its own.</param>
+    internal static string? WhyItCannotReplace(string targetExe, Func<string, bool>? canCreateFileIn = null)
+    {
+        if (!IsValidApplyTarget(targetExe, out var reason))
+            return reason == ProtectedFolderReason ? "it runs from a folder Windows protects, such as Program Files" : reason;
+
+        var folder = Path.GetDirectoryName(Path.GetFullPath(targetExe));
+        return string.IsNullOrEmpty(folder) || !(canCreateFileIn ?? CanCreateFileIn)(folder)
+            ? "it cannot write to the folder it runs from"
+            : null;
+    }
+
+    /// <summary>Creates, and at once deletes, a file in <paramref name="folder"/>.</summary>
+    private static bool CanCreateFileIn(string folder)
+    {
+        try
+        {
+            using (new FileStream(Path.Join(folder, $".sysmanager-write-check-{Guid.NewGuid():N}"), FileMode.CreateNew,
+                       FileAccess.Write, FileShare.None, bufferSize: 1, FileOptions.DeleteOnClose)) { }
+            return true;
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            return false;
+        }
     }
 
     /// <summary>
@@ -296,7 +335,8 @@ internal static class UpdateApplier
     /// enough — see the ratchet note in ArchitectureTests and issue #1772.
     /// </param>
     internal static bool ApplyCopyFromPath(
-        string sourceExe, string targetExe, int maxAttempts = 10, int delayMs = 500, string? updatesDir = null)
+        string sourceExe, string targetExe, int maxAttempts = 10, int delayMs = 500, string? updatesDir = null,
+        bool retainOutgoing = true)
     {
         // A missing source is non-recoverable, and it is worth its own message: without this the open below
         // throws FileNotFoundException, which the retry block would misread as a transient lock.
@@ -307,7 +347,7 @@ internal static class UpdateApplier
         }
 
         using var source = new FileStream(sourceExe, FileMode.Open, FileAccess.Read, FileShare.Read);
-        return ApplyCopy(source, targetExe, maxAttempts, delayMs, updatesDir);
+        return ApplyCopy(source, targetExe, maxAttempts, delayMs, updatesDir, retainOutgoing);
     }
 
     /// <summary>
@@ -326,10 +366,17 @@ internal static class UpdateApplier
     /// Where the retained previous generation is written; null resolves the real profile — see the overload
     /// above for why a test must redirect it.
     /// </param>
+    /// <param name="retainOutgoing">
+    /// Whether the build being replaced is kept for Go back. False for a rollback, which runs from that kept copy:
+    /// the build it replaces is the newer one, and keeping it there left Go back offered to reinstall the version
+    /// already running (#2725). A copy that lands with nothing kept takes Go back off offer.
+    /// </param>
     internal static bool ApplyCopy(
-        Stream source, string targetExe, int maxAttempts = 10, int delayMs = 500, string? updatesDir = null)
+        Stream source, string targetExe, int maxAttempts = 10, int delayMs = 500, string? updatesDir = null,
+        bool retainOutgoing = true)
     {
         var staging = targetExe + ".new";
+        var retained = false;
 
         // STAGED ONCE, outside the retry loop. Only the move can be blocked by the lock the retries exist
         // to wait out, and these two steps produce identical bytes every time — so repeating them cost two
@@ -349,8 +396,11 @@ internal static class UpdateApplier
             // interrupted copy safe, but it also means a SUCCESSFUL update into a broken build
             // leaves nothing to go back to — and this project has shipped two launch-blocking
             // regressions. Best-effort: failing to retain a copy must never abort an update that
-            // is otherwise fine, so PreserveCurrentBuild swallows its own errors.
-            PreserveCurrentBuild(targetExe, updatesDir);
+            // is otherwise fine, so StageOutgoingBuild swallows its own errors. Under a pending name,
+            // and made the copy Go back offers only once the move below has landed: written straight
+            // over the kept copy, an update that then failed replaced the real previous version with
+            // the one still running (#2725).
+            retained = retainOutgoing && StageOutgoingBuild(targetExe, updatesDir);
 
             // File.Copy reports success once Windows has the bytes in memory. The move that follows
             // is a metadata change, so a power cut between the two can leave targetExe — the app's
@@ -364,12 +414,14 @@ internal static class UpdateApplier
         {
             LogStagingFailure(ex, targetExe);
             TryDelete(staging);
+            if (retained) DiscardOutgoingBuild(updatesDir);
             return false;
         }
         catch (UnauthorizedAccessException ex)
         {
             Log.Warning(ex, "Update apply: access denied staging next to {Target}", LogService.SanitizePath(targetExe));
             TryDelete(staging);
+            if (retained) DiscardOutgoingBuild(updatesDir);
             return false;
         }
 
@@ -377,13 +429,15 @@ internal static class UpdateApplier
         // loop would need its own cleanup, and a per-attempt TryDelete is what forced the copy above to be
         // repeated in the first place — so the two belong together, outside.
         string? reason = null;
+        var moved = false;
 
         for (var attempt = 1; attempt <= maxAttempts; attempt++)
         {
             try
             {
                 File.Move(staging, targetExe, overwrite: true);
-                return true;
+                moved = true;
+                break;
             }
             catch (IOException ex)
             {
@@ -408,7 +462,26 @@ internal static class UpdateApplier
             }
         }
 
+        if (moved)
+        {
+            // Go back offers the build this update replaced, or nothing. A copy kept by an earlier update would be
+            // offered as the version the user had before the last update, and it is not that version (#2725).
+            if (retained)
+            {
+                PromoteOutgoingBuild(updatesDir);
+            }
+            else
+            {
+                RetireKeptCopy(updatesDir);
+                Log.Information(retainOutgoing
+                    ? "Update apply: the outgoing build was not kept, so Go back is no longer offered"
+                    : "Update apply: the previous build was restored, so Go back is no longer offered");
+            }
+            return true;
+        }
+
         TryDelete(staging);
+        if (retained) DiscardOutgoingBuild(updatesDir);
 
         // Names the cause the run actually met. The old message asserted a lock for every failure, which was
         // the wrong answer for both of the others.
@@ -456,47 +529,106 @@ internal static class UpdateApplier
         Log.Error(ex, "Update apply: could not stage the new build next to {Target}", LogService.SanitizePath(targetExe));
     }
 
+    /// <summary>Where the outgoing build waits until the update that replaces it has landed.</summary>
+    internal static string PendingPreviousBuildPath(string? updatesDir = null) =>
+        PreviousBuildPath(updatesDir) + ".pending";
+
     /// <summary>
-    /// Copies the build currently at <paramref name="targetExe"/> aside as the one retained
-    /// previous generation, so a successful-but-broken update can be undone.
+    /// Copies the build currently at <paramref name="targetExe"/> to the pending name, with its checksum. True when
+    /// there is a copy to promote.
     /// </summary>
     /// <remarks>
     /// BEST-EFFORT by design. Everything here is a nice-to-have compared with completing the update:
     /// if the disk is full or the folder is unwritable, the update must still proceed rather than
     /// fail because a safety net could not be stretched. That is why every failure is swallowed and
-    /// logged at Debug/Warning instead of propagating.
-    /// <para>Exactly ONE generation is kept: the copy overwrites any earlier one, so retention is
+    /// logged at Warning instead of propagating.
+    /// <para>Exactly ONE generation is kept: the promotion overwrites any earlier one, so retention is
     /// "current + one previous" rather than an unbounded pile of full-size executables.</para>
     /// </remarks>
-    internal static void PreserveCurrentBuild(string targetExe, string? updatesDir = null)
+    private static bool StageOutgoingBuild(string targetExe, string? updatesDir)
     {
         try
         {
-            if (!File.Exists(targetExe)) return;   // first install — nothing to preserve
+            if (!File.Exists(targetExe)) return false;   // first install — nothing to preserve
 
-            var previous = PreviousBuildPath(updatesDir);
-            var dir = Path.GetDirectoryName(previous);
+            var pending = PendingPreviousBuildPath(updatesDir);
+            var dir = Path.GetDirectoryName(pending);
             if (!string.IsNullOrEmpty(dir)) Directory.CreateDirectory(dir);
 
-            File.Copy(targetExe, previous, overwrite: true);
+            File.Copy(targetExe, pending, overwrite: true);
 
             // Record the hash of what we just wrote, so RollBackAsync can prove the binary it launches
             // is still that copy. Hashed from the RETAINED file rather than the source, so the recorded
-            // value describes the bytes that actually landed on disk. Written after the copy: a hash
-            // present without its binary is harmless (rollback checks the binary exists first), whereas
-            // a binary present without its hash is what we must never leave behind.
-            File.WriteAllText(previous + ".sha256", ComputeFileHash(previous));
-            Log.Information("Update apply: retained the outgoing build for rollback");
+            // value describes the bytes that actually landed on disk.
+            File.WriteAllText(pending + ".sha256", ComputeFileHash(pending));
+            return true;
         }
         catch (IOException ex)
         {
             Log.Warning(ex, "Update apply: could not retain the previous build — rollback will be unavailable");
+            DiscardOutgoingBuild(updatesDir);
+            return false;
         }
         catch (UnauthorizedAccessException ex)
         {
             Log.Warning(ex, "Update apply: access denied retaining the previous build — rollback will be unavailable");
+            DiscardOutgoingBuild(updatesDir);
+            return false;
         }
     }
+
+    /// <summary>Makes the staged outgoing build the copy Go back offers, once the update that replaced it has landed.</summary>
+    /// <remarks>
+    /// Whichever move fails, the copy left is not the build this update replaced: either the one an earlier update
+    /// kept, or the new binary beside the earlier one's checksum. Go back is taken off offer rather than offering it.
+    /// </remarks>
+    private static void PromoteOutgoingBuild(string? updatesDir)
+    {
+        var pending = PendingPreviousBuildPath(updatesDir);
+        try
+        {
+            File.Move(pending, PreviousBuildPath(updatesDir), overwrite: true);
+            File.Move(pending + ".sha256", PreviousBuildHashPath(updatesDir), overwrite: true);
+            Log.Information("Update apply: retained the outgoing build for rollback");
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            Log.Warning(ex, "Update apply: could not keep the previous build — rollback will be unavailable");
+            RetireKeptCopy(updatesDir);
+            DiscardOutgoingBuild(updatesDir);
+        }
+    }
+
+    /// <summary>Removes a staged outgoing build that is not to be kept.</summary>
+    private static void DiscardOutgoingBuild(string? updatesDir)
+    {
+        var pending = PendingPreviousBuildPath(updatesDir);
+        TryDelete(pending);
+        TryDelete(pending + ".sha256");
+    }
+
+    /// <summary>
+    /// Whether <paramref name="exe"/> is the kept previous build, which a rollback runs the applier from.
+    /// </summary>
+    internal static bool IsTheKeptCopy(string exe, string? updatesDir = null)
+    {
+        try
+        {
+            return string.Equals(Path.GetFullPath(exe), Path.GetFullPath(PreviousBuildPath(updatesDir)),
+                StringComparison.OrdinalIgnoreCase);
+        }
+        catch (Exception ex) when (ex is ArgumentException or NotSupportedException or PathTooLongException)
+        {
+            return false;
+        }
+    }
+
+    /// <summary>
+    /// Takes Go back off offer. The checksum goes rather than the binary: after a rollback the kept binary is this
+    /// process's own image and cannot be deleted while it runs. Without the checksum the copy is never offered, and the
+    /// next update's kept copy is written over it.
+    /// </summary>
+    internal static void RetireKeptCopy(string? updatesDir = null) => TryDelete(PreviousBuildHashPath(updatesDir));
 
     /// <summary>SHA-256 of a file as an uppercase hex string, matching the published .sha256 format.</summary>
     internal static string ComputeFileHash(string path)
@@ -658,19 +790,20 @@ internal static class UpdateApplier
                 return;
             }
 
-            SwapAndRelaunch(verified, targetExe, oldPid);
+            // A rollback runs from the kept copy itself, so the build it replaces is the newer one (#2725).
+            SwapAndRelaunch(verified, targetExe, oldPid, isRollback: IsTheKeptCopy(sourceExe));
         }
     }
 
     /// <summary>
     /// The rest of the applier sequence, on an executable already verified through <paramref name="verified"/>.
     /// </summary>
-    private static void SwapAndRelaunch(FileStream verified, string targetExe, int oldPid)
+    private static void SwapAndRelaunch(FileStream verified, string targetExe, int oldPid, bool isRollback)
     {
         Log.Information("Update apply: waiting for old process {Pid} to exit", oldPid);
         WaitForProcessExit(oldPid, TimeSpan.FromSeconds(30));
 
-        var applied = ApplyCopy(verified, targetExe);
+        var applied = ApplyCopy(verified, targetExe, retainOutgoing: !isRollback);
         Log.Information(applied
             ? "Update apply: swapped new build into place, relaunching"
             : "Update apply: copy failed, relaunching existing build unchanged");

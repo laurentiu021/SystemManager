@@ -19,7 +19,7 @@ namespace SysManager.Tests;
 public class UpdateApplierTests
 {
     /// <summary>
-    /// The updates directory every <see cref="UpdateApplier.ApplyCopyFromPath(string, string, int, int, string?)"/> call in this file must be
+    /// The updates directory every <see cref="UpdateApplier.ApplyCopyFromPath(string, string, int, int, string?, bool)"/> call in this file must be
     /// pointed at. Omitting it is not a harmless default: ApplyCopy retains the outgoing build, and
     /// with no override that copy lands in the REAL <c>%LocalAppData%\SysManager\updates</c> and
     /// overwrites the developer's own rollback build with a temp fixture (#1772).
@@ -30,6 +30,15 @@ public class UpdateApplierTests
     {
         using var stream = File.OpenRead(path);
         return Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(stream));
+    }
+
+    /// <summary>Keeps a previous build in <paramref name="updates"/> the way an update does: the binary and its checksum.</summary>
+    private static void KeepABuild(string updates, string content)
+    {
+        Directory.CreateDirectory(updates);
+        var previous = UpdateApplier.PreviousBuildPath(updates);
+        File.WriteAllText(previous, content);
+        File.WriteAllText(UpdateApplier.PreviousBuildHashPath(updates), Sha256(previous));
     }
 
     /// <summary>A SHA-256-shaped value, which is the only shape the hash argument may take.</summary>
@@ -262,34 +271,36 @@ public class UpdateApplierTests
             File.WriteAllText(source, "NEW-BUILD");
             File.WriteAllText(target, "OLD-BUILD");
 
-            UpdateApplier.PreserveCurrentBuild(target, updates);
             Assert.True(UpdateApplier.ApplyCopyFromPath(source, target, updatesDir: updates));
 
             // The update landed…
             Assert.Equal("NEW-BUILD", File.ReadAllText(target));
-            // …and the build it replaced is still recoverable.
+            // …and the build it replaced is still recoverable, with the checksum Go back proves it against.
             var previous = UpdateApplier.PreviousBuildPath(updates);
-            Assert.True(File.Exists(previous));
             Assert.Equal("OLD-BUILD", File.ReadAllText(previous));
+            Assert.Equal(Sha256(previous), File.ReadAllText(UpdateApplier.PreviousBuildHashPath(updates)));
+            Assert.Empty(Directory.GetFiles(updates, "*.pending*"));
         }
         finally { dir.Delete(recursive: true); }
     }
 
     [Fact]
-    public void PreserveCurrentBuild_KeepsExactlyOneGeneration()
+    public void ApplyCopy_KeepsExactlyOneGeneration()
     {
         // Retention is "current + one previous", not a history: each copy overwrites the last, so the
         // folder can never accumulate full-size executables.
         var dir = Directory.CreateTempSubdirectory("ApplierOneGen_");
         try
         {
+            var source = Path.Combine(dir.FullName, "new.exe");
             var target = Path.Combine(dir.FullName, "current.exe");
             var updates = Path.Combine(dir.FullName, "updates");
 
             File.WriteAllText(target, "BUILD-1");
-            UpdateApplier.PreserveCurrentBuild(target, updates);
-            File.WriteAllText(target, "BUILD-2");
-            UpdateApplier.PreserveCurrentBuild(target, updates);
+            File.WriteAllText(source, "BUILD-2");
+            Assert.True(UpdateApplier.ApplyCopyFromPath(source, target, updatesDir: updates));
+            File.WriteAllText(source, "BUILD-3");
+            Assert.True(UpdateApplier.ApplyCopyFromPath(source, target, updatesDir: updates));
 
             Assert.Single(Directory.GetFiles(updates, "SysManager-previous.exe"));
             Assert.Equal("BUILD-2", File.ReadAllText(UpdateApplier.PreviousBuildPath(updates)));
@@ -298,26 +309,193 @@ public class UpdateApplierTests
     }
 
     [Fact]
-    public void PreserveCurrentBuild_FirstInstall_DoesNothing()
+    public void ApplyCopy_FirstInstall_KeepsNothing()
     {
         // Nothing at the target yet (a fresh install), so there is nothing to retain — and certainly no
         // reason to throw.
         var dir = Directory.CreateTempSubdirectory("ApplierFirst_");
         try
         {
+            var source = Path.Combine(dir.FullName, "new.exe");
             var target = Path.Combine(dir.FullName, "not-there-yet.exe");
             var updates = Path.Combine(dir.FullName, "updates");
+            File.WriteAllText(source, "NEW-BUILD");
 
-            var ex = Record.Exception(() => UpdateApplier.PreserveCurrentBuild(target, updates));
+            Assert.True(UpdateApplier.ApplyCopyFromPath(source, target, updatesDir: updates));
 
-            Assert.Null(ex);
             Assert.False(File.Exists(UpdateApplier.PreviousBuildPath(updates)));
+            Assert.False(File.Exists(UpdateApplier.PendingPreviousBuildPath(updates)));
+        }
+        finally { dir.Delete(recursive: true); }
+    }
+
+    // ── A failed update and a rollback leave the kept copy right (#2725) ─────────────────────
+    //
+    // The outgoing build was written over the kept copy before the move, so an update that then failed replaced the
+    // real previous version with the one still running. A rollback, which runs from the kept copy, tried to keep the
+    // newer build in its place and left Go back offered to reinstall the version already running. And an update that
+    // could not keep its outgoing build left an earlier update's copy offered as the version before the last update.
+
+    [Fact]
+    public void ApplyCopy_ThatFails_LeavesTheKeptCopyAsItWas()
+    {
+        var dir = Directory.CreateTempSubdirectory("ApplierFailKeep_");
+        try
+        {
+            var source = Path.Combine(dir.FullName, "new.exe");
+            var target = Path.Combine(dir.FullName, "current.exe");
+            var updates = Path.Combine(dir.FullName, "updates");
+            File.WriteAllText(target, "BUILD-1");
+            File.WriteAllText(source, "BUILD-2");
+            Assert.True(UpdateApplier.ApplyCopyFromPath(source, target, updatesDir: updates));   // keeps BUILD-1
+            var previous = UpdateApplier.PreviousBuildPath(updates);
+            var hash = File.ReadAllText(UpdateApplier.PreviousBuildHashPath(updates));
+
+            File.WriteAllText(source, "BUILD-3");
+            using (new FileStream(target, FileMode.Open, FileAccess.Read, FileShare.Read))
+                Assert.False(UpdateApplier.ApplyCopyFromPath(source, target, maxAttempts: 2, delayMs: 0, updatesDir: updates));
+
+            Assert.Equal("BUILD-2", File.ReadAllText(target));
+            Assert.Equal("BUILD-1", File.ReadAllText(previous));
+            Assert.Equal(hash, File.ReadAllText(UpdateApplier.PreviousBuildHashPath(updates)));
+            Assert.Empty(Directory.GetFiles(updates, "*.pending*"));
         }
         finally { dir.Delete(recursive: true); }
     }
 
     [Fact]
-    public void PreserveCurrentBuild_IsBestEffort_AndNeverBlocksAnUpdate()
+    public void ApplyCopy_ThatCannotReplaceTheKeptCopy_StillUpdates_AndOffersNoGoBack()
+    {
+        // The kept copy is held, so the staged one cannot take its place. The update lands anyway, and Go back is no
+        // longer offered: what is kept is an earlier update's copy, not the version this update replaced.
+        var dir = Directory.CreateTempSubdirectory("ApplierPromote_");
+        try
+        {
+            var source = Path.Combine(dir.FullName, "new.exe");
+            var target = Path.Combine(dir.FullName, "current.exe");
+            var updates = Updates(dir);
+            KeepABuild(updates, "BUILD-1");
+            File.WriteAllText(target, "BUILD-2");
+            File.WriteAllText(source, "BUILD-3");
+
+            using (new FileStream(UpdateApplier.PreviousBuildPath(updates), FileMode.Open, FileAccess.Read, FileShare.Read))
+                Assert.True(UpdateApplier.ApplyCopyFromPath(source, target, maxAttempts: 2, delayMs: 0, updatesDir: updates));
+
+            Assert.Equal("BUILD-3", File.ReadAllText(target));
+            Assert.False(File.Exists(UpdateApplier.PreviousBuildHashPath(updates)));
+            Assert.Empty(Directory.GetFiles(updates, "*.pending*"));
+        }
+        finally { dir.Delete(recursive: true); }
+    }
+
+    [Fact]
+    public void ApplyCopy_ThatCouldNotKeepTheOutgoingBuild_OffersNoGoBack()
+    {
+        // Keeping the outgoing build failed, so the copy an earlier update kept is all there is, and it is not the
+        // version this update replaced.
+        var dir = Directory.CreateTempSubdirectory("ApplierNotKept_");
+        try
+        {
+            var source = Path.Combine(dir.FullName, "new.exe");
+            var target = Path.Combine(dir.FullName, "current.exe");
+            var updates = Updates(dir);
+            KeepABuild(updates, "BUILD-1");
+            File.WriteAllText(target, "BUILD-2");
+            File.WriteAllText(source, "BUILD-3");
+            var pending = UpdateApplier.PendingPreviousBuildPath(updates);
+            File.WriteAllText(pending, "held");
+
+            using (new FileStream(pending, FileMode.Open, FileAccess.Read, FileShare.None))
+                Assert.True(UpdateApplier.ApplyCopyFromPath(source, target, maxAttempts: 2, delayMs: 0, updatesDir: updates));
+
+            Assert.Equal("BUILD-3", File.ReadAllText(target));
+            Assert.False(File.Exists(UpdateApplier.PreviousBuildHashPath(updates)));
+        }
+        finally { dir.Delete(recursive: true); }
+    }
+
+    [Fact]
+    public void ApplyCopy_ForARollback_KeepsNothingInPlaceOfTheCopy_AndTakesGoBackOffOffer()
+    {
+        // The applier runs from the kept copy, so the build it replaces is the newer one, and the copy Go back would
+        // install is the version now running. From a copy of it here: the kept copy itself is held while a rollback
+        // reads it, which would refuse the newer build its place whether or not it was kept.
+        var dir = Directory.CreateTempSubdirectory("ApplierRollback_");
+        try
+        {
+            var source = Path.Combine(dir.FullName, "previous.exe");
+            var target = Path.Combine(dir.FullName, "current.exe");
+            var updates = Updates(dir);
+            KeepABuild(updates, "OLDER-BUILD");
+            File.WriteAllText(source, "OLDER-BUILD");
+            File.WriteAllText(target, "NEWER-BUILD");
+
+            Assert.True(UpdateApplier.ApplyCopyFromPath(source, target, updatesDir: updates, retainOutgoing: false));
+
+            Assert.Equal("OLDER-BUILD", File.ReadAllText(target));
+            Assert.Equal("OLDER-BUILD", File.ReadAllText(UpdateApplier.PreviousBuildPath(updates)));
+            Assert.False(File.Exists(UpdateApplier.PreviousBuildHashPath(updates)));
+            Assert.Empty(Directory.GetFiles(updates, "*.pending*"));
+        }
+        finally { dir.Delete(recursive: true); }
+    }
+
+    [Fact]
+    public void ApplyCopy_ForARollbackThatFails_LeavesGoBackOffered()
+    {
+        var dir = Directory.CreateTempSubdirectory("ApplierRollbackFail_");
+        try
+        {
+            var target = Path.Combine(dir.FullName, "current.exe");
+            var updates = Updates(dir);
+            KeepABuild(updates, "OLDER-BUILD");
+            var hash = File.ReadAllText(UpdateApplier.PreviousBuildHashPath(updates));
+            var source = Path.Combine(dir.FullName, "previous.exe");
+            File.WriteAllText(source, "OLDER-BUILD");
+            File.WriteAllText(target, "NEWER-BUILD");
+
+            using (new FileStream(target, FileMode.Open, FileAccess.Read, FileShare.Read))
+                Assert.False(UpdateApplier.ApplyCopyFromPath(source, target,
+                    maxAttempts: 2, delayMs: 0, updatesDir: updates, retainOutgoing: false));
+
+            Assert.Equal("NEWER-BUILD", File.ReadAllText(target));
+            Assert.Equal(hash, File.ReadAllText(UpdateApplier.PreviousBuildHashPath(updates)));
+        }
+        finally { dir.Delete(recursive: true); }
+    }
+
+    [Fact]
+    public void IsTheKeptCopy_KnowsTheKeptBuild_AndNothingElse()
+    {
+        var updates = Path.Combine(Path.GetTempPath(), "ApplierKept_" + Guid.NewGuid().ToString("N"));
+
+        Assert.True(UpdateApplier.IsTheKeptCopy(UpdateApplier.PreviousBuildPath(updates), updates));
+        Assert.True(UpdateApplier.IsTheKeptCopy(UpdateApplier.PreviousBuildPath(updates).ToUpperInvariant(), updates));
+        Assert.False(UpdateApplier.IsTheKeptCopy(Path.Combine(updates, "SysManager-v9.9.9.exe"), updates));
+    }
+
+    [Fact]
+    public void RetireKeptCopy_TakesGoBackOffOffer()
+    {
+        // The kept binary is the running applier's own image after a rollback, so its checksum is what goes: About
+        // offers Go back only when both are there.
+        var dir = Directory.CreateTempSubdirectory("ApplierRetire_");
+        try
+        {
+            var updates = Path.Combine(dir.FullName, "updates");
+            Directory.CreateDirectory(updates);
+            File.WriteAllText(UpdateApplier.PreviousBuildPath(updates), "OLDER-BUILD");
+            File.WriteAllText(UpdateApplier.PreviousBuildHashPath(updates), AnyHash);
+
+            UpdateApplier.RetireKeptCopy(updates);
+
+            Assert.False(File.Exists(UpdateApplier.PreviousBuildHashPath(updates)));
+        }
+        finally { dir.Delete(recursive: true); }
+    }
+
+    [Fact]
+    public void KeepingTheOutgoingBuild_IsBestEffort_AndNeverBlocksAnUpdate()
     {
         // Retaining a copy is a safety net, not the job. If the folder cannot be written — full disk,
         // permissions, a file where the directory should be — the update must still proceed rather than
@@ -333,11 +511,7 @@ public class UpdateApplierTests
             File.WriteAllText(target, "OLD-BUILD");
             File.WriteAllText(blocked, "not a directory");
 
-            var ex = Record.Exception(() => UpdateApplier.PreserveCurrentBuild(target, blocked));
-            Assert.Null(ex);                                      // swallowed, logged, not thrown
-
-            // Same blocked directory: the update must survive the retention failing INSIDE ApplyCopy,
-            // not merely when PreserveCurrentBuild is called separately beforehand.
+            // The retention fails inside ApplyCopy, swallowed and logged, and the update still lands.
             Assert.True(UpdateApplier.ApplyCopyFromPath(source, target, updatesDir: blocked));
             Assert.Equal("NEW-BUILD", File.ReadAllText(target));
         }
@@ -363,7 +537,7 @@ public class UpdateApplierTests
         // resolved the REAL profile no matter where the caller pointed source/target. A test could
         // redirect every path it knew about and still write an executable into the user's own
         // %LocalAppData%\SysManager\updates. Accepting the parameter is not enough — it has to reach
-        // PreserveCurrentBuild, which is what this asserts.
+        // the retention step, which is what this asserts.
         var dir = Directory.CreateTempSubdirectory("ApplierRedirect_");
         try
         {
@@ -373,7 +547,7 @@ public class UpdateApplierTests
             File.WriteAllText(source, "NEW-BUILD");
             File.WriteAllText(target, "OLD-BUILD");
 
-            // No separate PreserveCurrentBuild call — ApplyCopy's own retention must do the work.
+            // ApplyCopy's own retention must do the work.
             Assert.True(UpdateApplier.ApplyCopyFromPath(source, target, maxAttempts: 1, delayMs: 0, updatesDir: updates));
 
             Assert.Equal("OLD-BUILD", File.ReadAllText(UpdateApplier.PreviousBuildPath(updates)));
@@ -432,6 +606,31 @@ public class UpdateApplierTests
             Assert.True(File.Exists(previous), "the retained previous build must survive pruning");
             Assert.True(File.Exists(keep));
             Assert.False(File.Exists(stale));   // control: pruning still works
+        }
+        finally { dir.Delete(recursive: true); }
+    }
+
+    [Fact]
+    public void PruneOldDownloads_RemovesAKeptCopyLeftPendingByAnInterruptedUpdate()
+    {
+        // An update that stopped between keeping the outgoing build and the move leaves it under the pending name. It is
+        // never offered, so it goes with the next download like any other superseded file, and the kept copy stays.
+        var dir = Directory.CreateTempSubdirectory("ApplierPrunePending_");
+        try
+        {
+            var keep = Path.Combine(dir.FullName, "SysManager-9.9.9.exe");
+            File.WriteAllText(keep, "current");
+            KeepABuild(dir.FullName, "rollback");
+            var pending = UpdateApplier.PendingPreviousBuildPath(dir.FullName);
+            File.WriteAllText(pending, "interrupted");
+            File.WriteAllText(pending + ".sha256", AnyHash);
+
+            UpdateService.PruneOldDownloads(dir.FullName, keep);
+
+            Assert.False(File.Exists(pending));
+            Assert.False(File.Exists(pending + ".sha256"));
+            Assert.True(File.Exists(UpdateApplier.PreviousBuildPath(dir.FullName)));
+            Assert.True(File.Exists(UpdateApplier.PreviousBuildHashPath(dir.FullName)));
         }
         finally { dir.Delete(recursive: true); }
     }
@@ -524,6 +723,46 @@ public class UpdateApplierTests
         // Specifically for BEING in a system root — the location check runs before the existence check,
         // so this cannot pass merely because no file happens to sit at that path.
         Assert.Contains("system directory", reason);
+    }
+
+    // ── asked before SysManager closes (#2725) ───────────────────────────────────────────
+    // The applier decides after SysManager has closed, so its refusal could only be logged: under Program Files,
+    // Install and Go back closed SysManager for good. About asks the same question first.
+
+    [Fact]
+    public void WhyItCannotReplace_AProgramFilesCopy_SaysWhyInPlainWords()
+    {
+        var target = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles), "SysManager", "SysManager.exe");
+
+        Assert.Equal("it runs from a folder Windows protects, such as Program Files", UpdateApplier.WhyItCannotReplace(target));
+    }
+
+    [Fact]
+    public void WhyItCannotReplace_AFolderThatTakesNoNewFile_SaysSo()
+    {
+        var dir = Directory.CreateTempSubdirectory("ApplierTarget_");
+        try
+        {
+            var target = CopyOfThisBuild(dir);
+
+            Assert.Equal("it cannot write to the folder it runs from",
+                UpdateApplier.WhyItCannotReplace(target, canCreateFileIn: _ => false));
+        }
+        finally { dir.Delete(recursive: true); }
+    }
+
+    [Fact]
+    public void WhyItCannotReplace_AWritableCopyOfThisBuild_IsNothing_AndLeavesNoFileBehind()
+    {
+        var dir = Directory.CreateTempSubdirectory("ApplierTarget_");
+        try
+        {
+            var target = CopyOfThisBuild(dir);
+
+            Assert.Null(UpdateApplier.WhyItCannotReplace(target));
+            Assert.Equal([target], Directory.GetFiles(dir.FullName));
+        }
+        finally { dir.Delete(recursive: true); }
     }
 
     [Fact]
@@ -694,16 +933,18 @@ public class UpdateApplierTests
     // launch without reopening); these tests pin that rollback now does the same.
 
     [Fact]
-    public void PreserveCurrentBuild_RecordsTheChecksumOfWhatItWrote()
+    public void KeepingTheOutgoingBuild_RecordsTheChecksumOfWhatItWrote()
     {
         var dir = Directory.CreateTempSubdirectory("ApplierPreserve_");
         try
         {
             var updates = Updates(dir);
             var current = Path.Combine(dir.FullName, "SysManager.exe");
+            var source = Path.Combine(dir.FullName, "new.exe");
             File.WriteAllText(current, "the outgoing build");
+            File.WriteAllText(source, "the incoming build");
 
-            UpdateApplier.PreserveCurrentBuild(current, updates);
+            Assert.True(UpdateApplier.ApplyCopyFromPath(source, current, updatesDir: updates));
 
             var previous = UpdateApplier.PreviousBuildPath(updates);
             var hashFile = UpdateApplier.PreviousBuildHashPath(updates);
@@ -722,9 +963,7 @@ public class UpdateApplierTests
         try
         {
             var updates = Updates(dir);
-            var current = Path.Combine(dir.FullName, "SysManager.exe");
-            File.WriteAllText(current, "the outgoing build");
-            UpdateApplier.PreserveCurrentBuild(current, updates);
+            KeepABuild(updates, "the outgoing build");
 
             Assert.True(
                 UpdateApplier.TryOpenVerifiedPreviousBuild(updates, out var stream, out var reason, out _),
@@ -750,9 +989,7 @@ public class UpdateApplierTests
         try
         {
             var updates = Updates(dir);
-            var current = Path.Combine(dir.FullName, "SysManager.exe");
-            File.WriteAllText(current, "the outgoing build");
-            UpdateApplier.PreserveCurrentBuild(current, updates);
+            KeepABuild(updates, "the outgoing build");
 
             File.WriteAllText(UpdateApplier.PreviousBuildPath(updates), "attacker payload");
 
@@ -844,9 +1081,7 @@ public class UpdateApplierTests
         try
         {
             var updates = Updates(dir);
-            var current = Path.Combine(dir.FullName, "SysManager.exe");
-            File.WriteAllText(current, "the outgoing build");
-            UpdateApplier.PreserveCurrentBuild(current, updates);
+            KeepABuild(updates, "the outgoing build");
 
             Assert.True(UpdateApplier.TryOpenVerifiedPreviousBuild(updates, out var stream, out var why, out var hash), why);
             // The checksum it proved the copy against comes back with the handle: the rollback launch carries it,

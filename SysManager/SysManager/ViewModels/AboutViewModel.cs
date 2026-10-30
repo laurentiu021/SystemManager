@@ -1137,10 +1137,19 @@ public sealed partial class AboutViewModel : ViewModelBase
             }
 
             // Step 2: Determine current executable path.
-            var currentExe = Environment.ProcessPath;
-            if (string.IsNullOrWhiteSpace(currentExe) || !File.Exists(currentExe))
+            var currentExe = _processPath();
+            if (string.IsNullOrWhiteSpace(currentExe))
             {
                 InstallStopped("Cannot determine current executable path.", unusable: false);
+                return;
+            }
+
+            // Step 2a: whether the applier will replace it. It decides only after SysManager has closed, so under
+            // Program Files the update closed SysManager for good, with nothing said (#2725). The file is let go so
+            // Manual download is offered: it is the way to update a copy that cannot replace itself.
+            if (UpdateApplier.WhyItCannotReplace(currentExe) is { } cannot)
+            {
+                InstallStopped(CannotReplaceLine(cannot), unusable: true);
                 return;
             }
 
@@ -1205,13 +1214,19 @@ public sealed partial class AboutViewModel : ViewModelBase
         }
     }
 
+    /// <summary>What Install says when SysManager cannot replace itself where it runs.</summary>
+    internal static string CannotReplaceLine(string why) =>
+        $"SysManager can't update itself here: {why}. Press Manual download to get the new version, then replace "
+        + "this copy with it.";
+
     /// <summary>
     /// Shows why Install stopped short, in a row that reads as a problem rather than in the green one.
     /// </summary>
     /// <param name="message">What went wrong, for the row and for a screen reader.</param>
     /// <param name="unusable">
-    /// True when the downloaded file itself was refused or is gone. It is let go, so Download and Manual download come
-    /// back where an Install that cannot succeed was offered. Otherwise the file is kept, and Install stays offered.
+    /// True when the downloaded file itself was refused or is gone, or cannot be installed where SysManager runs. It is
+    /// let go, so Download and Manual download come back where an Install that cannot succeed was offered. Otherwise the
+    /// file is kept, and Install stays offered.
     /// </param>
     /// <remarks>
     /// Install wrote every refusal and failure to <see cref="DownloadStatus"/>, which with a downloaded file only the
@@ -1263,10 +1278,17 @@ public sealed partial class AboutViewModel : ViewModelBase
             return;
         }
 
-        var currentExe = Environment.ProcessPath;
+        var currentExe = _processPath();
         if (string.IsNullOrWhiteSpace(currentExe))
         {
             RollBackStatus = "Could not determine where SysManager is running from.";
+            return;
+        }
+
+        // The same check as Install's, for the same reason: the applier refuses only after SysManager has closed (#2725).
+        if (UpdateApplier.WhyItCannotReplace(currentExe) is { } cannot)
+        {
+            RollBackStatus = $"SysManager can't go back here: {cannot}.";
             return;
         }
 

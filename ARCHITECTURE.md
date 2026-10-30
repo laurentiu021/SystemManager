@@ -2407,9 +2407,20 @@ because `Run` is the only thing that writes. `ApplyCopy` has two overloads — t
 passes the verified `Stream`, and the path-taking one exists for the tests of staging,
 retry and retention.
 
-Before that move, `PreserveCurrentBuild` copies the outgoing executable to
-`SysManager-previous.exe` in the same updates folder, and writes that copy's SHA256
-beside it. The atomic move makes an
+Before that move, `StageOutgoingBuild` copies the outgoing executable, and that copy's
+SHA256, to `SysManager-previous.exe.pending` in the same updates folder. Only once the
+move has landed does `PromoteOutgoingBuild` make it `SysManager-previous.exe`, and an
+update that fails discards it, so the copy Go back offers is never replaced by the build
+still running (#2725). A rollback runs the applier from that copy (`IsTheKeptCopy`) and keeps
+nothing in its place. Whenever a copy lands without keeping the build it replaced (a rollback,
+an outgoing build that could not be copied, or a promotion that failed), the kept copy's hash
+is removed (`RetireKeptCopy`), so Go back never offers an earlier update's copy as the version
+before the last update; the binary, the running image after a rollback, is written over by
+the next update's copy. A pending pair left by an interrupted run matches the pattern below
+and goes with the next download. Before `Install` or `Go back` confirms, `WhyItCannotReplace`
+asks what `Run` will: `IsValidApplyTarget`, and whether the folder takes a new file. The
+applier decides only after SysManager has closed, so under Program Files the update used to
+close SysManager for good. The atomic move makes an
 *interrupted* update safe; it does nothing for an update that *succeeds* into a
 build that will not start, and this project has shipped two such regressions. One
 generation is retained (each copy overwrites the last), `PruneOldDownloads`

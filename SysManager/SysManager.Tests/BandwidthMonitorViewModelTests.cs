@@ -110,6 +110,21 @@ public class BandwidthMonitorViewModelTests : IDisposable
     }
 
     [Fact]
+    public void APidRow_TakesTheRealName_WhenPreciseModeLearnsIt()
+    {
+        // The row kept the name it was first added with, which cannot change on it, so an app already busy when
+        // precise mode started stayed "PID 1234" with the fallback icon for as long as it transferred (#2706).
+        using var vm = NewVm();
+        vm.MergeInto([new ProcessNetworkUsage { ProcessId = 1234, ProcessName = "PID 1234", TotalDownBytes = 100 }]);
+
+        vm.MergeInto([new ProcessNetworkUsage { ProcessId = 1234, ProcessName = "chrome", TotalDownBytes = 900 }]);
+
+        var row = Assert.Single(vm.Processes);
+        Assert.Equal("chrome", row.ProcessName);
+        Assert.Equal(900, row.TotalDownBytes);
+    }
+
+    [Fact]
     public void MergeInto_ReconcilesRowsByPid_InPlace()
     {
         var vm = NewVm();

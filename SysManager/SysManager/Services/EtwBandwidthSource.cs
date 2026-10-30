@@ -3,6 +3,7 @@
 // License: MIT
 
 using System.Collections.Concurrent;
+using System.Net;
 using Microsoft.Diagnostics.Tracing.Parsers;
 using Microsoft.Diagnostics.Tracing.Parsers.Kernel;
 using Microsoft.Diagnostics.Tracing.Session;
@@ -94,14 +95,14 @@ public sealed class EtwBandwidthSource : IBandwidthMonitorService
             _session.EnableKernelProvider(KernelTraceEventParser.Keywords.NetworkTCPIP);
 
             var kernel = _session.Source.Kernel;
-            kernel.TcpIpRecv += d => Add(d.ProcessID, down: d.size, up: 0, d.ProcessName);
-            kernel.TcpIpRecvIPV6 += d => Add(d.ProcessID, down: d.size, up: 0, d.ProcessName);
-            kernel.TcpIpSend += d => Add(d.ProcessID, down: 0, up: d.size, d.ProcessName);
-            kernel.TcpIpSendIPV6 += d => Add(d.ProcessID, down: 0, up: d.size, d.ProcessName);
-            kernel.UdpIpRecv += d => Add(d.ProcessID, down: d.size, up: 0, d.ProcessName);
-            kernel.UdpIpRecvIPV6 += d => Add(d.ProcessID, down: d.size, up: 0, d.ProcessName);
-            kernel.UdpIpSend += d => Add(d.ProcessID, down: 0, up: d.size, d.ProcessName);
-            kernel.UdpIpSendIPV6 += d => Add(d.ProcessID, down: 0, up: d.size, d.ProcessName);
+            kernel.TcpIpRecv += d => AddUnlessLoopback(d.ProcessID, down: d.size, up: 0, d.ProcessName, d.saddr, d.daddr);
+            kernel.TcpIpRecvIPV6 += d => AddUnlessLoopback(d.ProcessID, down: d.size, up: 0, d.ProcessName, d.saddr, d.daddr);
+            kernel.TcpIpSend += d => AddUnlessLoopback(d.ProcessID, down: 0, up: d.size, d.ProcessName, d.saddr, d.daddr);
+            kernel.TcpIpSendIPV6 += d => AddUnlessLoopback(d.ProcessID, down: 0, up: d.size, d.ProcessName, d.saddr, d.daddr);
+            kernel.UdpIpRecv += d => AddUnlessLoopback(d.ProcessID, down: d.size, up: 0, d.ProcessName, d.saddr, d.daddr);
+            kernel.UdpIpRecvIPV6 += d => AddUnlessLoopback(d.ProcessID, down: d.size, up: 0, d.ProcessName, d.saddr, d.daddr);
+            kernel.UdpIpSend += d => AddUnlessLoopback(d.ProcessID, down: 0, up: d.size, d.ProcessName, d.saddr, d.daddr);
+            kernel.UdpIpSendIPV6 += d => AddUnlessLoopback(d.ProcessID, down: 0, up: d.size, d.ProcessName, d.saddr, d.daddr);
 
             // Process the trace on a background thread; Source.Process() blocks until the session
             // is stopped/disposed. Guard so a mid-stream fault disables the source (the poll then
@@ -154,6 +155,23 @@ public sealed class EtwBandwidthSource : IBandwidthMonitorService
         && int.TryParse(name.AsSpan(8, name.Length - 9), System.Globalization.NumberStyles.None,
                         System.Globalization.CultureInfo.InvariantCulture, out var id)
         && id == pid;
+
+    /// <summary>
+    /// <see cref="Add"/> for one event, unless it went to or came from this PC's loopback address.
+    /// </summary>
+    /// <remarks>
+    /// The kernel raises its TCP and UDP events for 127.0.0.1 and ::1 too, so a datagram sent to a helper on the same
+    /// PC counted as upload for its sender and download for its receiver. Programs that talk to local helpers, Discord,
+    /// Steam's web helper, a local proxy, WSL's port relay, were listed as top network users and could set off the
+    /// alert, and the default source, which leaves loopback out, gave the same traffic other figures (#2706).
+    /// </remarks>
+    internal void AddUnlessLoopback(int pid, int down, int up, string name, IPAddress? source, IPAddress? destination)
+    {
+        if (IsLoopback(source) || IsLoopback(destination)) return;
+        Add(pid, down, up, name);
+    }
+
+    private static bool IsLoopback(IPAddress? address) => address is not null && IPAddress.IsLoopback(address);
 
     /// <summary>
     /// Accumulate one event's bytes against a PID. <c>internal</c> rather than private so the eviction

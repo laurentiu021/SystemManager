@@ -375,6 +375,11 @@ public sealed partial class BandwidthMonitorViewModel : ElevatedViewModelBase
     /// processes are added (icon attached once), and gone processes removed. In-place reconciliation
     /// keeps the list from flickering and avoids re-extracting icons every second.
     /// </summary>
+    /// <remarks>
+    /// A process whose name changed takes the new row, icon and all. Precise mode calls a process "PID 1234" until the
+    /// trace names it, and the row kept that first name, which cannot change on it, so an app already busy when precise
+    /// mode started stayed "PID 1234" with the fallback icon for as long as it transferred (#2706).
+    /// </remarks>
     internal void MergeInto(IReadOnlyList<ProcessNetworkUsage> snapshot)
     {
         var capped = snapshot.Count > MaxRows ? snapshot.Take(MaxRows).ToList() : snapshot;
@@ -385,7 +390,17 @@ public sealed partial class BandwidthMonitorViewModel : ElevatedViewModelBase
         foreach (var row in capped)
         {
             seen.Add(row.ProcessId);
-            if (existing.TryGetValue(row.ProcessId, out var current))
+            if (!existing.TryGetValue(row.ProcessId, out var current))
+            {
+                row.Icon = IconExtractorService.GetProcessIcon(null, row.ProcessName);
+                Processes.Add(row);
+            }
+            else if (current.ProcessName != row.ProcessName)
+            {
+                row.Icon = IconExtractorService.GetProcessIcon(null, row.ProcessName);
+                Processes[Processes.IndexOf(current)] = row;
+            }
+            else
             {
                 current.ConnectionCount = row.ConnectionCount;
                 current.RemoteSummary = row.RemoteSummary;
@@ -393,11 +408,6 @@ public sealed partial class BandwidthMonitorViewModel : ElevatedViewModelBase
                 current.UpBytesPerSec = row.UpBytesPerSec;
                 current.TotalDownBytes = row.TotalDownBytes;
                 current.TotalUpBytes = row.TotalUpBytes;
-            }
-            else
-            {
-                row.Icon = IconExtractorService.GetProcessIcon(null, row.ProcessName);
-                Processes.Add(row);
             }
         }
 

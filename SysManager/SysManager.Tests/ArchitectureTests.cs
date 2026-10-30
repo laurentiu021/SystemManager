@@ -2791,6 +2791,91 @@ public partial class ArchitectureTests
     }
 
     /// <summary>
+    /// A binding on a <c>DataGridColumn</c> itself, such as on its <c>Visibility</c>, reads its source through a
+    /// resource.
+    /// </summary>
+    /// <remarks>
+    /// A column is not in the visual tree and inherits no data context, so a binding set on one, through
+    /// <c>RelativeSource</c>, <c>ElementName</c> or the data context, never attaches. Bandwidth Monitor's precise-mode
+    /// columns hid that way, never hid, and showed every app at 0 bps without administrator rights (#2705).
+    /// <c>helpers:BindingProxy</c> in the grid's resources carries the data context to them, read with
+    /// <c>Source={StaticResource …}</c>. What a column binds for each row, its properties that hold a
+    /// <c>BindingBase</c> such as <c>Binding</c>, is evaluated in each cell and is not read.
+    /// </remarks>
+    [Fact]
+    public void EveryBindingOnAColumnItself_ReadsItsSourceThroughAResource()
+    {
+        var presentation = XNamespace.Get("http://schemas.microsoft.com/winfx/2006/xaml/presentation");
+        var textColumn = XamlType(presentation, "DataGridTextColumn");
+        Assert.NotNull(textColumn);
+        Assert.True(BindsEachRow(textColumn, "Binding"));
+        Assert.False(BindsEachRow(textColumn, "Visibility"));
+
+        var offenders = new List<string>();
+        var columns = 0;
+        var throughAResource = 0;
+        foreach (var file in SourceFilesUnder(TestPaths.AppProject(), ".xaml"))
+        {
+            var name = Path.GetFileName(file);
+            foreach (var element in XDocument.Parse(File.ReadAllText(file)).Descendants())
+            {
+                if (ColumnType(element.Name) is { } column)
+                {
+                    columns++;
+                    foreach (var attribute in element.Attributes())
+                    {
+                        var value = attribute.Value;
+                        if ((!value.StartsWith("{Binding", StringComparison.Ordinal)
+                             && !value.StartsWith("{MultiBinding", StringComparison.Ordinal))
+                            || BindsEachRow(column, attribute.Name.LocalName))
+                            continue;
+
+                        if (value.Contains("Source={StaticResource", StringComparison.Ordinal))
+                            throughAResource++;
+                        else
+                            offenders.Add($"{name}: <{element.Name.LocalName} {attribute.Name.LocalName}=\"{value}\">");
+                    }
+                }
+
+                // <DataGridTextColumn.Visibility><Binding …/></DataGridTextColumn.Visibility>, written as an element.
+                if (element.Name.LocalName is "Binding" or "MultiBinding"
+                    && element.Parent is { } holder
+                    && holder.Name.LocalName.Split('.') is [var ownerName, var property]
+                    && ColumnType(holder.Name.Namespace + ownerName) is { } owner
+                    && !BindsEachRow(owner, property))
+                {
+                    if (element.Attribute("Source") is null)
+                        offenders.Add($"{name}: <{holder.Name.LocalName}><{element.Name.LocalName} …/>");
+                    else
+                        throughAResource++;
+                }
+            }
+        }
+
+        // 175 columns and 3 bindings through a resource when written. Far fewer columns means the views were not read.
+        Assert.True(columns >= 150, $"only {columns} columns were read, so this checks nothing.");
+        Assert.True(offenders.Count == 0,
+            "These bind a property of a DataGrid column, which is not in the visual tree, so the binding never "
+            + "attaches. Put a helpers:BindingProxy with Data=\"{Binding}\" in the grid's resources and bind "
+            + "Data.Property with Source={StaticResource …} instead:\n  " + string.Join("\n  ", offenders));
+        Assert.True(throughAResource >= 3, $"only {throughAResource} column bindings through a resource were read, of 3.");
+
+        static Type? ColumnType(XName element) =>
+            XamlType(element.Namespace, element.LocalName) is { } type
+            && typeof(System.Windows.Controls.DataGridColumn).IsAssignableFrom(type)
+                ? type
+                : null;
+    }
+
+    /// <summary>
+    /// Whether <paramref name="property"/> on a column is what it binds for each row, such as a text column's
+    /// <c>Binding</c>, which WPF evaluates in each cell.
+    /// </summary>
+    private static bool BindsEachRow(Type column, string property) =>
+        column.GetProperty(property, BindingFlags.Public | BindingFlags.Instance)?.PropertyType is { } type
+        && typeof(System.Windows.Data.BindingBase).IsAssignableFrom(type);
+
+    /// <summary>
     /// Every <c>helpers:ThemeBrush</c> is on an element that has the property it paints, and the element does not set
     /// that property itself as well.
     /// </summary>

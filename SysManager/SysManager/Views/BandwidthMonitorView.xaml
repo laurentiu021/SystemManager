@@ -4,6 +4,7 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:lvc="clr-namespace:LiveChartsCore.SkiaSharpView.WPF;assembly=LiveChartsCore.SkiaSharpView.WPF"
              xmlns:v="clr-namespace:SysManager.Views"
+             xmlns:helpers="clr-namespace:SysManager.Helpers"
              xmlns:vm="clr-namespace:SysManager.ViewModels"
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
@@ -160,6 +161,9 @@
                               GridLinesVisibility="None"
                               VirtualizingPanel.IsVirtualizing="True"
                               VirtualizingPanel.VirtualizationMode="Recycling">
+                        <DataGrid.Resources>
+                            <helpers:BindingProxy x:Key="ViewContext" Data="{Binding}"/>
+                        </DataGrid.Resources>
                         <DataGrid.Columns>
                             <!-- Icon + app name -->
                             <DataGridTemplateColumn Header="App" Width="*">
@@ -182,13 +186,15 @@
                             </DataGridTemplateColumn>
                             <!-- Connections (both modes) -->
                             <DataGridTextColumn Header="Connections" Binding="{Binding ConnectionCount}" Width="110"/>
-                            <!-- Precise-mode columns: shown only when ETW mode is active -->
+                            <!-- Precise-mode columns: shown only when ETW mode is active. A column is not in the visual tree,
+                                 so it reads the mode through the proxy above; a RelativeSource binding never attached,
+                                 and the columns showed every app at 0 bps without administrator rights (#2705). -->
                             <DataGridTextColumn Header="Download" Binding="{Binding DownDisplay}" SortMemberPath="DownBytesPerSec" Width="110"
-                                                Visibility="{Binding DataContext.PreciseMode, RelativeSource={RelativeSource AncestorType=UserControl}, Converter={StaticResource FlexVis}}"/>
+                                                Visibility="{Binding Data.PreciseMode, Source={StaticResource ViewContext}, Converter={StaticResource FlexVis}}"/>
                             <DataGridTextColumn Header="Upload" Binding="{Binding UpDisplay}" SortMemberPath="UpBytesPerSec" Width="110"
-                                                Visibility="{Binding DataContext.PreciseMode, RelativeSource={RelativeSource AncestorType=UserControl}, Converter={StaticResource FlexVis}}"/>
+                                                Visibility="{Binding Data.PreciseMode, Source={StaticResource ViewContext}, Converter={StaticResource FlexVis}}"/>
                             <DataGridTextColumn Header="Session total" Binding="{Binding TotalDisplay}" SortMemberPath="TotalBytes" Width="120"
-                                                Visibility="{Binding DataContext.PreciseMode, RelativeSource={RelativeSource AncestorType=UserControl}, Converter={StaticResource FlexVis}}"/>
+                                                Visibility="{Binding Data.PreciseMode, Source={StaticResource ViewContext}, Converter={StaticResource FlexVis}}"/>
                         </DataGrid.Columns>
                     </DataGrid>
 

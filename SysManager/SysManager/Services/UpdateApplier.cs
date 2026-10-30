@@ -68,6 +68,17 @@ internal static class UpdateApplier
         PreviousBuildPath(updatesDir) + ".sha256";
 
     /// <summary>
+    /// Where the kept copy's versions are recorded: its own, and the one the update that kept it installed.
+    /// </summary>
+    /// <remarks>
+    /// Go back is offered only while that update's version is the one running. With the binary and its checksum
+    /// alone, an update made another way, through winget or a manual download, left the copy offered as the version
+    /// before the last update, and pressing it installed whatever the last update made here had replaced (#2725).
+    /// </remarks>
+    internal static string PreviousBuildVersionsPath(string? updatesDir = null) =>
+        PreviousBuildPath(updatesDir) + ".versions";
+
+    /// <summary>
     /// Builds the command-line arguments handed to the downloaded executable so
     /// it applies itself over <paramref name="targetExe"/> after process
     /// <paramref name="pid"/> exits. A Windows path cannot legally contain a
@@ -534,8 +545,8 @@ internal static class UpdateApplier
         PreviousBuildPath(updatesDir) + ".pending";
 
     /// <summary>
-    /// Copies the build currently at <paramref name="targetExe"/> to the pending name, with its checksum. True when
-    /// there is a copy to promote.
+    /// Copies the build currently at <paramref name="targetExe"/> to the pending name, with its checksum and its
+    /// versions. True when there is a copy to promote.
     /// </summary>
     /// <remarks>
     /// BEST-EFFORT by design. Everything here is a nice-to-have compared with completing the update:
@@ -561,6 +572,11 @@ internal static class UpdateApplier
             // is still that copy. Hashed from the RETAINED file rather than the source, so the recorded
             // value describes the bytes that actually landed on disk.
             File.WriteAllText(pending + ".sha256", ComputeFileHash(pending));
+
+            // Its own version, read from the outgoing build, the one file that knows it, so Go back can name it; and
+            // this process's, since this process is the build that replaces it.
+            AtomicFile.WriteAllText(pending + ".versions",
+                FormatKeptCopyVersions(ReadFileVersion(targetExe), UpdateService.CurrentVersion));
             return true;
         }
         catch (IOException ex)
@@ -581,6 +597,8 @@ internal static class UpdateApplier
     /// <remarks>
     /// Whichever move fails, the copy left is not the build this update replaced: either the one an earlier update
     /// kept, or the new binary beside the earlier one's checksum. Go back is taken off offer rather than offering it.
+    /// <para>The versions move last. A run stopped before them leaves the earlier record, which names the version
+    /// that update installed, not the one now running, so the copy is not offered.</para>
     /// </remarks>
     private static void PromoteOutgoingBuild(string? updatesDir)
     {
@@ -589,6 +607,7 @@ internal static class UpdateApplier
         {
             File.Move(pending, PreviousBuildPath(updatesDir), overwrite: true);
             File.Move(pending + ".sha256", PreviousBuildHashPath(updatesDir), overwrite: true);
+            File.Move(pending + ".versions", PreviousBuildVersionsPath(updatesDir), overwrite: true);
             Log.Information("Update apply: retained the outgoing build for rollback");
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
@@ -605,6 +624,7 @@ internal static class UpdateApplier
         var pending = PendingPreviousBuildPath(updatesDir);
         TryDelete(pending);
         TryDelete(pending + ".sha256");
+        TryDelete(pending + ".versions");
     }
 
     /// <summary>
@@ -624,11 +644,60 @@ internal static class UpdateApplier
     }
 
     /// <summary>
-    /// Takes Go back off offer. The checksum goes rather than the binary: after a rollback the kept binary is this
-    /// process's own image and cannot be deleted while it runs. Without the checksum the copy is never offered, and the
-    /// next update's kept copy is written over it.
+    /// Takes Go back off offer. The checksum and the versions go rather than the binary: after a rollback the kept
+    /// binary is this process's own image and cannot be deleted while it runs. Without them the copy is never offered,
+    /// and the next update's kept copy is written over it.
     /// </summary>
-    internal static void RetireKeptCopy(string? updatesDir = null) => TryDelete(PreviousBuildHashPath(updatesDir));
+    internal static void RetireKeptCopy(string? updatesDir = null)
+    {
+        TryDelete(PreviousBuildHashPath(updatesDir));
+        TryDelete(PreviousBuildVersionsPath(updatesDir));
+    }
+
+    /// <summary>
+    /// The kept copy's record: its own version on the first line, empty when it could not be read, and the version of
+    /// the update that kept it on the second.
+    /// </summary>
+    internal static string FormatKeptCopyVersions(Version? kept, Version installedBy) =>
+        $"{(kept is null ? "" : ThreePart(kept))}\n{ThreePart(installedBy)}\n";
+
+    /// <summary>
+    /// Reads the kept copy's record, each version in three parts. False when there is none or it names no version
+    /// installed; <paramref name="kept"/> is null when the record could not name the copy's own.
+    /// </summary>
+    internal static bool TryReadKeptCopyVersions(string? updatesDir, out Version? kept, out Version installedBy)
+    {
+        kept = null;
+        installedBy = new Version(0, 0, 0);
+        try
+        {
+            var lines = File.ReadAllLines(PreviousBuildVersionsPath(updatesDir));
+            if (lines.Length != 2 || !Version.TryParse(lines[1], out var installed)) return false;
+
+            installedBy = new Version(installed.Major, installed.Minor, Math.Max(installed.Build, 0));
+            if (Version.TryParse(lines[0], out var own)) kept = new Version(own.Major, own.Minor, Math.Max(own.Build, 0));
+            return true;
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            return false;
+        }
+    }
+
+    private static string ThreePart(Version v) => $"{v.Major}.{v.Minor}.{Math.Max(v.Build, 0)}";
+
+    /// <summary>A file's Win32 <c>FileVersion</c>, or null when there is none or it cannot be read.</summary>
+    private static Version? ReadFileVersion(string path)
+    {
+        try
+        {
+            return Version.TryParse(FileVersionInfo.GetVersionInfo(path).FileVersion, out var version) ? version : null;
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            return null;
+        }
+    }
 
     /// <summary>SHA-256 of a file as an uppercase hex string, matching the published .sha256 format.</summary>
     internal static string ComputeFileHash(string path)

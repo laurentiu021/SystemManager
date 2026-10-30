@@ -2289,8 +2289,8 @@ offers, "rate us" prompts:
   date and full changelog, and a badge marking the one you are running, so you can see what you
   skipped without leaving the app
 - **Go back to the previous version** — the build you updated from is kept, and this button
-  restores it. It appears only when that build is actually on disk, and refuses with a
-  reason rather than half-doing it when the swap would not be safe.
+  restores it, naming the version it goes back to. It appears only when that build is actually
+  on disk, and refuses with a reason rather than half-doing it when the swap would not be safe.
 - **Export or copy a full system report**, and a separate "Copy environment info" for
   pasting into a bug report
 - **Save diagnostics bundle** writes one `.zip` with everything a bug report needs: the
@@ -2372,7 +2372,10 @@ offers, "rate us" prompts:
   replaced only once an update has landed, so an update that fails leaves it as it was.
   After going back the button is gone until the next update, since the kept copy is
   then the version running, and so it is after an update that could not keep the
-  build it replaced, rather than offering an older one.
+  build it replaced, rather than offering an older one. It is offered only while the
+  version that update installed is the one running, so an update through winget or a
+  manual download takes it away too. The saved copy is checked against its checksum in
+  the background before the question, with "Checking the saved version…" shown meanwhile.
 - Full release-note history pulled live from GitHub — the notes for the newest
   version appear under the update check, the last ten releases below it, and each
   card links to its release on GitHub. The list is fetched with the startup check, or when you

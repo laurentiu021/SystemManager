@@ -160,9 +160,15 @@ public sealed partial class AboutViewModel : ViewModelBase
 
     /// <summary>
     /// Plain-language label for the rollback button. Says WHAT it does rather than naming a
-    /// mechanism — the target user does not think in terms of executables or versions on disk.
+    /// mechanism — the target user does not think in terms of executables or versions on disk — and
+    /// then which version, so it is plain where it goes (#2725).
     /// </summary>
-    [ObservableProperty] private string _rollBackLabel = "Go back to the previous version";
+    [ObservableProperty] private string _rollBackLabel = RollBackPlainLabel;
+
+    private const string RollBackPlainLabel = "Go back to the previous version";
+
+    /// <summary>What the tab says while Go back checks the saved version against its checksum.</summary>
+    internal const string CheckingSavedVersionLine = "Checking the saved version…";
 
     [ObservableProperty] private string _rollBackStatus = string.Empty;
 
@@ -284,32 +290,32 @@ public sealed partial class AboutViewModel : ViewModelBase
     /// to verify, so a copy with no checksum is not offered rather than offered-then-refused. This also
     /// means a build retained by a version that predates the checksum is not offered — that is the
     /// intended outcome, since its integrity was never recorded, and the next update writes both files.
+    /// <para>And the versions record, naming the version the update that kept it installed, which must be the one
+    /// running. Without it, after an update made through winget or a manual download the copy was still offered as the
+    /// version before the last update, and was older than that (#2725).</para>
     /// <para>Never offered on a winget-managed copy, even if one happens to be sitting on disk already
     /// (from before this copy was recognised as winget-managed) — restoring it would be the same
     /// in-place replacement Download/Install are blocked from making (#2889).</para>
     /// </remarks>
     private void RefreshRollbackAvailability()
     {
-        if (IsManagedByWinGet)
-        {
-            CanRollBack = false;
-            return;
-        }
+        Version? kept = null;
+        CanRollBack = !IsManagedByWinGet && KeptCopyOnOffer(out kept);
+        RollBackLabel = kept is null ? RollBackPlainLabel : $"{RollBackPlainLabel} (v{kept.ToString(3)})";
+    }
 
-        try
-        {
-            CanRollBack = File.Exists(UpdateApplier.PreviousBuildPath(_updatesDir))
-                       && File.Exists(UpdateApplier.PreviousBuildHashPath(_updatesDir));
-        }
-        catch (IOException)
-        {
-            // An unreadable folder simply means no rollback offer — never a crash on the About tab.
-            CanRollBack = false;
-        }
-        catch (UnauthorizedAccessException)
-        {
-            CanRollBack = false;
-        }
+    /// <summary>Whether Go back can offer the kept copy, and the copy's own version when its record names one.</summary>
+    private bool KeptCopyOnOffer(out Version? kept)
+    {
+        kept = null;
+        if (!File.Exists(UpdateApplier.PreviousBuildPath(_updatesDir))
+            || !File.Exists(UpdateApplier.PreviousBuildHashPath(_updatesDir))
+            || !UpdateApplier.TryReadKeptCopyVersions(_updatesDir, out var own, out var installedBy)
+            || !UpdateService.IsSameRelease(installedBy, UpdateService.CurrentVersion))
+            return false;
+
+        kept = own;
+        return true;
     }
 
     // Persist on change rather than on close: the app can be closed to the tray or killed, and a
@@ -1270,9 +1276,10 @@ public sealed partial class AboutViewModel : ViewModelBase
         }
 
         var previous = UpdateApplier.PreviousBuildPath(_updatesDir);
-        if (!File.Exists(previous))
+        if (!KeptCopyOnOffer(out var kept))
         {
-            // Vanished since the button appeared (manual cleanup, disk tools). Reflect reality.
+            // Gone, or no longer the copy before this version, since the button appeared (manual cleanup, disk tools,
+            // an update made another way). Reflect reality.
             RollBackStatus = "The previous version is no longer available.";
             RefreshRollbackAvailability();
             return;
@@ -1301,22 +1308,29 @@ public sealed partial class AboutViewModel : ViewModelBase
         // Before the confirmation, deliberately: never ask the user to approve something that is then
         // refused. It also means the deny-write handle is already held while the dialog is open, so the
         // file cannot be swapped during the seconds the prompt sits on screen.
-        if (!UpdateApplier.TryOpenVerifiedPreviousBuild(_updatesDir, out var verifiedStream, out var why,
-                                                        out var previousHash))
+        //
+        // Off the UI thread: the saved build is the size of the app, and hashing it here froze the window with
+        // nothing shown (#2725). Install hashes its download the same way.
+        RollBackStatus = CheckingSavedVersionLine;
+        var (opened, verifiedStream, why, previousHash) = await Task.Run(() =>
+            (UpdateApplier.TryOpenVerifiedPreviousBuild(_updatesDir, out var stream, out var reason, out var hash),
+                stream, reason, hash));
+        if (!opened)
         {
             RollBackStatus = $"Cannot go back safely — {why}.";
             RefreshRollbackAvailability();
             return;
         }
 
+        RollBackStatus = string.Empty;
         try
         {
             if (!DialogService.Instance.Confirm(
-                    $"Go back to the version you had before the last update?\n\n" +
+                    $"Go back to {(kept is null ? "" : $"v{kept.ToString(3)}, ")}the version you had before the last update?\n\n" +
                     "SysManager will close and reopen on the older version. Anything the newer version " +
                     "fixed will come back, and your settings are not affected." +
                     QuitGuard.ActiveWorkWarning(),
-                    "Go back to the previous version"))
+                    RollBackPlainLabel))
             {
                 return;
             }

@@ -1322,17 +1322,11 @@ public sealed class AboutViewModelRollbackTests : IDisposable
     private string PreviousBuild => Path.Combine(_dir, UpdateApplier.PreviousBuildFileName);
 
     /// <summary>
-    /// Writes a retained build the way the applier does — the binary AND its checksum. A rollback is
-    /// only offered when both exist, because SysManager will not start a saved build it cannot verify,
+    /// Writes a retained build the way the applier does — the binary, its checksum and its versions. A rollback is
+    /// only offered when all of them exist, because SysManager will not start a saved build it cannot verify,
     /// so writing the binary alone sets up the legacy/tampered state rather than the healthy one.
     /// </summary>
-    private void RetainBuild(string content = "OLD-BUILD")
-    {
-        File.WriteAllText(PreviousBuild, content);
-        File.WriteAllText(
-            UpdateApplier.PreviousBuildHashPath(_dir),
-            UpdateApplier.ComputeFileHash(PreviousBuild));
-    }
+    private void RetainBuild(string content = "OLD-BUILD") => KeptCopy.Keep(_dir, content);
 
     [Fact]
     public void CanRollBack_IsFalse_WhenNoPreviousBuildWasRetained()
@@ -1368,6 +1362,56 @@ public sealed class AboutViewModelRollbackTests : IDisposable
         using var vm = NewVm();
 
         Assert.False(vm.CanRollBack);
+    }
+
+    [Fact]
+    public void CanRollBack_IsFalse_WhenTheKeptCopyHasNoVersionsRecord()
+    {
+        // A copy kept before the record existed: nothing says which update kept it, so nothing says it is the version
+        // before this one.
+        RetainBuild();
+        File.Delete(UpdateApplier.PreviousBuildVersionsPath(_dir));
+
+        using var vm = NewVm();
+
+        Assert.False(vm.CanRollBack);
+    }
+
+    [Fact]
+    public void CanRollBack_IsFalse_WhenTheVersionRunningIsNotTheOneThatUpdateInstalled()
+    {
+        // The update made here kept the copy, and one made through winget or a manual download has replaced what it
+        // installed since. The copy is not the version before this one any more (#2725).
+        KeptCopy.Keep(_dir, installedBy: new Version(1, 0, 1));
+
+        using var vm = NewVm();
+
+        Assert.False(vm.CanRollBack);
+        Assert.Equal("Go back to the previous version", vm.RollBackLabel);
+    }
+
+    [Fact]
+    public void RollBackLabel_NamesTheVersionItGoesBackTo()
+    {
+        RetainBuild();
+
+        using var vm = NewVm();
+
+        Assert.True(vm.CanRollBack);
+        Assert.Equal("Go back to the previous version (v1.0.0)", vm.RollBackLabel);
+    }
+
+    [Fact]
+    public void RollBackLabel_WithNoVersionToName_StaysPlain()
+    {
+        RetainBuild();
+        File.WriteAllText(UpdateApplier.PreviousBuildVersionsPath(_dir),
+            UpdateApplier.FormatKeptCopyVersions(null, UpdateService.CurrentVersion));
+
+        using var vm = NewVm();
+
+        Assert.True(vm.CanRollBack);
+        Assert.Equal("Go back to the previous version", vm.RollBackLabel);
     }
 
     [Fact]

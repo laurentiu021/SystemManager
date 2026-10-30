@@ -765,9 +765,11 @@ public sealed class UpdateService : IUpdateService
                 //
                 // The sidecar is not optional: TryOpenVerifiedPreviousBuild fails CLOSED on a missing
                 // hash, and nothing rewrites it except another successful apply, so losing it disabled
-                // rollback permanently while the button stayed enabled.
+                // rollback permanently while the button stayed enabled. The versions record is the same:
+                // without it Go back is not offered at all.
                 if (name.Equals(UpdateApplier.PreviousBuildFileName, StringComparison.OrdinalIgnoreCase) ||
-                    name.Equals(UpdateApplier.PreviousBuildFileName + ".sha256", StringComparison.OrdinalIgnoreCase))
+                    name.Equals(UpdateApplier.PreviousBuildFileName + ".sha256", StringComparison.OrdinalIgnoreCase) ||
+                    name.Equals(UpdateApplier.PreviousBuildFileName + ".versions", StringComparison.OrdinalIgnoreCase))
                 {
                     continue;
                 }

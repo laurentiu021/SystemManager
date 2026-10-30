@@ -12158,7 +12158,7 @@ public partial class ArchitectureTests
         Assert.Contains("if (!IsSha256(verifiedHash))", source, StringComparison.Ordinal);
         Assert.Contains("if (!IsSha256(args[3])) return false;", source, StringComparison.Ordinal);
 
-        var run = MemberSlice(source, "public static void Run(string targetExe, int oldPid, string expectedHash)");
+        var run = MemberSlice(source, "public static void Run(");
         Assert.False(string.IsNullOrWhiteSpace(run),
             "Run was not found — the slice is empty, so every check below would pass without reading code.");
 
@@ -12178,10 +12178,10 @@ public partial class ArchitectureTests
         Assert.Contains("return;", afterMismatch[..handedOn], StringComparison.Ordinal);
 
         // The install reads from the handle.
-        var swap = MemberSlice(source,
-            "private static void SwapAndRelaunch(FileStream verified, string targetExe, int oldPid, bool isRollback)");
+        var swap = MemberSlice(source, "private static void SwapAndRelaunch(");
         Assert.False(string.IsNullOrWhiteSpace(swap), "SwapAndRelaunch was not found.");
-        Assert.Contains("ApplyCopy(verified, targetExe, retainOutgoing: !isRollback)", swap, StringComparison.Ordinal);
+        Assert.Contains("ApplyCopy(verified, targetExe, out var failure, updatesDir: updatesDir, retainOutgoing: !isRollback)",
+            swap, StringComparison.Ordinal);
 
         // And the by-name form is CALLED nowhere in this file — it exists for the staging, retry and retention
         // tests only. Asserted over the whole file rather than inside Run: a second read added anywhere on the
@@ -12209,8 +12209,8 @@ public partial class ArchitectureTests
     /// The applier knows a rollback by where it runs from, the kept previous build, and installs it as one.
     /// </summary>
     /// <remarks>
-    /// Read from source because <c>Run</c> cannot be driven past its checks in a unit test: what follows relaunches the
-    /// target. The two halves it wires are tested on their own, <c>IsTheKeptCopy</c> and <c>ApplyCopy</c> without
+    /// Read from source because what <c>Run</c> installs is this process's own executable, and a test cannot run from
+    /// the kept copy. The two halves it wires are tested on their own, <c>IsTheKeptCopy</c> and <c>ApplyCopy</c> without
     /// <c>retainOutgoing</c>. Without the wiring a rollback kept the newer build in the copy's place, and Go back was
     /// then offered to install the version already running (#2725).
     /// </remarks>
@@ -12220,14 +12220,14 @@ public partial class ArchitectureTests
         var source = WithoutComments(File.ReadAllText(
             Path.Combine(TestPaths.AppProject(), "Services", "UpdateApplier.cs")));
 
-        var run = MemberSlice(source, "public static void Run(string targetExe, int oldPid, string expectedHash)");
+        var run = MemberSlice(source, "public static void Run(");
         Assert.False(string.IsNullOrWhiteSpace(run), "Run was not found.");
         Assert.Contains("var sourceExe = Environment.ProcessPath;", run, StringComparison.Ordinal);
-        Assert.Contains("SwapAndRelaunch(verified, targetExe, oldPid, isRollback: IsTheKeptCopy(sourceExe));", run,
+        Assert.Contains("var isRollback = IsTheKeptCopy(sourceExe, updatesDir);", run, StringComparison.Ordinal);
+        Assert.Contains("SwapAndRelaunch(verified, targetExe, oldPid, isRollback, start, updatesDir);", run,
             StringComparison.Ordinal);
 
-        var swap = MemberSlice(source,
-            "private static void SwapAndRelaunch(FileStream verified, string targetExe, int oldPid, bool isRollback)");
+        var swap = MemberSlice(source, "private static void SwapAndRelaunch(");
         Assert.False(string.IsNullOrWhiteSpace(swap), "SwapAndRelaunch was not found.");
         Assert.Contains("retainOutgoing: !isRollback", swap, StringComparison.Ordinal);
     }

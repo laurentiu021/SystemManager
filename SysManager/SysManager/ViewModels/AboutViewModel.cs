@@ -277,9 +277,39 @@ public sealed partial class AboutViewModel : ViewModelBase
 
         RefreshRollbackAvailability();
 
+        // Before the startup check, which looks for a failed update again sooner than it otherwise would.
+        if (UpdateApplier.TryTakeFailedSwap(_updatesDir, out var failed) && failed is not null) ShowFailedSwap(failed);
+
         if (autoCheck)
             InitializeAsync(InitAsync);
     }
+
+    /// <summary>
+    /// A failed update, said in the update card once a check finds that update again; null when there is none.
+    /// </summary>
+    private UpdateApplier.FailedSwap? _failedUpdate;
+
+    /// <summary>
+    /// Says that the update or the Go back SysManager closed for did not land. It reopened on the old version with
+    /// nothing said, because the build that reopens is started with no argument (#2725).
+    /// </summary>
+    private void ShowFailedSwap(UpdateApplier.FailedSwap failed)
+    {
+        if (failed.IsRollback)
+        {
+            RollBackStatus = $"Going back to v{failed.Version.ToString(3)} did not work: {failed.Reason}. "
+                + $"SysManager is still on v{UpdateService.CurrentVersion.ToString(3)}.";
+            return;
+        }
+
+        _failedUpdate = failed;
+        UpdateStatus = FailedUpdateLine(failed);
+    }
+
+    /// <summary>What the tab says about an update that did not land after SysManager closed for it.</summary>
+    internal static string FailedUpdateLine(UpdateApplier.FailedSwap failed) =>
+        $"The update to v{failed.Version.ToString(3)} could not be installed: {failed.Reason}. "
+        + $"SysManager is still on v{UpdateService.CurrentVersion.ToString(3)}.";
 
     /// <summary>
     /// Re-reads whether a retained previous build exists. Called on construction and after a
@@ -368,15 +398,20 @@ public sealed partial class AboutViewModel : ViewModelBase
             return;
         }
 
-        if (!UpdateCheckPreferenceService.ShouldCheckAtStartup(preference, DateTimeOffset.UtcNow))
+        // An update that did not land is looked for again now rather than a day after the check that found it; the
+        // switch that turns the startup check off still holds (#2725).
+        if (!UpdateCheckPreferenceService.ShouldCheckAtStartup(preference, DateTimeOffset.UtcNow)
+            && !(_failedUpdate is not null && preference.CheckOnStartup))
         {
             Log.Debug("Startup update check skipped (enabled={Enabled}, last={Last})",
                 preference.CheckOnStartup, preference.LastCheckUtc);
             // The release history is not fetched either: it comes from GitHub too, and Refresh loads
             // it when asked.
-            UpdateStatus = preference.CheckOnStartup
-                ? "Checked recently. Use Check for updates to look again."
-                : "Startup update check is off. Use Check for updates to look now.";
+            UpdateStatus = _failedUpdate is { } failed
+                ? $"{FailedUpdateLine(failed)} Use Check for updates to look for it again."
+                : preference.CheckOnStartup
+                    ? "Checked recently. Use Check for updates to look again."
+                    : "Startup update check is off. Use Check for updates to look now.";
             return;
         }
 
@@ -441,11 +476,19 @@ public sealed partial class AboutViewModel : ViewModelBase
                       + $"with winget — run \"winget upgrade {UpdateService.WingetPackageId}\" to update it. "
                       + "Winget sometimes takes longer than GitHub to offer a new release."
                     : $"Update available: {LatestVersionLabel} ({LatestPublishedLabel}). Click Download to get it.";
+
+                // In the card's warning row, which a check does not overwrite as it does the line above.
+                if (_failedUpdate is { } failed)
+                {
+                    _failedUpdate = null;
+                    InstallStopped(FailedUpdateLine(failed), unusable: false);
+                }
             }
             else
             {
                 UpdateAvailable = false;
                 UpdateStatus = $"You're up to date. Running v{UpdateService.CurrentVersion.ToString(3)}.";
+                _failedUpdate = null;
             }
         }
         catch (HttpRequestException ex)

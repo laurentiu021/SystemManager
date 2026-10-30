@@ -2422,7 +2422,13 @@ About offers Go back only while that version is the one running (`TryReadKeptCop
 and names the copy's version on the button and in its question; it moves last in a promotion,
 so a promotion cut short leaves the earlier record, which names another version. A pending set
 left by an interrupted run matches the pattern below and goes with the next download. Before `Install` or `Go back` confirms, `WhyItCannotReplace`
-asks what `Run` will: `IsValidApplyTarget`, and whether the folder takes a new file. The
+asks what `Run` will: `IsValidApplyTarget`, and whether the folder takes a new file. Once the
+target is known to be this application's own executable, every refusal in `Run` (the build
+cannot be opened, came without a checksum or does not match it) and a swap that fails reopen
+the build that was there and record why in `last-update-failed.txt`; About takes that record
+once when it starts and says it, beside Go back for a rollback and in the update card for an
+update, whose check it runs at once instead of a day later. `Run` starts the target through a
+`launch` parameter, so the tests drive it end to end without starting anything. The
 applier decides only after SysManager has closed, so under Program Files the update used to
 close SysManager for good. The atomic move makes an
 *interrupted* update safe; it does nothing for an update that *succeeds* into a

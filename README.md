@@ -2355,6 +2355,11 @@ offers, "rate us" prompts:
   update a copy in Program Files or another folder Windows protects, or one in a folder it
   cannot write to. Install and Go back say so before they ask, and Install offers Manual
   download, instead of closing SysManager for an update that was then refused.
+- **An update that cannot finish says why when SysManager reopens.** If replacing SysManager's
+  file fails once it has closed (Windows refuses, the drive is full, or the new version does
+  not match its checksum), the version that was there opens again. About names the update and
+  the reason, and looks for the update again at once rather than a day later. A Go back that
+  cannot finish says so beside its button.
 - **A winget-installed copy updates through winget, not here.** Detected by its location under
   `WinGet\Packages` or its PATH shim at `WinGet\Links`, Download and Install are not offered for
   it — only the command to run instead, `winget upgrade laurentiu021.SysManager`. Installing in

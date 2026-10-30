@@ -86,11 +86,13 @@ public sealed partial class PerformanceService : IDisposable
     private static partial bool SystemParametersInfoSet(
         uint uiAction, uint uiParam, int pvParam, uint fWinIni);
 
-    public PerformanceService(IPowerShellRunner ps, RestorePointService restorePoints)
+    /// <summary>The service over the machine, with its record in <paramref name="configDir"/>.</summary>
+    /// <param name="configDir">Where the record lives; the real profile unless the shell's no-container graph passes its own.</param>
+    public PerformanceService(IPowerShellRunner ps, RestorePointService restorePoints, string? configDir = null)
         : this(
             ps,
             restorePoints,
-            AppDataFolders.Local,
+            configDir ?? AppDataFolders.Local,
             System.Diagnostics.Process.GetProcesses,
             writeGpu: WriteGpuToRegistry,
             setUiEffects: SetUiEffects,

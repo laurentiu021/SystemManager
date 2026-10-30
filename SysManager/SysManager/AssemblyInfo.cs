@@ -11,6 +11,7 @@ using System.Windows;
 [assembly: AssemblyTrademark("SysManager by laurentiu021")]
 [assembly: InternalsVisibleTo("SysManager.Tests")]
 [assembly: InternalsVisibleTo("SysManager.IntegrationTests")]
+[assembly: InternalsVisibleTo("SysManager.UITests")]
 
 [assembly: ThemeInfo(
     ResourceDictionaryLocation.None,            //where theme specific resource dictionaries are located

@@ -27,8 +27,28 @@ public sealed class AppFixture : IDisposable
     public Window MainWindow { get; }
     private AutomationElement CurrentViewHost { get; }
 
+    /// <summary>Where the app records that the Welcome screen was seen, in the profile of whoever runs the tests.</summary>
+    private readonly string _welcomeRecord = Path.Join(Helpers.AppDataFolders.Local, Services.FirstRunService.FileName);
+
+    /// <summary>That record as it was before the launch, or null when there was none.</summary>
+    private readonly byte[]? _welcomeBefore;
+
     public AppFixture()
     {
+        // A copy started while one already runs for this account, in the notification area too, hands over to it and
+        // exits with code 0, and every test then failed as a crash on launch (#2740). Said here, before anything starts.
+        if (Mutex.TryOpenExisting(global::SysManager.App.MutexNameFor(global::SysManager.App.CurrentUserKey()), out var running))
+        {
+            running.Dispose();
+            throw new InvalidOperationException(
+                "SysManager is already running for this account, so the copy these tests start would hand over to it and "
+                + "close. Close it, from the notification area too, and run the UI tests again.");
+        }
+
+        // Closing the Welcome screen below records it as seen, and the next run never showed it (#2740). Put back as it
+        // was when the fixture is disposed.
+        _welcomeBefore = File.Exists(_welcomeRecord) ? File.ReadAllBytes(_welcomeRecord) : null;
+
         var exe = FindExecutable();
         App = Application.Launch(new ProcessStartInfo
         {
@@ -423,6 +443,21 @@ public sealed class AppFixture : IDisposable
         catch (Exception ex) { System.Diagnostics.Debug.WriteLine($"AppFixture: app teardown failed: {ex.Message}"); }
         try { Automation.Dispose(); }
         catch (Exception ex) { System.Diagnostics.Debug.WriteLine($"AppFixture: automation teardown failed: {ex.Message}"); }
+        RestoreTheWelcomeRecord();
+    }
+
+    /// <summary>Puts the Welcome screen's record back as it was before the launch: as it was, or not there.</summary>
+    private void RestoreTheWelcomeRecord()
+    {
+        try
+        {
+            if (_welcomeBefore is null) File.Delete(_welcomeRecord);
+            else File.WriteAllBytes(_welcomeRecord, _welcomeBefore);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            System.Diagnostics.Debug.WriteLine($"AppFixture: the Welcome record could not be put back: {ex.Message}");
+        }
     }
 }
 

@@ -261,16 +261,17 @@ public partial class ArchitectureTests
     }
 
     /// <summary>
-    /// The shell's no-container graph keeps what its looks record out of the user's folder (#1507).
+    /// The shell's no-container graph keeps every store it builds out of the user's folder (#1507, #2740).
     /// </summary>
     /// <remarks>
     /// <see cref="Tests_NeverLeaveAConfigDirAtTheRealProfile"/> reads the tests, and this graph is app code the tests
     /// build: <c>new MainWindowViewModel()</c> constructs every tab's view model at once, ten times over in the
-    /// integration suite. Most of them only read when they are built, which is why the graph otherwise builds its
-    /// stores over the real profile, as production does. Opening Settings Watchdog or Recent Changes is a look, and a
-    /// look writes: when each changed setting was first seen, and the list of installed programs. Over the real
-    /// profile, every build of the graph made a look in the records of whoever ran the suite, and dated their next
-    /// "between your look on ... and ..." from a look nobody took.
+    /// integration suite. Opening Settings Watchdog or Recent Changes is a look, and a look writes: when each changed
+    /// setting was first seen, and the list of installed programs. Over the real profile, every build of the graph
+    /// made a look in the records of whoever ran the suite. A list of the stores that write was the guard once, and the
+    /// Dashboard's crash marker, which it takes and deletes, and About's record of its startup check, after which the
+    /// real app skipped its own for a day, were not on it. So the same scan as the tests' guard, over every type with
+    /// a <c>configDir</c>: a store is covered from the day it gains the seam.
     /// </remarks>
     [Fact]
     public void TheDesignerGraph_KeepsWhatItsLooksRecordOutOfTheUsersFolder()
@@ -280,19 +281,19 @@ public partial class ArchitectureTests
         Assert.True(at > 0, "BuildDesignerGraph was not found in MainWindowViewModel.cs, so nothing below is checked.");
         var graph = WithStringsBlanked(WithoutComments(shell[at..]));
 
-        // FirstRunService writes only when the graph's Welcome screen is closed, which no constructor does. Kept out of
-        // the user's folder anyway: a test that closed it there would record the Welcome screen as seen, and the user
-        // would never be shown it.
-        foreach (var store in new[] { nameof(SettingsWatchdogService), nameof(InstalledProgramsHistory), nameof(AppAlertHistory),
-                                      nameof(FirstRunService) })
-        {
-            var built = Regex.Matches(graph, $@"\bnew\s+{store}\s*\((?<args>[^()]*)\)")
-                .Select(m => m.Groups["args"].Value.Trim())
-                .ToList();
-            Assert.True(built.Count > 0, $"BuildDesignerGraph builds no {store}, so this checks nothing for it.");
-            Assert.All(built, args => Assert.True(args.StartsWith("lookRecords", StringComparison.Ordinal),
-                $"BuildDesignerGraph builds {store}({args}) over the real profile. Give it lookRecords as its folder."));
-        }
+        var seams = ConfigDirSeams();
+        var built = ConfigDirConstructions(graph, seams).ToList();
+        Assert.True(built.Count >= 18,
+            $"only {built.Count} constructions of a type with a configDir were found in BuildDesignerGraph, and 18 were "
+            + "measured. The scan stopped matching, so this would pass while checking nothing.");
+
+        var overTheRealProfile = built
+            .Where(b => LeavesConfigDirAtItsDefault(b.Arguments, seams[b.Type]))
+            .Select(b => $"new {b.Type}({string.Join(", ", b.Arguments)})")
+            .ToList();
+        Assert.True(overTheRealProfile.Count == 0,
+            "BuildDesignerGraph builds these over the real profile, %LocalAppData%\\SysManager. Give each lookRecords as "
+            + "its folder (#2740):\n  " + string.Join("\n  ", overTheRealProfile));
     }
 
     /// <summary>

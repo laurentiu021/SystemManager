@@ -255,8 +255,15 @@ public sealed partial class BandwidthMonitorViewModel : ElevatedViewModelBase
     /// only when elevated, requested, and a factory exists AND the ETW session actually starts;
     /// otherwise the safe connection source is used. Disposes any previous source first.
     /// </summary>
+    /// <remarks>
+    /// A precise source that does not start unticks the box and says so, rather than leave it ticked over the default
+    /// view (#2707). Unticking builds the default source through the change handler of <see cref="PreciseRequested"/>.
+    /// </remarks>
     private void StartSource()
     {
+        // A precise source stopped as the tab was hidden finishes first: its stop finds the session by the name a new
+        // one takes, so a stop still running could end the new trace.
+        PreciseStopping.Wait();
         _source?.Dispose();
         _source = null;
         PreciseMode = false;
@@ -272,9 +279,11 @@ public sealed partial class BandwidthMonitorViewModel : ElevatedViewModelBase
                 LetRefreshReplaceStatus();
                 return;
             }
-            // ETW couldn't start — fall back cleanly.
             etw.Dispose();
             Log.Debug("Bandwidth: precise mode requested but ETW unavailable; using connection mode");
+            PreciseRequested = false;
+            StatusMessage = PreciseCouldNotStart;
+            return;
         }
 
         var safe = _connectionSourceFactory();
@@ -304,6 +313,16 @@ public sealed partial class BandwidthMonitorViewModel : ElevatedViewModelBase
     {
         var source = _source;
         if (source is null) return;
+
+        // Precise mode's trace can end on its own: stopped from outside by its name, or by a fault in its processing. It
+        // went on being sampled as a live trace that read zero (#2707). Unticking builds the default source.
+        if (PreciseMode && !source.IsAvailable)
+        {
+            Log.Information("Bandwidth: the precise trace ended; using connection mode");
+            PreciseRequested = false;
+            StatusMessage = PreciseEnded;
+            return;
+        }
 
         // Offload HERE rather than trusting each source to do it. ConnectionBandwidthSource wrapped its
         // own work in Task.Run; EtwBandwidthSource returned Task.FromResult and so ran inline — under the
@@ -750,13 +769,51 @@ public sealed partial class BandwidthMonitorViewModel : ElevatedViewModelBase
 
     partial void OnIsActiveChanged(bool value)
     {
-        // Only the poll loop honours IsActive (it skips sampling while hidden). Nothing to start/stop
-        // here — but clear a stale alert when leaving so it doesn't linger on the hidden tab.
+        // The poll loop skips sampling while hidden; clear a stale alert when leaving so it doesn't linger on the
+        // hidden tab, and stop precise mode's trace until the tab is back.
         if (!value)
         {
             AlertMessage = "";
             _primeNextSample = true;
+            StopPreciseWhileHidden();
+            return;
         }
+
+        if (_restartPrecise)
+        {
+            _restartPrecise = false;
+            StartSource();
+        }
+    }
+
+    /// <summary>What the status line says when precise mode was asked for and its trace could not start.</summary>
+    internal const string PreciseCouldNotStart =
+        "Precise per-app rates could not start, so the tab shows activity by connection. Tick the box to try again.";
+
+    /// <summary>What the status line says when precise mode's trace ended while the tab showed it.</summary>
+    internal const string PreciseEnded =
+        "Precise per-app rates stopped because the kernel trace ended, so the tab shows activity by connection. "
+        + "Tick the box to start it again.";
+
+    // True while precise mode's trace is stopped because the tab is hidden, so showing it starts the trace again.
+    private bool _restartPrecise;
+
+    /// <summary>The stop of precise mode's trace as the tab was last hidden. Internal so a test can await it.</summary>
+    internal Task PreciseStopping { get; private set; } = Task.CompletedTask;
+
+    /// <summary>Stops precise mode's kernel trace while the tab is hidden, the window included.</summary>
+    /// <remarks>
+    /// Nothing samples it while the tab is hidden, and it went on receiving every send and receive on the PC, while its
+    /// table gained every process that touched the network meanwhile, which only a sample evicts (#2707). It starts
+    /// again when the tab is shown, so its totals count from then. Stopped off the UI thread: the stop takes a tenth
+    /// of a second or more.
+    /// </remarks>
+    private void StopPreciseWhileHidden()
+    {
+        if (!PreciseMode || _source is not { } precise) return;
+        _source = null;
+        _restartPrecise = true;
+        PreciseStopping = Task.Run(precise.Dispose);
     }
 
     /// <summary>

@@ -1195,8 +1195,10 @@ Answers "what is actually using my space?" by listing the biggest files in one p
   session data totals per app (like Task Manager's Network column), enable precise
   mode; it uses a Windows kernel trace and so **needs administrator**. Traffic between
   programs on the same PC is left out, as in the default view. The tab offers it only
-  when you're already running as administrator and falls back to the no-admin view
-  automatically if the trace can't start — it never breaks the tab
+  when you're already running as administrator. If the trace can't start, or stops while
+  the tab is open, the tab goes back to the no-admin view, unticks the box and says so.
+  The trace runs only while the tab is on screen, so its totals count from when you last
+  opened it
 - The Download, Upload and Session total columns appear only in precise mode, and sort by the
   figure itself, so 800 KB/s comes before 1.2 MB/s
 - **Export CSV** saves the per-app list to a file you choose the location for, with the raw

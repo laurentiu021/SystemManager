@@ -225,6 +225,10 @@ public partial class App : Application
         // service is disposed with the DI container on exit (stops the loop).
         Services.GetRequiredService<ResourceHistoryService>().Start();
 
+        // Bandwidth Monitor's precise-mode trace outlives a SysManager that was killed with it on, and kept its buffers
+        // until precise mode was next turned on (#2707). Off the UI thread: it asks Windows for the session.
+        if (AdminHelper.IsElevated()) _ = Task.Run(EtwBandwidthSource.StopLeftoverSession);
+
         base.OnStartup(e);
 
         ThemeService.Instance.Initialize();

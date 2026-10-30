@@ -10,6 +10,28 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.136.30] - 2026-10-30
+
+**Bandwidth Monitor's precise mode no longer freezes the tab when its trace fails, and stops the
+trace while the tab is hidden.**
+
+### Fixed
+- When the kernel trace behind precise mode failed to start with an error SysManager did not
+  expect, for example because other tools had taken every trace session Windows allows, the tab
+  froze: the list, the figures and the chart stopped, and the box stayed ticked. A trace that
+  cannot start now leaves the tab on the default view, unticks the box and says so.
+- A trace that ended while the tab was open, stopped by another tool for example, went on being
+  shown as a live trace with every rate at zero. The tab now goes back to the default view and
+  says that the trace ended.
+- The trace kept running while the tab was hidden or SysManager sat in the notification area,
+  receiving every send and receive on the PC with nothing on screen to use it, and its list of
+  apps grew with every program that touched the network. It now stops while the tab is hidden
+  and starts again when you come back, so the per-app totals count from then.
+- A trace left running when SysManager was ended by force, by a crash or from Task Manager, kept
+  running with 64 MB of buffers until precise mode was next turned on. SysManager now stops it
+  when it starts as administrator, and the trace asks Windows for 8 MB. All four were present
+  since the tab was added in 1.54.0.
+
 ## [1.136.29] - 2026-10-30
 
 **Performance Mode waits for game mode before it changes the settings game mode holds.**

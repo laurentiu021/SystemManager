@@ -209,8 +209,8 @@ public class EtwBandwidthSourceTests
     /// Not elevated, <c>Start</c> refuses cleanly instead of throwing.
     /// </summary>
     /// <remarks>
-    /// The whole fallback story depends on it: the view-model reads <c>IsAvailable</c> and silently uses the
-    /// no-admin source instead.
+    /// The whole fallback story depends on it: the view-model reads <c>IsAvailable</c> and uses the no-admin
+    /// source instead.
     /// <para>Used to open with <c>if (AdminHelper.IsElevated()) return;</c> and the comment "elevated CI
     /// runner: the negative path is moot" — which was the clearest statement anywhere that this assertion ran
     /// on no machine at all. <c>Start</c> asks <c>AdminHelper.IsElevated()</c> before it touches TraceEvent,
@@ -222,6 +222,35 @@ public class EtwBandwidthSourceTests
         using var notElevated = Helpers.AdminHelper.ForceElevation(false);
         var clock = new TestClock();
         using var src = new EtwBandwidthSource(clock);
+
+        Assert.False(src.Start());
+        Assert.False(src.IsAvailable);
+    }
+
+    /// <summary>
+    /// Elevated, a kernel session that cannot open is a false start, whatever it throws (#2707).
+    /// </summary>
+    /// <remarks>
+    /// The catch named six types, and TraceEvent turns most StartTrace errors into a <c>COMException</c>, every
+    /// logger slot taken by other tools for one. That one escaped the tab's rebuild, which had already dropped the old
+    /// source, and the tab froze with no source at all. The session's opening is a seam here, so nothing touches ETW
+    /// on the PC running the suite.
+    /// </remarks>
+    [Theory]
+    [InlineData("COMException")]
+    [InlineData("ArgumentException")]
+    [InlineData("NotSupportedException")]
+    public void Start_WhenTheSessionCannotOpen_IsAFalseStart_WhateverItThrows(string thrown)
+    {
+        Exception error = thrown switch
+        {
+            "COMException" => new System.Runtime.InteropServices.COMException(
+                "Insufficient system resources exist to complete the requested service.", unchecked((int)0x800705AA)),
+            "ArgumentException" => new ArgumentException("A session property Windows refused."),
+            _ => new NotSupportedException("Not on this Windows."),
+        };
+        using var elevated = Helpers.AdminHelper.ForceElevation(true);
+        using var src = new EtwBandwidthSource(new TestClock(), () => throw error);
 
         Assert.False(src.Start());
         Assert.False(src.IsAvailable);

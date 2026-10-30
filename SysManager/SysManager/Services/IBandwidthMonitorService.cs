@@ -55,14 +55,15 @@ public interface IBandwidthMonitorService : IDisposable
 
     /// <summary>
     /// True once the source is initialized and producing data. An ETW source that failed to
-    /// start its kernel session reports false so the ViewModel can fall back to the safe source.
+    /// start its kernel session reports false so the ViewModel can fall back to the safe source,
+    /// and so does one whose trace has ended since; the ViewModel reads it on every poll (#2707).
     /// </summary>
     bool IsAvailable { get; }
 
     /// <summary>
     /// Starts the underlying sampler (opens the ETW session, or primes the interface counters).
     /// Idempotent. Returns false if the source could not start (e.g. ETW needs admin) so the
-    /// caller can fall back.
+    /// caller can fall back. Never throws: a start that fails for any reason returns false.
     /// </summary>
     bool Start();
 

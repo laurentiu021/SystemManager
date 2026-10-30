@@ -39,16 +39,22 @@ public class BandwidthMonitorViewModelTests : IDisposable
     }
 
     // A deterministic in-memory source that yields a fixed snapshot on demand.
-    private sealed class FakeSource(BandwidthMode mode, bool available, BandwidthSnapshot? snapshot = null) : IBandwidthMonitorService
+    private sealed class FakeSource(
+        BandwidthMode mode, bool available, BandwidthSnapshot? snapshot = null, Action? onStart = null) : IBandwidthMonitorService
     {
         private readonly BandwidthSnapshot _snap = snapshot
             ?? new BandwidthSnapshot(mode, 0, 0, []);
         public BandwidthMode Mode => mode;
         public bool IsAvailable { get; private set; }
         public bool StartReturnsAvailable { get; init; } = available;
-        public bool Start() { IsAvailable = StartReturnsAvailable; return StartReturnsAvailable; }
+        public bool Started { get; private set; }
+        public bool Disposed { get; private set; }
+        public bool Start() { Started = true; onStart?.Invoke(); IsAvailable = StartReturnsAvailable; return StartReturnsAvailable; }
         public Task<BandwidthSnapshot> SampleAsync(CancellationToken ct = default) => Task.FromResult(_snap);
-        public void Dispose() { }
+        public void Dispose() => Disposed = true;
+
+        // The trace ending on its own, as a kernel session stopped from outside does.
+        public void End() => IsAvailable = false;
     }
 
     private BandwidthMonitorViewModel NewVm(
@@ -326,6 +332,128 @@ public class BandwidthMonitorViewModelTests : IDisposable
 
         Assert.False(vm.PreciseMode);
         Assert.Contains("needs administrator", vm.ModeDescription, StringComparison.Ordinal);
+        // Not left ticked over the default view, and the line says why (#2707).
+        Assert.False(vm.PreciseRequested);
+        Assert.Equal(BandwidthMonitorViewModel.PreciseCouldNotStart, vm.StatusMessage);
+    }
+
+    // ── Precise mode's trace ends, or the tab is hidden (#2707) ──────────────────
+    //
+    // Nothing read IsAvailable after the start, so a trace stopped from outside went on showing zero rates as a live
+    // one, and the trace kept running while the tab was hidden.
+
+    [Fact]
+    public async Task APreciseTraceThatEnds_FallsBackToConnections_AndSaysSo()
+    {
+        using var elevated = AdminHelper.ForceElevation(true);
+        var precise = new FakeSource(BandwidthMode.PreciseEtw, available: true);
+        using var vm = NewVm(etwFactory: () => precise);
+        vm.PreciseRequested = true;
+        Assert.True(vm.PreciseMode, "precondition: precise mode is on");
+
+        precise.End();
+        await PollOnceAsync(vm);
+
+        Assert.False(vm.PreciseMode);
+        Assert.False(vm.PreciseRequested);
+        Assert.True(precise.Disposed);
+        Assert.Equal(BandwidthMonitorViewModel.PreciseEnded, vm.StatusMessage);
+        Assert.Contains("connection", vm.ModeDescription, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public async Task HidingTheTab_StopsThePreciseTrace_AndShowingItStartsAnotherOne()
+    {
+        using var elevated = AdminHelper.ForceElevation(true);
+        var made = new List<FakeSource>();
+        using var vm = NewVm(etwFactory: () =>
+        {
+            var source = new FakeSource(BandwidthMode.PreciseEtw, available: true);
+            made.Add(source);
+            return source;
+        });
+        vm.IsActive = true;
+        vm.PreciseRequested = true;
+        var first = Assert.Single(made);
+
+        vm.IsActive = false;
+        await vm.PreciseStopping;
+        Assert.True(first.Disposed);
+
+        vm.IsActive = true;
+
+        Assert.Equal(2, made.Count);
+        Assert.True(made[1].Started);
+        Assert.False(made[1].Disposed);
+        Assert.True(vm.PreciseMode);
+        Assert.True(vm.PreciseRequested);
+    }
+
+    // A precise source whose stop holds until the test lets it finish.
+    private sealed class HeldStopSource(System.Collections.Concurrent.ConcurrentQueue<string> order,
+        ManualResetEventSlim release) : IBandwidthMonitorService
+    {
+        public BandwidthMode Mode => BandwidthMode.PreciseEtw;
+        public bool IsAvailable { get; private set; }
+        public bool Start() { IsAvailable = true; return true; }
+        public Task<BandwidthSnapshot> SampleAsync(CancellationToken ct = default) =>
+            Task.FromResult(new BandwidthSnapshot(Mode, 0, 0, []));
+        public void Dispose()
+        {
+            release.Wait(TimeSpan.FromSeconds(30));
+            order.Enqueue("first stopped");
+        }
+    }
+
+    /// <summary>
+    /// Shown while the hidden tab's trace is still stopping, the tab starts the next trace only once the stop is done.
+    /// </summary>
+    /// <remarks>
+    /// The stop runs off the UI thread, and it finds the kernel session by the name the next trace takes, so a stop
+    /// still running could end the new trace. The half second is how long the next start is given to go ahead while it
+    /// must not, which no machine needs to show it; the pass never waits on it to be right.
+    /// </remarks>
+    [Fact]
+    public async Task ShowingTheTab_WhileTheHiddenTraceIsStopping_StartsTheNextOneOnlyAfterTheStop()
+    {
+        using var elevated = AdminHelper.ForceElevation(true);
+        var order = new System.Collections.Concurrent.ConcurrentQueue<string>();
+        using var release = new ManualResetEventSlim(false);
+        var made = 0;
+        using var vm = NewVm(etwFactory: () => ++made == 1
+            ? new HeldStopSource(order, release)
+            : new FakeSource(BandwidthMode.PreciseEtw, available: true, onStart: () => order.Enqueue("second started")));
+        vm.IsActive = true;
+        vm.PreciseRequested = true;
+        vm.IsActive = false;
+
+        var show = Task.Run(() => vm.IsActive = true);
+        Assert.False(SpinWait.SpinUntil(() => order.Contains("second started"), TimeSpan.FromMilliseconds(500)),
+            "the next trace started while the hidden tab's trace was still stopping");
+        release.Set();
+        await show;
+
+        Assert.Equal(["first stopped", "second started"], order);
+        Assert.True(vm.PreciseMode);
+    }
+
+    [Fact]
+    public void HidingTheTab_InConnectionMode_RebuildsNothing()
+    {
+        var made = 0;
+        using var vm = NewVm(connFactory: () =>
+        {
+            made++;
+            return new FakeSource(BandwidthMode.Connections, available: true);
+        });
+        Assert.Equal(1, made);
+
+        vm.IsActive = true;
+        vm.IsActive = false;
+        vm.IsActive = true;
+
+        Assert.Equal(1, made);
+        Assert.False(vm.PreciseMode);
     }
 
     /// <summary>

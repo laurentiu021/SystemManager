@@ -96,10 +96,15 @@ jobs:
       attestations: write
 
     steps:
+      # persist-credentials: false. The default left this job's contents: write token in git's config for every later
+      # step, and this job restores and builds NuGet packages, whose MSBuild targets and analyzers run inside it: any of
+      # them could have read it and replaced a published exe together with its .sha256 (#2743). No step needs git to be
+      # signed in: the release and script actions take the token as an input, and the gh steps read GH_TOKEN.
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: ${{ inputs.tag || github.ref }}
+          persist-credentials: false
 
       # The attestation further down signs with this run's own commit and ref, GITHUB_SHA and
       # GITHUB_REF, not with the commit checked out above. A release dispatched from main builds the
@@ -785,6 +790,31 @@ jobs:
           }
           Write-Host "The rebuilt exe is byte-identical to the one already published."
 
+      # Latest used to follow creation date: with no make_latest, GitHub makes every newly created release Latest, so a
+      # re-dispatch of an older tag, or two tags whose runs overlap, made the older build Latest, and with it the README
+      # download link and the in-app update check, which reads releases/latest (#2743). Only the highest published
+      # version is Latest now. Compared with the published releases rather than the tags: Latest is a release, and a
+      # higher tag whose own run failed has none yet.
+      - name: Decide whether this release is Latest
+        id: latest
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          # Every release, not the first page: there were 978 when this was written. Drafts and pre-releases are left
+          # out because GitHub never makes either Latest, so a higher one would keep every real release from it.
+          $tags = gh release list --repo $env:GITHUB_REPOSITORY --limit 10000 --exclude-drafts --exclude-pre-releases `
+              --json tagName --jq '.[].tagName'
+          if ($LASTEXITCODE -ne 0) { throw "Could not list the published releases to decide which one is Latest." }
+          $highest = @($tags) | Where-Object { $_ -match '^v\d+\.\d+\.\d+$' } |
+              ForEach-Object { [version]$_.Substring(1) } | Sort-Object -Descending | Select-Object -First 1
+          $mine = [version]$env:VERSION
+          $isLatest = ($null -eq $highest) -or ($mine -ge $highest)
+          "make_latest=$($isLatest.ToString().ToLowerInvariant())" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
+          if ($isLatest) { Write-Host "v$mine is the highest published version, so it is Latest." }
+          else { Write-Host "v$mine is below v$highest, which stays Latest." }
+
       - name: Create GitHub Release
         id: release
         uses: softprops/action-gh-release@efb35369e0ad2afab669f228072c1b0d510eae64 # v3
@@ -794,6 +824,7 @@ jobs:
           body_path: release-notes.md
           draft: false
           prerelease: false
+          make_latest: ${{ steps.latest.outputs.make_latest }}
           # The step above is what makes re-publishing safe: it has already refused a rebuild whose
           # bytes differ from what this tag published, so reaching here means the assets are the
           # same ones. Left additive on purpose rather than set to fail on an existing file, because

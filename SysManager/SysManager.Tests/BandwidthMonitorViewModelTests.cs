@@ -157,6 +157,87 @@ public class BandwidthMonitorViewModelTests : IDisposable
         Assert.False(vm.HasAlert);
     }
 
+    // ── the "Alert over" box (#2706) ──
+    //
+    // It bound the number and wrote it back on every key, so "2." became "2", a comma was a thousands separator, and an
+    // emptied box went red and kept its last number.
+
+    [Theory]
+    [InlineData("2.", 2.0)]
+    [InlineData("2.5", 2.5)]
+    [InlineData("2,5", 2.5)]
+    [InlineData(" 12 ", 12.0)]
+    [InlineData("0", 0.0)]
+    [InlineData("", 0.0)]
+    public void TheAlertBox_SetsTheThreshold_FromWhatIsTyped(string typed, double expected)
+    {
+        using var vm = NewVm();
+        vm.AlertThresholdText = "7";
+
+        vm.AlertThresholdText = typed;
+
+        Assert.Equal(expected, vm.AlertThresholdMbps);
+        Assert.Equal(typed, vm.AlertThresholdText);
+        Assert.NotEqual(BandwidthMonitorViewModel.ThresholdComplaint, vm.StatusMessage);
+    }
+
+    [Theory]
+    [InlineData("abc")]
+    [InlineData("-3")]
+    [InlineData("1,000.5")]
+    [InlineData("NaN")]
+    public void TheAlertBox_WithoutANumber_KeepsTheThreshold_AndSaysWhy(string typed)
+    {
+        using var vm = NewVm();
+        vm.AlertThresholdText = "7";
+
+        vm.AlertThresholdText = typed;
+
+        Assert.Equal(7.0, vm.AlertThresholdMbps);
+        Assert.Equal(BandwidthMonitorViewModel.ThresholdComplaint, vm.StatusMessage);
+    }
+
+    // The complaint stays through the once-a-second poll, as a refusal does (#2532), and gives way to it once the box
+    // holds a number again.
+    [Fact]
+    public async Task TheAlertBox_Complaint_GivesWayToThePoll_OnceTheBoxHoldsANumber()
+    {
+        using var vm = NewVm();
+        vm.AlertThresholdText = "abc";
+        await PollOnceAsync(vm);
+        Assert.Equal(BandwidthMonitorViewModel.ThresholdComplaint, vm.StatusMessage);
+
+        vm.AlertThresholdText = "3";
+        await PollOnceAsync(vm);
+
+        Assert.Equal(3.0, vm.AlertThresholdMbps);
+        Assert.Equal("No network activity from user apps right now.", vm.StatusMessage);
+    }
+
+    [Fact]
+    public void TheAlertBox_ReadsAComma_WhateverThePcsLanguage()
+    {
+        var previous = CultureInfo.CurrentCulture;
+        try
+        {
+            foreach (var culture in new[] { "en-US", "ro-RO", "de-DE" })
+            {
+                CultureInfo.CurrentCulture = new CultureInfo(culture);
+                using var vm = NewVm();
+
+                vm.AlertThresholdText = "2,5";
+                Assert.Equal(2.5, vm.AlertThresholdMbps);
+
+                vm.AlertThresholdText = "2.5";
+                Assert.Equal(2.5, vm.AlertThresholdMbps);
+            }
+        }
+        finally
+        {
+            CultureInfo.CurrentCulture = previous;
+        }
+    }
+
     [Theory]
     [InlineData("ro-RO")]
     [InlineData("de-DE")]

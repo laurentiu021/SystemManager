@@ -122,6 +122,23 @@ public sealed partial class BandwidthMonitorViewModel : ElevatedViewModelBase
     /// <summary>Alert threshold in Mbps for total throughput; 0 disables the alert.</summary>
     [ObservableProperty] private double _alertThresholdMbps;
 
+    /// <summary>
+    /// What the "Alert over" box holds, exactly as typed. A number of Mbps sets <see cref="AlertThresholdMbps"/>, with
+    /// a point or a comma before its decimals; an empty box turns the alert off; anything else leaves the threshold as it
+    /// was and says why on the status line.
+    /// </summary>
+    /// <remarks>
+    /// The box bound the number itself and updated it on every key, so each key press converted the text and wrote the
+    /// number back: typing "2." showed "2" and the next key made it 25, and WPF read the comma ro-RO or de-DE users type
+    /// as a thousands separator, so "2,5" became 25 as well. Clearing the box to retype drew a red outline with no message
+    /// and kept the last number left in it (#2706). A string the view model reads leaves the text alone.
+    /// </remarks>
+    [ObservableProperty] private string _alertThresholdText = "0";
+
+    /// <summary>What the status line says when the "Alert over" box does not hold a number.</summary>
+    internal const string ThresholdComplaint =
+        "Alert over needs a number of Mbps, such as 2.5. 0 or an empty box turns the alert off.";
+
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(HasAlert))]
     private string _alertMessage = "";
@@ -574,6 +591,39 @@ public sealed partial class BandwidthMonitorViewModel : ElevatedViewModelBase
     }
 
     partial void OnAlertThresholdMbpsChanged(double value) => EvaluateAlert();
+
+    partial void OnAlertThresholdTextChanged(string value)
+    {
+        if (TryReadThreshold(value, out var mbps))
+        {
+            AlertThresholdMbps = mbps;
+            if (StatusMessage == ThresholdComplaint) LetRefreshReplaceStatus();
+        }
+        else
+        {
+            StatusMessage = ThresholdComplaint;
+        }
+    }
+
+    /// <summary>
+    /// The threshold in <paramref name="text"/>: a number of Mbps, zero or more, with a point or a comma before its
+    /// decimals, or 0 for an empty box. False for anything else.
+    /// </summary>
+    /// <remarks>
+    /// Either mark, whatever the PC's language, since the tab writes its own figures with a point and a user writes
+    /// decimals the way their keyboard does. No thousands separator is read, so neither mark can turn 2,5 into 25.
+    /// </remarks>
+    internal static bool TryReadThreshold(string? text, out double mbps)
+    {
+        mbps = 0;
+        if (string.IsNullOrWhiteSpace(text)) return true;
+        if (!double.TryParse(text.Trim().Replace(',', '.'), NumberStyles.Float, CultureInfo.InvariantCulture,
+                out var parsed)
+            || !double.IsFinite(parsed) || parsed < 0)
+            return false;
+        mbps = parsed;
+        return true;
+    }
 
     // Re-evaluate the alert whenever the totals change too, not only on a threshold edit — so the
     // banner always reflects the current rate (the poll loop also calls EvaluateAlert directly, but

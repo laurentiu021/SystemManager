@@ -10,6 +10,20 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.136.26] - 2026-10-30
+
+**Bandwidth Monitor's "Alert over" box takes a decimal the way you type it.**
+
+### Fixed
+- The box rewrote what was typed on every key. "2." became "2" as soon as the point was typed, so
+  the next digit made 25 instead of 2.5. On a PC set to a language that writes decimals with a
+  comma, such as Romanian or German, "2,5" was read as 25 as well. The box now keeps what is
+  typed, and a point or a comma before the decimals works whatever the PC's language.
+- Emptying the box to type a new number drew a red outline with no explanation and kept the old
+  limit. An empty box now turns the alert off, as 0 does, and text that is not a number keeps the
+  limit and says on the status line what the box needs. Both were present since the tab was added
+  in 1.54.0.
+
 ## [1.136.25] - 2026-10-30
 
 **Bandwidth Monitor's download and upload figures no longer double while a VPN is on, and no

@@ -14,9 +14,14 @@ namespace SysManager.Tests;
 [Collection("ProcessWideStatics")]
 public class NetworkRepairViewModelTests
 {
+    // A runner that runs nothing unless a test hands in its own. With the real one, the gate tests below were one
+    // regressed check away from running netsh winsock reset or netsh int ip reset on the PC running the suite (#2740).
     private static NetworkSharedState NewShared(IPowerShellRunner? runner = null) =>
         new(new PingMonitorService(), new TracerouteService(), new TracerouteMonitorService(),
-            new SpeedTestService(), new NetworkRepairService(runner ?? new PowerShellRunner()));
+            new SpeedTestService(), new NetworkRepairService(runner ?? Substitute.For<IPowerShellRunner>()));
+
+    private static Task<int> AnyProcess(IPowerShellRunner runner) =>
+        runner.RunProcessAsync(Arg.Any<string>(), Arg.Any<string>(), Arg.Any<CancellationToken>(), Arg.Any<Encoding?>());
 
     // A tab whose restore point nothing asks Windows for.
     private static NetworkRepairViewModel NewVm(NetworkSharedState shared) =>
@@ -100,7 +105,8 @@ public class NetworkRepairViewModelTests
     public async Task Reset_WhenNotElevated_SaysSoAndNeverPromptsConfirm(string which)
     {
         using var notElevated = AdminHelper.ForceElevation(false);
-        var vm = NewVm(NewShared());
+        var runner = Substitute.For<IPowerShellRunner>();
+        var vm = NewVm(NewShared(runner));
 
         var prevDialog = DialogService.Instance;
         var dialog = Substitute.For<IDialogService>();
@@ -113,6 +119,7 @@ public class NetworkRepairViewModelTests
             Assert.Contains("administrator", vm.RepairStatus, StringComparison.OrdinalIgnoreCase);
             dialog.DidNotReceive().Confirm(Arg.Any<string>(), Arg.Any<string>());
             Assert.False(vm.IsRepairing);
+            await AnyProcess(runner.DidNotReceive());
         }
         finally
         {
@@ -126,7 +133,8 @@ public class NetworkRepairViewModelTests
     public async Task Reset_WhenElevated_AsksBeforeTouchingTheNetworkStack(string which)
     {
         using var elevated = AdminHelper.ForceElevation(true);
-        var vm = NewVm(NewShared());
+        var runner = Substitute.For<IPowerShellRunner>();
+        var vm = NewVm(NewShared(runner));
 
         var prevDialog = DialogService.Instance;
         var dialog = Substitute.For<IDialogService>();
@@ -139,6 +147,7 @@ public class NetworkRepairViewModelTests
             dialog.Received(1).Confirm(Arg.Any<string>(), Arg.Any<string>());
             Assert.Equal("", vm.RepairStatus);
             Assert.False(vm.IsRepairing);
+            await AnyProcess(runner.DidNotReceive());
         }
         finally
         {

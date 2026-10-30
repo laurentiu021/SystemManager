@@ -18,16 +18,32 @@ namespace SysManager.Tests;
 /// the registry.
 /// </summary>
 [Collection("ProcessWideStatics")]
-public class PrivacyViewModelTests
+public sealed class PrivacyViewModelTests : IDisposable
 {
+    // Every view model here reads and writes its privacy settings under a throwaway key. Over the real hives, the
+    // tests that decline the confirmation were one regressed check away from changing this PC's own privacy policies
+    // (#2740).
+    private readonly string _rootName = @"Software\SysManagerTests\PrivacyVmSettings_" + Guid.NewGuid().ToString("N");
+    private readonly RegistryKey _root;
+
+    public PrivacyViewModelTests() => _root = Registry.CurrentUser.CreateSubKey(_rootName, writable: true);
+
+    public void Dispose()
+    {
+        _root.Dispose();
+        Registry.CurrentUser.DeleteSubKeyTree(_rootName, throwOnMissingSubKey: false);
+    }
+
+    private PrivacyService Privacy() => new(hkcuRoot: _root, hklmRoot: _root);
+
     // The VM loads its toggles asynchronously off the UI thread (so startup isn't blocked);
     // wait for that init to finish before asserting loaded state, so the tests observe the
     // populated collections deterministically instead of racing the background load.
-    private static PrivacyViewModel NewVm() => NewVm(NoRestorePoint());
+    private PrivacyViewModel NewVm() => NewVm(NoRestorePoint());
 
-    private static PrivacyViewModel NewVm(ISessionRestorePoint restorePoint)
+    private PrivacyViewModel NewVm(ISessionRestorePoint restorePoint)
     {
-        var vm = new PrivacyViewModel(new PrivacyService(), restorePoint, new PrivacyChoicesHandoff());
+        var vm = new PrivacyViewModel(Privacy(), restorePoint, new PrivacyChoicesHandoff());
         vm.InitializationComplete.GetAwaiter().GetResult();
         return vm;
     }
@@ -277,7 +293,7 @@ public class PrivacyViewModelTests
     [Fact]
     public async Task AfterConstruction_TheBusyFlagIsClear()
     {
-        var vm = new PrivacyViewModel(new PrivacyService(), NoRestorePoint(), new PrivacyChoicesHandoff());
+        var vm = new PrivacyViewModel(Privacy(), NoRestorePoint(), new PrivacyChoicesHandoff());
 
         await vm.InitializationComplete;
 

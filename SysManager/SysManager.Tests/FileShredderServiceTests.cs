@@ -332,6 +332,24 @@ public class FileShredderServiceTests
 
     // ---------- symlink bypass regression (P0) ----------
 
+    /// <summary>
+    /// A temp folder the service under test treats as a protected root, holding one victim file, so a link test aims
+    /// at a file it made. Aimed at the real hosts file, a regression in both path checks would have overwritten and
+    /// deleted it on any elevated run, the CI runner's included (#2740).
+    /// </summary>
+    private static (string Root, string Victim, byte[] Bytes) TempProtectedRoot()
+    {
+        var root = Path.Combine(Path.GetTempPath(), "smtest_protected_" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(root);
+        var victim = Path.Combine(root, "victim.dat");
+        byte[] bytes = [0x53, 0x4D, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06];
+        File.WriteAllBytes(victim, bytes);
+        return (root, victim, bytes);
+    }
+
+    /// <summary>The path check's own refusal, as opposed to the later refusal of any link.</summary>
+    private const string ProtectedPathRefusal = "Shredding system-protected paths is not allowed: ";
+
     [Fact]
     public async Task ShredFileAsync_SymlinkToProtectedFile_ThrowsSecurityException()
     {
@@ -339,28 +357,26 @@ public class FileShredderServiceTests
         // symlinks. A link sitting at an unprotected path but pointing into System32
         // previously passed validation and the real protected file was shredded
         // through the link. The guard must resolve the link target and block it.
-        var svc = NewService();
-        var sys32 = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.Windows), "System32");
-        // A file that reliably exists under System32; the link's *target* is what matters.
-        var protectedTarget = Path.Combine(sys32, "drivers", "etc", "hosts");
-        if (!File.Exists(protectedTarget))
-            protectedTarget = Path.Combine(sys32, "notepad.exe");
-
+        var (root, victim, bytes) = TempProtectedRoot();
+        var svc = new FileShredderService(openExclusiveWrite: null, protectedRoots: [root]);
         var link = Path.Combine(Path.GetTempPath(), "smtest_symlink_" + Guid.NewGuid().ToString("N") + ".dat");
 
         try
         {
             // Creating a file symlink needs privilege/developer-mode; the helper reports the skip.
-            Symlinks.RequireFileLink(link, protectedTarget);
+            Symlinks.RequireFileLink(link, victim);
 
-            await Assert.ThrowsAsync<SecurityException>(
+            var ex = await Assert.ThrowsAsync<SecurityException>(
                 () => svc.ShredFileAsync(link, ShredMethod.Quick, null, CancellationToken.None));
+            Assert.StartsWith(ProtectedPathRefusal, ex.Message, StringComparison.Ordinal);
+            Assert.Equal(bytes, File.ReadAllBytes(victim));
         }
         finally
         {
             // Delete only the link, never its target. File.Delete on a symlink removes
             // the link itself.
             if (File.Exists(link)) File.Delete(link);
+            Directory.Delete(root, recursive: true);
         }
     }
 
@@ -390,31 +406,32 @@ public class FileShredderServiceTests
         // path pointing into System32 (creatable without admin via `mklink /J`) let a
         // path like <temp>\link\notepad.exe pass the denylist, and the real protected
         // file behind it was shredded through. The guard must canonicalize the full path.
-        var svc = NewService();
-        var sys32 = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.Windows), "System32");
+        // The victim is a file this test made: without notepad.exe in System32, as on recent Windows 11, this
+        // test used to fall back to the real hosts file.
+        var (root, victim, bytes) = TempProtectedRoot();
+        var svc = new FileShredderService(openExclusiveWrite: null, protectedRoots: [root]);
 
         var baseDir = Path.Combine(Path.GetTempPath(), "smtest_midjunc_" + Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(baseDir);
-        var link = Path.Combine(baseDir, "sys32link");
+        var link = Path.Combine(baseDir, "protectedlink");
 
         try
         {
             // A directory junction needs no admin rights — which is the whole reason this guard has to exist.
-            Symlinks.RequireJunction(link, sys32);
+            Symlinks.RequireJunction(link, root);
 
-            // A file that reliably exists under System32, reached THROUGH the junction.
-            var throughJunction = Path.Combine(link, "notepad.exe");
-            if (!File.Exists(throughJunction))
-                throughJunction = Path.Combine(link, "drivers", "etc", "hosts");
-
-            await Assert.ThrowsAsync<SecurityException>(
+            var throughJunction = Path.Combine(link, Path.GetFileName(victim));
+            var ex = await Assert.ThrowsAsync<SecurityException>(
                 () => svc.ShredFileAsync(throughJunction, ShredMethod.Quick, null, CancellationToken.None));
+            Assert.StartsWith(ProtectedPathRefusal, ex.Message, StringComparison.Ordinal);
+            Assert.Equal(bytes, File.ReadAllBytes(victim));
         }
         finally
         {
             // The junction goes first and as a link (Directory.Delete on a junction removes the link, not
-            // its target — and the target here is System32), then the base dir.
+            // its target), then the base dir, then the folder it pointed at.
             Symlinks.RemoveLinkThenTree(link, baseDir);
+            Directory.Delete(root, recursive: true);
         }
     }
 

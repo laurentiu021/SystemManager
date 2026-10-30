@@ -52,6 +52,7 @@ public sealed partial class FileShredderService
     private static readonly string[] ProtectedPrefixes = GetProtectedPrefixes();
 
     private readonly Func<string, FileStream> _openExclusiveWrite;
+    private readonly string[] _protectedRoots;
 
     public FileShredderService() : this(openExclusiveWrite: null) { }
 
@@ -63,8 +64,16 @@ public sealed partial class FileShredderService
     /// subclass that opens the real file but throws from an overridden <c>WriteAsync</c> after N calls
     /// (#2824).
     /// </summary>
-    internal FileShredderService(Func<string, FileStream>? openExclusiveWrite) =>
+    /// <param name="protectedRoots">
+    /// Null for the system roots. A test names a temp folder instead, so a link test's victim is a file it made
+    /// rather than one of the machine's own: aimed at the real hosts file, a regression in both path checks would
+    /// have overwritten and deleted it on any elevated run (#2740).
+    /// </param>
+    internal FileShredderService(Func<string, FileStream>? openExclusiveWrite, IReadOnlyList<string>? protectedRoots = null)
+    {
         _openExclusiveWrite = openExclusiveWrite ?? DefaultOpenExclusiveWrite;
+        _protectedRoots = protectedRoots is null ? ProtectedPrefixes : [.. protectedRoots];
+    }
 
     private static FileStream DefaultOpenExclusiveWrite(string path) => new(
         path,
@@ -610,7 +619,7 @@ public sealed partial class FileShredderService
         }
     }
 
-    private static void ValidatePath(string path)
+    private void ValidatePath(string path)
     {
         var fullPath = Path.GetFullPath(path);
 
@@ -654,9 +663,9 @@ public sealed partial class FileShredderService
     /// sits under any system-protected root. Matches on a directory boundary so an
     /// unrelated sibling (e.g. "C:\WindowsApps") is not blocked by "C:\Windows".
     /// </summary>
-    private static void ThrowIfProtected(string fullPath)
+    private void ThrowIfProtected(string fullPath)
     {
-        foreach (var prefix in ProtectedPrefixes)
+        foreach (var prefix in _protectedRoots)
         {
             if (fullPath.Equals(prefix, StringComparison.OrdinalIgnoreCase) ||
                 fullPath.StartsWith(prefix + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase))

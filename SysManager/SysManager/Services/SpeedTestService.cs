@@ -21,12 +21,33 @@ namespace SysManager.Services;
 ///  - HTTP: downloads/uploads known-size payloads from speed.cloudflare.com.
 ///    Zero dependencies, no admin, runs everywhere.
 ///  - Ookla: downloads the official speedtest.exe CLI on first use into
-///    %LOCALAPPDATA%\SysManager\tools, then runs it with --format=json.
+///    %LOCALAPPDATA%\SysManager\tools, checks it against the pinned release on every run, then runs it with
+///    --format=json. It does not run while SysManager is elevated.
 /// Progress reporting is in percent (0-100) plus a free-form status message.
 /// </summary>
 public sealed class SpeedTestService : ISpeedTestService
 {
     private static readonly HttpClient _http = new() { Timeout = TimeSpan.FromMinutes(2) };
+
+    private readonly HttpClient _download;
+    private readonly string? _toolsDir;
+    private readonly OoklaRelease _ookla;
+    private readonly Func<bool> _isElevated;
+
+    public SpeedTestService() : this(_http, toolsDir: null, OoklaRelease.Pinned, AdminHelper.IsElevated) { }
+
+    /// <summary>
+    /// Prepares the Ookla CLI through <paramref name="download"/> into <paramref name="toolsDir"/> and checks it
+    /// against <paramref name="ookla"/>, so a test needs no network and no real release.
+    /// </summary>
+    /// <param name="toolsDir">Null for <see cref="AppDataFolders.Tools"/>, read on each run.</param>
+    internal SpeedTestService(HttpClient download, string? toolsDir, OoklaRelease ookla, Func<bool> isElevated)
+    {
+        _download = download;
+        _toolsDir = toolsDir;
+        _ookla = ookla;
+        _isElevated = isElevated;
+    }
 
     // Cloudflare returns exactly N bytes from these endpoints; perfect for timing.
     private const string CfDownloadUrl = "https://speed.cloudflare.com/__down?bytes={0}";
@@ -216,14 +237,40 @@ public sealed class SpeedTestService : ISpeedTestService
     // ---------------- Ookla ----------------
 
     /// <summary>
+    /// The one Ookla CLI build SysManager runs: where its zip is downloaded from, and the SHA-256 of the zip and of
+    /// the <c>speedtest.exe</c> in it.
+    /// </summary>
+    /// <remarks>
+    /// The build carries no signature, so these hashes are the whole check, and a changed byte in either file fails
+    /// it. The signature check they replace rejected the real file on every run, and could not have caught a changed
+    /// one either: <c>X509Certificate.CreateFromSignedFile</c> reads the signer certificate without checking the
+    /// file's bytes against the signature (#2701). Moving to a newer CLI means changing all three values together.
+    /// </remarks>
+    internal sealed record OoklaRelease(string ZipUrl, string ZipSha256, string ExeSha256)
+    {
+        /// <summary>
+        /// Ookla CLI 1.2.0 for 64-bit Windows. SysManager ships only as an x64 build, and Ookla publishes no 32-bit
+        /// Windows build of 1.2.0: that URL answers 403.
+        /// </summary>
+        internal static OoklaRelease Pinned { get; } = new(
+            "https://install.speedtest.net/app/cli/ookla-speedtest-1.2.0-win64.zip",
+            "13E3D888B845D301A556419E31F14AB9BFF57E3F06089EF2FD3BDC9BA6841EFA",
+            "C73C4AC2A7CDC48829FE0F9D7EC91CA41C8B434490D4EB3205AAD69C7AA3B921");
+    }
+
+    /// <summary>What the Ookla card says while SysManager is elevated, when the CLI does not run.</summary>
+    public const string OoklaNeedsStandardRunMessage =
+        "The Ookla test does not run while SysManager is running as administrator, because its program is kept in "
+        + "a folder your own account can change. Close SysManager and open it normally, then try again, or use the "
+        + "HTTP test.";
+
+    /// <summary>
     /// A verified Ookla CLI, held open so the bytes that were verified are the bytes that get executed.
     /// </summary>
     /// <remarks>
     /// The CLI is cached under <c>%LocalAppData%\SysManager\tools</c>, which the user — and therefore any
-    /// process running as the user — can write to. Verifying a path and then launching that same path
-    /// leaves a window in which the file can be replaced, and when SysManager is elevated that window is a
-    /// way to get arbitrary code executed at high integrity by a caller who could not reach it otherwise.
-    /// Signature verification cannot close it, because the bytes checked are not the bytes mapped.
+    /// process running as the user — can write to. Hashing a path and then launching that same path
+    /// leaves a window in which the file can be replaced. So the hash is read through this handle.
     /// <para>Holding the file with <see cref="FileShare.Read"/> denies both writing and deleting for the
     /// lifetime of this object, so the path cannot come to mean a different file. Measured that this does
     /// not prevent execution: a pinned image still loads and runs, while an overwrite and a rename are both
@@ -239,23 +286,31 @@ public sealed class SpeedTestService : ISpeedTestService
     }
 
     /// <summary>
-    /// Pins <paramref name="exe"/> against modification and deletion, then verifies it. On success the
-    /// caller owns the pin and must keep it alive until the process has exited.
+    /// Pins <paramref name="exe"/> against modification and deletion, then checks its SHA-256 against
+    /// <paramref name="expectedSha256"/>, reading it through that same handle. On success the caller owns the pin and
+    /// must keep it alive until the process has exited.
     /// </summary>
     /// <remarks>
-    /// Pin first, verify second. The other order would leave the same gap, only narrower.
+    /// Pin first, hash second. The other order would leave the same gap, only narrower.
     /// <para>On failure the pin is released BEFORE the rejected binary is deleted. That order is not
-    /// incidental: the pin denies deletion, and <see cref="TryDeleteExe"/> swallows the resulting
+    /// incidental: the pin denies deletion, and <see cref="TryDelete"/> swallows the resulting
     /// IOException at Debug level, so deleting while pinned would silently leave a binary that failed
     /// verification sitting in the cache. Verification decides; this method cleans up.</para>
     /// </remarks>
-    internal static PinnedCli PinAndVerify(string exe)
+    internal static PinnedCli PinAndVerify(string exe, string expectedSha256)
     {
         var pin = Pin(exe);
         var verified = false;
         try
         {
-            VerifyOoklaSignature(exe);
+            var actual = Convert.ToHexString(SHA256.HashData(pin));
+            if (!string.Equals(actual, expectedSha256, StringComparison.OrdinalIgnoreCase))
+            {
+                Log.Warning("Ookla speedtest.exe has SHA256 {Actual}, not the pinned {Expected}", actual, expectedSha256);
+                throw new InvalidOperationException(
+                    "The saved Ookla program was not the release SysManager checks for, so it was deleted. Run the "
+                    + "test again to download it again.");
+            }
             verified = true;
             return new PinnedCli(exe, pin);
         }
@@ -264,7 +319,7 @@ public sealed class SpeedTestService : ISpeedTestService
             if (!verified)
             {
                 pin.Dispose();
-                TryDeleteExe(exe);
+                TryDelete(exe);
             }
         }
     }
@@ -283,6 +338,11 @@ public sealed class SpeedTestService : ISpeedTestService
     public async Task<SpeedTestResult> RunOoklaAsync(
         IProgress<(int Percent, string Message)>? progress, CancellationToken ct, int? serverId = null)
     {
+        // The CLI is kept in a folder the user's own account can write to and inherits SysManager's token, so elevated
+        // it would run, as administrator, a DLL anyone with that account put beside it: Windows looks for a DLL in the
+        // exe's own folder first. A speed test needs no rights, so elevated it does not run at all (#2701).
+        if (_isElevated()) throw new InvalidOperationException(OoklaNeedsStandardRunMessage);
+
         // Held for the whole run, not only the preparation: the pin is what makes the verified binary and
         // the executed binary the same object. Scoped by the `using` below, after the process has exited.
         PinnedCli cli;
@@ -326,10 +386,10 @@ public sealed class SpeedTestService : ISpeedTestService
             UseShellExecute = false,
             CreateNoWindow = true,
             ErrorDialog = false,   // suppress Win32 "DLL not found" system dialogs
-            // SEC-M4: Set working directory to System32 instead of the tools dir.
-            // This prevents DLL hijacking via CWD search order — if an attacker
-            // plants a malicious DLL in the user-writable tools directory, the
-            // process won't load it because CWD is System32 (admin-protected).
+            // System32 rather than the tools folder, so nothing is looked up relative to a folder the user can write
+            // to. It does not stop a DLL beside the exe from loading, since Windows searches the exe's own folder
+            // first: that is why the CLI never runs elevated, and why nothing is extracted from a zip that is not
+            // the pinned one.
             WorkingDirectory = Environment.GetFolderPath(Environment.SpecialFolder.System)
         };
 
@@ -378,17 +438,10 @@ public sealed class SpeedTestService : ISpeedTestService
             throw;
         }
 
+        // A failed run keeps the exe: its bytes were checked against the pinned release a moment ago, so it is not
+        // corrupt, and downloading the same file again cannot change how it runs.
         if (proc.ExitCode != 0)
-        {
-            // If the exe is broken/corrupt, delete it so next run re-downloads it.
-            if (proc.ExitCode == -1073741515) // STATUS_DLL_NOT_FOUND
-            {
-                try { File.Delete(exe); }
-                catch (IOException ex2) { Log.Debug("Cleanup failed (locked): {Error}", LogService.SanitizePath(ex2.Message)); }
-                catch (UnauthorizedAccessException ex2) { Log.Debug("Cleanup failed (access): {Error}", LogService.SanitizePath(ex2.Message)); }
-            }
             throw new InvalidOperationException($"Ookla failed ({proc.ExitCode}): {stderr}");
-        }
 
         JsonDocument doc;
         try
@@ -429,10 +482,14 @@ public sealed class SpeedTestService : ISpeedTestService
         }
     }
 
-    private static async Task<PinnedCli> EnsureOoklaAsync(
+    /// <summary>
+    /// The cached CLI, checked and pinned, or else a fresh download of the pinned release. Internal so a test can
+    /// prepare the CLI without running it.
+    /// </summary>
+    internal async Task<PinnedCli> EnsureOoklaAsync(
         IProgress<(int, string)>? progress, CancellationToken ct)
     {
-        var toolsDir = AppDataFolders.Tools;
+        var toolsDir = _toolsDir ?? AppDataFolders.Tools;
 
         // Run all synchronous file-system checks on a thread-pool thread
         // so the UI thread is never blocked by disk I/O.
@@ -441,63 +498,43 @@ public sealed class SpeedTestService : ISpeedTestService
             Directory.CreateDirectory(toolsDir);
             var path = Path.Join(toolsDir, "speedtest.exe");
             if (File.Exists(path) && new FileInfo(path).Length < 1024)
-            {
-                try { File.Delete(path); }
-                catch (IOException ex) { Log.Debug("Cleanup failed (locked): {Error}", LogService.SanitizePath(ex.Message)); }
-                catch (UnauthorizedAccessException ex) { Log.Debug("Cleanup failed (access): {Error}", LogService.SanitizePath(ex.Message)); }
-            }
+                TryDelete(path);
             return !File.Exists(path);
         }, ct).ConfigureAwait(false);
 
         var exe = Path.Join(toolsDir, "speedtest.exe");
         if (!needsDownload)
         {
-            // TOCTOU guard: the cached exe lives in a user-writable dir, so an attacker
-            // could swap it between runs. Re-verify its Authenticode signature every
-            // time before we hand it back to be executed — not only right after download.
-            // The pin travels back with it, so the path cannot change meaning between here
-            // and Process.Start.
-            return await Task.Run(() => PinAndVerify(exe), ct).ConfigureAwait(false);
+            // TOCTOU guard: the cached exe lives in a user-writable dir, so it could be swapped
+            // between runs. Its hash is checked every time before we hand it back to be executed,
+            // not only right after download. The pin travels back with it, so the path cannot
+            // change meaning between here and Process.Start.
+            return await Task.Run(() => PinAndVerify(exe, _ookla.ExeSha256), ct).ConfigureAwait(false);
         }
 
         progress?.Report((5, "Downloading Ookla CLI…"));
-        var arch = Environment.Is64BitOperatingSystem ? "win64" : "win32";
-        // MAINTENANCE: Ookla CLI version is pinned. When a new version is released,
-        // update the version string below. Check https://www.speedtest.net/apps/cli
-        // for the latest version. Authenticode signature verification (below) ensures
-        // binary integrity regardless of version.
-        var zipUrl = $"https://install.speedtest.net/app/cli/ookla-speedtest-1.2.0-{arch}.zip";
-
         var zipPath = Path.Join(toolsDir, "ookla.zip");
-        using (var resp = await _http.GetAsync(zipUrl, HttpCompletionOption.ResponseHeadersRead, ct).ConfigureAwait(false))
+        using (var resp = await _download.GetAsync(_ookla.ZipUrl, HttpCompletionOption.ResponseHeadersRead, ct).ConfigureAwait(false))
         {
             resp.EnsureSuccessStatusCode();
             await using var fs = File.Create(zipPath);
             await resp.Content.CopyToAsync(fs, ct).ConfigureAwait(false);
         }
 
-        // Log download integrity info for audit (SHA-256 of the zip).
-        // Security relies on Authenticode signature verification of the
-        // extracted binary, not on pinned hashes (which break on Ookla updates).
+        // Nothing is extracted from a zip that is not the pinned one, so a changed archive cannot put a file
+        // beside the exe, where Windows would load it as one of the exe's own DLLs.
         await Task.Run(() =>
         {
-            using var stream = File.OpenRead(zipPath);
-            var hash = Convert.ToHexString(SHA256.HashData(stream));
-            Log.Information("Ookla CLI downloaded: {Url}, SHA256={Hash}, Size={Size}",
-                zipUrl, hash, new FileInfo(zipPath).Length);
+            string actual;
+            using (var stream = File.OpenRead(zipPath))
+                actual = Convert.ToHexString(SHA256.HashData(stream));
+            if (string.Equals(actual, _ookla.ZipSha256, StringComparison.OrdinalIgnoreCase)) return;
 
-            // Structural integrity check: must be a valid zip with speedtest.exe
-            try
-            {
-                using var testZip = ZipFile.OpenRead(zipPath);
-                if (!testZip.Entries.Any(e => e.Name.Equals("speedtest.exe", StringComparison.OrdinalIgnoreCase)))
-                    throw new InvalidOperationException("Downloaded zip does not contain speedtest.exe");
-            }
-            catch (InvalidDataException)
-            {
-                File.Delete(zipPath);
-                throw new InvalidOperationException("Downloaded Ookla CLI zip is corrupt or tampered");
-            }
+            Log.Warning("Ookla CLI download {Url} has SHA256 {Actual}, not the pinned {Expected}",
+                _ookla.ZipUrl, actual, _ookla.ZipSha256);
+            TryDelete(zipPath);
+            throw new InvalidOperationException(
+                "The Ookla download was not the release SysManager checks for, so it was not used.");
         }, ct).ConfigureAwait(false);
 
         progress?.Report((15, "Extracting…"));
@@ -507,90 +544,43 @@ public sealed class SpeedTestService : ISpeedTestService
             // ZipFile.ExtractToDirectory does not validate that entry paths
             // stay within the target directory — a crafted zip with "../"
             // entries could write files outside toolsDir.
-            using var archive = ZipFile.OpenRead(zipPath);
-            foreach (var entry in archive.Entries.Where(e => !string.IsNullOrEmpty(e.Name)))
+            // A block, not a using declaration: the archive holds the zip open without delete sharing, so the
+            // delete below would fail while it is still open.
+            using (var archive = ZipFile.OpenRead(zipPath))
             {
-                var destinationPath = Path.GetFullPath(Path.Join(toolsDir, entry.FullName));
-                if (!IsInsideDirectory(toolsDir, destinationPath))
+                foreach (var entry in archive.Entries.Where(e => !string.IsNullOrEmpty(e.Name)))
                 {
-                    Log.Warning("Zip Slip attempt blocked: {Entry} resolves outside target dir", entry.FullName);
-                    continue;
+                    var destinationPath = Path.GetFullPath(Path.Join(toolsDir, entry.FullName));
+                    if (!IsInsideDirectory(toolsDir, destinationPath))
+                    {
+                        Log.Warning("Zip Slip attempt blocked: {Entry} resolves outside target dir", entry.FullName);
+                        continue;
+                    }
+
+                    // Ensure subdirectory exists
+                    var entryDir = Path.GetDirectoryName(destinationPath);
+                    if (!string.IsNullOrEmpty(entryDir))
+                        Directory.CreateDirectory(entryDir);
+
+                    entry.ExtractToFile(destinationPath, overwrite: true);
                 }
-
-                // Ensure subdirectory exists
-                var entryDir = Path.GetDirectoryName(destinationPath);
-                if (!string.IsNullOrEmpty(entryDir))
-                    Directory.CreateDirectory(entryDir);
-
-                entry.ExtractToFile(destinationPath, overwrite: true);
             }
-            File.Delete(zipPath);
+            // A zip left behind is only a file the next download overwrites, so it does not fail the run.
+            TryDelete(zipPath);
         }, ct).ConfigureAwait(false);
 
         if (!File.Exists(exe))
             throw new FileNotFoundException("speedtest.exe not found after extraction");
 
-        // Verify Authenticode signature on the freshly-extracted binary — fail-closed, and pinned first
-        // for the same reason as the cached branch above. Extraction has just written this file into a
-        // directory the user can write to, so the gap between verifying it and executing it is exactly as
-        // exploitable on the first run as on every later one.
-        return await Task.Run(() => PinAndVerify(exe), ct).ConfigureAwait(false);
+        // Checked again after extraction, through the pin, for the same reason as the cached branch above.
+        // Extraction has just written this file into a directory the user can write to, so the gap between
+        // checking it and executing it is exactly as open on the first run as on every later one.
+        return await Task.Run(() => PinAndVerify(exe, _ookla.ExeSha256), ct).ConfigureAwait(false);
     }
 
-    /// <summary>
-    /// Verifies that <paramref name="exe"/> carries a valid Authenticode signature whose subject is
-    /// Ookla's — fail-closed, throwing on any mismatch or missing signature.
-    /// </summary>
-    /// <remarks>
-    /// Deleting the rejected binary is <see cref="PinAndVerify"/>'s job, not this method's. It used to
-    /// delete here, which stopped working the moment the file was pinned against deletion during
-    /// verification: <see cref="TryDeleteExe"/> swallows the resulting IOException at Debug level, so a
-    /// binary that failed verification would have stayed in the cache while the exception still claimed it
-    /// had been removed. The caller releases the pin and then deletes.
-    /// <para>Called on every cached reuse as well as right after download, since the cache lives in a
-    /// user-writable directory.</para>
-    /// </remarks>
-    private static void VerifyOoklaSignature(string exe)
+    private static void TryDelete(string path)
     {
-        // Reading the certificate and validating its chain live in Helpers/Authenticode, so the policy
-        // below is the only thing this method owns. Unsigned and unreadable are treated alike here and
-        // deliberately NOT in UpdateService: an unsigned third-party download is a rejection, while an
-        // unsigned SysManager build is the normal case.
-        var (state, cert, hresult) = Helpers.Authenticode.ReadSigner(exe);
-        if (state is not Helpers.SignerState.Signed || cert is null)
-        {
-            Log.Warning("Ookla speedtest.exe has no valid Authenticode signature (0x{HResult:X8})", hresult);
-            throw new InvalidOperationException(
-                "Ookla speedtest.exe has no valid Authenticode signature. Binary deleted for security.");
-        }
-
-        using (cert)
-        {
-            if (!cert.Subject.Contains("Ookla", StringComparison.OrdinalIgnoreCase))
-            {
-                Log.Warning("Ookla speedtest.exe Authenticode subject mismatch: {Subject}", cert.Subject);
-                throw new InvalidOperationException(
-                    $"Ookla speedtest.exe failed Authenticode verification (subject: {cert.Subject}). Binary deleted for security.");
-            }
-
-            // Subject alone is forgeable (anyone can issue a self-signed "Ookla" cert), so also validate
-            // the full certificate chain to a trusted root, with online revocation. Fail closed if it
-            // does not validate. Checked AFTER the subject, so a mismatch costs no revocation request.
-            if (!Helpers.Authenticode.ValidateChain(
-                    cert, System.Security.Cryptography.X509Certificates.X509RevocationMode.Online, out var statuses))
-            {
-                Log.Warning("Ookla speedtest.exe certificate chain did not validate: {Status}", statuses);
-                throw new InvalidOperationException(
-                    $"Ookla speedtest.exe certificate chain failed validation ({statuses}). Binary deleted for security.");
-            }
-
-            Log.Information("Ookla speedtest.exe Authenticode chain verified: {Subject}", cert.Subject);
-        }
-    }
-
-    private static void TryDeleteExe(string exe)
-    {
-        try { File.Delete(exe); }
+        try { File.Delete(path); }
         catch (IOException ex) { Log.Debug("Cleanup failed (locked): {Error}", LogService.SanitizePath(ex.Message)); }
         catch (UnauthorizedAccessException ex) { Log.Debug("Cleanup failed (access): {Error}", LogService.SanitizePath(ex.Message)); }
     }

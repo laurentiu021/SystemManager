@@ -96,10 +96,8 @@ public class UpdateServiceAuthenticodeTests
     // is the assumption that arrives with the certificate: "we sign now, so the signature check
     // protects us."
     //
-    // The correct pattern was already in this codebase for a THIRD-PARTY download —
-    // SpeedTestService.VerifyOoklaSignature pins the subject then builds an X509Chain with online
-    // revocation, because (its own comment) "subject alone is forgeable". These tests pin that the
-    // update path now shares that shape.
+    // The correct pattern pins the subject and then builds an X509Chain with online revocation,
+    // because a subject alone is forgeable. These tests pin that the update path has that shape.
 
     [Fact]
     public void ExpectedSignerSubject_ExistsAsASinglePinPoint()
@@ -134,10 +132,10 @@ public class UpdateServiceAuthenticodeTests
         // Asserted against the source rather than by execution, deliberately and with the limitation
         // stated: producing a genuinely signed binary with a controllable publisher needs a test
         // certificate and signtool, which this unit-test project does not have. What CAN be checked
-        // mechanically is that the signed branch does both things the Ookla path does — compare
-        // against the pin AND validate the chain. Either one alone is bypassable.
+        // mechanically is that the signed branch does both things — compare against the pin AND
+        // validate the chain. Either one alone is bypassable.
         //
-        // The chain build now lives in Helpers/Authenticode, shared with the Ookla gate, so what is
+        // The chain build now lives in Helpers/Authenticode, so what is
         // asserted here is the DELEGATION and the pin; the policy inside it is pinned by
         // AuthenticodeTests.EveryPolicy_IsTheStrictOne and
         // AuthenticodeTests.ValidateChain_BuildsWithThatPolicy_AndFailsClosed, and the fact that this

@@ -1528,6 +1528,10 @@ Answers "what is actually using my space?" by listing the biggest files in one p
   under it says why. The history records it as not measured, never as a perfect 0 ms ping
 - Progress bar with a time-remaining estimate and a Cancel button, on the card of the test
   that is running and not on the other; the Ookla CLI is downloaded on first run
+- **The Ookla CLI is checked before every run** against the SHA-256 of Ookla's 1.2.0 release,
+  and a copy that does not match is deleted, so the next run downloads it again. It does not run while
+  SysManager is running as administrator, because it is kept in a folder your own account
+  can change; the card says so, and the HTTP test still works
 - Only one engine runs at a time, so the two cards can never show conflicting progress
 
 ### Network Repair

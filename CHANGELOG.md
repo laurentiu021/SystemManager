@@ -10,6 +10,32 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.136.13] - 2026-10-30
+
+**The Ookla speed test runs again. Its program is now checked against Ookla's exact release
+instead of a signature it never had.**
+
+### Fixed
+- Every Ookla run failed with "Ookla speedtest.exe has no valid Authenticode signature. Binary
+  deleted for security." Ookla's 1.2.0 CLI carries no signature at all, so the check rejected
+  and deleted the real file each time, and the next run downloaded it again. The check could
+  not have caught a changed file anyway, since it read the certificate without checking the
+  file against it. SysManager now pins the SHA-256 of Ookla's 1.2.0 zip and of the
+  `speedtest.exe` in it: nothing is extracted from a zip that does not match, and the exe is
+  checked before every run, through the handle that keeps it from being changed until the test
+  ends. A copy that does not match is deleted, and the next run downloads it again. The tab has
+  done this since 0.35.12.
+- The run that downloaded the CLI failed after extracting it, because the zip was still open
+  when it was deleted, and showed a sharing error with your profile path in it. The zip is now
+  closed first, and a zip that cannot be deleted no longer fails the test.
+- While SysManager runs as administrator, the Ookla test no longer starts. The CLI is kept in
+  a folder your own account can change, and Windows loads a DLL from the program's own folder
+  before anywhere else, so an elevated run would have given whatever was put there
+  administrator rights. The card says so; the HTTP test is unaffected.
+- A run that failed on a missing DLL no longer tries to delete the CLI. The delete never
+  worked while the file was held open, and the file it would have removed had just been
+  checked byte for byte.
+
 ## [1.136.12] - 2026-10-30
 
 **Without administrator rights, Defender Tweaks now says so before you change anything, instead of

@@ -56,7 +56,9 @@ public sealed class AboutUpdateExitTests : IDisposable
     /// <summary>A view-model over the substitute update client, with the start and the shutdown recorded.</summary>
     /// <param name="verify">What the hash check answers; it passes unless a test says otherwise.</param>
     /// <param name="launch">What starting the new version does; it records the start unless a test says otherwise.</param>
-    private AboutViewModel NewVm((bool, string?, string?)? verify = null, Action<ProcessStartInfo>? launch = null)
+    /// <param name="processPath">Where SysManager runs from; the test host unless a test says otherwise.</param>
+    private AboutViewModel NewVm((bool, string?, string?)? verify = null, Action<ProcessStartInfo>? launch = null,
+                                 Func<string?>? processPath = null)
     {
         _updates.GetLatestAsync(Arg.Any<CancellationToken>())
             .Returns(Task.FromResult<UpdateService.ReleaseInfo?>(Release));
@@ -65,14 +67,14 @@ public sealed class AboutUpdateExitTests : IDisposable
 
         return new AboutViewModel(_updates, new SystemReportService(new SystemInfoService(), new DiskHealthService(), new BatteryService(), new EventLogService()),
             autoCheck: false, preferences: new UpdateCheckPreferenceService(_dir), updatesDir: _dir,
-            launch: launch ?? _launched.Add, shutdown: () => _shutdowns++);
+            launch: launch ?? _launched.Add, shutdown: () => _shutdowns++, processPath: processPath);
     }
 
     /// <summary>A view-model that has found the update and downloaded it, one click from Install.</summary>
     private async Task<AboutViewModel> ReadyToInstallAsync(
-        (bool, string?, string?)? verify = null, Action<ProcessStartInfo>? launch = null)
+        (bool, string?, string?)? verify = null, Action<ProcessStartInfo>? launch = null, Func<string?>? processPath = null)
     {
-        var vm = NewVm(verify, launch);
+        var vm = NewVm(verify, launch, processPath);
         await vm.CheckForUpdatesCommand.ExecuteAsync(null);
         Assert.Equal("v99.0.0", vm.LatestVersionLabel);   // the premise: the update was found
 
@@ -351,6 +353,51 @@ public sealed class AboutUpdateExitTests : IDisposable
         Assert.Null(vm.DownloadedPath);
         Assert.False(vm.InstallFailed);
         Assert.True(vm.ShowDownloadButton);
+    }
+
+    // ── Refused before SysManager closes when it cannot replace itself (#2725) ───────────────────
+    //
+    // The applier refuses a copy under Program Files, and it decides only after SysManager has closed: Install and
+    // Go back confirmed, closed SysManager, and nothing reopened.
+
+    private static string? InProgramFiles() =>
+        Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles), "SysManager", "SysManager.exe");
+
+    [Fact]
+    public async Task Install_FromAProgramFilesCopy_IsRefusedBeforeAnythingCloses_AndOffersManualDownload()
+    {
+        var vm = await ReadyToInstallAsync(processPath: InProgramFiles);
+        using var dialog = new DialogAnswer(confirm: true);
+
+        await vm.InstallUpdateCommand.ExecuteAsync(null);
+
+        Assert.Equal(AboutViewModel.CannotReplaceLine("it runs from a folder Windows protects, such as Program Files"),
+            vm.DownloadStatus);
+        Assert.Equal(0, dialog.Calls);
+        Assert.Empty(_launched);
+        Assert.Equal(0, _shutdowns);
+        Assert.True(vm.AutoDownloadFailed);   // the warning row, and Manual download
+        // The file is fine, only the place is not, so it is not deleted.
+        _updates.DidNotReceiveWithAnyArgs().DiscardDownload(default!);
+    }
+
+    [Fact]
+    public async Task GoingBack_FromAProgramFilesCopy_IsRefusedBeforeAnythingCloses()
+    {
+        var previous = Path.Combine(_dir, UpdateApplier.PreviousBuildFileName);
+        await File.WriteAllTextAsync(previous, "OLD-BUILD");
+        await File.WriteAllTextAsync(UpdateApplier.PreviousBuildHashPath(_dir), UpdateApplier.ComputeFileHash(previous));
+        var vm = NewVm(processPath: InProgramFiles);
+        Assert.True(vm.CanRollBack);   // the premise: a verifiable previous build is on offer
+        using var dialog = new DialogAnswer(confirm: true);
+
+        await vm.RollBackCommand.ExecuteAsync(null);
+
+        Assert.Equal("SysManager can't go back here: it runs from a folder Windows protects, such as Program Files.",
+            vm.RollBackStatus);
+        Assert.Equal(0, dialog.Calls);
+        Assert.Empty(_launched);
+        Assert.Equal(0, _shutdowns);
     }
 
     [Fact]

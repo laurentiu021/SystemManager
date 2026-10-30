@@ -2351,6 +2351,10 @@ offers, "rate us" prompts:
 - One-click "Install" replaces the running executable in-place and
   restarts automatically (no manual file copying needed). It asks first, because it
   closes SysManager, and names anything still running that closing would cut off.
+- **A copy that cannot replace itself says so before anything closes.** SysManager cannot
+  update a copy in Program Files or another folder Windows protects, or one in a folder it
+  cannot write to. Install and Go back say so before they ask, and Install offers Manual
+  download, instead of closing SysManager for an update that was then refused.
 - **A winget-installed copy updates through winget, not here.** Detected by its location under
   `WinGet\Packages` or its PATH shim at `WinGet\Links`, Download and Install are not offered for
   it — only the command to run instead, `winget upgrade laurentiu021.SysManager`. Installing in
@@ -2364,7 +2368,11 @@ offers, "rate us" prompts:
   update that installs cleanly but turns out to be broken is not a dead end. The
   button appears in the About tab only when a retained copy exists, asks for
   confirmation, and notes that whatever the newer version fixed will come back too.
-  One generation is kept, so it never accumulates copies of the app.
+  One generation is kept, so it never accumulates copies of the app. The copy is
+  replaced only once an update has landed, so an update that fails leaves it as it was.
+  After going back the button is gone until the next update, since the kept copy is
+  then the version running, and so it is after an update that could not keep the
+  build it replaced, rather than offering an older one.
 - Full release-note history pulled live from GitHub — the notes for the newest
   version appear under the update check, the last ten releases below it, and each
   card links to its release on GitHub. The list is fetched with the startup check, or when you

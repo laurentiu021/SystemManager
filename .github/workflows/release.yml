@@ -802,8 +802,10 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           VERSION: ${{ steps.version.outputs.version }}
         run: |
-          # Every release, not the first page: there were 978 when this was written.
-          $tags = gh release list --repo $env:GITHUB_REPOSITORY --limit 10000 --json tagName --jq '.[].tagName'
+          # Every release, not the first page: there were 978 when this was written. Drafts and pre-releases are left
+          # out because GitHub never makes either Latest, so a higher one would keep every real release from it.
+          $tags = gh release list --repo $env:GITHUB_REPOSITORY --limit 10000 --exclude-drafts --exclude-pre-releases `
+              --json tagName --jq '.[].tagName'
           if ($LASTEXITCODE -ne 0) { throw "Could not list the published releases to decide which one is Latest." }
           $highest = @($tags) | Where-Object { $_ -match '^v\d+\.\d+\.\d+$' } |
               ForEach-Object { [version]$_.Substring(1) } | Sort-Object -Descending | Select-Object -First 1

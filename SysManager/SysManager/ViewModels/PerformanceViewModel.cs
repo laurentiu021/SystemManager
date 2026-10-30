@@ -229,8 +229,14 @@ public sealed partial class PerformanceViewModel : ElevatedViewModelBase
                 // visual-effects values stay live until the game exits. A snapshot taken in that
                 // window records the profile's state as the user's own and persists it, so a later
                 // Restore All would put the machine on a gaming plan it was never on. Loading an
-                // ALREADY-persisted snapshot above is fine — it predates the session.
-                if (_gaming.IsActive) throw SnapshotDuringGamingSession();
+                // ALREADY-persisted snapshot above is fine — it predates the session. A session an
+                // earlier run left on holds them just the same until it is turned off (#2711).
+                switch (await ReadGameModeHoldAsync())
+                {
+                    case GameModeHold.On: throw SnapshotDuringGamingSession();
+                    case GameModeHold.LeftOn: throw SnapshotUnderLeftoverGameMode();
+                    case GameModeHold.NotKnown: throw new InvalidOperationException(GameModeNotKnown);
+                }
 
                 var captured = await _service.TakeSnapshotAsync();
                 var saved = await Task.Run(() => _service.SaveSnapshot(captured));
@@ -275,6 +281,75 @@ public sealed partial class PerformanceViewModel : ElevatedViewModelBase
     private static InvalidOperationException SnapshotDuringGamingSession() =>
         new("Stop the game profile first. While it is running, the power plan and visual effects are "
             + "the profile's, so recording them as your original settings would restore you to them later.");
+
+    /// <summary>
+    /// The refusal for a capture while game mode is still on from a run of SysManager that closed before it ended: the
+    /// settings stay its own until it is turned off (#2711).
+    /// </summary>
+    private static InvalidOperationException SnapshotUnderLeftoverGameMode() =>
+        new(GameModeLeftOnLead + " Until then the power plan and visual effects are its own, so recording them as "
+            + "your original settings would restore you to them later.");
+
+    private const string GameModeLeftOnLead =
+        "Turn game mode off first, in Undo Changes: it is still on from a run of SysManager that closed before it ended.";
+
+    /// <summary>The status line for a change refused while game mode is on (#2711).</summary>
+    internal const string ChangeDuringGameMode =
+        "Stop the game profile first. While it is running, the power plan and visual effects are the profile's, and "
+        + "stopping it puts back the ones it started from, so a change made now would not last.";
+
+    /// <summary>The status line for a change refused while game mode is still on from an earlier run (#2711).</summary>
+    internal const string ChangeUnderLeftoverGameMode =
+        GameModeLeftOnLead + " Until then the power plan and visual effects are its own, and turning it off puts back "
+        + "the ones it started from, so a change made now would not last.";
+
+    /// <summary>
+    /// The status line for a change, or a capture, refused while whether game mode was left on could not be read just
+    /// now (#2711).
+    /// </summary>
+    internal const string GameModeNotKnown =
+        "SysManager could not read just now whether game mode was left on, so no setting was changed. Try again in a "
+        + "moment.";
+
+    // Whether game mode holds the power plan and visual effects just now. While it is on, or was left on by an earlier
+    // run, they are its own, and turning it off puts back the ones it started from (#2711). The rule Undo Changes holds
+    // Performance Mode back by, which counts a record that could not be read as well: it may say game mode was left on.
+    private enum GameModeHold { None, On, LeftOn, NotKnown }
+
+    // The record is a file, so it is read off the UI thread.
+    private async Task<GameModeHold> ReadGameModeHoldAsync()
+    {
+        if (_gaming.IsActive) return GameModeHold.On;
+        return (await Task.Run(_gaming.ReadPendingRecovery).ConfigureAwait(true)).Kind switch
+        {
+            PendingRecoveryKind.LeftOn => GameModeHold.LeftOn,
+            PendingRecoveryKind.Unreadable => GameModeHold.NotKnown,
+            _ => GameModeHold.None,
+        };
+    }
+
+    /// <summary>
+    /// True, with the status line saying why, when game mode holds the settings a change would make (#2711).
+    /// </summary>
+    /// <remarks>
+    /// Asked before the question, so nothing is asked that would be refused, and again once the system-modification
+    /// lock is held. Game mode takes that lock to start, so once it is held a session cannot begin before the change.
+    /// Performance Mode used to check game mode only before taking its own snapshot, so Restore All and the Apply
+    /// buttons ran under a session, and the session's end put its own record back over what they had set.
+    /// </remarks>
+    private async Task<bool> RefusedForGameModeAsync()
+    {
+        var why = await ReadGameModeHoldAsync() switch
+        {
+            GameModeHold.On => ChangeDuringGameMode,
+            GameModeHold.LeftOn => ChangeUnderLeftoverGameMode,
+            GameModeHold.NotKnown => GameModeNotKnown,
+            _ => null,
+        };
+        if (why is null) return false;
+        StatusMessage = why;
+        return true;
+    }
 
     /// <summary>
     /// Releases the snapshot gate unless disposal has already claimed it. Releasing a disposed
@@ -401,6 +476,7 @@ public sealed partial class PerformanceViewModel : ElevatedViewModelBase
             StatusMessage = "Power plan is already set to the selected option.";
             return;
         }
+        if (await RefusedForGameModeAsync()) return;
 
         var planName = plan switch
         {
@@ -423,6 +499,7 @@ public sealed partial class PerformanceViewModel : ElevatedViewModelBase
             StatusMessage = $"Cannot start — {OperationLockService.Instance.GetActiveOperationName(OperationCategory.SystemModification)} is already running.";
             return;
         }
+        if (await RefusedForGameModeAsync()) return;
 
         IsBusy = true;
         IsProgressIndeterminate = true;
@@ -477,6 +554,7 @@ public sealed partial class PerformanceViewModel : ElevatedViewModelBase
             StatusMessage = "Visual effects are already in the selected state.";
             return;
         }
+        if (await RefusedForGameModeAsync()) { WantVisualEffectsReduced = Profile.VisualEffectsReduced; return; }
 
         var action = reduce ? "Reduce" : "Restore";
         if (!DialogService.Instance.Confirm(
@@ -491,6 +569,7 @@ public sealed partial class PerformanceViewModel : ElevatedViewModelBase
             WantVisualEffectsReduced = Profile.VisualEffectsReduced;
             return;
         }
+        if (await RefusedForGameModeAsync()) { WantVisualEffectsReduced = Profile.VisualEffectsReduced; return; }
 
         IsBusy = true;
         IsProgressIndeterminate = true;
@@ -689,6 +768,8 @@ public sealed partial class PerformanceViewModel : ElevatedViewModelBase
             StatusMessage = "Processor state is already in the selected state.";
             return;
         }
+        // A setting of the power plan that is on, which game mode may have switched (#2711).
+        if (await RefusedForGameModeAsync()) { WantProcessorMaxState = Profile.ProcessorMaxState; return; }
 
         var action = maxState ? "Set to 100%" : "Restore default";
         if (!DialogService.Instance.Confirm(
@@ -703,6 +784,7 @@ public sealed partial class PerformanceViewModel : ElevatedViewModelBase
             WantProcessorMaxState = Profile.ProcessorMaxState;
             return;
         }
+        if (await RefusedForGameModeAsync()) { WantProcessorMaxState = Profile.ProcessorMaxState; return; }
 
         IsBusy = true;
         IsProgressIndeterminate = true;
@@ -903,6 +985,9 @@ public sealed partial class PerformanceViewModel : ElevatedViewModelBase
             return;
         }
 
+        // Game mode's end would put its own record back over what this restores (#2711).
+        if (await RefusedForGameModeAsync()) return;
+
         var gpuWillBeRestored = card is not null and not PerformanceService.RecordedAdapter.Gone;
         var gpuLeftOut = card is PerformanceService.RecordedAdapter.Gone;
         var capturedAt = onDisk.CapturedAtUtc is DateTimeOffset timestamp
@@ -940,6 +1025,7 @@ public sealed partial class PerformanceViewModel : ElevatedViewModelBase
             StatusMessage = $"Cannot start — {OperationLockService.Instance.GetActiveOperationName(OperationCategory.SystemModification)} is already running.";
             return;
         }
+        if (await RefusedForGameModeAsync()) return;
 
         IsBusy = true;
         IsProgressIndeterminate = true;

@@ -772,17 +772,207 @@ public sealed class PerformanceSnapshotRestartTests
             DialogService.Instance = dialog;
             try
             {
-                // Must DIFFER from the current plan, or the command returns at its "already set to
-                // the selected option" short-circuit and never reaches the snapshot step — which is
-                // what the first version of this test did, passing for the wrong reason.
-                vm.SelectedPlan = "high";
-                await vm.ApplyPowerPlanCommand.ExecuteAsync(null);
+                // The Game Mode switch, which has no check of its own, so what refuses is the capture: the power
+                // plan, visual effects and processor switches refuse before their question (#2711). It must DIFFER
+                // from the current state, or the command returns at its "already in the selected state"
+                // short-circuit and never reaches the snapshot step — which is what the first version of this
+                // test did, passing for the wrong reason.
+                vm.WantGameModeOff = vm.Profile.GameModeEnabled;
+                await vm.ApplyGameModeCommand.ExecuteAsync(null);
             }
             finally { DialogService.Instance = previousDialog; }
 
             Assert.Contains("Stop the game profile first", vm.StatusMessage, StringComparison.Ordinal);
+            Assert.Contains("recording them as your original settings", vm.StatusMessage, StringComparison.Ordinal);
             Assert.Null(service.LoadSnapshot());
             Assert.False(vm.HasSnapshot);
+        }
+        finally
+        {
+            Directory.Delete(dir, recursive: true);
+        }
+    }
+
+    // ── Game mode left on, and changes made under game mode (#2711) ─────────
+    //
+    // The capture checked only IsActive, which lives in memory: after a crash it is false while the record of the
+    // session left on is still on disk, so the leftover gaming plan could be recorded as the user's own. Restore All and
+    // the Apply buttons checked nothing, so a change made under a session was undone when it ended. Every write here goes
+    // nowhere and every process call to a substitute, so a refusal that regressed changes nothing on the PC running the
+    // suite.
+
+    private static IGamingProfileService GameModeLeftOn(PendingRecoveryKind kind)
+    {
+        var gaming = Substitute.For<IGamingProfileService>();
+        gaming.IsActive.Returns(false);
+        gaming.ReadPendingRecovery().Returns(new PendingRecovery(kind));
+        return gaming;
+    }
+
+    [Theory]
+    [InlineData(PendingRecoveryKind.LeftOn, "Turn game mode off first, in Undo Changes")]
+    [InlineData(PendingRecoveryKind.Unreadable, "could not read just now whether game mode was left on")]
+    public async Task AnApply_UnderGameModeLeftOnByAnEarlierRun_RefusesToRecordAnOriginal(
+        PendingRecoveryKind kind, string said)
+    {
+        var dir = CreateTempDirectory();
+        try
+        {
+            using var service = NewService(dir);
+            using var vm = new PerformanceViewModel(service, GameModeLeftOn(kind));
+            await vm.InitializationComplete;
+            Assert.False(vm.HasSnapshot, "precondition: nothing is persisted, so a capture would happen");
+
+            // The Game Mode switch has no check of its own: the capture's is all that stands in the way.
+            using var dialog = new DialogAnswer(confirm: true);
+            vm.WantGameModeOff = vm.Profile.GameModeEnabled;
+            await vm.ApplyGameModeCommand.ExecuteAsync(null);
+
+            Assert.Contains(said, vm.StatusMessage, StringComparison.Ordinal);
+            Assert.Null(service.LoadSnapshot());
+            Assert.False(vm.HasSnapshot);
+        }
+        finally
+        {
+            Directory.Delete(dir, recursive: true);
+        }
+    }
+
+    // The changes game mode holds the settings of.
+    private static readonly string[] HeldChangeNames = ["power plan", "visual effects", "processor state", "restore all"];
+
+    public static TheoryData<string> HeldChanges()
+    {
+        var data = new TheoryData<string>();
+        foreach (var change in HeldChangeNames) data.Add(change);
+        return data;
+    }
+
+    public static TheoryData<string, PendingRecoveryKind> HeldChangesUnderARecord()
+    {
+        var data = new TheoryData<string, PendingRecoveryKind>();
+        foreach (var change in HeldChangeNames)
+        {
+            data.Add(change, PendingRecoveryKind.LeftOn);
+            data.Add(change, PendingRecoveryKind.Unreadable);
+        }
+        return data;
+    }
+
+    // Each change set to differ from what was read, so that nothing but game mode stops it.
+    private static Task MakeHeldChange(PerformanceViewModel vm, string change)
+    {
+        switch (change)
+        {
+            case "power plan":
+                vm.SelectedPlan = vm.SelectedPlan == "high" ? "balanced" : "high";
+                return vm.ApplyPowerPlanCommand.ExecuteAsync(null);
+            case "visual effects":
+                vm.WantVisualEffectsReduced = !vm.Profile.VisualEffectsReduced;
+                return vm.ApplyVisualEffectsCommand.ExecuteAsync(null);
+            case "processor state":
+                vm.WantProcessorMaxState = !vm.Profile.ProcessorMaxState;
+                return vm.ApplyProcessorStateCommand.ExecuteAsync(null);
+            default:
+                return vm.RestoreAllCommand.ExecuteAsync(null);
+        }
+    }
+
+    // A record on disk, so no capture is needed and Restore All has something to put back.
+    private static async Task<PerformanceViewModel> ViewModelOverARecord(
+        PerformanceService service, IGamingProfileService gaming)
+    {
+        Assert.True(service.SaveSnapshot(ValidSnapshot(Recorded)));
+        var vm = new PerformanceViewModel(service, gaming);
+        await vm.InitializationComplete;
+        Assert.False(vm.IsProcessorStateLocked, "precondition: the processor switch can be applied");
+        return vm;
+    }
+
+    [Theory]
+    [MemberData(nameof(HeldChanges))]
+    public async Task AChange_WhileGameModeIsOn_IsRefused_BeforeTheQuestion(string change)
+    {
+        var dir = CreateTempDirectory();
+        try
+        {
+            using var service = NewService(dir);
+            var gaming = Substitute.For<IGamingProfileService>();
+            gaming.IsActive.Returns(true);
+            using var vm = await ViewModelOverARecord(service, gaming);
+            using var dialog = new DialogAnswer(confirm: true);
+
+            await MakeHeldChange(vm, change);
+
+            Assert.Equal(0, dialog.Calls);
+            Assert.Equal(PerformanceViewModel.ChangeDuringGameMode, vm.StatusMessage);
+            Assert.NotNull(service.LoadSnapshot());
+        }
+        finally
+        {
+            Directory.Delete(dir, recursive: true);
+        }
+    }
+
+    [Theory]
+    [MemberData(nameof(HeldChangesUnderARecord))]
+    public async Task AChange_WhileGameModeIsLeftOnOrNotKnown_IsRefused_BeforeTheQuestion(
+        string change, PendingRecoveryKind kind)
+    {
+        var dir = CreateTempDirectory();
+        try
+        {
+            using var service = NewService(dir);
+            using var vm = await ViewModelOverARecord(service, GameModeLeftOn(kind));
+            using var dialog = new DialogAnswer(confirm: true);
+
+            await MakeHeldChange(vm, change);
+
+            Assert.Equal(0, dialog.Calls);
+            Assert.Equal(
+                kind == PendingRecoveryKind.LeftOn
+                    ? PerformanceViewModel.ChangeUnderLeftoverGameMode
+                    : PerformanceViewModel.GameModeNotKnown,
+                vm.StatusMessage);
+            Assert.NotNull(service.LoadSnapshot());
+        }
+        finally
+        {
+            Directory.Delete(dir, recursive: true);
+        }
+    }
+
+    [Theory]
+    [MemberData(nameof(HeldChanges))]
+    public async Task AChange_WhenGameModeStartsWhileItsQuestionIsOpen_IsRefusedOnceTheLockIsHeld(string change)
+    {
+        var dir = CreateTempDirectory();
+        try
+        {
+            using var service = NewService(dir);
+            var on = false;
+            var gaming = Substitute.For<IGamingProfileService>();
+            gaming.IsActive.Returns(_ => on);
+            using var vm = await ViewModelOverARecord(service, gaming);
+
+            var previousDialog = DialogService.Instance;
+            var dialog = Substitute.For<IDialogService>();
+            // Game mode starts while the question is open, and the answer is yes.
+            dialog.Confirm(Arg.Any<string>(), Arg.Any<string>()).Returns(_ =>
+            {
+                on = true;
+                return true;
+            });
+            DialogService.Instance = dialog;
+            try
+            {
+                await MakeHeldChange(vm, change);
+            }
+            finally { DialogService.Instance = previousDialog; }
+
+            dialog.ReceivedWithAnyArgs(1).Confirm(default!, default!);
+            Assert.Equal(PerformanceViewModel.ChangeDuringGameMode, vm.StatusMessage);
+            Assert.NotNull(service.LoadSnapshot());
         }
         finally
         {

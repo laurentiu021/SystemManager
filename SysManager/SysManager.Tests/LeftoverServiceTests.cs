@@ -377,6 +377,55 @@ public sealed class LeftoverServiceTests : IDisposable
         Assert.Single(Assert.Single(LeftoverService.Parse(File.ReadAllText(service.PendingPath))).Folders);
     }
 
+    /// <summary>
+    /// The record sits in the user's own profile, where anything running as the user can add to it. The administrator
+    /// session that reads it back offered whatever it held, so a folder under another account's profile or
+    /// Users\Public, written into it, was offered for removal with administrator rights (#2747). It now applies the
+    /// writing side's rule again: only Program Files, Program Files (x86) and ProgramData.
+    /// </summary>
+    [Fact]
+    public void ARecordedFolderOutsideTheAdministratorFolders_IsNotOffered_AndLeavesTheRecord()
+    {
+        var install = TempLeftoverEnvironment.Folder(Path.Combine(_env.ProgramFiles, "Acme Notes"));
+        var otherAccount = TempLeftoverEnvironment.Folder(Path.Combine(_env.Root, @"Users\other\AppData\Local\Acme Notes"));
+        var publicFolder = TempLeftoverEnvironment.Folder(Path.Combine(_env.Root, @"Users\Public\Acme Notes"));
+        var service = Service();
+        // Written through RememberPending, so the record is the serialiser's own shape; the flag is what a forged
+        // record would claim, since RememberPending keeps whatever it is told needs administrator rights.
+        service.RememberPending([new LeftoverGroup
+        {
+            AppName = "Acme Notes",
+            Items = [Folder(install, needsAdmin: true), Folder(otherAccount, needsAdmin: true), Folder(publicFolder, needsAdmin: true)],
+        }]);
+        _env.IsElevated = true;
+
+        Assert.Equal([install], Assert.Single(service.LoadPending()).Items.Select(i => i.Location));
+        Assert.Equal([install], Assert.Single(LeftoverService.Parse(File.ReadAllText(service.PendingPath))).Folders.Select(f => f.Path));
+        // And nothing outside the rule was touched on disk.
+        Assert.True(Directory.Exists(otherAccount));
+        Assert.True(Directory.Exists(publicFolder));
+    }
+
+    /// <summary>
+    /// A record that does not parse was read as "nothing queued", and the next RememberPending wrote the new groups over
+    /// it, losing every leftover an earlier session had queued (#2747). It is now set aside first, as every other store
+    /// sets one aside (#2521).
+    /// </summary>
+    [Fact]
+    public void ARecordThatDoesNotParse_IsSetAside_NotWrittenOver()
+    {
+        var install = TempLeftoverEnvironment.Folder(Path.Combine(_env.ProgramFiles, "Acme Notes"));
+        var service = Service();
+        Directory.CreateDirectory(Path.GetDirectoryName(service.PendingPath)!);
+        const string damaged = """[{"AppName":"Earlier","Publisher":"","Folders":[{"Path":"C:\\X",""";
+        File.WriteAllText(service.PendingPath, damaged);
+
+        service.RememberPending([new LeftoverGroup { AppName = "Acme Notes", Items = [Folder(install, needsAdmin: true)] }]);
+
+        Assert.Equal(damaged, File.ReadAllText(service.PendingPath + ".unreadable"));
+        Assert.Equal("Acme Notes", Assert.Single(LeftoverService.Parse(File.ReadAllText(service.PendingPath))).AppName);
+    }
+
     [Theory]
     [InlineData(null)]
     [InlineData("")]

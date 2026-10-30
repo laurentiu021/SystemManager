@@ -67,7 +67,7 @@ public partial class App : Application
     }
 
     // The account's SID, which no other account shares; its name only when Windows gives no SID.
-    private static string CurrentUserKey()
+    internal static string CurrentUserKey()
     {
         using var identity = System.Security.Principal.WindowsIdentity.GetCurrent();
         return identity.User?.Value ?? Environment.UserName;

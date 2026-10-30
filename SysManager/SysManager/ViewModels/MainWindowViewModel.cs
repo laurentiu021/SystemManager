@@ -730,6 +730,12 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable,
 
     private Dictionary<Type, object> BuildDesignerGraph()
     {
+        // Every store in this graph keeps its files here rather than in the user's folder. The graph is built by the
+        // XAML designer and by every test that constructs the shell, and what it builds is no user's: a look at
+        // Settings Watchdog or Recent Changes records what it saw, which would date the user's next "between your look
+        // on ... and ..." from a look nobody took (#1507), the Dashboard takes and deletes the crash marker, and About's
+        // startup check records when it ran, after which the real app skipped its own for a day (#2740).
+        var lookRecords = System.IO.Path.Join(System.IO.Path.GetTempPath(), "SysManager-designer");
         var runner = new PowerShellRunner();
         var sysInfo = new SystemInfoService();
         var winget = new WingetService(runner);
@@ -759,7 +765,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable,
         var gamingCpu = new CpuAffinityService();
         // One Performance Mode service, as under DI: the Performance Mode tab, Gaming Profile and Undo Changes all read
         // and write its record, and an instance each would disagree about what is there (#1525).
-        var performance = new PerformanceService(runner, restorePoints);
+        var performance = new PerformanceService(runner, restorePoints, lookRecords);
         // ONE gaming service for the whole graph. Performance Mode asks it whether a profile is live
         // before it records a recovery baseline, so a second copy would answer "no" while the first
         // one had a session running — which is exactly the state that must never be snapshotted.
@@ -781,7 +787,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable,
         var windowsUpdate = new WindowsUpdateService();
         // One speed-test history, as under DI: the Dashboard's quick test records into the list the Speed Test
         // tab shows, which only works if both hold the same instance.
-        var speedHistory = new SpeedTestHistoryService();
+        var speedHistory = new SpeedTestHistoryService(lookRecords);
         // One privacy service and one handoff, as under DI: Profile Export / Import leaves imported privacy
         // choices in the handoff for the Privacy & Telemetry tab, which only works if both hold the same one.
         var privacy = new PrivacyService();
@@ -789,13 +795,9 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable,
         // One of each store Undo Changes reads, shared with the tab that writes it, as under DI: a put-back through one
         // instance and a tab reading another would disagree about what is there. And one signal, so the tab that made a
         // change hears that Undo Changes put it back (#1525).
-        var serviceLedger = new ServiceStartupLedgerService();
+        var serviceLedger = new ServiceStartupLedgerService(lookRecords);
         var hosts = new HostsFileService();
         var environment = new EnvironmentVariableService();
-        // A look at Settings Watchdog or Recent Changes records what it saw, and a look this graph makes is the
-        // designer's or a test's, not the user's: kept in the user's folder, it would date the user's next "between
-        // your look on ... and ..." from a look nobody took. So what those looks record stays out of it (#1507).
-        var lookRecords = System.IO.Path.Join(System.IO.Path.GetTempPath(), "SysManager-designer");
         var watchdog = new SettingsWatchdogService(lookRecords);
         var putBack = new PutBackSignal();
         // One record of App Alerts' detections, as under DI: Recent Changes reads what App Alerts writes (#1507).
@@ -814,7 +816,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable,
         {
             // The switch for the app-updates check at startup over lookRecords, which holds no setting, so this graph checks
             // as a first launch does, whatever the user has ticked in About (#2613).
-            [typeof(DashboardViewModel)] = new DashboardViewModel(sysInfo, tuneUp, healthScore, new TemperatureService(diskHealth, nvidia: nvidia), winget, new CrashMarkerService(), new MemoryTestService(), designerNavigation, windowsUpdate, speedTest, speedHistory,
+            [typeof(DashboardViewModel)] = new DashboardViewModel(sysInfo, tuneUp, healthScore, new TemperatureService(diskHealth, nvidia: nvidia), winget, new CrashMarkerService(lookRecords), new MemoryTestService(), designerNavigation, windowsUpdate, speedTest, speedHistory,
                 new UpdateCheckPreferenceService(lookRecords),
                 slowdown: new SlowdownService(processes, sysInfo, startup, bootAnalyzer), gaming: gamingProfiles,
                 gpu: gpuTelemetry),
@@ -825,7 +827,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable,
             [typeof(DeepCleanupViewModel)] = new DeepCleanupViewModel(new DeepCleanupService(runner, recycleBin)),
             [typeof(LargeFilesViewModel)] = new LargeFilesViewModel(new LargeFileScanner(), fixedDrives),
             [typeof(DuplicateFileViewModel)] = new DuplicateFileViewModel(new DuplicateFileService()),
-            [typeof(DiskAnalyzerViewModel)] = new DiskAnalyzerViewModel(new DiskAnalyzerService(), new DiskScanHistoryService()),
+            [typeof(DiskAnalyzerViewModel)] = new DiskAnalyzerViewModel(new DiskAnalyzerService(), new DiskScanHistoryService(lookRecords)),
             [typeof(ProcessManagerViewModel)] = new ProcessManagerViewModel(processes),
             [typeof(BatteryHealthViewModel)] = new BatteryHealthViewModel(battery, new BatteryReportService(runner)),
             [typeof(UninstallerViewModel)] = new UninstallerViewModel(new UninstallerService(runner), new LeftoverService(runner)),
@@ -838,12 +840,12 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable,
             [typeof(NetworkRepairViewModel)] = new NetworkRepairViewModel(networkShared, sessionRestorePoint),
             [typeof(DriversViewModel)] = new DriversViewModel(runner),
             [typeof(LogsViewModel)] = new LogsViewModel(new EventLogService()),
-            [typeof(AboutViewModel)] = new AboutViewModel(),
+            [typeof(AboutViewModel)] = new AboutViewModel(lookRecords),
             [typeof(ServicesViewModel)] = new ServicesViewModel(runner, serviceLedger, putBack),
             [typeof(AppAlertsViewModel)] = new AppAlertsViewModel(new AppAlertService(), appAlertHistory),
             [typeof(ShortcutCleanerViewModel)] = new ShortcutCleanerViewModel(shortcuts),
             [typeof(AppBlockerViewModel)] = new AppBlockerViewModel(new AppBlockerService()),
-            [typeof(BulkInstallerViewModel)] = new BulkInstallerViewModel(new BulkInstallerService(new PowerShellRunner()), new AppIconService()),
+            [typeof(BulkInstallerViewModel)] = new BulkInstallerViewModel(new BulkInstallerService(new PowerShellRunner()), new AppIconService(configDir: lookRecords)),
             [typeof(FileShredderViewModel)] = new FileShredderViewModel(new FileShredderService()),
             [typeof(DnsHostsViewModel)] = new DnsHostsViewModel(new DnsService(new PowerShellRunner()), hosts, putBack),
             [typeof(WindowsFeaturesViewModel)] = new WindowsFeaturesViewModel(new WindowsFeaturesService(runner), sessionRestorePoint, new FeatureParentsService()),
@@ -858,7 +860,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable,
             // Two runners, matching what DI hands it: IPowerShellRunner is Transient so the service's
             // stream and the one SFC/DISM drive directly cannot cross-contaminate each other.
             [typeof(SystemFixesViewModel)] = new SystemFixesViewModel(new SystemFixService(new PowerShellRunner()), new PowerShellRunner()),
-            [typeof(ProfileViewModel)] = new ProfileViewModel(new ProfileService(privacy, gamingProfiles), privacyChoices, designerNavigation),
+            [typeof(ProfileViewModel)] = new ProfileViewModel(new ProfileService(privacy, gamingProfiles, lookRecords), privacyChoices, designerNavigation),
             [typeof(BrowserCleanerViewModel)] = new BrowserCleanerViewModel(new BrowserCleanerService(), new BrowserExtensionService()),
             [typeof(PrivacyMonitorViewModel)] = new PrivacyMonitorViewModel(new PrivacyMonitorService()),
             [typeof(BootAnalyzerViewModel)] = new BootAnalyzerViewModel(bootAnalyzer, designerNavigation),
@@ -868,15 +870,15 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable,
             [typeof(CpuAffinityViewModel)] = new CpuAffinityViewModel(new CpuAffinityService()),
             [typeof(DefenderViewModel)] = new DefenderViewModel(new DefenderService(new PowerShellRunner()), sessionRestorePoint),
             [typeof(TaskSchedulerViewModel)] = new TaskSchedulerViewModel(new TaskSchedulerService(new PowerShellRunner())),
-            [typeof(DarkModeViewModel)] = new DarkModeViewModel(new WindowsThemeService()),
+            [typeof(DarkModeViewModel)] = new DarkModeViewModel(new WindowsThemeService(lookRecords)),
             [typeof(StandbyMemoryViewModel)] = new StandbyMemoryViewModel(new StandbyMemoryService()),
             [typeof(ResourceHistoryViewModel)] = new ResourceHistoryViewModel(new ResourceHistoryService(sysInfo, new TemperatureService(diskHealth, nvidia: nvidia), gpu: gpuTelemetry)),
-            [typeof(BandwidthMonitorViewModel)] = new BandwidthMonitorViewModel(new BandwidthHistoryService()),
+            [typeof(BandwidthMonitorViewModel)] = new BandwidthMonitorViewModel(new BandwidthHistoryService(lookRecords)),
             [typeof(SettingsWatchdogViewModel)] = new SettingsWatchdogViewModel(watchdog),
             [typeof(CliInterfaceViewModel)] = new CliInterfaceViewModel(),
             [typeof(ScheduledMaintenanceViewModel)] = new ScheduledMaintenanceViewModel(new MaintenanceSchedulerService(new PowerShellRunner())),
-            [typeof(AudioMixerViewModel)] = new AudioMixerViewModel(new AudioMixerService(), new VolumePresetService()),
-            [typeof(NotificationBlockerViewModel)] = new NotificationBlockerViewModel(new NotificationBlockerService()),
+            [typeof(AudioMixerViewModel)] = new AudioMixerViewModel(new AudioMixerService(), new VolumePresetService(lookRecords)),
+            [typeof(NotificationBlockerViewModel)] = new NotificationBlockerViewModel(new NotificationBlockerService(configDir: lookRecords)),
             [typeof(GamingProfileViewModel)] = new GamingProfileViewModel(gamingProfiles, gamingCpu, putBack),
             [typeof(UndoChangesViewModel)] = new UndoChangesViewModel(
                 new UndoChangesService(performance, serviceLedger, new PowerShellRunner(), hosts, environment,

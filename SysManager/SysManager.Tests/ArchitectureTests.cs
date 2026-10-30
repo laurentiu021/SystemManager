@@ -12628,7 +12628,7 @@ public partial class ArchitectureTests
             $"the EnsureSnapshotAsync slice is {slice.Length} chars — too short to be the method, so every "
             + "assertion below would measure nothing.");
 
-        var checkAt = slice.IndexOf("_gaming.IsActive", StringComparison.Ordinal);
+        var checkAt = slice.IndexOf("ReadGameModeHoldAsync()", StringComparison.Ordinal);
         var loadAt = slice.IndexOf("LoadSnapshot", StringComparison.Ordinal);
         var captureAt = slice.IndexOf("TakeSnapshotAsync", StringComparison.Ordinal);
 
@@ -12637,6 +12637,24 @@ public partial class ArchitectureTests
         if (checkAt < 0)
             offenders.Add("EnsureSnapshotAsync does not consult the gaming session at all, so it can record "
                 + "a profile's power plan as the user's original");
+
+        // The check is the rule Undo Changes holds Performance Mode back by: game mode on in this run, left on by an
+        // earlier one, or not known. It read IsActive alone, which a crash leaves false with the session's record still
+        // on disk, so the guard passed with that gap open (#2711).
+        var hold = WithoutComments(MemberSlice(vm, "private async Task<GameModeHold> ReadGameModeHoldAsync()"));
+        Assert.True(hold.Length > 100,
+            $"the ReadGameModeHoldAsync slice is {hold.Length} chars — too short to be the method, so the reads "
+            + "below would measure nothing.");
+        foreach (var read in new[]
+                 {
+                     "_gaming.IsActive", "_gaming.ReadPendingRecovery", "PendingRecoveryKind.LeftOn",
+                     "PendingRecoveryKind.Unreadable",
+                 })
+        {
+            if (!hold.Contains(read, StringComparison.Ordinal))
+                offenders.Add($"ReadGameModeHoldAsync no longer reads {read}, so a capture can take game mode's "
+                    + "settings for the user's own");
+        }
         Assert.True(loadAt >= 0 && captureAt >= 0,
             "LoadSnapshot / TakeSnapshotAsync were not both found in EnsureSnapshotAsync — this guard "
             + "cannot check the ordering it exists for; fix the guard.");

@@ -302,6 +302,10 @@ to scroll.
   and a read leaves `NeedsReboot` alone, so a graphics change's reboot notice lasts the session (#2607). The read
   after an Apply keeps any switch that differs from the last read, and a declined or locked-out Apply puts back only
   its own switch (#2836). The Apply commands write through `PerformanceService`'s constructor writes.
+  `ReadGameModeHoldAsync` tells game mode on in this run, left on by an earlier one, or not known, the rule
+  Undo Changes holds Performance Mode back by: the capture of a first baseline refuses for any of them, and
+  Restore All and the power plan, visual effects and processor state Apply refuse before their question and
+  again once the system-modification lock is held, which game mode takes to start (#2711).
 - `PingViewModel` — live ping monitoring with latency chart and health verdict.
 - `TracerouteViewModel` — auto-traceroute + manual trace. Its Start/Stop drive the auto-trace monitor in
   `NetworkSharedState`, which traces the Ping tab's targets plus the host typed here: `TrackAutoTraceHost` gives the

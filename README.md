@@ -2058,10 +2058,14 @@ offers, "rate us" prompts:
   one of them, so turn it back on with its own switch. Each Apply, and Restore All, reads that record
   from disk when you press it; it is checked before use, and the question shows when it was taken. A
   power plan the record could not read is listed as "unchanged", because Restore All leaves it alone
-- **It will not record your settings while a game profile is running** — those are the
-  profile's power plan and visual effects, not yours, and saving them as your baseline
-  would restore you to them later. It asks you to stop the profile first. A baseline
-  saved *before* the profile started is still used normally
+- **It will not record your settings while a game profile is running**, or while one an earlier
+  run left on is still to be put back — those are the profile's power plan and visual effects, not
+  yours, and saving them as your baseline would restore you to them later. It asks you to stop the
+  profile first, or to turn it off in Undo Changes. A baseline saved *before* the profile started is
+  still used normally
+- **Restore All and the power plan, visual effects and processor switches wait for game mode** —
+  while it is on, or left on, turning it off puts back the settings it started from, so a change
+  made then would not last. They ask you to stop game mode first, before anything else
 - **It never records over a baseline it cannot read** — after an earlier change, the settings
   on the PC are the tweaks, and recording them as your original would make Restore All put them
   back. If the saved baseline cannot be read, the change is stopped and nothing is recorded. A

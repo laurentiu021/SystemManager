@@ -10,6 +10,18 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.136.29] - 2026-10-30
+
+**Performance Mode waits for game mode before it changes the settings game mode holds.**
+
+### Fixed
+- Performance Mode's Restore All and its power plan, visual effects and processor state buttons
+  ran while game mode was on, and the end of the session then put its own settings back over what
+  they had set. They now ask you to stop game mode first, before anything else. With game mode
+  left on by an earlier run, Performance Mode also no longer records the gaming settings as your
+  originals, and asks you to turn game mode off in Undo Changes first. Present since Gaming Profile
+  was added in 1.52.38.
+
 ## [1.136.28] - 2026-10-30
 
 **Game mode's record of your own settings can no longer be written over or lost.**

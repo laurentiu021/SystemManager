@@ -3,6 +3,7 @@
 // License: MIT
 
 using System.Reflection;
+using Microsoft.Win32;
 using NSubstitute;
 using SysManager.Helpers;
 using SysManager.Models;
@@ -17,9 +18,26 @@ namespace SysManager.Tests;
 /// </summary>
 // Serialized: the confirm-gate test swaps the static DialogService.Instance.
 [Collection("ProcessWideStatics")]
-public class WindowsUpdateViewModelTests
+public sealed class WindowsUpdateViewModelTests : IDisposable
 {
-    private static WindowsUpdateViewModel NewVm() => new(new PowerShellRunner(), new WindowsUpdateService(), new WindowsUpdatePolicyService());
+    // Every view model here reads and writes its update policy under a throwaway key. Over the default,
+    // HKEY_LOCAL_MACHINE, a policy command whose gate regressed would have changed this PC's own Windows Update
+    // policy on an elevated run, and the CI runner is elevated (#2740).
+    private readonly string _policyRootName = @"Software\SysManagerTests\UpdatePolicyVm_" + Guid.NewGuid().ToString("N");
+    private readonly RegistryKey _policyRoot;
+
+    public WindowsUpdateViewModelTests() =>
+        _policyRoot = Registry.CurrentUser.CreateSubKey(_policyRootName, writable: true);
+
+    public void Dispose()
+    {
+        _policyRoot.Dispose();
+        Registry.CurrentUser.DeleteSubKeyTree(_policyRootName, throwOnMissingSubKey: false);
+    }
+
+    private WindowsUpdatePolicyService Policy() => new(_policyRoot);
+
+    private WindowsUpdateViewModel NewVm() => new(new PowerShellRunner(), new WindowsUpdateService(), Policy());
 
     // ---------- construction & defaults ----------
 
@@ -100,7 +118,7 @@ public class WindowsUpdateViewModelTests
         var vm = new WindowsUpdateViewModel(
             runner,
             new WindowsUpdateService(),
-            new WindowsUpdatePolicyService(),
+            Policy(),
             static () => true);
 
         await vm.InstallModuleCommand.ExecuteAsync(null);
@@ -119,7 +137,7 @@ public class WindowsUpdateViewModelTests
         var vm = new WindowsUpdateViewModel(
             runner,
             new WindowsUpdateService(),
-            new WindowsUpdatePolicyService(),
+            Policy(),
             static () => false);
 
         await vm.InstallModuleCommand.ExecuteAsync(null);
@@ -141,7 +159,7 @@ public class WindowsUpdateViewModelTests
         var vm = new WindowsUpdateViewModel(
             runner,
             new WindowsUpdateService(),
-            new WindowsUpdatePolicyService(),
+            Policy(),
             static () => false);
 
         await vm.InstallModuleCommand.ExecuteAsync(null);
@@ -162,7 +180,7 @@ public class WindowsUpdateViewModelTests
         var vm = new WindowsUpdateViewModel(
             runner,
             new WindowsUpdateService(),
-            new WindowsUpdatePolicyService(),
+            Policy(),
             static () => false);
         vm.Updates.Add(new UpdateEntry { Title = "Previous result" });
         vm.UpdateCount = 1;
@@ -188,7 +206,7 @@ public class WindowsUpdateViewModelTests
         var vm = new WindowsUpdateViewModel(
             runner,
             new WindowsUpdateService(),
-            new WindowsUpdatePolicyService(),
+            Policy(),
             static () => false);
         vm.Updates.Add(new UpdateEntry { Title = "Previous result" });
         vm.UpdateCount = 1;
@@ -245,7 +263,7 @@ public class WindowsUpdateViewModelTests
         var vm = new WindowsUpdateViewModel(
             runner,
             new WindowsUpdateService(),
-            new WindowsUpdatePolicyService(),
+            Policy(),
             static () => false);
         vm.Updates.Add(new UpdateEntry { Title = "Previous result" });
         vm.UpdateCount = 1;
@@ -271,7 +289,7 @@ public class WindowsUpdateViewModelTests
         var vm = new WindowsUpdateViewModel(
             runner,
             new WindowsUpdateService(),
-            new WindowsUpdatePolicyService(),
+            Policy(),
             static () => false);
         vm.Updates.Add(new UpdateEntry { Title = "Previous result" });
         vm.UpdateCount = 1;
@@ -297,7 +315,7 @@ public class WindowsUpdateViewModelTests
         var vm = new WindowsUpdateViewModel(
             runner,
             new WindowsUpdateService(),
-            new WindowsUpdatePolicyService(),
+            Policy(),
             static () => false);
         vm.Updates.Add(new UpdateEntry { Title = "Previous result" });
         vm.UpdateCount = 1;
@@ -508,7 +526,7 @@ public class WindowsUpdateViewModelTests
     /// A view model whose scans return the given updates in turn, each time as new rows, as Windows Update does,
     /// and whose history read fails, which still clears the grid as a look at the history does.
     /// </summary>
-    private static WindowsUpdateViewModel VmOverScans(params string[][] scans)
+    private WindowsUpdateViewModel VmOverScans(params string[][] scans)
     {
         var wu = Substitute.For<IWindowsUpdateService>();
         var call = 0;
@@ -521,7 +539,7 @@ public class WindowsUpdateViewModelTests
         var runner = Substitute.For<IPowerShellRunner>();
         runner.RunScriptViaPwshAsync(Arg.Any<string>(), Arg.Any<CancellationToken>())
               .Returns(WindowsUpdateViewModel.HistoryModuleImportFailedExitCode);
-        return new WindowsUpdateViewModel(runner, wu, new WindowsUpdatePolicyService(), () => false);
+        return new WindowsUpdateViewModel(runner, wu, Policy(), () => false);
     }
 
     private static bool Ticked(WindowsUpdateViewModel vm, string id) =>
@@ -599,7 +617,7 @@ public class WindowsUpdateViewModelTests
 
     // ---------- select-all header checkbox (audit #66) ----------
 
-    private static WindowsUpdateViewModel VmWithUpdates(int count)
+    private WindowsUpdateViewModel VmWithUpdates(int count)
     {
         var vm = NewVm();
         for (var i = 0; i < count; i++)
@@ -702,7 +720,7 @@ public class WindowsUpdateViewModelTests
         var runner = Substitute.For<IPowerShellRunner>();
         runner.RunScriptViaPwshAsync(Arg.Any<string>(), Arg.Any<CancellationToken>()).Returns(probe.Task);
         var vm = new WindowsUpdateViewModel(runner, Substitute.For<IWindowsUpdateService>(),
-            new WindowsUpdatePolicyService(), () => false);
+            Policy(), () => false);
 
         var check = vm.CheckModuleCommand.ExecuteAsync(null);
         try
@@ -753,11 +771,10 @@ public class WindowsUpdateViewModelTests
     // deferral or pause those two produced — was the one that did not ask. All three are pinned here so
     // the asymmetry cannot come back.
     //
-    // Driven with isElevated: true and a DECLINED confirm, deliberately. WindowsUpdatePolicyService is
-    // sealed with no interface, so it cannot be substituted; on an elevated machine a confirmed Restore
-    // would really delete six values under HKLM\…\WindowsUpdate — the developer's own update policy.
-    // Declining is the assertion that matters anyway (the gate exists and it blocks), and it reaches the
-    // Confirm without ever reaching the registry.
+    // Driven with isElevated: true and a DECLINED confirm, deliberately: declining is the assertion that
+    // matters (the gate exists and it blocks), and it reaches the Confirm without ever reaching the registry.
+    // The policy service writes under the class's throwaway key, so even a confirmed Restore could not reach
+    // this PC's own update policy.
 
     [Theory]
     [InlineData("RestoreUpdatePolicyCommand")]
@@ -768,7 +785,7 @@ public class WindowsUpdateViewModelTests
         var vm = new WindowsUpdateViewModel(
             Substitute.For<IPowerShellRunner>(),
             new WindowsUpdateService(),
-            new WindowsUpdatePolicyService(),
+            Policy(),
             static () => true);
 
         var before = vm.PolicySummary;
@@ -800,7 +817,7 @@ public class WindowsUpdateViewModelTests
         var vm = new WindowsUpdateViewModel(
             Substitute.For<IPowerShellRunner>(),
             new WindowsUpdateService(),
-            new WindowsUpdatePolicyService(),
+            Policy(),
             static () => true);
 
         var prevDialog = DialogService.Instance;
@@ -941,11 +958,11 @@ public class WindowsUpdateViewModelTests
     // The runner is substituted throughout: past these gates the real one installs a PowerShell module or
     // Windows updates, and a test must not be one gate away from doing that.
 
-    private static WindowsUpdateViewModel NewVm(bool elevated, out IPowerShellRunner runner)
+    private WindowsUpdateViewModel NewVm(bool elevated, out IPowerShellRunner runner)
     {
         runner = Substitute.For<IPowerShellRunner>();
         return new WindowsUpdateViewModel(runner, new WindowsUpdateService(),
-                                         new WindowsUpdatePolicyService(),
+                                         Policy(),
                                          isElevated: () => elevated);
     }
 
@@ -1117,7 +1134,7 @@ public class WindowsUpdateViewModelTests
         var asked = 0;
         var runner = Substitute.For<IPowerShellRunner>();
         var vm = new WindowsUpdateViewModel(runner, new WindowsUpdateService(),
-                                            new WindowsUpdatePolicyService(),
+                                            Policy(),
                                             isElevated: () => { asked++; return false; });
         Assert.Equal(1, asked);   // the constructor's read, seeding the property
 
@@ -1144,7 +1161,7 @@ public class WindowsUpdateViewModelTests
     public void Constructor_WithoutAnElevationProbe_Throws()
         => Assert.Throws<ArgumentNullException>(() => new WindowsUpdateViewModel(
             Substitute.For<IPowerShellRunner>(), new WindowsUpdateService(),
-            new WindowsUpdatePolicyService(), isElevated: null!));
+            Policy(), isElevated: null!));
 
     [Fact]
     public async Task InstallUpdates_WhileAnotherSystemChangeRuns_InstallsNothing()
@@ -1153,7 +1170,7 @@ public class WindowsUpdateViewModelTests
         // repair, or of a Reset Windows Update that stops the services it installs through.
         var wu = Substitute.For<IWindowsUpdateService>();
         var vm = new WindowsUpdateViewModel(
-            Substitute.For<IPowerShellRunner>(), wu, new WindowsUpdatePolicyService(), static () => true);
+            Substitute.For<IPowerShellRunner>(), wu, Policy(), static () => true);
         vm.Updates.Add(new UpdateEntry { Title = "2026-09 Cumulative Update", IsSelected = true });
         using var dialog = new DialogAnswer(confirm: true);
         using var held = OperationLockService.Instance.TryAcquire(OperationCategory.SystemModification, "Windows Update reset");

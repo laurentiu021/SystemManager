@@ -2,17 +2,40 @@
 // Author: laurentiu021 · https://github.com/laurentiu021/SystemManager
 // License: MIT
 
+using Microsoft.Win32;
 using SysManager.Models;
 using SysManager.Services;
 
 namespace SysManager.Tests;
 
 /// <summary>
-/// Tests for <see cref="StartupService.SetEnabledAsync"/> covering registry-based
+/// Tests for <see cref="StartupService.SetEnabledAsync(StartupEntry, bool)"/> covering registry-based
 /// and Task Scheduler entries, plus specific error messages (#159, #160).
 /// </summary>
-public class StartupToggleTests
+public sealed class StartupToggleTests : IDisposable
 {
+    // Throwaway keys standing in for HKCU and HKLM. A toggle writes StartupApproved under the root it is given, and on
+    // the real hive every run of the suite left one more value in the user's own list (#2740).
+    private readonly string _rootName = @"Software\SysManagerTests\StartupToggle_" + Guid.NewGuid().ToString("N");
+    private readonly RegistryKey _currentUser;
+    private readonly RegistryKey _localMachine;
+
+    public StartupToggleTests()
+    {
+        _currentUser = Registry.CurrentUser.CreateSubKey(_rootName + @"\HKCU", writable: true);
+        _localMachine = Registry.CurrentUser.CreateSubKey(_rootName + @"\HKLM", writable: true);
+    }
+
+    public void Dispose()
+    {
+        _currentUser.Dispose();
+        _localMachine.Dispose();
+        Registry.CurrentUser.DeleteSubKeyTree(_rootName, throwOnMissingSubKey: false);
+    }
+
+    private Task<bool> SetEnabledAsync(StartupEntry entry, bool enabled)
+        => StartupService.SetEnabledAsync(entry, enabled, _currentUser, _localMachine);
+
     [Fact]
     public async Task SetEnabledAsync_TaskScheduler_EmptyPath_ReturnsFalseWithMessage()
     {
@@ -26,7 +49,7 @@ public class StartupToggleTests
             StatusText = "Enabled"
         };
 
-        var result = await StartupService.SetEnabledAsync(entry, false);
+        var result = await SetEnabledAsync(entry, false);
 
         Assert.False(result);
         Assert.Contains("task path unknown", entry.StatusText, StringComparison.OrdinalIgnoreCase);
@@ -45,7 +68,7 @@ public class StartupToggleTests
             StatusText = "Enabled"
         };
 
-        var result = await StartupService.SetEnabledAsync(entry, false);
+        var result = await SetEnabledAsync(entry, false);
 
         Assert.False(result);
         Assert.Contains("task path unknown", entry.StatusText, StringComparison.OrdinalIgnoreCase);
@@ -65,9 +88,16 @@ public class StartupToggleTests
             StatusText = "Enabled"
         };
 
-        var result = await StartupService.SetEnabledAsync(entry, false);
+        var result = await SetEnabledAsync(entry, false);
 
         Assert.DoesNotContain("may need admin", entry.StatusText, StringComparison.OrdinalIgnoreCase);
+
+        // The disable blob went to the throwaway root, and nothing reached the user's own list.
+        Assert.True(result);
+        using (var approved = _currentUser.OpenSubKey(StartupService.ApprovedRunHKCU))
+            Assert.Equal((byte)3, Assert.IsType<byte[]>(approved?.GetValue(entry.ValueName))[0]);
+        using (var real = Registry.CurrentUser.OpenSubKey(StartupService.ApprovedRunHKCU))
+            Assert.Null(real?.GetValue(entry.ValueName));
     }
 
     [Fact]
@@ -83,7 +113,7 @@ public class StartupToggleTests
             StatusText = "Enabled"
         };
 
-        var result = await StartupService.SetEnabledAsync(entry, false);
+        var result = await SetEnabledAsync(entry, false);
 
         Assert.False(result);
         Assert.StartsWith("Error", entry.StatusText, StringComparison.OrdinalIgnoreCase);
@@ -103,7 +133,7 @@ public class StartupToggleTests
             StatusText = "Enabled"
         };
 
-        await StartupService.SetEnabledAsync(entry, false);
+        await SetEnabledAsync(entry, false);
 
         Assert.True(entry.IsEnabled);
     }
@@ -132,10 +162,76 @@ public class StartupToggleTests
             StatusText = "Enabled"
         };
 
-        var result = await StartupService.SetEnabledAsync(entry, false);
+        var result = await SetEnabledAsync(entry, false);
 
         Assert.False(result);
         Assert.Contains("run-once", entry.StatusText, StringComparison.OrdinalIgnoreCase);
         Assert.True(entry.IsEnabled); // never flipped to disabled
+        Assert.Empty(_currentUser.GetSubKeyNames());
+        Assert.Empty(_localMachine.GetSubKeyNames());
+    }
+
+    // ---------- each source writes the StartupApproved list Windows reads for it ----------
+    // Asserted against the source until SetEnabledAsync took its hive roots, because the only registry it could
+    // reach was the live one. A blob in the wrong list is the failure that shipped twice: the item keeps starting at
+    // every boot while the tab says "Disabled".
+
+    private const string ApprovedLists = @"SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\StartupApproved";
+
+    [Theory]
+    [InlineData(StartupSource.RegistryCurrentUser, "HKCU", "Run")]
+    [InlineData(StartupSource.StartupFolder, "HKCU", "StartupFolder")]
+    [InlineData(StartupSource.RegistryLocalMachine, "HKLM", "Run")]
+    [InlineData(StartupSource.RegistryLocalMachine32, "HKLM", "Run32")]
+    [InlineData(StartupSource.CommonStartupFolder, "HKLM", "StartupFolder")]
+    public async Task Disabling_WritesTheApprovedKeyWindowsReadsForItsSource(StartupSource source, string hive, string list)
+    {
+        var entry = new StartupEntry
+        {
+            Name = "Probe",
+            Command = "probe.exe",
+            Source = source,
+            RegistryKey = @"SOFTWARE\Microsoft\Windows\CurrentVersion\Run",
+            ValueName = "Probe",
+            IsEnabled = true,
+            StatusText = "Enabled"
+        };
+
+        Assert.True(await SetEnabledAsync(entry, false));
+
+        var (written, untouched) = hive == "HKCU" ? (_currentUser, _localMachine) : (_localMachine, _currentUser);
+        foreach (var name in new[] { "Run", "Run32", "StartupFolder" })
+        {
+            using var key = written.OpenSubKey($@"{ApprovedLists}\{name}");
+            if (name == list)
+                Assert.Equal((byte)3, Assert.IsType<byte[]>(key?.GetValue("Probe"))[0]);
+            else
+                Assert.Null(key?.GetValue("Probe"));
+        }
+        Assert.Empty(untouched.GetSubKeyNames());
+        Assert.False(entry.IsEnabled);
+    }
+
+    [Fact]
+    public async Task APolicyRunItem_IsRefused_AndNothingIsWritten()
+    {
+        // Windows never consults StartupApproved for a policy key, so a disable blob anywhere would be one nothing reads.
+        var entry = new StartupEntry
+        {
+            Name = "Pushed",
+            Command = "pushed.exe",
+            Source = StartupSource.PolicyRun,
+            RegistryKey = @"SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\Explorer\Run",
+            ValueName = "Pushed",
+            IsEnabled = true,
+            StatusText = "Enabled"
+        };
+
+        Assert.False(await SetEnabledAsync(entry, false));
+
+        Assert.Contains("system policy", entry.StatusText, StringComparison.OrdinalIgnoreCase);
+        Assert.True(entry.IsEnabled);
+        Assert.Empty(_currentUser.GetSubKeyNames());
+        Assert.Empty(_localMachine.GetSubKeyNames());
     }
 }

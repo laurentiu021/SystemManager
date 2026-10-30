@@ -311,29 +311,24 @@ public class EnvironmentVariableServiceTests
     public void SetVariable_PreservesExpandSz_AndReadsRawTokens_EndToEnd()
     {
         // End-to-end regression for the REG_EXPAND_SZ flattening bug: write an expandable
-        // value to a throwaway User variable, then confirm via the service that the value
+        // value to a User variable, then confirm via the service that the value
         // KIND stayed REG_EXPAND_SZ and the RAW %VAR% token round-tripped (not expanded).
-        // Uses a unique name in the real HKCU\Environment and removes it in finally.
-        var svc = new EnvironmentVariableService();
-        var name = "SM_TEST_" + Guid.NewGuid().ToString("N");
+        // Over a redirected root: it used to write the real HKCU\Environment and count on a finally (#2740).
+        using var env = new RedirectedEnvironment();
+        const string name = "SM_TEST_EXPAND";
         const string rawValue = @"%SystemRoot%\System32;C:\SmTest";
-        try
-        {
-            Assert.True(svc.SetVariable(name, rawValue, EnvVarScope.User));
 
-            using var key = Registry.CurrentUser.OpenSubKey("Environment");
+        Assert.True(env.Service.SetVariable(name, rawValue, EnvVarScope.User));
+
+        using (var key = env.UserRoot.OpenSubKey(EnvironmentVariableService.UserEnvPath))
+        {
             Assert.NotNull(key);
             Assert.Equal(RegistryValueKind.ExpandString, key!.GetValueKind(name));
+        }
 
-            var roundTripped = svc.Read(EnvVarScope.User).Single(v => v.Name == name);
-            Assert.Equal(rawValue, roundTripped.Value);   // %SystemRoot% preserved, not expanded
-            Assert.True(roundTripped.IsExpandable);
-        }
-        finally
-        {
-            using var key = Registry.CurrentUser.OpenSubKey("Environment", writable: true);
-            key?.DeleteValue(name, throwOnMissingValue: false);
-        }
+        var roundTripped = env.Service.Read(EnvVarScope.User).Single(v => v.Name == name);
+        Assert.Equal(rawValue, roundTripped.Value);   // %SystemRoot% preserved, not expanded
+        Assert.True(roundTripped.IsExpandable);
     }
 
     [Fact]
@@ -393,16 +388,16 @@ public class EnvironmentVariableServiceTests
     [Fact]
     public void SetVariable_ReturnsFalse_ForInvalidName_DoesNotThrow()
     {
-        var svc = new EnvironmentVariableService();
+        // Over a redirected root: on the real HKCU\Environment, a regression in TryValidateName would have left
+        // these three names there for good (#2740).
+        using var env = new RedirectedEnvironment();
 
-        var result = svc.SetVariable("HAS SPACE", "somevalue", EnvVarScope.User);
-        Assert.False(result);
+        Assert.False(env.Service.SetVariable("HAS SPACE", "somevalue", EnvVarScope.User));
+        Assert.False(env.Service.SetVariable("=C:", "somepath", EnvVarScope.User));
+        Assert.False(env.Service.SetVariable("1DIGIT_START", "x", EnvVarScope.User));
 
-        result = svc.SetVariable("=C:", "somepath", EnvVarScope.User);
-        Assert.False(result);
-
-        result = svc.SetVariable("1DIGIT_START", "x", EnvVarScope.User);
-        Assert.False(result);
+        using var key = env.UserRoot.OpenSubKey(EnvironmentVariableService.UserEnvPath);
+        Assert.Empty(key!.GetValueNames());
     }
 
     [Fact]
@@ -464,21 +459,14 @@ public class EnvironmentVariableServiceTests
     [Fact]
     public void SetVariable_WithExplicitKind_WritesCorrectKind()
     {
-        var svc = new EnvironmentVariableService();
-        var name = "SM_TEST_KIND_" + Guid.NewGuid().ToString("N");
-        try
-        {
-            Assert.True(svc.SetVariable(name, "plain_no_percent", EnvVarScope.User, RegistryValueKind.ExpandString));
+        using var env = new RedirectedEnvironment();
+        const string name = "SM_TEST_KIND";
 
-            using var key = Registry.CurrentUser.OpenSubKey("Environment");
-            Assert.NotNull(key);
-            Assert.Equal(RegistryValueKind.ExpandString, key!.GetValueKind(name));
-        }
-        finally
-        {
-            using var key = Registry.CurrentUser.OpenSubKey("Environment", writable: true);
-            key?.DeleteValue(name, throwOnMissingValue: false);
-        }
+        Assert.True(env.Service.SetVariable(name, "plain_no_percent", EnvVarScope.User, RegistryValueKind.ExpandString));
+
+        using var key = env.UserRoot.OpenSubKey(EnvironmentVariableService.UserEnvPath);
+        Assert.NotNull(key);
+        Assert.Equal(RegistryValueKind.ExpandString, key!.GetValueKind(name));
     }
 
     // ---------- Backup trust boundary ----------

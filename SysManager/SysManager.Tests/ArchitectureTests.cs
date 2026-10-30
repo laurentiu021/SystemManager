@@ -11768,8 +11768,9 @@ public partial class ArchitectureTests
     /// folder, which is why <c>CommonStartupFolder</c> exists as its own source — this pins the same
     /// contract for the 32-bit registry view so the pattern cannot be reintroduced by adding a key to the
     /// array and reusing the nearest source value.</para>
-    /// <para>Asserted at source level because <c>SetEnabledAsync</c> writes to the live registry, so the
-    /// mapping cannot be exercised from a unit test without touching the user's real machine.</para>
+    /// <para>The read half is asserted here, at source level. The write half is exercised on throwaway roots by
+    /// <c>StartupToggleTests.Disabling_WritesTheApprovedKeyWindowsReadsForItsSource</c>, since
+    /// <c>SetEnabledAsync</c> takes its hive roots (#2740).</para>
     /// </summary>
     [Fact]
     public void EveryMachineRunKey_ReadsAndWritesItsOwnStartupApprovedKey()
@@ -11794,7 +11795,7 @@ public partial class ArchitectureTests
         // both exist.
         var readAt = source.IndexOf("private static void ApplyApprovedState", StringComparison.Ordinal);
         Assert.True(readAt > 0, "ApplyApprovedState was not found — fix this guard, do not delete it.");
-        var writeAt = source.IndexOf("public static async Task<bool> SetEnabledAsync", StringComparison.Ordinal);
+        var writeAt = source.IndexOf("internal static async Task<bool> SetEnabledAsync", StringComparison.Ordinal);
         Assert.True(writeAt > readAt,
             "SetEnabledAsync is expected after ApplyApprovedState; the slices below assume that order.");
 
@@ -11808,14 +11809,7 @@ public partial class ArchitectureTests
             "StartupSource.RegistryLocalMachine => hklmApproved ?? hklm32Approved",
             readBody, StringComparison.Ordinal);
 
-        // Write path: the same source must target ApprovedRun32HKLM.
         var writeBody = source[writeAt..];
-        Assert.Contains(
-            "StartupSource.RegistryLocalMachine32 => (Registry.LocalMachine, ApprovedRun32HKLM)",
-            writeBody, StringComparison.Ordinal);
-        Assert.Contains(
-            "StartupSource.RegistryLocalMachine => (Registry.LocalMachine, ApprovedRunHKLM)",
-            writeBody, StringComparison.Ordinal);
 
         // The approved key must be CREATED if absent, not merely opened. Windows creates each
         // StartupApproved subkey lazily, on the first disable through that list, so on a machine where
@@ -11840,9 +11834,9 @@ public partial class ArchitectureTests
     /// the item keeps starting at every boot while the tab reports "Disabled". That failure has already
     /// shipped twice in this service's history (the all-users folder, then the 32-bit view), and RunOnce is
     /// refused for precisely this reason.</para>
-    /// <para>Asserted at source level for the same reason as the guard above: <c>SetEnabledAsync</c> writes
-    /// to the live registry, so the refusal cannot be exercised from a unit test without touching the
-    /// user's real machine.</para>
+    /// <para>The enumeration and the read half are asserted here, at source level. The refusal itself is exercised
+    /// on throwaway roots by <c>StartupToggleTests.APolicyRunItem_IsRefused_AndNothingIsWritten</c>, since
+    /// <c>SetEnabledAsync</c> takes its hive roots (#2740).</para>
     /// </summary>
     [Fact]
     public void EveryStartupSourceWithNoApprovedKey_IsRefusedInsteadOfFakingSuccess()
@@ -11864,21 +11858,8 @@ public partial class ArchitectureTests
                 source, StringComparison.Ordinal);
         }
 
-        var writeAt = source.IndexOf("public static async Task<bool> SetEnabledAsync", StringComparison.Ordinal);
+        var writeAt = source.IndexOf("internal static async Task<bool> SetEnabledAsync", StringComparison.Ordinal);
         Assert.True(writeAt > 0, "SetEnabledAsync was not found — fix this guard, do not delete it.");
-        var writeBody = source[writeAt..];
-
-        // The refusal must come BEFORE the approved-key switch, so slice there and require it in the
-        // earlier half: a refusal placed after the switch would never run.
-        var switchAt = writeBody.IndexOf("var (root, approvedPath) = entry.Source switch", StringComparison.Ordinal);
-        Assert.True(switchAt > 0, "the approved-key switch was not found in SetEnabledAsync.");
-        var beforeSwitch = writeBody[..switchAt];
-
-        Assert.Contains("entry.Source == StartupSource.PolicyRun", beforeSwitch, StringComparison.Ordinal);
-
-        // And it must actually return false, not merely set a message and carry on into the switch.
-        var refusalAt = beforeSwitch.IndexOf("entry.Source == StartupSource.PolicyRun", StringComparison.Ordinal);
-        Assert.Contains("return false;", beforeSwitch[refusalAt..], StringComparison.Ordinal);
 
         // The read path must not map the policy source to an approved dictionary either. Matched as the
         // switch-ARM shape so the comments that name the source cannot satisfy it.

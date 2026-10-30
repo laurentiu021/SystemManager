@@ -60,7 +60,7 @@ public sealed class StartupService
         @"SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\Explorer\Run";
 
     // Approved key where Windows stores disabled startup items
-    private const string ApprovedRunHKCU =
+    internal const string ApprovedRunHKCU =
         @"SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\StartupApproved\Run";
     private const string ApprovedRunHKLM =
         @"SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\StartupApproved\Run";
@@ -598,7 +598,16 @@ public sealed class StartupService
     /// registry key. This is the same mechanism Task Manager uses.
     /// Non-destructive — the Run key value is never deleted.
     /// </summary>
-    public static async Task<bool> SetEnabledAsync(StartupEntry entry, bool enabled)
+    public static Task<bool> SetEnabledAsync(StartupEntry entry, bool enabled)
+        => SetEnabledAsync(entry, enabled, Registry.CurrentUser, Registry.LocalMachine);
+
+    /// <summary>
+    /// <see cref="SetEnabledAsync(StartupEntry, bool)"/> with the StartupApproved keys opened under
+    /// <paramref name="currentUser"/> and <paramref name="localMachine"/>, so a test writes a throwaway key: on the
+    /// real hive, every run of the suite left one more value in the user's own StartupApproved list (#2740).
+    /// </summary>
+    internal static async Task<bool> SetEnabledAsync(
+        StartupEntry entry, bool enabled, RegistryKey currentUser, RegistryKey localMachine)
     {
         try
         {
@@ -630,19 +639,19 @@ public sealed class StartupService
 
             var (root, approvedPath) = entry.Source switch
             {
-                StartupSource.RegistryCurrentUser => (Registry.CurrentUser, ApprovedRunHKCU),
-                StartupSource.RegistryLocalMachine => (Registry.LocalMachine, ApprovedRunHKLM),
+                StartupSource.RegistryCurrentUser => (currentUser, ApprovedRunHKCU),
+                StartupSource.RegistryLocalMachine => (localMachine, ApprovedRunHKLM),
                 // Windows consults StartupApproved\Run32 for Wow6432Node Run items. Writing the disable
                 // blob to StartupApproved\Run instead would land where Windows never looks: the item
                 // would keep running at boot while this tab reported "Disabled".
-                StartupSource.RegistryLocalMachine32 => (Registry.LocalMachine, ApprovedRun32HKLM),
-                StartupSource.StartupFolder => (Registry.CurrentUser, ApprovedStartupFolder),
+                StartupSource.RegistryLocalMachine32 => (localMachine, ApprovedRun32HKLM),
+                StartupSource.StartupFolder => (currentUser, ApprovedStartupFolder),
                 // Common (all-users) folder items live under HKLM — writing to HKCU (as before)
                 // put the disable blob where Windows never looks, so the item still ran while the
                 // UI claimed "Disabled". HKLM needs elevation; a non-elevated open below returns
                 // null and surfaces the same access-denied status as the HKLM Run path.
-                StartupSource.CommonStartupFolder => (Registry.LocalMachine, ApprovedStartupFolder),
-                _ => (Registry.CurrentUser, ApprovedRunHKCU)
+                StartupSource.CommonStartupFolder => (localMachine, ApprovedStartupFolder),
+                _ => (currentUser, ApprovedRunHKCU)
             };
 
             // CreateSubKey, not OpenSubKey(writable: true): Windows creates each StartupApproved subkey

@@ -10,7 +10,7 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
-## [1.136.31] - 2026-10-30
+## [1.136.31] - 2026-10-31
 
 **Ping's verdict no longer calls your router and DNS clean without pinging them, and counts the
 targets you add.**

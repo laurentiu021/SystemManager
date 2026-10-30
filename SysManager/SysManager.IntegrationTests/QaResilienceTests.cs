@@ -89,9 +89,12 @@ public class QaResilienceTests
     [Fact]
     public void HealthAnalyzer_MultipleGameTargets_WorstWinsVerdict()
     {
+        // The clean public DNS reference is what lets the verdict blame the game server. Without one, the server and
+        // the provider in between cannot be told apart, and the verdict is Inconclusive (#2712).
         var diag = HealthAnalyzer.Analyze(new[]
         {
             new HealthAnalyzer.TargetMetric("gw", TargetRole.Gateway, 2, 1, 0, 10),
+            new HealthAnalyzer.TargetMetric("dns", TargetRole.PublicDns, 15, 2, 0, 10),
             new HealthAnalyzer.TargetMetric("g1", TargetRole.GameServer, 30, 5, 0, 10),
             new HealthAnalyzer.TargetMetric("g2", TargetRole.GameServer, 30, 5, 10, 10), // bad
             new HealthAnalyzer.TargetMetric("g3", TargetRole.GameServer, 30, 5, 0, 10),

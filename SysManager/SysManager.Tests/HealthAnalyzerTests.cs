@@ -221,6 +221,7 @@ public class HealthAnalyzerTests
         Assert.Equal("Trouble reaching the game server", d.Headline);
         Assert.Contains("No public DNS server was measured", d.Detail, StringComparison.Ordinal);
         Assert.DoesNotContain("clean", d.Detail, StringComparison.OrdinalIgnoreCase);
+        Assert.Equal(StatusColors.Warning, d.ColorHex);
     }
 
     [Fact]

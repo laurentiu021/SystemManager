@@ -264,13 +264,23 @@ public sealed class SettingsWatchdogService : ISettingsWatchdogService
         // catalog (matched by exact hive+path AND value name). The catalog is the single
         // source of truth, so the writer can never be repurposed for an arbitrary
         // registry path even if a caller hands us a hand-built drift.
-        var inCatalog = Catalog.Any(s =>
+        var catalogued = Catalog.FirstOrDefault(s =>
             string.Equals(s.RegistryPath, drift.Setting.RegistryPath, StringComparison.OrdinalIgnoreCase)
             && string.Equals(s.ValueName, drift.Setting.ValueName, StringComparison.OrdinalIgnoreCase));
-        if (!inCatalog)
+        if (catalogued is null)
         {
             Log.Warning("Settings Watchdog refused to restore an out-of-catalog setting: {Path}\\{Value}",
                 drift.Setting.RegistryPath, drift.Setting.ValueName);
+            return false;
+        }
+
+        // And only a value the catalog lists for it, checked against the catalog's own entry rather than the drift's:
+        // the number comes from settings-baseline.json in the user's own profile, and a hand-built drift can carry any
+        // labels it likes (#2747).
+        if (!catalogued.ValueLabels.ContainsKey(baseline))
+        {
+            Log.Warning("Settings Watchdog refused to restore {Name}: the baseline holds {Value}, which it never sets",
+                catalogued.Name, baseline);
             return false;
         }
 

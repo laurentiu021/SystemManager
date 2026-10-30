@@ -12232,6 +12232,27 @@ public partial class ArchitectureTests
         Assert.Contains("retainOutgoing: !isRollback", swap, StringComparison.Ordinal);
     }
 
+    /// <summary>Go back checks the saved build off the UI thread, as Install checks its download.</summary>
+    /// <remarks>
+    /// The check hashes a file the size of the app. Called in <c>RollBackAsync</c> before its first await, it froze the
+    /// window with nothing shown (#2725). Read from source, because which thread runs a call is not something a test of
+    /// the view model can see; the status line it shows meanwhile is tested in <c>AboutUpdateExitTests</c>.
+    /// </remarks>
+    [Fact]
+    public void GoBack_ChecksTheSavedBuildOffTheUIThread()
+    {
+        var source = WithoutComments(File.ReadAllText(
+            Path.Combine(TestPaths.AppProject(), "ViewModels", "AboutViewModel.cs")));
+
+        var rollBack = MemberSlice(source, "private async Task RollBackAsync()");
+        Assert.False(string.IsNullOrWhiteSpace(rollBack), "RollBackAsync was not found.");
+        Assert.Equal(1, rollBack.Split("TryOpenVerifiedPreviousBuild(").Length - 1);
+        Assert.Matches(SavedBuildCheckedOnThePool(), rollBack);
+    }
+
+    [GeneratedRegex(@"await\s+Task\.Run\(\s*\(\)\s*=>\s*\(\s*UpdateApplier\.TryOpenVerifiedPreviousBuild\(", RegexOptions.Compiled)]
+    private static partial Regex SavedBuildCheckedOnThePool();
+
     [GeneratedRegex(@"bool\s+_restorePoint\w*Attempted\w*\s*;", RegexOptions.Compiled)]
     private static partial Regex RestorePointAttemptFlag();
 

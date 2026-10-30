@@ -10,6 +10,22 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.136.16] - 2026-10-30
+
+**Go back names the version it returns to, and is no longer offered once SysManager was updated
+some other way.**
+
+### Fixed
+- After an update made in SysManager and a later one through winget or a manual download, Go
+  back was still offered as "the version you had before the last update", and pressing it
+  installed what the update made in SysManager had replaced, older than that. The kept copy now
+  records its own version and the version of the update that kept it, and Go back is offered
+  only while that version is the one running. The button and its question name the version,
+  which nothing on screen did before. Present since Go back arrived in 1.61.0.
+- Go back froze the window, with nothing shown, while it checked the saved version against its
+  checksum, a file the size of the app. The check now runs in the background, and the tab says
+  "Checking the saved version…" meanwhile. Present since 1.64.2.
+
 ## [1.136.15] - 2026-10-30
 
 **Install and Go back no longer close SysManager for good when it runs from Program Files,

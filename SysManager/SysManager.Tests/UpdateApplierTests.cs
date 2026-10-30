@@ -2,6 +2,7 @@
 // Author: laurentiu021 · https://github.com/laurentiu021/SystemManager
 // License: MIT
 
+using System.Diagnostics;
 using System.IO;
 using SysManager.Services;
 
@@ -30,15 +31,6 @@ public class UpdateApplierTests
     {
         using var stream = File.OpenRead(path);
         return Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(stream));
-    }
-
-    /// <summary>Keeps a previous build in <paramref name="updates"/> the way an update does: the binary and its checksum.</summary>
-    private static void KeepABuild(string updates, string content)
-    {
-        Directory.CreateDirectory(updates);
-        var previous = UpdateApplier.PreviousBuildPath(updates);
-        File.WriteAllText(previous, content);
-        File.WriteAllText(UpdateApplier.PreviousBuildHashPath(updates), Sha256(previous));
     }
 
     /// <summary>A SHA-256-shaped value, which is the only shape the hash argument may take.</summary>
@@ -280,6 +272,85 @@ public class UpdateApplierTests
             Assert.Equal("OLD-BUILD", File.ReadAllText(previous));
             Assert.Equal(Sha256(previous), File.ReadAllText(UpdateApplier.PreviousBuildHashPath(updates)));
             Assert.Empty(Directory.GetFiles(updates, "*.pending*"));
+            // And the record naming this version as the one that replaced it. A build with no version resource
+            // still is kept; the record just cannot name it.
+            Assert.True(UpdateApplier.TryReadKeptCopyVersions(updates, out var kept, out var installedBy));
+            Assert.Null(kept);
+            Assert.True(UpdateService.IsSameRelease(installedBy, UpdateService.CurrentVersion));
+        }
+        finally { dir.Delete(recursive: true); }
+    }
+
+    [Fact]
+    public void ApplyCopy_RecordsTheKeptBuildsOwnVersion()
+    {
+        // A real executable as the outgoing build, with a version of its own that is not this one's, so the two
+        // lines of the record cannot be told apart by accident.
+        var dir = Directory.CreateTempSubdirectory("ApplierKeptVersion_");
+        try
+        {
+            var source = Path.Combine(dir.FullName, "new.exe");
+            var target = Path.Combine(dir.FullName, "current.exe");
+            var updates = Updates(dir);
+            File.Copy(typeof(Assert).Assembly.Location, target);
+            File.WriteAllText(source, "NEW-BUILD");
+            Assert.True(Version.TryParse(FileVersionInfo.GetVersionInfo(target).FileVersion, out var own));
+            Assert.False(UpdateService.IsSameRelease(own, UpdateService.CurrentVersion));   // the premise
+
+            Assert.True(UpdateApplier.ApplyCopyFromPath(source, target, updatesDir: updates));
+
+            Assert.True(UpdateApplier.TryReadKeptCopyVersions(updates, out var kept, out var installedBy));
+            Assert.Equal(new Version(own.Major, own.Minor, own.Build), kept);
+            Assert.True(UpdateService.IsSameRelease(installedBy, UpdateService.CurrentVersion));
+        }
+        finally { dir.Delete(recursive: true); }
+    }
+
+    [Theory]
+    [InlineData("1.2.3\n4.5.6\n", "1.2.3", "4.5.6")]
+    [InlineData("\n4.5.6\n", null, "4.5.6")]
+    [InlineData("1.2.3.0\n4.5.6.0\n", "1.2.3", "4.5.6")]
+    [InlineData("1.2\n4.5\n", "1.2.0", "4.5.0")]
+    public void TryReadKeptCopyVersions_ReadsTheRecord_InThreeParts(string record, string? kept, string installedBy)
+    {
+        var dir = Directory.CreateTempSubdirectory("ApplierRecord_");
+        try
+        {
+            File.WriteAllText(UpdateApplier.PreviousBuildVersionsPath(dir.FullName), record);
+
+            Assert.True(UpdateApplier.TryReadKeptCopyVersions(dir.FullName, out var readKept, out var readInstalledBy));
+
+            Assert.Equal(kept, readKept?.ToString());
+            Assert.Equal(installedBy, readInstalledBy.ToString());
+        }
+        finally { dir.Delete(recursive: true); }
+    }
+
+    [Theory]
+    [InlineData("1.2.3\n")]
+    [InlineData("1.2.3\nnot a version\n")]
+    [InlineData("1.2.3\n4.5.6\n7.8.9\n")]
+    [InlineData("")]
+    public void TryReadKeptCopyVersions_RefusesARecordThatNamesNoInstall(string record)
+    {
+        var dir = Directory.CreateTempSubdirectory("ApplierBadRecord_");
+        try
+        {
+            File.WriteAllText(UpdateApplier.PreviousBuildVersionsPath(dir.FullName), record);
+
+            Assert.False(UpdateApplier.TryReadKeptCopyVersions(dir.FullName, out _, out _));
+        }
+        finally { dir.Delete(recursive: true); }
+    }
+
+    [Fact]
+    public void TryReadKeptCopyVersions_WithNoRecord_IsFalse()
+    {
+        var dir = Directory.CreateTempSubdirectory("ApplierNoRecord_");
+        try
+        {
+            Assert.False(UpdateApplier.TryReadKeptCopyVersions(dir.FullName, out _, out _));
+            Assert.False(UpdateApplier.TryReadKeptCopyVersions(Path.Combine(dir.FullName, "missing"), out _, out _));
         }
         finally { dir.Delete(recursive: true); }
     }
@@ -350,6 +421,7 @@ public class UpdateApplierTests
             Assert.True(UpdateApplier.ApplyCopyFromPath(source, target, updatesDir: updates));   // keeps BUILD-1
             var previous = UpdateApplier.PreviousBuildPath(updates);
             var hash = File.ReadAllText(UpdateApplier.PreviousBuildHashPath(updates));
+            var record = File.ReadAllText(UpdateApplier.PreviousBuildVersionsPath(updates));
 
             File.WriteAllText(source, "BUILD-3");
             using (new FileStream(target, FileMode.Open, FileAccess.Read, FileShare.Read))
@@ -358,6 +430,7 @@ public class UpdateApplierTests
             Assert.Equal("BUILD-2", File.ReadAllText(target));
             Assert.Equal("BUILD-1", File.ReadAllText(previous));
             Assert.Equal(hash, File.ReadAllText(UpdateApplier.PreviousBuildHashPath(updates)));
+            Assert.Equal(record, File.ReadAllText(UpdateApplier.PreviousBuildVersionsPath(updates)));
             Assert.Empty(Directory.GetFiles(updates, "*.pending*"));
         }
         finally { dir.Delete(recursive: true); }
@@ -374,7 +447,7 @@ public class UpdateApplierTests
             var source = Path.Combine(dir.FullName, "new.exe");
             var target = Path.Combine(dir.FullName, "current.exe");
             var updates = Updates(dir);
-            KeepABuild(updates, "BUILD-1");
+            KeptCopy.Keep(updates, "BUILD-1");
             File.WriteAllText(target, "BUILD-2");
             File.WriteAllText(source, "BUILD-3");
 
@@ -399,7 +472,7 @@ public class UpdateApplierTests
             var source = Path.Combine(dir.FullName, "new.exe");
             var target = Path.Combine(dir.FullName, "current.exe");
             var updates = Updates(dir);
-            KeepABuild(updates, "BUILD-1");
+            KeptCopy.Keep(updates, "BUILD-1");
             File.WriteAllText(target, "BUILD-2");
             File.WriteAllText(source, "BUILD-3");
             var pending = UpdateApplier.PendingPreviousBuildPath(updates);
@@ -426,7 +499,7 @@ public class UpdateApplierTests
             var source = Path.Combine(dir.FullName, "previous.exe");
             var target = Path.Combine(dir.FullName, "current.exe");
             var updates = Updates(dir);
-            KeepABuild(updates, "OLDER-BUILD");
+            KeptCopy.Keep(updates, "OLDER-BUILD");
             File.WriteAllText(source, "OLDER-BUILD");
             File.WriteAllText(target, "NEWER-BUILD");
 
@@ -448,7 +521,7 @@ public class UpdateApplierTests
         {
             var target = Path.Combine(dir.FullName, "current.exe");
             var updates = Updates(dir);
-            KeepABuild(updates, "OLDER-BUILD");
+            KeptCopy.Keep(updates, "OLDER-BUILD");
             var hash = File.ReadAllText(UpdateApplier.PreviousBuildHashPath(updates));
             var source = Path.Combine(dir.FullName, "previous.exe");
             File.WriteAllText(source, "OLDER-BUILD");
@@ -486,10 +559,12 @@ public class UpdateApplierTests
             Directory.CreateDirectory(updates);
             File.WriteAllText(UpdateApplier.PreviousBuildPath(updates), "OLDER-BUILD");
             File.WriteAllText(UpdateApplier.PreviousBuildHashPath(updates), AnyHash);
+            File.WriteAllText(UpdateApplier.PreviousBuildVersionsPath(updates), "1.0.0\n1.0.1\n");
 
             UpdateApplier.RetireKeptCopy(updates);
 
             Assert.False(File.Exists(UpdateApplier.PreviousBuildHashPath(updates)));
+            Assert.False(File.Exists(UpdateApplier.PreviousBuildVersionsPath(updates)));
         }
         finally { dir.Delete(recursive: true); }
     }
@@ -620,7 +695,7 @@ public class UpdateApplierTests
         {
             var keep = Path.Combine(dir.FullName, "SysManager-9.9.9.exe");
             File.WriteAllText(keep, "current");
-            KeepABuild(dir.FullName, "rollback");
+            KeptCopy.Keep(dir.FullName, "rollback");
             var pending = UpdateApplier.PendingPreviousBuildPath(dir.FullName);
             File.WriteAllText(pending, "interrupted");
             File.WriteAllText(pending + ".sha256", AnyHash);
@@ -631,6 +706,7 @@ public class UpdateApplierTests
             Assert.False(File.Exists(pending + ".sha256"));
             Assert.True(File.Exists(UpdateApplier.PreviousBuildPath(dir.FullName)));
             Assert.True(File.Exists(UpdateApplier.PreviousBuildHashPath(dir.FullName)));
+            Assert.True(File.Exists(UpdateApplier.PreviousBuildVersionsPath(dir.FullName)));
         }
         finally { dir.Delete(recursive: true); }
     }
@@ -963,7 +1039,7 @@ public class UpdateApplierTests
         try
         {
             var updates = Updates(dir);
-            KeepABuild(updates, "the outgoing build");
+            KeptCopy.Keep(updates, "the outgoing build");
 
             Assert.True(
                 UpdateApplier.TryOpenVerifiedPreviousBuild(updates, out var stream, out var reason, out _),
@@ -989,7 +1065,7 @@ public class UpdateApplierTests
         try
         {
             var updates = Updates(dir);
-            KeepABuild(updates, "the outgoing build");
+            KeptCopy.Keep(updates, "the outgoing build");
 
             File.WriteAllText(UpdateApplier.PreviousBuildPath(updates), "attacker payload");
 
@@ -1081,7 +1157,7 @@ public class UpdateApplierTests
         try
         {
             var updates = Updates(dir);
-            KeepABuild(updates, "the outgoing build");
+            KeptCopy.Keep(updates, "the outgoing build");
 
             Assert.True(UpdateApplier.TryOpenVerifiedPreviousBuild(updates, out var stream, out var why, out var hash), why);
             // The checksum it proved the copy against comes back with the handle: the rollback launch carries it,

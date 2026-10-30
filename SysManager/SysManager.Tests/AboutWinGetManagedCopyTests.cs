@@ -140,9 +140,7 @@ public sealed class AboutWinGetManagedCopyTests : IDisposable
     public async Task RollBackAsync_OnAWinGetManagedCopy_IsNeverOfferedAndRefusesIfCalledDirectly()
     {
         // A previous build retained on disk — the premise CanRollBack would otherwise be true for.
-        var previous = Path.Combine(_dir, UpdateApplier.PreviousBuildFileName);
-        await File.WriteAllTextAsync(previous, "OLD-BUILD");
-        await File.WriteAllTextAsync(UpdateApplier.PreviousBuildHashPath(_dir), UpdateApplier.ComputeFileHash(previous));
+        KeptCopy.Keep(_dir);
 
         var vm = NewVm(WinGetExePath);
         Assert.False(vm.CanRollBack); // never offered for a winget-managed copy, files or not
@@ -157,9 +155,7 @@ public sealed class AboutWinGetManagedCopyTests : IDisposable
     [Fact]
     public async Task RollBackAsync_OnAnOrdinaryCopyWithTheSameFiles_IsStillOffered()
     {
-        var previous = Path.Combine(_dir, UpdateApplier.PreviousBuildFileName);
-        await File.WriteAllTextAsync(previous, "OLD-BUILD");
-        await File.WriteAllTextAsync(UpdateApplier.PreviousBuildHashPath(_dir), UpdateApplier.ComputeFileHash(previous));
+        KeptCopy.Keep(_dir);
 
         var vm = NewVm(OrdinaryExePath);
 

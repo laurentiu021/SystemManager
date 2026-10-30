@@ -2,6 +2,7 @@
 // Author: laurentiu021 · https://github.com/laurentiu021/SystemManager
 // License: MIT
 
+using System.Collections.Concurrent;
 using System.Diagnostics;
 using System.IO;
 using NSubstitute;
@@ -136,9 +137,7 @@ public sealed class AboutUpdateExitTests : IDisposable
     [Fact]
     public async Task GoingBack_WhileSomethingRuns_NamesItInTheQuestion()
     {
-        var previous = Path.Combine(_dir, UpdateApplier.PreviousBuildFileName);
-        await File.WriteAllTextAsync(previous, "OLD-BUILD");
-        await File.WriteAllTextAsync(UpdateApplier.PreviousBuildHashPath(_dir), UpdateApplier.ComputeFileHash(previous));
+        KeptCopy.Keep(_dir);
         var vm = NewVm();
         Assert.True(vm.CanRollBack);   // the premise: a verifiable previous build is on offer
         using var held = OperationLockService.Instance.TryAcquire(OperationCategory.Disk, "Deep Cleanup");
@@ -384,9 +383,7 @@ public sealed class AboutUpdateExitTests : IDisposable
     [Fact]
     public async Task GoingBack_FromAProgramFilesCopy_IsRefusedBeforeAnythingCloses()
     {
-        var previous = Path.Combine(_dir, UpdateApplier.PreviousBuildFileName);
-        await File.WriteAllTextAsync(previous, "OLD-BUILD");
-        await File.WriteAllTextAsync(UpdateApplier.PreviousBuildHashPath(_dir), UpdateApplier.ComputeFileHash(previous));
+        KeptCopy.Keep(_dir);
         var vm = NewVm(processPath: InProgramFiles);
         Assert.True(vm.CanRollBack);   // the premise: a verifiable previous build is on offer
         using var dialog = new DialogAnswer(confirm: true);
@@ -398,6 +395,57 @@ public sealed class AboutUpdateExitTests : IDisposable
         Assert.Equal(0, dialog.Calls);
         Assert.Empty(_launched);
         Assert.Equal(0, _shutdowns);
+    }
+
+    // ── Go back names its version, and checks the saved copy off the UI thread (#2725) ─────────────────
+
+    [Fact]
+    public async Task GoingBack_AsksAboutTheVersionByName()
+    {
+        KeptCopy.Keep(_dir);
+        var vm = NewVm();
+        using var dialog = new DialogAnswer(confirm: false);
+
+        await vm.RollBackCommand.ExecuteAsync(null);
+
+        Assert.Contains("Go back to v1.0.0, the version you had before the last update?", Assert.Single(dialog.Messages),
+            StringComparison.Ordinal);
+        Assert.Empty(_launched);
+    }
+
+    [Fact]
+    public async Task GoingBack_SaysItIsCheckingTheSavedVersion_WhileItDoes()
+    {
+        KeptCopy.Keep(_dir);
+        var vm = NewVm();
+        var shown = new ConcurrentQueue<string>();
+        vm.PropertyChanged += (_, e) =>
+        {
+            if (e.PropertyName == nameof(AboutViewModel.RollBackStatus)) shown.Enqueue(vm.RollBackStatus);
+        };
+        using var dialog = new DialogAnswer(confirm: false);
+
+        await vm.RollBackCommand.ExecuteAsync(null);
+
+        Assert.Equal(new[] { AboutViewModel.CheckingSavedVersionLine, "" }, shown);
+    }
+
+    [Fact]
+    public async Task GoingBack_AfterAnotherUpdateReplacedTheVersion_AsksNothing()
+    {
+        KeptCopy.Keep(_dir);
+        var vm = NewVm();
+        Assert.True(vm.CanRollBack);   // the premise: offered when the tab opened
+        KeptCopy.Keep(_dir, installedBy: new Version(1, 0, 1));
+        using var dialog = new DialogAnswer(confirm: true);
+
+        await vm.RollBackCommand.ExecuteAsync(null);
+
+        Assert.Equal(0, dialog.Calls);
+        Assert.Empty(_launched);
+        Assert.Equal(0, _shutdowns);
+        Assert.False(vm.CanRollBack);
+        Assert.Equal("The previous version is no longer available.", vm.RollBackStatus);
     }
 
     [Fact]

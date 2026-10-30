@@ -2416,8 +2416,12 @@ nothing in its place. Whenever a copy lands without keeping the build it replace
 an outgoing build that could not be copied, or a promotion that failed), the kept copy's hash
 is removed (`RetireKeptCopy`), so Go back never offers an earlier update's copy as the version
 before the last update; the binary, the running image after a rollback, is written over by
-the next update's copy. A pending pair left by an interrupted run matches the pattern below
-and goes with the next download. Before `Install` or `Go back` confirms, `WhyItCannotReplace`
+the next update's copy. Beside the hash, `SysManager-previous.exe.versions` records the
+copy's own version, read from its `FileVersion`, and the version of the update that kept it.
+About offers Go back only while that version is the one running (`TryReadKeptCopyVersions`),
+and names the copy's version on the button and in its question; it moves last in a promotion,
+so a promotion cut short leaves the earlier record, which names another version. A pending set
+left by an interrupted run matches the pattern below and goes with the next download. Before `Install` or `Go back` confirms, `WhyItCannotReplace`
 asks what `Run` will: `IsValidApplyTarget`, and whether the folder takes a new file. The
 applier decides only after SysManager has closed, so under Program Files the update used to
 close SysManager for good. The atomic move makes an

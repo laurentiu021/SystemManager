@@ -12873,9 +12873,10 @@ public partial class ArchitectureTests
     /// backlog item (#2381). The list is deliberately explicit: adding a name to it is a decision someone has
     /// to write down, which is exactly what the copied walkers never had to do.</para>
     /// <para>The exemption holds only while its reason does, so both halves are asserted. Each scanner must
-    /// still test its root through the shared <c>IsReparsePoint</c>, and neither it nor the view model behind
-    /// its tab may call anything that deletes. The day one of them gains a delete, it loses the exemption and
-    /// has to move onto the shared walk.</para>
+    /// still test its root through the shared <c>IsReachedThroughLink</c> — not the plain <c>IsReparsePoint</c>,
+    /// which only sees a link in the root's own last path segment and misses one in an ancestor folder (#3001) —
+    /// and neither it nor the view model behind its tab may call anything that deletes. The day one of them
+    /// gains a delete, it loses the exemption and has to move onto the shared walk.</para>
     /// </remarks>
     [Fact]
     public void OnlySafeFileWalk_WalksATreeItMightDeleteFrom()
@@ -12942,10 +12943,11 @@ public partial class ArchitectureTests
             var exemptCode = WithoutComments(File.ReadAllText(exemptPath));
             Assert.Matches(@"Stack<(?:string|DirectoryInfo)>", exemptCode);
 
-            Assert.True(exemptCode.Contains("SafeFileWalk.IsReparsePoint(", StringComparison.Ordinal),
-                $"{service} keeps its own walk AND no longer tests its root through SafeFileWalk.IsReparsePoint. "
-                + "The exemption is for the loop, not for the root guard: a link at the folder the user chose "
-                + "sends the entire scan outside it.");
+            Assert.True(exemptCode.Contains("SafeFileWalk.IsReachedThroughLink(", StringComparison.Ordinal),
+                $"{service} keeps its own walk AND no longer tests its root through "
+                + "SafeFileWalk.IsReachedThroughLink. IsReparsePoint alone is not enough here: Windows resolves "
+                + "a link in an ANCESTOR folder before reporting attributes, so a junction one level above the "
+                + "picked root passes IsReparsePoint and sends the entire scan outside it regardless (#3001).");
 
             // And the reason for the exemption: nothing on the tab deletes what the walk found. The view model
             // is checked as well, because that is where a "Delete selected" command would be added.

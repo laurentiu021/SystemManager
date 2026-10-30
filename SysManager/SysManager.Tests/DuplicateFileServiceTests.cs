@@ -4,6 +4,7 @@
 
 using System.IO;
 using System.Reflection;
+using SysManager.Helpers;
 using SysManager.Models;
 using SysManager.Services;
 
@@ -438,6 +439,42 @@ public class DuplicateFileServiceTests : IDisposable
             Assert.Empty(result.Groups);
         }
         finally { Symlinks.RemoveLinkThenTree(rootLink, baseDir); }
+    }
+
+    /// <summary>
+    /// The gap the plain root check missed: a junction in an ANCESTOR of the picked root, not the root
+    /// itself. Windows resolves a parent link before reporting attributes, so the old
+    /// <c>IsReparsePoint(rootPath)</c> check saw a root reached this way as an ordinary folder and the
+    /// scan reported duplicates living at the link's target while naming the folder actually picked (#3001).
+    /// </summary>
+    [Fact]
+    public async Task ScanAsync_RootReachedThroughAJunctionInAParent_SaysSo()
+    {
+        var baseDir = NewRoot();
+        var real = Path.Combine(baseDir, "real");
+        var bucket = Path.Combine(real, "bucket");
+        Directory.CreateDirectory(bucket);
+        await File.WriteAllTextAsync(Path.Combine(bucket, "a.txt"), new string('x', 4096));
+        await File.WriteAllTextAsync(Path.Combine(bucket, "b.txt"), new string('x', 4096));
+
+        var linkParent = Path.Combine(baseDir, "linkparent");
+        Symlinks.RequireJunction(linkParent, real, () => Directory.Delete(baseDir, recursive: true));
+
+        try
+        {
+            var pickedRoot = Path.Combine(linkParent, "bucket");
+            Assert.True(Directory.Exists(pickedRoot));
+            Assert.False(SafeFileWalk.IsReparsePoint(pickedRoot));
+
+            var result = await new DuplicateFileService().ScanAsync(pickedRoot, minSizeBytes: 1);
+            Assert.Equal(DuplicateFileService.ScanFailure.IsLink, result.Failure);
+            Assert.Empty(result.Groups);
+        }
+        finally
+        {
+            Directory.Delete(linkParent);
+            Directory.Delete(baseDir, recursive: true);
+        }
     }
 
     [Fact]

@@ -39,6 +39,9 @@ public sealed partial class AboutViewModel : ViewModelBase
     /// <summary>Overrides where the retained previous build is looked for. Null = the real profile.</summary>
     private readonly string? _updatesDir;
 
+    /// <summary>The running executable's full path, or null when Windows does not say.</summary>
+    private readonly Func<string?> _processPath;
+
     /// <summary>Starts the build that installs or restores SysManager. A test records the call instead.</summary>
     private readonly Action<ProcessStartInfo> _launch;
 
@@ -118,6 +121,22 @@ public sealed partial class AboutViewModel : ViewModelBase
     [ObservableProperty] private bool _autoDownloadFailed;
 
     /// <summary>
+    /// True when this running copy is the one winget's own portable installer manages. Set once at
+    /// construction from <see cref="UpdateService.IsRunningFromWinGet(string?)"/> and never changes
+    /// afterward in the same session.
+    /// </summary>
+    /// <remarks>
+    /// Blocks Download, Install and the rollback for this copy rather than letting About replace the
+    /// exe winget tracks separately: doing so leaves winget's own recorded version stale, and the next
+    /// <c>winget upgrade</c> or <c>winget uninstall</c> of this package then refuses with "the package
+    /// has been modified" until the user adds <c>--force</c> (#2889). A winget-managed copy updates
+    /// through winget instead.
+    /// </remarks>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(ShowDownloadButton))]
+    private bool _isManagedByWinGet;
+
+    /// <summary>
     /// Where the last successfully saved diagnostics bundle landed, or null before one is saved this
     /// session. Drives the "Show in folder" offer next to <see cref="ReportStatus"/> (#2861): a zip
     /// named with a timestamp is otherwise found only by typing the save dialog's path from memory.
@@ -131,7 +150,7 @@ public sealed partial class AboutViewModel : ViewModelBase
     /// </summary>
     [ObservableProperty] private bool _installFailed;
 
-    public bool ShowDownloadButton => !IsDownloading && string.IsNullOrEmpty(DownloadedPath);
+    public bool ShowDownloadButton => !IsDownloading && string.IsNullOrEmpty(DownloadedPath) && !IsManagedByWinGet;
 
     /// <summary>
     /// True when the previous build was retained and can be restored. Drives the visibility of the
@@ -210,6 +229,9 @@ public sealed partial class AboutViewModel : ViewModelBase
     /// <para><paramref name="launch"/> and <paramref name="shutdown"/> are what installing and going back end in:
     /// starting another build and closing this one. A test replaces both, so it can drive the confirmed path
     /// without starting a file or closing anything (#2499).</para>
+    /// <para><paramref name="processPath"/> decides <see cref="IsManagedByWinGet"/>: the default reads
+    /// <see cref="Environment.ProcessPath"/>, the real running executable, and a test must be able to
+    /// answer with a path under a fake winget folder instead (#2889).</para>
     /// </summary>
     internal AboutViewModel(
         IUpdateService updates,
@@ -220,12 +242,14 @@ public sealed partial class AboutViewModel : ViewModelBase
         DiagnosticsBundleService? bundle = null,
         Action<ProcessStartInfo>? launch = null,
         Action? shutdown = null,
-        IDialogService? dialog = null)
+        IDialogService? dialog = null,
+        Func<string?>? processPath = null)
     {
         _updates = updates;
         _reportService = reportService;
         _preferences = preferences ?? new UpdateCheckPreferenceService();
         _updatesDir = updatesDir;
+        _processPath = processPath ?? (static () => Environment.ProcessPath);
         _launch = launch ?? (static startInfo => Process.Start(startInfo)?.Dispose());
         _shutdown = shutdown ?? App.RequestShutdown;
         _dialog = dialog ?? DialogService.Instance;
@@ -233,6 +257,7 @@ public sealed partial class AboutViewModel : ViewModelBase
         // directory under %LocalAppData%, and a test must be able to point it at a temp folder rather than
         // read whatever is in the developer's own profile.
         _bundle = bundle ?? new DiagnosticsBundleService(reportService);
+        IsManagedByWinGet = UpdateService.IsRunningFromWinGet(_processPath());
 
         // Load before any check can run, and suppress the save that binding the value would
         // otherwise trigger — restoring a preference must not rewrite the file it came from.
@@ -259,9 +284,18 @@ public sealed partial class AboutViewModel : ViewModelBase
     /// to verify, so a copy with no checksum is not offered rather than offered-then-refused. This also
     /// means a build retained by a version that predates the checksum is not offered — that is the
     /// intended outcome, since its integrity was never recorded, and the next update writes both files.
+    /// <para>Never offered on a winget-managed copy, even if one happens to be sitting on disk already
+    /// (from before this copy was recognised as winget-managed) — restoring it would be the same
+    /// in-place replacement Download/Install are blocked from making (#2889).</para>
     /// </remarks>
     private void RefreshRollbackAvailability()
     {
+        if (IsManagedByWinGet)
+        {
+            CanRollBack = false;
+            return;
+        }
+
         try
         {
             CanRollBack = File.Exists(UpdateApplier.PreviousBuildPath(_updatesDir))
@@ -389,7 +423,14 @@ public sealed partial class AboutViewModel : ViewModelBase
             if (UpdateService.IsNewer(latest.Version, UpdateService.CurrentVersion))
             {
                 UpdateAvailable = true;
-                UpdateStatus = $"Update available: {LatestVersionLabel} ({LatestPublishedLabel}). Click Download to get it.";
+                // GitHub releases always reach here before winget-pkgs does, so this copy may be offered an
+                // update winget cannot deliver yet. Nothing About can do changes that — only naming the
+                // right next step does (#2889).
+                UpdateStatus = IsManagedByWinGet
+                    ? $"Update available: {LatestVersionLabel} ({LatestPublishedLabel}). This copy was installed "
+                      + $"with winget — run \"winget upgrade {UpdateService.WingetPackageId}\" to update it. "
+                      + "Winget sometimes takes longer than GitHub to offer a new release."
+                    : $"Update available: {LatestVersionLabel} ({LatestPublishedLabel}). Click Download to get it.";
             }
             else
             {
@@ -486,7 +527,10 @@ public sealed partial class AboutViewModel : ViewModelBase
     [RelayCommand]
     private async Task DownloadAsync()
     {
-        if (_latest is null || IsDownloading) return;
+        // The actual safety boundary, not just ShowDownloadButton hiding the button: a winget-managed copy
+        // must never acquire a downloaded file to install, since the whole point is that this copy's exe
+        // is winget's to replace, not About's (#2889).
+        if (IsManagedByWinGet || _latest is null || IsDownloading) return;
         IsDownloading = true;
         AutoDownloadFailed = false;
         InstallFailed = false;
@@ -964,6 +1008,16 @@ public sealed partial class AboutViewModel : ViewModelBase
     private async Task InstallUpdateAsync()
     {
         InstallFailed = false;
+
+        // Defensive, since DownloadAsync already refuses a winget-managed copy a file to install — but
+        // Install is independently reachable, and this is the actual boundary that must hold either way
+        // (#2889).
+        if (IsManagedByWinGet)
+        {
+            InstallStopped($"This copy was installed with winget — run \"winget upgrade {UpdateService.WingetPackageId}\" to update it.", unusable: false);
+            return;
+        }
+
         var path = DownloadedPath;
         if (string.IsNullOrWhiteSpace(path) || !File.Exists(path))
         {
@@ -1151,6 +1205,14 @@ public sealed partial class AboutViewModel : ViewModelBase
     [RelayCommand]
     private async Task RollBackAsync()
     {
+        // Defensive, like InstallUpdateAsync's: RefreshRollbackAvailability already keeps CanRollBack
+        // false for a winget-managed copy, but Rollback is independently reachable (#2889).
+        if (IsManagedByWinGet)
+        {
+            RollBackStatus = "This copy is managed by winget — going back through SysManager is not offered for it.";
+            return;
+        }
+
         var previous = UpdateApplier.PreviousBuildPath(_updatesDir);
         if (!File.Exists(previous))
         {

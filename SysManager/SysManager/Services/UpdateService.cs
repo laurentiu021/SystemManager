@@ -29,6 +29,81 @@ public sealed class UpdateService : IUpdateService
     public const string WingetPackageId = "laurentiu021.SysManager";
 
     /// <summary>
+    /// The folder winget's portable installer names under <c>WinGet\Packages</c>: the package id plus
+    /// winget's own community-source identifier, which is fixed rather than per-install.
+    /// </summary>
+    private const string WingetProductFolder = WingetPackageId + "_Microsoft.Winget.Source_8wekyb3d8bbwe";
+
+    /// <summary>The PATH shim winget's portable installer creates under <c>WinGet\Links</c>.</summary>
+    private const string WingetLinkFileName = "SysManager.exe";
+
+    /// <summary>
+    /// True when <paramref name="processPath"/> is the copy winget's portable installer manages — either
+    /// the real executable under <c>WinGet\Packages</c>, or the PATH shim winget creates at
+    /// <c>WinGet\Links</c> (#2889).
+    /// </summary>
+    /// <remarks>
+    /// Checked against BOTH locations because which one <see cref="Environment.ProcessPath"/> resolves to
+    /// depends on how the copy was started: typing the <c>SysManager</c> command resolves through the
+    /// Links shim, while a shortcut or Start-menu entry that targets the real file resolves to the
+    /// Packages copy. Replacing either one in place is what leaves winget's own record of the installed
+    /// version stale, so either match is enough to call this copy winget-managed.
+    /// <para>Only the DEFAULT per-user and per-machine winget roots are checked. A root customised with
+    /// winget's own <c>portablePackageUserRoot</c>/<c>portablePackageMachineRoot</c> settings, or an
+    /// install made with <c>--location</c>, is not detected — those are rare enough, and read-only enough
+    /// to recover from (the user can still run <c>winget upgrade</c> by hand), that guessing at a custom
+    /// root is not worth the false-positive risk of a wrong guess refusing a legitimate self-update.</para>
+    /// </remarks>
+    internal static bool IsRunningFromWinGet(string? processPath) =>
+        IsRunningFromWinGet(
+            processPath,
+            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+            Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles),
+            Environment.GetFolderPath(Environment.SpecialFolder.ProgramFilesX86));
+
+    /// <summary>
+    /// <see cref="IsRunningFromWinGet(string?)"/> over caller-supplied roots, so a test can stand in for
+    /// the real per-user and per-machine folders without touching
+    /// <see cref="Environment.GetFolderPath(Environment.SpecialFolder)"/>.
+    /// </summary>
+    internal static bool IsRunningFromWinGet(
+        string? processPath, string? localAppData, string? programFiles, string? programFilesX86)
+    {
+        if (string.IsNullOrWhiteSpace(processPath)) return false;
+
+        List<string?> packageDirs =
+        [
+            JoinOrNull(localAppData, "Microsoft", "WinGet", "Packages", WingetProductFolder),
+            JoinOrNull(programFiles, "WinGet", "Packages", WingetProductFolder),
+            JoinOrNull(programFilesX86, "WinGet", "Packages", WingetProductFolder),
+        ];
+        if (packageDirs.Exists(dir => SystemPaths.IsInsideSubtree(processPath, dir))) return true;
+
+        List<string?> linkFiles =
+        [
+            JoinOrNull(localAppData, "Microsoft", "WinGet", "Links", WingetLinkFileName),
+            JoinOrNull(programFiles, "WinGet", "Links", WingetLinkFileName),
+            JoinOrNull(programFilesX86, "WinGet", "Links", WingetLinkFileName),
+        ];
+        return linkFiles.Exists(f => PathsEqual(processPath, f));
+    }
+
+    private static string? JoinOrNull(string? root, params string[] parts) =>
+        string.IsNullOrEmpty(root) ? null : Path.Combine([root, .. parts]);
+
+    private static bool PathsEqual(string a, string? b)
+    {
+        if (string.IsNullOrEmpty(b)) return false;
+        try
+        {
+            return string.Equals(Path.GetFullPath(a), Path.GetFullPath(b), StringComparison.OrdinalIgnoreCase);
+        }
+        catch (ArgumentException) { return false; }
+        catch (PathTooLongException) { return false; }
+        catch (NotSupportedException) { return false; }
+    }
+
+    /// <summary>
     /// True for the release's main executable asset. Release assets are named
     /// <c>SysManager-v&lt;version&gt;.exe</c> (e.g. <c>SysManager-v1.20.1.exe</c>),
     /// not a fixed <c>SysManager.exe</c>, so match by pattern and exclude the

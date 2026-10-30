@@ -10,6 +10,21 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.136.1] - 2026-10-30
+
+**About no longer offers to replace a winget-installed copy's executable — it now points at
+`winget upgrade` instead.**
+
+### Fixed
+- Download, Install and "Go back to the previous version" are refused on a copy winget's portable
+  installer manages (detected under `WinGet\Packages` or its `WinGet\Links` PATH shim), with the
+  update card naming `winget upgrade laurentiu021.SysManager` instead. About's own self-update
+  always replaced the exe in place, which left winget's own record of the installed version stale —
+  the next `winget upgrade` or `winget uninstall` of that package then refused with "the package has
+  been modified" until `--force` was added. The App Updates tab, the Dashboard's app-updates alert
+  and Update All Apps already excluded SysManager's own package and never used `winget upgrade --all`
+  (#2916, v1.130.29); this closes the second half of #2889, About's own update path.
+
 ## [1.136.0] - 2026-10-29
 
 **The diagnostics bundle now includes Windows' own record of a crash SysManager could not log

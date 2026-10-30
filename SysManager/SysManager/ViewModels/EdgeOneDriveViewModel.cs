@@ -125,6 +125,13 @@ public sealed partial class EdgeOneDriveViewModel : ElevatedViewModelBase
     [RelayCommand(CanExecute = nameof(NotBusy))]
     private async Task RemoveOneDriveAsync()
     {
+        // Before the confirmation and the restore point: the service refuses an elevated OneDrive change anyway, and
+        // asking first, then creating a restore point for a change that cannot run, wastes both (#2710).
+        if (IsElevated)
+        {
+            StatusMessage = EdgeOneDriveService.OneDriveNeedsStandardRunMessage;
+            return;
+        }
         if (StatusRead && !OneDriveInstalled)
         {
             StatusMessage = "OneDrive is not installed — nothing to remove.";
@@ -153,6 +160,11 @@ public sealed partial class EdgeOneDriveViewModel : ElevatedViewModelBase
     [RelayCommand(CanExecute = nameof(NotBusy))]
     private async Task RestoreOneDriveAsync()
     {
+        if (IsElevated)
+        {
+            StatusMessage = EdgeOneDriveService.OneDriveNeedsStandardRunMessage;
+            return;
+        }
         if (!Confirm("Reinstall OneDrive for your account and restore its File Explorer sidebar entry?",
                 "Restore OneDrive"))
         {

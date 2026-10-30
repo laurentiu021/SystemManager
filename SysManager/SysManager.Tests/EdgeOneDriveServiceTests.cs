@@ -87,7 +87,7 @@ public sealed class EdgeOneDriveServiceTests : IDisposable
     /// <paramref name="exitCode"/> when <paramref name="setupPresent"/>, and OneDrive.exe when
     /// <paramref name="installed"/>. They only have to exist: the runner is substituted, so nothing is launched.
     /// </summary>
-    private EdgeOneDriveService WithOneDrive(bool installed, bool setupPresent = true, int exitCode = 0)
+    private EdgeOneDriveService WithOneDrive(bool installed, bool setupPresent = true, int exitCode = 0, bool elevated = false)
     {
         Directory.CreateDirectory(_setupDir);
         var setup = Path.Combine(_setupDir, "OneDriveSetup.exe");
@@ -96,8 +96,10 @@ public sealed class EdgeOneDriveServiceTests : IDisposable
         if (installed) File.WriteAllBytes(client, []);
         _runner.RunProcessAsync(setup, Arg.Any<string>(), Arg.Any<CancellationToken>(), Arg.Any<System.Text.Encoding?>())
                .Returns(exitCode);
+        // Elevation is given, not read from the host: this machine and the CI runner are both elevated, and the
+        // OneDrive changes refuse to run elevated (#2710).
         return new EdgeOneDriveService(_runner, hkcuRoot: _root, hklmRoot: _root, oneDriveSetupPath: setup,
-            oneDriveClientPath: client, isOneDriveRunning: () => false);
+            oneDriveClientPath: client, isOneDriveRunning: () => false, isElevated: () => elevated);
     }
 
     /// <summary>A service whose installed OneDrive's setup answers with <paramref name="exitCode"/>.</summary>
@@ -378,11 +380,53 @@ public sealed class EdgeOneDriveServiceTests : IDisposable
     public async Task RestoreOneDrive_WithNoSetupOnDisk_IsNotApplicable_AndLaunchesNothing()
     {
         var svc = new EdgeOneDriveService(_runner, hkcuRoot: _root, hklmRoot: _root,
-            oneDriveSetupPath: Path.Combine(_setupDir, "OneDriveSetup.exe"));   // never created
+            oneDriveSetupPath: Path.Combine(_setupDir, "OneDriveSetup.exe"),   // never created
+            isElevated: () => false);
 
         Assert.Equal(EdgeOneDriveOutcome.NotApplicable, await svc.RestoreOneDriveAsync());
         await _runner.DidNotReceive().RunProcessAsync(
             Arg.Any<string>(), Arg.Any<string>(), Arg.Any<CancellationToken>(), Arg.Any<System.Text.Encoding?>());
+    }
+
+    // ── an elevated session never starts OneDrive's setup (#2710) ──────────
+
+    /// <summary>
+    /// When neither System32 nor SysWOW64 holds OneDriveSetup.exe, the one found is under LOCALAPPDATA, which any
+    /// program running as the user can replace, and Remove and Restore ran it with SysManager's own token. Elevated,
+    /// that was a user-writable file running as administrator. Both now refuse before anything starts.
+    /// </summary>
+    [Theory]
+    [InlineData("Remove")]
+    [InlineData("Restore")]
+    public async Task OneDriveChange_WhileElevated_IsRefused_AndStartsNothing(string change)
+    {
+        using (var key = _root.CreateSubKey(OneDriveClsidPath, writable: true)!)
+            key.SetValue("System.IsPinnedToNameSpaceTree", 1, RegistryValueKind.DWord);
+        var svc = WithOneDrive(installed: true, exitCode: 0, elevated: true);
+        _runner.ClearReceivedCalls();
+
+        var refusal = await Assert.ThrowsAsync<InvalidOperationException>(
+            () => change == "Remove" ? svc.RemoveOneDriveAsync() : svc.RestoreOneDriveAsync());
+
+        Assert.Equal(EdgeOneDriveService.OneDriveNeedsStandardRunMessage, refusal.Message);
+        // Neither the setup nor the stop step ran, and the File Explorer entry is as it was.
+        await _runner.DidNotReceive().RunProcessAsync(
+            Arg.Any<string>(), Arg.Any<string>(), Arg.Any<CancellationToken>(), Arg.Any<System.Text.Encoding?>());
+        await _runner.DidNotReceive().RunAsync(
+            Arg.Any<string>(), Arg.Any<IDictionary<string, object?>?>(), Arg.Any<CancellationToken>());
+        Assert.Equal(1, ReadOneDrivePin());
+    }
+
+    /// <summary>The other side: not elevated, the same setup runs, so the refusal is not a blanket off-switch.</summary>
+    [Fact]
+    public async Task RemoveOneDrive_WhenNotElevated_StillRunsTheSetup()
+    {
+        var svc = WithOneDrive(installed: true, exitCode: 0, elevated: false);
+
+        Assert.Equal(EdgeOneDriveOutcome.Success, await svc.RemoveOneDriveAsync());
+        await _runner.Received(1).RunProcessAsync(
+            Path.Combine(_setupDir, "OneDriveSetup.exe"), "/uninstall",
+            Arg.Any<CancellationToken>(), Arg.Any<System.Text.Encoding?>());
     }
 
     [Fact]

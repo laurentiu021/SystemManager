@@ -29,7 +29,7 @@
              portion writes machine policy + scheduled tasks, so it needs elevation. -->
         <v:AdminBanner Grid.Row="1" Margin="0,0,0,12"
                        NotElevatedMessage="Disabling Edge needs administrator privileges. Removing OneDrive works without it."
-                       ElevatedMessage="Running as administrator — you can disable Edge and remove OneDrive."/>
+                       ElevatedMessage="Running as administrator — you can disable Edge. OneDrive changes only your own account, so remove or restore it with SysManager opened normally."/>
 
         <!-- Content cards -->
         <ScrollViewer Grid.Row="2" VerticalScrollBarVisibility="Auto" Padding="0,0,4,0">

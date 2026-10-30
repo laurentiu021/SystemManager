@@ -1464,7 +1464,9 @@ Key services:
 - `EdgeOneDriveService` — reversibly de-integrates Edge and OneDrive through the
   `IPowerShellRunner` seam plus injectable HKCU/HKLM roots. OneDrive is fully removed
   per-user (`OneDriveSetup.exe /uninstall` + nav-pane unpin once the uninstaller has succeeded,
-  no elevation), and "installed" means OneDrive.exe is there, not the setup Windows keeps after
+  no elevation; both OneDrive actions refuse while elevated, through an injectable elevation probe,
+  because the per-user setup fallback under LOCALAPPDATA is user-writable (#2710)), and "installed"
+  means OneDrive.exe is there, not the setup Windows keeps after
   an uninstall; Edge is never uninstalled — only its background/startup-boost Group-Policy keys
   and its two auto-update scheduled tasks (a fixed, injection-safe allowlist of name prefixes,
   matched in the root task folder, as Edge Update adds an ID to each name) are toggled, which

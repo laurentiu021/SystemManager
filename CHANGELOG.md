@@ -10,6 +10,22 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.136.7] - 2026-10-30
+
+**Edge/OneDrive Remover no longer runs OneDrive's setup as administrator. Remove and Restore
+OneDrive now need SysManager opened normally, and say so.**
+
+### Fixed
+- When neither System32 nor SysWOW64 held `OneDriveSetup.exe`, Remove and Restore OneDrive used the
+  copy under `%LOCALAPPDATA%\Microsoft\OneDrive`, which any program running as you can replace, and
+  started it with SysManager's own rights. The tab's Edge half needs administrator, so running
+  elevated is the normal state there, and that file then ran as administrator. Elevated with
+  another administrator's password, the uninstall and the File Explorer entry also reached that
+  administrator's account rather than yours. OneDrive is per account and needs no elevation, so
+  both actions now refuse while SysManager runs as administrator, before the confirmation and
+  before any restore point, with a message saying to open SysManager normally. The gold banner no
+  longer says OneDrive can be removed while elevated.
+
 ## [1.136.6] - 2026-10-30
 
 **The temp sweeps no longer delete whatever folder TMP or TEMP name. They clean your own

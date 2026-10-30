@@ -4,6 +4,7 @@
 
 using System.Collections;
 using System.Collections.ObjectModel;
+using System.IO;
 using System.Management.Automation;
 using System.Management.Automation.Runspaces;
 using NSubstitute;
@@ -127,6 +128,71 @@ public class DefenderServiceTests
     [InlineData(@"D:\Steam\steamapps")]
     public void IsValidExclusionPath_AcceptsRootedNonWildcardPath(string path)
         => Assert.True(DefenderService.IsValidExclusionPath(path));
+
+    // ── an exclusion can never cover a whole drive, Windows or the user's own files (#2773) ──
+
+    /// <summary>A machine of the test's own: the folders the rule protects, under made-up roots.</summary>
+    private static readonly IReadOnlyList<(string Name, string? Path, bool ContentsToo)> Protected =
+    [
+        ("the Windows folder", @"C:\Windows", true),
+        ("Program Files", @"C:\Program Files", false),
+        ("the folder every account's files are in", @"C:\Users", false),
+        ("your account's folder", @"C:\Users\me", false),
+        ("Downloads", @"D:\Downloads", false),
+        ("your temp folder", @"C:\Users\me\AppData\Local\Temp", false),
+    ];
+
+    [Theory]
+    [InlineData(@"C:\", "is a whole drive or network share")]
+    [InlineData(@"D:\", "is a whole drive or network share")]
+    [InlineData(@"\\server\share\", "is a whole drive or network share")]
+    [InlineData(@"C:", "is not a full folder path without wildcards")]           // rooted, but the current directory on C:
+    [InlineData(@"\Windows", "is not a full folder path without wildcards")]     // rooted, but on the current drive
+    [InlineData(@"C:\Windows", "is or holds the Windows folder")]
+    [InlineData(@"C:\Windows\System32", "is inside the Windows folder")]
+    [InlineData(@"C:\Program Files", "is or holds Program Files")]
+    [InlineData(@"C:\Users", "is or holds the folder every account's files are in")]
+    [InlineData(@"C:\Users\me", "is or holds your account's folder")]
+    [InlineData(@"C:\Users\me\AppData", "is or holds your temp folder")]
+    [InlineData(@"D:\Downloads\", "is or holds Downloads")]
+    public void ExclusionRefusal_RefusesWhatWouldLeaveTheSystemOrTheUsersFilesUnscanned(string path, string why)
+        => Assert.Equal(why, DefenderService.ExclusionRefusal(path, Protected));
+
+    /// <summary>The other side: a folder inside the ones that are not system folders is what exclusions are for.</summary>
+    [Theory]
+    [InlineData(@"C:\Games")]
+    [InlineData(@"C:\Program Files\Steam\steamapps")]
+    [InlineData(@"C:\Users\me\Documents\Builds")]
+    [InlineData(@"\\server\share\Builds")]
+    public void ExclusionRefusal_AllowsAFolderInsideThem(string path)
+        => Assert.Null(DefenderService.ExclusionRefusal(path, Protected));
+
+    /// <summary>The real folders of the machine running the suite, through the overload the service itself uses.</summary>
+    [Fact]
+    public void IsValidExclusionPath_RefusesThisMachinesDriveWindowsAndProfile()
+    {
+        var windows = Environment.GetFolderPath(Environment.SpecialFolder.Windows);
+        var profile = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
+        Assert.False(string.IsNullOrEmpty(windows) || string.IsNullOrEmpty(profile));   // else nothing below is real
+
+        Assert.False(DefenderService.IsValidExclusionPath(Path.GetPathRoot(windows)!));
+        Assert.False(DefenderService.IsValidExclusionPath(windows));
+        Assert.False(DefenderService.IsValidExclusionPath(Path.Join(windows, "System32")));
+        Assert.False(DefenderService.IsValidExclusionPath(profile));
+        Assert.False(DefenderService.IsValidExclusionPath(SysManager.Helpers.KnownFolders.GetDownloadsPath()));
+    }
+
+    [Fact]
+    public async Task AddExclusionPathAsync_ForAWholeDrive_Throws_AndRunsNothing()
+    {
+        var runner = Substitute.For<IPowerShellRunner>();
+        var service = new DefenderService(runner);
+
+        var refused = await Assert.ThrowsAsync<ArgumentException>(() => service.AddExclusionPathAsync(@"C:\"));
+
+        Assert.Contains("is a whole drive or network share", refused.Message, StringComparison.Ordinal);
+        await runner.DidNotReceiveWithAnyArgs().RunAsync(default!, default, default);
+    }
 
     [Fact]
     public void ParseStatus_NormalizesInvertedRealtimeBoolean()

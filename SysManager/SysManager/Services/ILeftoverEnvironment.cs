@@ -89,15 +89,7 @@ public sealed class SystemLeftoverEnvironment : ILeftoverEnvironment
 
     public string ProgramFilesX86 { get; } = Environment.GetFolderPath(Environment.SpecialFolder.ProgramFilesX86);
 
-    public IReadOnlyList<(string Name, string Path)> UserFolders { get; } =
-    [
-        ("Documents", KnownFolders.GetDocumentsPath()),
-        ("Desktop", KnownFolders.GetDesktopPath()),
-        ("Downloads", KnownFolders.GetDownloadsPath()),
-        ("Pictures", KnownFolders.GetPicturesPath()),
-        ("Music", KnownFolders.GetMusicPath()),
-        ("Videos", KnownFolders.GetVideosPath()),
-    ];
+    public IReadOnlyList<(string Name, string Path)> UserFolders { get; } = KnownFolders.UserFolders();
 
     /// <summary>
     /// SysManager's two data folders and the folder the running exe is in, which is where a portable copy keeps

@@ -1474,7 +1474,8 @@ Answers "what is actually using my space?" by listing the biggest files in one p
   layer: "Problem on your local network", "Problem at your ISP or upstream", "It's the game
   server, not you", "Streaming service is slow", or "Multiple layers affected". This is the
   point of the tab: "my internet is bad" is not actionable, "your router is fine, your ISP
-  is not" is.
+  is not" is. A layer is called clean only when something in it was pinged, the targets you
+  add count as well, and the verdict says what tripped: packet loss, jitter or high latency.
 - **Watches several hosts at once**, each with its own live latency, average, jitter and
   loss, and its own colour on the shared chart. A ping that got no reply, and an average or
   jitter not measured yet, read "—"
@@ -1485,6 +1486,8 @@ Answers "what is actually using my space?" by listing the biggest files in one p
   - **FACEIT Europe** — competitive CS2 servers in DE, NL, UK
   - **PUBG Europe** — the EU matchmaking cloud regions (Frankfurt, Ireland, London)
   - **Streaming** — YouTube, Twitch, Cloudflare, to correlate buffering with the network
+  - The game and streaming presets also ping Cloudflare's DNS server, 1.1.1.1, so the verdict
+    can tell a server's loss from your provider's
 - **Your gateway is detected and added automatically**, so the first thing the chart can
   tell you apart is your own network from everything beyond it
 - **Live latency chart** with a window you pick in minutes (1, 5, 10 or 15) and a ping

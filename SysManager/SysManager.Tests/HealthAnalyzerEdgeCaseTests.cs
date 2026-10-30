@@ -214,14 +214,15 @@ public class HealthAnalyzerEdgeCaseTests
     }
 
     [Fact]
-    public void Analyze_OnlyGenericRole_AllGood()
+    public void Analyze_OnlyGenericRole_WithLoss_IsNotGood()
     {
         var metrics = new[]
         {
             new TargetMetric("custom", TargetRole.Generic, 100.0, 50.0, 10.0, 10),
         };
         var result = HealthAnalyzer.Analyze(metrics);
-        // Generic role is not checked by any of the specific conditions
-        Assert.Equal(HealthVerdict.Good, result.Verdict);
+        // A target of the user's own counts (#2712): it read "healthy" at 10% loss, with the loss in the pill under
+        // it. With no DNS server measured, the verdict cannot say where the loss is.
+        Assert.Equal(HealthVerdict.Inconclusive, result.Verdict);
     }
 }

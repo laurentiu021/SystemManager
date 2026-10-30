@@ -206,6 +206,119 @@ public class HealthAnalyzerTests
         Assert.Equal(StatusColors.Bad, d.ColorHex);
     }
 
+    // ---------- what was measured, and what tripped (#2712) ----------
+    //
+    // A layer with no targets read as healthy, so the game presets, which pinged no DNS server, said DNS and the
+    // gateway were clean. Generic targets, google.com and every target the user adds, were left out of the verdict
+    // while their loss was in the worst-loss pill, and the detail said "loss" whatever had tripped.
+
+    [Fact]
+    public void GameServersOnly_WithLoss_DoNotBlameTheServer()
+    {
+        var d = Analyze(new[] { M("cs2", TargetRole.GameServer, loss: 8) });
+
+        Assert.Equal(HealthVerdict.Inconclusive, d.Verdict);
+        Assert.Equal("Trouble reaching the game server", d.Headline);
+        Assert.Contains("No public DNS server was measured", d.Detail, StringComparison.Ordinal);
+        Assert.DoesNotContain("clean", d.Detail, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public void GameLoss_WithNoGatewayMeasured_DoesNotCallTheGatewayClean()
+    {
+        var d = Analyze(new[]
+        {
+            M("dns", TargetRole.PublicDns),
+            M("cs2", TargetRole.GameServer, loss: 8),
+        });
+
+        Assert.Equal(HealthVerdict.GameServer, d.Verdict);
+        Assert.DoesNotContain("gateway is clean", d.Detail, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("your router was not measured", d.Detail, StringComparison.Ordinal);
+        Assert.Contains("packet loss", d.Detail, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void ACustomTargetsLoss_IsNotCalledHealthy()
+    {
+        var d = Analyze(new[]
+        {
+            M("gw", TargetRole.Gateway),
+            M("dns", TargetRole.PublicDns),
+            M("my.server", TargetRole.Generic, loss: 15),
+        });
+
+        Assert.Equal(HealthVerdict.RemoteTarget, d.Verdict);
+        Assert.Equal("It's my.server, not you", d.Headline);
+        Assert.Equal(15, d.WorstLossPercent);
+        Assert.Equal(StatusColors.Info, d.ColorHex);
+    }
+
+    [Fact]
+    public void CustomTargetsOnly_WithLoss_DoNotBlameTheTarget()
+    {
+        var d = Analyze(new[]
+        {
+            M("one.example", TargetRole.Generic, loss: 15),
+            M("two.example", TargetRole.Generic, jitter: 30),
+        });
+
+        Assert.Equal(HealthVerdict.Inconclusive, d.Verdict);
+        Assert.Equal("Trouble reaching those targets", d.Headline);
+    }
+
+    [Fact]
+    public void DnsAt65MsWithNoLoss_IsReportedAsHighLatency()
+    {
+        var d = Analyze(new[]
+        {
+            M("gw", TargetRole.Gateway),
+            M("dns", TargetRole.PublicDns, avg: 65, jitter: 1, loss: 0),
+        });
+
+        Assert.Equal(HealthVerdict.IspOrUpstream, d.Verdict);
+        Assert.Contains("high latency", d.Detail, StringComparison.Ordinal);
+        Assert.DoesNotContain("loss", d.Detail, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void DnsLoss_WithNoGatewayMeasured_SaysTheRouterWasNotMeasured()
+    {
+        var d = Analyze(new[] { M("dns", TargetRole.PublicDns, loss: 5) });
+
+        Assert.Equal(HealthVerdict.IspOrUpstream, d.Verdict);
+        Assert.DoesNotContain("Gateway is clean", d.Detail, StringComparison.Ordinal);
+        Assert.Contains("router was not measured", d.Detail, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void GatewayJitter_IsReportedAsJitter()
+    {
+        var d = Analyze(new[]
+        {
+            M("gw", TargetRole.Gateway, jitter: 25),
+            M("dns", TargetRole.PublicDns),
+        });
+
+        Assert.Equal(HealthVerdict.LocalNetwork, d.Verdict);
+        Assert.Contains("showing jitter", d.Detail, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void TwoFarEndsInTrouble_WithDnsClean_IsMixed()
+    {
+        var d = Analyze(new[]
+        {
+            M("gw", TargetRole.Gateway),
+            M("dns", TargetRole.PublicDns),
+            M("cs2", TargetRole.GameServer, loss: 8),
+            M("my.server", TargetRole.Generic, loss: 8),
+        });
+
+        Assert.Equal(HealthVerdict.Mixed, d.Verdict);
+        Assert.StartsWith("2 network layers", d.Detail, StringComparison.Ordinal);
+    }
+
     // ---------- threshold boundaries ----------
 
     [Fact]

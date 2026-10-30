@@ -397,6 +397,45 @@ public sealed class AboutUpdateExitTests : IDisposable
         Assert.Equal(0, _shutdowns);
     }
 
+    // ── An update or a Go back that did not land is said when SysManager reopens (#2725) ──────────────
+    //
+    // The applier runs after SysManager has closed, and the build it reopens was started with no argument, so a failed
+    // update came back on the old version with nothing said.
+
+    [Fact]
+    public async Task AnUpdateThatDidNotLand_IsSaid_AndInTheCardOnceTheCheckFindsItAgain()
+    {
+        var failed = new UpdateApplier.FailedSwap(false, Release.Version, "Windows did not let SysManager replace its own file");
+        UpdateApplier.RecordFailedSwap(failed, _dir);
+
+        var vm = NewVm();
+
+        var line = "The update to v99.0.0 could not be installed: Windows did not let SysManager replace its own file. "
+            + $"SysManager is still on v{UpdateService.CurrentVersion.ToString(3)}.";
+        Assert.Equal(line, vm.UpdateStatus);
+        Assert.False(File.Exists(UpdateApplier.FailedSwapPath(_dir)));   // said once
+
+        await vm.CheckForUpdatesCommand.ExecuteAsync(null);
+
+        // The check writes its own line over the one above, so the card's warning row says it, with Download offered.
+        Assert.True(vm.InstallFailed);
+        Assert.Equal(line, vm.DownloadStatus);
+        Assert.True(vm.ShowDownloadButton);
+    }
+
+    [Fact]
+    public void AGoBackThatDidNotLand_IsSaidBesideGoBack()
+    {
+        UpdateApplier.RecordFailedSwap(
+            new UpdateApplier.FailedSwap(true, new Version(1, 0, 0), "Windows did not let SysManager replace its own file"), _dir);
+
+        var vm = NewVm();
+
+        Assert.Equal("Going back to v1.0.0 did not work: Windows did not let SysManager replace its own file. "
+            + $"SysManager is still on v{UpdateService.CurrentVersion.ToString(3)}.", vm.RollBackStatus);
+        Assert.DoesNotContain("could not be installed", vm.UpdateStatus, StringComparison.Ordinal);
+    }
+
     // ── Go back names its version, and checks the saved copy off the UI thread (#2725) ─────────────────
 
     [Fact]

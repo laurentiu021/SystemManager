@@ -896,13 +896,17 @@ public class UpdateApplierTests
             var victim = Path.Combine(dir.FullName, "hosts");
             File.WriteAllText(victim, "127.0.0.1 localhost");
             var before = Sha256(victim);
+            var started = new List<ProcessStartInfo>();
 
             // A pid that cannot exist, so Run does not wait: this is exactly what an attacker supplies.
-            UpdateApplier.Run(victim, 999999, AnyHash);
+            UpdateApplier.Run(victim, 999999, AnyHash, started.Add, Updates(dir));
 
             Assert.True(File.Exists(victim));
             Assert.Equal(before, Sha256(victim));
             Assert.False(File.Exists(victim + ".new"));   // not even a staging file was written
+            // Nor started, and nothing recorded: a target that is not this application's own is not reopened.
+            Assert.Empty(started);
+            Assert.False(File.Exists(UpdateApplier.FailedSwapPath(Updates(dir))));
         }
         finally { dir.Delete(recursive: true); }
     }
@@ -935,12 +939,19 @@ public class UpdateApplierTests
             File.Copy(self, target);
             var before = Sha256(target);
 
+            var started = new List<ProcessStartInfo>();
+
             // A pid that cannot exist, so nothing waits. AnyHash is a well-formed SHA-256 that is not this
             // executable's, which is exactly the swapped-file case.
-            UpdateApplier.Run(target, 999999, AnyHash);
+            UpdateApplier.Run(target, 999999, AnyHash, started.Add, Updates(dir));
 
             Assert.Equal(before, Sha256(target));
             Assert.False(File.Exists(target + ".new"), "a staging file was written before the hash was checked");
+            // The build that was there opens again, and says why the update did not land (#2725).
+            Assert.Equal(target, Assert.Single(started).FileName);
+            Assert.True(UpdateApplier.TryTakeFailedSwap(Updates(dir), out var failed));
+            Assert.Equal(new UpdateApplier.FailedSwap(false, ThisVersion,
+                "the new version did not match the checksum it was checked against"), failed);
         }
         finally { dir.Delete(recursive: true); }
     }
@@ -966,10 +977,142 @@ public class UpdateApplierTests
             File.Copy(self, target);
             var before = Sha256(target);
 
-            UpdateApplier.Run(target, 999999, hash);
+            var started = new List<ProcessStartInfo>();
+
+            UpdateApplier.Run(target, 999999, hash, started.Add, Updates(dir));
 
             Assert.Equal(before, Sha256(target));
             Assert.False(File.Exists(target + ".new"));
+            Assert.Equal(target, Assert.Single(started).FileName);
+            Assert.True(UpdateApplier.TryTakeFailedSwap(Updates(dir), out var failed));
+            Assert.Equal("the new version came without a checksum to check it against", failed?.Reason);
+        }
+        finally { dir.Delete(recursive: true); }
+    }
+
+    /// <summary>This build's version in three parts, as the record of a failed swap names it.</summary>
+    private static readonly Version ThisVersion = new(
+        UpdateService.CurrentVersion.Major, UpdateService.CurrentVersion.Minor, UpdateService.CurrentVersion.Build);
+
+    /// <summary>
+    /// A copy of the running executable with bytes of its own appended, so it is still one of this application's builds
+    /// and an install over it shows: afterwards it is this executable byte for byte.
+    /// </summary>
+    private static string AnOlderCopyOfThisBuild(DirectoryInfo dir)
+    {
+        var self = Environment.ProcessPath!;
+        var target = Path.Combine(dir.FullName, Path.GetFileName(self));
+        File.Copy(self, target);
+        File.AppendAllText(target, "the build that was there");
+        return target;
+    }
+
+    [Fact]
+    public void Run_WithThisBuildsOwnHash_InstallsIt_KeepsTheOneItReplaced_AndStartsIt()
+    {
+        var dir = Directory.CreateTempSubdirectory("ApplierRunInstall_");
+        try
+        {
+            var target = AnOlderCopyOfThisBuild(dir);
+            var replaced = Sha256(target);
+            var started = new List<ProcessStartInfo>();
+
+            UpdateApplier.Run(target, 999999, Sha256(Environment.ProcessPath!), started.Add, Updates(dir));
+
+            Assert.Equal(Sha256(Environment.ProcessPath!), Sha256(target));
+            Assert.Equal(replaced, Sha256(UpdateApplier.PreviousBuildPath(Updates(dir))));
+            Assert.Equal(target, Assert.Single(started).FileName);
+            Assert.False(File.Exists(UpdateApplier.FailedSwapPath(Updates(dir))));
+        }
+        finally { dir.Delete(recursive: true); }
+    }
+
+    [Fact]
+    public void Run_WhenTheSwapFails_StartsTheBuildThatWasThere_AndRecordsWhy()
+    {
+        // A read-only target refuses the move at once, as a folder Windows protects would, without waiting out the
+        // retries a lock gets.
+        var dir = Directory.CreateTempSubdirectory("ApplierRunFails_");
+        var target = AnOlderCopyOfThisBuild(dir);
+        try
+        {
+            var before = Sha256(target);
+            File.SetAttributes(target, FileAttributes.ReadOnly);
+            var started = new List<ProcessStartInfo>();
+
+            UpdateApplier.Run(target, 999999, Sha256(Environment.ProcessPath!), started.Add, Updates(dir));
+
+            Assert.Equal(before, Sha256(target));
+            Assert.Equal(target, Assert.Single(started).FileName);
+            Assert.True(UpdateApplier.TryTakeFailedSwap(Updates(dir), out var failed));
+            Assert.Equal(new UpdateApplier.FailedSwap(false, ThisVersion,
+                "Windows did not let SysManager replace its own file"), failed);
+            // The outgoing build it copied aside is gone again: the copy is ours, and is never left read-only.
+            Assert.Empty(Directory.GetFiles(Updates(dir), "*.pending*"));
+        }
+        finally
+        {
+            File.SetAttributes(target, FileAttributes.Normal);
+            dir.Delete(recursive: true);
+        }
+    }
+
+    [Fact]
+    public void ApplyCopy_OverAFileThatIsOpen_SaysWindowsRefused()
+    {
+        var dir = Directory.CreateTempSubdirectory("ApplierInUse_");
+        try
+        {
+            var target = Path.Combine(dir.FullName, "current.exe");
+            File.WriteAllText(target, "OLD-BUILD");
+            using var source = new MemoryStream("NEW-BUILD"u8.ToArray());
+            string failure;
+
+            using (new FileStream(target, FileMode.Open, FileAccess.Read, FileShare.Read))
+                Assert.False(UpdateApplier.ApplyCopy(source, target, out failure, maxAttempts: 2, delayMs: 0,
+                    updatesDir: Updates(dir)));
+
+            Assert.Equal("OLD-BUILD", File.ReadAllText(target));
+            // Windows answers a replace over an open file, as over a running one, with access denied.
+            Assert.Equal("Windows did not let SysManager replace its own file", failure);
+        }
+        finally { dir.Delete(recursive: true); }
+    }
+
+    [Fact]
+    public void FailedSwap_IsTakenOnce()
+    {
+        var dir = Directory.CreateTempSubdirectory("ApplierFailedSwap_");
+        try
+        {
+            var recorded = new UpdateApplier.FailedSwap(true, new Version(1, 2, 3), "SysManager's file could not be replaced");
+            UpdateApplier.RecordFailedSwap(recorded, dir.FullName);
+
+            Assert.True(UpdateApplier.TryTakeFailedSwap(dir.FullName, out var first));
+            Assert.Equal(recorded, first);
+            Assert.False(UpdateApplier.TryTakeFailedSwap(dir.FullName, out var second));
+            Assert.Null(second);
+            Assert.False(File.Exists(UpdateApplier.FailedSwapPath(dir.FullName)));
+        }
+        finally { dir.Delete(recursive: true); }
+    }
+
+    [Theory]
+    [InlineData("update\n1.2.3\n")]
+    [InlineData("upgrade\n1.2.3\nwhy\n")]
+    [InlineData("update\nnot a version\nwhy\n")]
+    [InlineData("update\n1.2.3\n   \n")]
+    [InlineData("")]
+    public void FailedSwap_ThatCannotBeRead_IsDroppedUnsaid(string record)
+    {
+        var dir = Directory.CreateTempSubdirectory("ApplierBadFailedSwap_");
+        try
+        {
+            File.WriteAllText(UpdateApplier.FailedSwapPath(dir.FullName), record);
+
+            Assert.False(UpdateApplier.TryTakeFailedSwap(dir.FullName, out var failed));
+            Assert.Null(failed);
+            Assert.False(File.Exists(UpdateApplier.FailedSwapPath(dir.FullName)));
         }
         finally { dir.Delete(recursive: true); }
     }
@@ -996,7 +1139,7 @@ public class UpdateApplierTests
             // it has just hashed, and hashing leaves the position at the end.
             source.Position = source.Length;
 
-            Assert.True(UpdateApplier.ApplyCopy(source, target, updatesDir: Updates(dir)));
+            Assert.True(UpdateApplier.ApplyCopy(source, target, out _, updatesDir: Updates(dir)));
             Assert.Equal("the verified build", File.ReadAllText(target));
         }
         finally { dir.Delete(recursive: true); }

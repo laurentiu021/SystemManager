@@ -358,7 +358,7 @@ internal static class UpdateApplier
         }
 
         using var source = new FileStream(sourceExe, FileMode.Open, FileAccess.Read, FileShare.Read);
-        return ApplyCopy(source, targetExe, maxAttempts, delayMs, updatesDir, retainOutgoing);
+        return ApplyCopy(source, targetExe, out _, maxAttempts, delayMs, updatesDir, retainOutgoing);
     }
 
     /// <summary>
@@ -382,12 +382,16 @@ internal static class UpdateApplier
     /// the build it replaces is the newer one, and keeping it there left Go back offered to reinstall the version
     /// already running (#2725). A copy that lands with nothing kept takes Go back off offer.
     /// </param>
+    /// <param name="failure">
+    /// Why the copy did not land, in words for the person, which SysManager shows when it reopens; empty when it did.
+    /// </param>
     internal static bool ApplyCopy(
-        Stream source, string targetExe, int maxAttempts = 10, int delayMs = 500, string? updatesDir = null,
-        bool retainOutgoing = true)
+        Stream source, string targetExe, out string failure, int maxAttempts = 10, int delayMs = 500,
+        string? updatesDir = null, bool retainOutgoing = true)
     {
         var staging = targetExe + ".new";
         var retained = false;
+        failure = "";
 
         // STAGED ONCE, outside the retry loop. Only the move can be blocked by the lock the retries exist
         // to wait out, and these two steps produce identical bytes every time — so repeating them cost two
@@ -424,6 +428,7 @@ internal static class UpdateApplier
         catch (IOException ex)
         {
             LogStagingFailure(ex, targetExe);
+            failure = IsOutOfSpace(ex) ? OutOfSpaceFailure : "the new version could not be written next to SysManager";
             TryDelete(staging);
             if (retained) DiscardOutgoingBuild(updatesDir);
             return false;
@@ -431,6 +436,7 @@ internal static class UpdateApplier
         catch (UnauthorizedAccessException ex)
         {
             Log.Warning(ex, "Update apply: access denied staging next to {Target}", LogService.SanitizePath(targetExe));
+            failure = "Windows did not let SysManager write next to its own file";
             TryDelete(staging);
             if (retained) DiscardOutgoingBuild(updatesDir);
             return false;
@@ -459,6 +465,7 @@ internal static class UpdateApplier
                 {
                     LogStagingFailure(ex, targetExe);
                     reason = "there was not enough free space on the volume";
+                    failure = OutOfSpaceFailure;
                     break;
                 }
 
@@ -469,6 +476,7 @@ internal static class UpdateApplier
             {
                 Log.Warning(ex, "Update apply: access denied writing {Target}", LogService.SanitizePath(targetExe));
                 reason = "access to it was denied";
+                failure = "Windows did not let SysManager replace its own file";
                 break;
             }
         }
@@ -493,6 +501,7 @@ internal static class UpdateApplier
 
         TryDelete(staging);
         if (retained) DiscardOutgoingBuild(updatesDir);
+        if (failure.Length == 0) failure = "SysManager's file could not be replaced";
 
         // Names the cause the run actually met. The old message asserted a lock for every failure, which was
         // the wrong answer for both of the others.
@@ -501,6 +510,67 @@ internal static class UpdateApplier
             LogService.SanitizePath(targetExe),
             reason ?? $"it stayed locked through all {maxAttempts} attempts");
         return false;
+    }
+
+    private const string OutOfSpaceFailure = "there was not enough free space on the drive";
+
+    /// <summary>
+    /// An update or a Go back that did not land after SysManager had closed: whether it was a Go back, the version that
+    /// was not installed, and why, in words for the person.
+    /// </summary>
+    internal sealed record FailedSwap(bool IsRollback, Version Version, string Reason);
+
+    /// <summary>
+    /// Where a swap that failed after SysManager closed is recorded, so the version that reopens can say so.
+    /// </summary>
+    /// <remarks>
+    /// The applier runs after SysManager has closed, and the build it relaunches started with no argument: a failed
+    /// update reopened the old version with nothing said, and when the check that found the update was a startup check
+    /// in the last day, About even read "Checked recently" (#2725). Not under the download pattern, so the cleanup
+    /// leaves it for the version that reads it.
+    /// </remarks>
+    internal static string FailedSwapPath(string? updatesDir = null) =>
+        Path.Join(updatesDir ?? AppDataFolders.Updates, "last-update-failed.txt");
+
+    /// <summary>Records <paramref name="failed"/> for the version that reopens. Best-effort, like the kept copy.</summary>
+    internal static void RecordFailedSwap(FailedSwap failed, string? updatesDir = null)
+    {
+        try
+        {
+            Directory.CreateDirectory(updatesDir ?? AppDataFolders.Updates);
+            AtomicFile.WriteAllText(FailedSwapPath(updatesDir),
+                $"{(failed.IsRollback ? "rollback" : "update")}\n{ThreePart(failed.Version)}\n{failed.Reason}\n");
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            Log.Warning(ex, "Update apply: could not record why the update did not land");
+        }
+    }
+
+    /// <summary>
+    /// Reads the record of a swap that failed and removes it, so it is said once. False when there is none, or it
+    /// cannot be read.
+    /// </summary>
+    internal static bool TryTakeFailedSwap(string? updatesDir, out FailedSwap? failed)
+    {
+        failed = null;
+        var path = FailedSwapPath(updatesDir);
+        try
+        {
+            var lines = File.ReadAllLines(path);
+            TryDelete(path);
+            if (lines.Length != 3 || lines[0] is not ("update" or "rollback") || !Version.TryParse(lines[1], out var version)
+                || string.IsNullOrWhiteSpace(lines[2]))
+                return false;
+
+            failed = new FailedSwap(lines[0] == "rollback",
+                new Version(version.Major, version.Minor, Math.Max(version.Build, 0)), lines[2].Trim());
+            return true;
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            return false;
+        }
     }
 
     /// <summary>
@@ -567,6 +637,10 @@ internal static class UpdateApplier
             if (!string.IsNullOrEmpty(dir)) Directory.CreateDirectory(dir);
 
             File.Copy(targetExe, pending, overwrite: true);
+
+            // The copy takes the attributes of the build it copies, and a read-only one could then be neither discarded
+            // nor replaced by the next update's. The copy is SysManager's own, in its own folder.
+            File.SetAttributes(pending, File.GetAttributes(pending) & ~FileAttributes.ReadOnly);
 
             // Record the hash of what we just wrote, so RollBackAsync can prove the binary it launches
             // is still that copy. Hashed from the RETAINED file rather than the source, so the recorded
@@ -807,7 +881,11 @@ internal static class UpdateApplier
     /// The SHA-256 the launching app checked this executable against. Checked again here, on a handle this
     /// process opens and keeps, and the bytes installed are read from that same handle (#2832).
     /// </param>
-    public static void Run(string targetExe, int oldPid, string expectedHash)
+    /// <param name="launch">Starts the build at the target; the real start unless a test passes its own.</param>
+    /// <param name="updatesDir">Where the kept copy and the record of a failure live; null resolves the real profile.</param>
+    public static void Run(
+        string targetExe, int oldPid, string expectedHash, Action<ProcessStartInfo>? launch = null,
+        string? updatesDir = null)
     {
         // SEC: the gate sits here rather than in TryParseArgs so it cannot be bypassed by a future
         // second caller — Run is the only thing that writes, so Run is what must refuse.
@@ -820,12 +898,18 @@ internal static class UpdateApplier
             return;
         }
 
+        // From here the target is this application's own executable, so every refusal below reopens it and says why.
+        // They used to return with SysManager closed for good, and nothing said (#2725).
+        var start = launch ?? StartTarget;
         var sourceExe = Environment.ProcessPath;
         if (string.IsNullOrWhiteSpace(sourceExe))
         {
             Log.Error("Update apply: cannot determine source executable path");
+            GiveUp(targetExe, oldPid, isRollback: false, "the new version could not be found", start, updatesDir);
             return;
         }
+
+        var isRollback = IsTheKeptCopy(sourceExe, updatesDir);
 
         // SEC: opened deny-write and held for the rest of the run, hashed through that handle, and the install
         // below reads the bytes from it. Before this, the launching app verified a hash and closed its handle,
@@ -839,6 +923,7 @@ internal static class UpdateApplier
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
             Log.Error(ex, "Update apply: could not open this build to verify it");
+            GiveUp(targetExe, oldPid, isRollback, "the new version could not be opened", start, updatesDir);
             return;
         }
 
@@ -847,6 +932,8 @@ internal static class UpdateApplier
             if (!IsSha256(expectedHash))
             {
                 Log.Error("Update apply: refusing to install — no usable checksum was passed for this build");
+                GiveUp(targetExe, oldPid, isRollback, "the new version came without a checksum to check it against",
+                    start, updatesDir);
                 return;
             }
 
@@ -856,41 +943,69 @@ internal static class UpdateApplier
                 Log.Error(
                     "Update apply: refusing to install — this build does not match the checksum it was "
                     + "launched with (expected {Expected}, got {Actual})", expectedHash, actual);
+                GiveUp(targetExe, oldPid, isRollback, "the new version did not match the checksum it was checked against",
+                    start, updatesDir);
                 return;
             }
 
             // A rollback runs from the kept copy itself, so the build it replaces is the newer one (#2725).
-            SwapAndRelaunch(verified, targetExe, oldPid, isRollback: IsTheKeptCopy(sourceExe));
+            SwapAndRelaunch(verified, targetExe, oldPid, isRollback, start, updatesDir);
         }
+    }
+
+    /// <summary>
+    /// Leaves the build at <paramref name="targetExe"/> as it is: records why for the version that reopens, and once the
+    /// old process has gone, starts it again.
+    /// </summary>
+    private static void GiveUp(
+        string targetExe, int oldPid, bool isRollback, string reason, Action<ProcessStartInfo> start, string? updatesDir)
+    {
+        RecordFailedSwap(new FailedSwap(isRollback, UpdateService.CurrentVersion, reason), updatesDir);
+        WaitForProcessExit(oldPid, TimeSpan.FromSeconds(30));
+        Relaunch(targetExe, start);
     }
 
     /// <summary>
     /// The rest of the applier sequence, on an executable already verified through <paramref name="verified"/>.
     /// </summary>
-    private static void SwapAndRelaunch(FileStream verified, string targetExe, int oldPid, bool isRollback)
+    private static void SwapAndRelaunch(
+        FileStream verified, string targetExe, int oldPid, bool isRollback, Action<ProcessStartInfo> start,
+        string? updatesDir)
     {
         Log.Information("Update apply: waiting for old process {Pid} to exit", oldPid);
         WaitForProcessExit(oldPid, TimeSpan.FromSeconds(30));
 
-        var applied = ApplyCopy(verified, targetExe, retainOutgoing: !isRollback);
+        var applied = ApplyCopy(verified, targetExe, out var failure, updatesDir: updatesDir, retainOutgoing: !isRollback);
         Log.Information(applied
             ? "Update apply: swapped new build into place, relaunching"
             : "Update apply: copy failed, relaunching existing build unchanged");
 
+        // The build that reopens started with no argument, so a failure is recorded for it to read (#2725).
+        if (!applied) RecordFailedSwap(new FailedSwap(isRollback, UpdateService.CurrentVersion, failure), updatesDir);
+
         // Relaunch whatever is at the target path. On success it's the new
         // build; on failure it's the original — either way the user gets a
-        // working app rather than a dead one. UseShellExecute lets the relaunch
-        // inherit the applier's elevation, preserving the user's run-as-admin
-        // state across the update.
+        // working app rather than a dead one.
+        Relaunch(targetExe, start);
+    }
+
+    /// <summary>
+    /// Starts the build at <paramref name="targetExe"/>. UseShellExecute lets it inherit the applier's elevation,
+    /// preserving the user's run-as-admin state across the update.
+    /// </summary>
+    private static void Relaunch(string targetExe, Action<ProcessStartInfo> start)
+    {
         try
         {
-            Process.Start(new ProcessStartInfo(targetExe) { UseShellExecute = true })?.Dispose();
+            start(new ProcessStartInfo(targetExe) { UseShellExecute = true });
         }
         catch (Exception ex) when (ex is InvalidOperationException or System.ComponentModel.Win32Exception)
         {
             Log.Error(ex, "Update apply: failed to relaunch {Target}", LogService.SanitizePath(targetExe));
         }
     }
+
+    private static void StartTarget(ProcessStartInfo info) => Process.Start(info)?.Dispose();
 
     private static void WaitForProcessExit(int pid, TimeSpan timeout)
     {

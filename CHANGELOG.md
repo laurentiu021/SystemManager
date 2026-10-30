@@ -10,6 +10,22 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.136.17] - 2026-10-30
+
+**When an update or Go back cannot finish after SysManager has closed, SysManager opens again
+and says why.**
+
+### Fixed
+- An update that could not replace SysManager's file after it had closed reopened the old
+  version with nothing said, and when the check that found the update had run in the last day,
+  About even read "Checked recently". The reason is now kept for the version that reopens:
+  About says "The update to vX could not be installed", names the reason and the version still
+  running, and looks for the update again at once instead of a day later. A Go back that cannot
+  finish says so beside its button. Present since updates were installed in-process in 1.42.11.
+- A new version that failed its own checksum check, or came without one, left SysManager
+  closed for good: the part that installs it refused and opened nothing. It now opens the
+  version that was there again and says why. Present since 1.130.86.
+
 ## [1.136.16] - 2026-10-30
 
 **Go back names the version it returns to, and is no longer offered once SysManager was updated

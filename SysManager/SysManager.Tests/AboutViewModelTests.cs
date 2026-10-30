@@ -755,6 +755,14 @@ public sealed class AboutViewModelUpdateGateTests : IDisposable
             autoCheck: true,
             preferences);
 
+    /// <summary>The same, over an updates folder of the test's own, for a record a parallel test must not take.</summary>
+    private AboutViewModel NewVm(UpdateCheckPreferenceService preferences, IUpdateService updates, string updatesDir) =>
+        new(updates,
+            new SystemReportService(new SystemInfoService(), new DiskHealthService(), new BatteryService(), new EventLogService()),
+            autoCheck: true,
+            preferences,
+            updatesDir: updatesDir);
+
     /// <summary>
     /// The preference a fresh service reads from <paramref name="dir"/>, as the next launch would, asserted to have
     /// been readable. Null is its own answer, "could not be read" (#2614).
@@ -1027,6 +1035,40 @@ public sealed class AboutViewModelUpdateGateTests : IDisposable
         await updates.DidNotReceive().GetLatestAsync(Arg.Any<CancellationToken>());
         Assert.False(vm.UpdateCheckFailed);
         Assert.Contains("recently", vm.UpdateStatus, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public async Task WithAnUpdateThatDidNotLand_TheStartupCheckRunsDespiteARecentOne()
+    {
+        // The update a check found failed after SysManager closed, and waiting out the day left the tab reading
+        // "Checked recently" over a version that never installed (#2725).
+        var prefs = new UpdateCheckPreferenceService(_dir);
+        prefs.RecordCheck(DateTimeOffset.UtcNow);
+        var updatesDir = Path.Combine(_dir, "updates");
+        UpdateApplier.RecordFailedSwap(new UpdateApplier.FailedSwap(false, new Version(99, 0, 0), "a reason"), updatesDir);
+        var updates = NewUpdates();
+
+        using var vm = NewVm(prefs, updates, updatesDir);
+        await vm.InitializationComplete;
+
+        await updates.Received(1).GetLatestAsync(Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task WithAnUpdateThatDidNotLand_AndTheCheckTurnedOff_ItIsSaid_AndNothingIsFetched()
+    {
+        var prefs = new UpdateCheckPreferenceService(_dir);
+        prefs.SetCheckOnStartup(false);
+        var updatesDir = Path.Combine(_dir, "updates");
+        var failed = new UpdateApplier.FailedSwap(false, new Version(99, 0, 0), "a reason");
+        UpdateApplier.RecordFailedSwap(failed, updatesDir);
+        var updates = NewUpdates();
+
+        using var vm = NewVm(prefs, updates, updatesDir);
+        await vm.InitializationComplete;
+
+        await updates.DidNotReceive().GetLatestAsync(Arg.Any<CancellationToken>());
+        Assert.Equal($"{AboutViewModel.FailedUpdateLine(failed)} Use Check for updates to look for it again.", vm.UpdateStatus);
     }
 
     [Fact]

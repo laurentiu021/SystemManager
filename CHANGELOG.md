@@ -22,8 +22,9 @@ and an update check that times out says so instead of "Check cancelled."**
   mismatch — file may be corrupted" every time, until SysManager was restarted. A check that
   finds another release now lets that download go, and a failed download of the old one too,
   so Download is offered again. A download that was still running when the newer release was
-  found says so when it ends instead of offering its file for Install. Present since the About
-  tab gained Download and Install in 0.5.0.
+  found says so when it ends instead of offering its file for Install, and an Install that was
+  still checking its file stops there instead of installing a version the card no longer names.
+  Present since the About tab gained Download and Install in 0.5.0.
 - An update check that GitHub did not answer within 15 seconds read "Check cancelled." and was
   not tried again, although the check promises one retry for a failure like that. It is now
   tried once more, and if that times out too it says GitHub did not answer in time. Only a

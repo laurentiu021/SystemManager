@@ -275,6 +275,7 @@ public sealed class AboutUpdateExitTests : IDisposable
     {
         var vm = await ReadyToInstallAsync();
         var file = vm.DownloadedPath;
+        GitHubNowAnswers(Release with { Body = "Notes edited after publishing." });
 
         await vm.CheckForUpdatesCommand.ExecuteAsync(null);
 
@@ -302,6 +303,53 @@ public sealed class AboutUpdateExitTests : IDisposable
         Assert.Equal("v99.0.1", vm.LatestVersionLabel);
         Assert.Equal(AboutViewModel.NewerReleaseWhileDownloadingLine, vm.DownloadStatus);
         Assert.Null(vm.DownloadedPath);
+        Assert.True(vm.ShowDownloadButton);
+    }
+
+    [Fact]
+    public async Task ADownloadThatEndsAfterTheSameReleaseWasFoundAgain_IsOfferedForInstall()
+    {
+        // The same release with its notes edited since, as they are after publishing: still the file's release.
+        var vm = NewVm();
+        await vm.CheckForUpdatesCommand.ExecuteAsync(null);
+        var file = Path.Combine(_dir, "SysManager-v99.0.0.exe");
+        await File.WriteAllBytesAsync(file, "not a signed PE, just bytes"u8.ToArray());
+        var parked = new TaskCompletionSource<string?>(TaskCreationOptions.RunContinuationsAsynchronously);
+        _updates.DownloadAsync(Release, Arg.Any<IProgress<(long, long?)>>(), Arg.Any<CancellationToken>())
+            .Returns(parked.Task);
+
+        var download = vm.DownloadCommand.ExecuteAsync(null);
+        GitHubNowAnswers(Release with { Body = "Notes edited after publishing." });
+        await vm.CheckForUpdatesCommand.ExecuteAsync(null);
+        parked.SetResult(file);
+        await download;
+
+        Assert.Equal(file, vm.DownloadedPath);
+        Assert.StartsWith("Download complete.", vm.DownloadStatus, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task ACheckThatFindsANewerReleaseWhileInstallChecksTheFile_StopsTheInstall()
+    {
+        // The check let the file go and the card names the newer release, so installing it would install a version
+        // the card no longer offers, under the newer one's name.
+        var vm = await ReadyToInstallAsync();
+        var hashed = new TaskCompletionSource<(bool, string?, string?)>(TaskCreationOptions.RunContinuationsAsynchronously);
+        _updates.VerifyHashAsync(Release, Arg.Any<Stream>(), Arg.Any<CancellationToken>()).Returns(hashed.Task);
+        using var dialog = new DialogAnswer(confirm: true);
+
+        var install = vm.InstallUpdateCommand.ExecuteAsync(null);
+        GitHubNowAnswers(Newer);
+        await vm.CheckForUpdatesCommand.ExecuteAsync(null);
+        hashed.SetResult((true, VerifiedHash, VerifiedHash));
+        await install;
+
+        Assert.Equal(0, dialog.Calls);
+        Assert.Empty(_launched);
+        Assert.Equal(0, _shutdowns);
+        Assert.Equal(AboutViewModel.NewerReleaseBeforeInstallLine, vm.DownloadStatus);
+        Assert.Null(vm.DownloadedPath);
+        Assert.False(vm.InstallFailed);
         Assert.True(vm.ShowDownloadButton);
     }
 

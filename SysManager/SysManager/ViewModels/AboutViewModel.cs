@@ -522,6 +522,10 @@ public sealed partial class AboutViewModel : ViewModelBase
     internal const string NewerReleaseWhileDownloadingLine =
         "A newer version was found while this one downloaded. Press Download to get it.";
 
+    /// <summary>What the tab says when a check found another release while Install checked this one's file.</summary>
+    internal const string NewerReleaseBeforeInstallLine =
+        "A newer version was found, so this one was not installed. Press Download to get it.";
+
     /// <summary>Lets go of the download for a release the card no longer names, so Download is offered again.</summary>
     private void ForgetDownload()
     {
@@ -586,7 +590,9 @@ public sealed partial class AboutViewModel : ViewModelBase
                 return;
             }
 
-            if (!Equals(release, _latest))
+            // By tag, as the check compares: a check that found this release again with its notes edited since gets a
+            // record that differs, and the file is still this release's.
+            if (release.Tag != _latest?.Tag)
             {
                 // A check found another release while this one downloaded, so the file is not the one the card names.
                 DownloadStatus = NewerReleaseWhileDownloadingLine;
@@ -1051,7 +1057,7 @@ public sealed partial class AboutViewModel : ViewModelBase
             return;
         }
 
-        if (_latest is null)
+        if (_latest is not { } release)
         {
             InstallStopped("No release info available.", unusable: false);
             return;
@@ -1090,7 +1096,16 @@ public sealed partial class AboutViewModel : ViewModelBase
             // Step 1: Verify SHA256 hash before installing — hashes from the held stream
             // so no other process can modify the bytes between verify and launch.
             DownloadStatus = "Verifying file integrity...";
-            var (verified, expected, actual) = await _updates.VerifyHashAsync(_latest, lockedStream);
+            var (verified, expected, actual) = await _updates.VerifyHashAsync(release, lockedStream);
+
+            // A check that found another release while the hash was fetched has let this file go, and the card names
+            // that release now, so the file is not installed under its name (#2728).
+            if (release.Tag != _latest?.Tag)
+            {
+                DownloadStatus = NewerReleaseBeforeInstallLine;
+                return;
+            }
+
             if (!verified && expected is not null && actual is not null)
             {
                 refused = true;

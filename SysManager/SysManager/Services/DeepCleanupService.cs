@@ -169,10 +169,11 @@ public sealed class DeepCleanupService
                 [Path.Combine(windowsDir, "Installer", "$PatchCache$")]),
 
             new("Temporary files",
-                "Files in the per-user and system TEMP folders that nothing has created or changed in the last week, "
-                + "as Windows' own Disk Cleanup leaves them: a program being installed may still need newer ones. "
-                + "Files an app is holding open are skipped, and the folder apps unpack themselves into is left "
-                + "alone entirely.",
+                "Files in your own temp folder (AppData\\Local\\Temp) and Windows' own (Windows\\Temp) that nothing has "
+                + "created or changed in the last week, as Windows' own Disk Cleanup leaves them: a program being "
+                + "installed may still need newer ones. Files an app is holding open are skipped, and the folder apps "
+                + "unpack themselves into is left alone entirely. A TEMP or TMP variable pointed anywhere else is left "
+                + "alone too, because nothing tells temporary files there apart from the rest of that folder.",
                 [tempUser, Path.Combine(windowsDir, "Temp")],
                 OlderThan: CleanupAge.TempFilesKeptFor),
 

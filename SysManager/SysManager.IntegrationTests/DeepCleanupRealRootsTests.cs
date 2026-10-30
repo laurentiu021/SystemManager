@@ -80,6 +80,9 @@ public class DeepCleanupRealRootsTests(RealMachineScanFixture scan) : IClassFixt
         };
         anchors.AddRange(roots.FixedDriveRoots);
         anchors.AddRange(roots.RecycleBinPaths);
+        // UserTemp is empty when the profile folder cannot be resolved, and every path starts with "": one empty
+        // anchor would let this whole assertion pass while checking nothing.
+        anchors.RemoveAll(string.IsNullOrEmpty);
 
         var resolved = _scanned.SelectMany(c => c.Paths).ToList();
 

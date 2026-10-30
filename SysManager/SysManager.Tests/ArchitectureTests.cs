@@ -19603,6 +19603,54 @@ public partial class ArchitectureTests
     }
 
     /// <summary>
+    /// No temp sweep takes its folder from TMP or TEMP. Both are user-writable, and the sweep deletes everything under
+    /// the folder it is given.
+    /// </summary>
+    /// <remarks>
+    /// With TMP pointed at <c>D:\</c> or Documents, Deep Cleanup reported that tree as "Temporary files" and Clean
+    /// emptied it, and Quick Cleanup did the same through TEMP (#2700). The real roots now come from
+    /// <c>SystemPaths.UserTempRoot</c>. A behavioural test cannot catch a call to the environment coming back: it would
+    /// have to change TMP for the whole test process, under every other test that builds its own folder from
+    /// <c>Path.GetTempPath</c>. So this reads the three files that produce the roots. Each must still name the resolved
+    /// root, which is the floor that stops a rename from leaving this guard checking nothing.
+    /// </remarks>
+    [Fact]
+    public void NoTempSweep_TakesItsFolderFromTmpOrTemp()
+    {
+        var files = new (string File, string MustUse)[]
+        {
+            ("ICleanupRoots.cs", "SystemPaths.UserTempRoot"),
+            ("TuneUpService.cs", "SystemPaths.UserTempRoot"),
+            ("CleanupPreScanService.cs", "TuneUpService.TempRoots()"),
+        };
+        string[] banned = ["Path.GetTempPath", "GetEnvironmentVariable(\"TEMP\")", "GetEnvironmentVariable(\"TMP\")"];
+
+        var offenders = new List<string>();
+        var unanchored = new List<string>();
+        foreach (var (file, mustUse) in files)
+        {
+            var path = Path.Combine(TestPaths.AppProject(), "Services", file);
+            Assert.True(File.Exists(path), $"{file} was not found at {path}");
+            var source = WithoutComments(File.ReadAllText(path));
+
+            offenders.AddRange(banned
+                .Where(call => source.Contains(call, StringComparison.Ordinal))
+                .Select(call => $"{file}: {call}"));
+            if (!source.Contains(mustUse, StringComparison.Ordinal)) unanchored.Add($"{file}: {mustUse}");
+        }
+
+        // The defect first: a file that went back to the environment also stops naming the resolved root, and that
+        // second symptom must not be the message a reader sees.
+        Assert.True(offenders.Count == 0,
+            "A temp sweep takes its folder from the environment again. TMP and TEMP live in HKCU\\Environment, "
+            + "so any program running as the user can point them at a drive root or Documents, and the sweep "
+            + "deletes everything it finds there. Use SystemPaths.UserTempRoot:\n  " + string.Join("\n  ", offenders));
+        Assert.True(unanchored.Count == 0,
+            "These files no longer name the resolved temp root. If it moved, move this guard with it; as it stands "
+            + "it checks nothing:\n  " + string.Join("\n  ", unanchored));
+    }
+
+    /// <summary>
     /// A bucket that counts only some of the files under its path must delete only those files. Scan and
     /// Clean are separate walks, so the filter has to reach both or the bucket lies about what it removes.
     /// </summary>

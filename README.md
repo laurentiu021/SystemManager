@@ -852,7 +852,10 @@ System → System Fixes, where the tab name matches what they do.
   Windows' own TEMP folder as well as yours. Files created or changed in the last week stay, as
   Windows' own Disk Cleanup leaves them, so a program being installed keeps what it unpacked;
   the size shown counts only what would go. Deep Cleanup's Temporary files, the Dashboard's
-  quick clean and Quick Tune-Up, Scheduled Maintenance and `--cleanup` keep them too
+  quick clean and Quick Tune-Up, Scheduled Maintenance and `--cleanup` keep them too. Your own
+  temp folder is always `AppData\Local\Temp` in your profile: when TEMP or TMP has been moved to
+  another folder, that folder is left alone, because nothing tells its temporary files apart from
+  whatever else it holds
 - Empty the Recycle Bin. Its size is the one Windows reports, as Explorer shows it, so an
   empty bin reads "Empty" and is left as it is; each time it is emptied, Recent activity
   records it with what it held

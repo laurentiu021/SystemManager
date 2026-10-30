@@ -10,6 +10,24 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.136.6] - 2026-10-30
+
+**The temp sweeps no longer delete whatever folder TMP or TEMP name. They clean your own
+`AppData\Local\Temp` and `Windows\Temp`, nothing else.**
+
+### Fixed
+- Deep Cleanup's Temporary files took the user's temp folder from `Path.GetTempPath()`, which reads
+  TMP, and Quick Cleanup, Quick Tune-Up, Scheduled Maintenance and `--cleanup` read TEMP. Both
+  variables live in `HKCU\Environment`, so the user, any program running as the user, and the
+  Environment Variables tab can point them anywhere without administrator rights. With TMP set to
+  `D:\` or to Documents, the scan reported that tree as "Temporary files" and Clean deleted what it
+  held, and an elevated run let a value any unelevated program can write decide what an
+  administrator process deleted. The sweeps now take `AppData\Local\Temp` under the account's own
+  profile folder, which neither variable changes; a TEMP or TMP moved anywhere else is left alone,
+  and Deep Cleanup's description and Quick Cleanup's note say so. Deep Cleanup and Quick Cleanup
+  also used to read two different variables, so they could measure and delete two different
+  folders; they now share one root.
+
 ## [1.136.5] - 2026-10-30
 
 **Disabling or enabling a scheduled task right after selecting it no longer loses the row and the

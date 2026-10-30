@@ -2095,6 +2095,11 @@ Key utility classes that don't fit neatly into Services or ViewModels (not an ex
   breaks a running program's later lazy loads, which no in-use check can
   prevent because nothing holds those files open yet. `BundleExtractionFolderName` names
   that folder for every temp root, `%WinDir%\Temp` included, where a SYSTEM service unpacks.
+  `UserTempRoot` is the per-user folder those sweeps empty: `AppData\Local\Temp` under the
+  account's fixed profile folder, never what TMP or TEMP name, because both are writable without
+  administrator rights and a sweep deletes everything under its root (#2700).
+  `SystemCleanupRoots.UserTemp` and `TuneUpService.TempRoots` both take it, so Deep Cleanup and
+  Quick Cleanup clean the same folder.
 - `RecycleBinHelper` — measures the Recycle Bin (`SHQueryRecycleBin`) and empties it
   (`SHEmptyRecycleBin`) through the shell API, asking first and leaving an empty bin alone, and judging a
   failure code by whether the bin is empty afterwards. Quick Cleanup, Deep Cleanup and the Dashboard's

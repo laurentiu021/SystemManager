@@ -19,19 +19,19 @@
     <PackageVersion Include="LibreHardwareMonitorLib" Version="0.9.6" />
     <PackageVersion Include="LiveChartsCore.SkiaSharpView.WPF" Version="2.0.5" />
     <PackageVersion Include="Microsoft.Diagnostics.Tracing.TraceEvent" Version="4.0.0" />
-    <PackageVersion Include="Microsoft.Extensions.DependencyInjection" Version="10.0.13" />
+    <PackageVersion Include="Microsoft.Extensions.DependencyInjection" Version="10.0.14" />
     <PackageVersion Include="NvAPIWrapper.Net" Version="0.8.1.101" />
     <PackageVersion Include="WPF-UI" Version="4.3.0" />
     <PackageVersion Include="Serilog" Version="4.4.0" />
     <PackageVersion Include="Serilog.Sinks.File" Version="7.0.0" />
-    <PackageVersion Include="System.Management" Version="10.0.13" />
-    <PackageVersion Include="System.Management.Automation" Version="7.6.7" />
-    <PackageVersion Include="System.ServiceProcess.ServiceController" Version="10.0.13" />
+    <PackageVersion Include="System.Management" Version="10.0.14" />
+    <PackageVersion Include="System.Management.Automation" Version="7.6.9" />
+    <PackageVersion Include="System.ServiceProcess.ServiceController" Version="10.0.14" />
   </ItemGroup>
 
   <!-- Build-time / repository-wide (applied via Directory.Build.props) -->
   <ItemGroup>
-    <PackageVersion Include="Microsoft.SourceLink.GitHub" Version="10.0.402" />
+    <PackageVersion Include="Microsoft.SourceLink.GitHub" Version="10.0.403" />
   </ItemGroup>
 
   <!--

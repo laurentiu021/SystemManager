@@ -2324,6 +2324,11 @@ offers, "rate us" prompts:
 - One-click "Install" replaces the running executable in-place and
   restarts automatically (no manual file copying needed). It asks first, because it
   closes SysManager, and names anything still running that closing would cut off.
+- **A winget-installed copy updates through winget, not here.** Detected by its location under
+  `WinGet\Packages` or its PATH shim at `WinGet\Links`, Download and Install are not offered for
+  it — only the command to run instead, `winget upgrade laurentiu021.SysManager`. Installing in
+  place would leave winget's own record of the version stale, and winget's own "Go back" is
+  skipped for the same reason.
 - **When Install stops short, it says so as a problem**, not in the green "download complete"
   line. A download that fails its hash check is deleted, so Download fetches it again; when
   the hash could not be fetched or the new version would not start, the file is kept and

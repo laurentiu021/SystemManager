@@ -413,6 +413,10 @@ public sealed partial class AboutViewModel : ViewModelBase
                 return;
             }
 
+            // Another release than the card held: what was downloaded for that one, or failed to download, is not this
+            // one's. Kept, its file was checked against this release's hash and refused on every Install, while Download
+            // stayed hidden (#2728). A download still running sees the change itself when it ends.
+            if (_latest is { } previous && previous.Tag != latest.Tag && !IsDownloading) ForgetDownload();
             _latest = latest;
             LatestVersionLabel = $"v{latest.Version.ToString(3)}";
             LatestPublishedLabel = latest.PublishedAt == DateTimeOffset.MinValue
@@ -514,6 +518,25 @@ public sealed partial class AboutViewModel : ViewModelBase
     /// <summary>What the tab says about a download the user stopped. Not a failure: nothing went wrong with it.</summary>
     private const string CancelledLine = "Download cancelled. Press Download to start again.";
 
+    /// <summary>What the tab says when a check found another release while a download for the previous one ran.</summary>
+    internal const string NewerReleaseWhileDownloadingLine =
+        "A newer version was found while this one downloaded. Press Download to get it.";
+
+    /// <summary>What the tab says when a check found another release while Install checked this one's file.</summary>
+    internal const string NewerReleaseBeforeInstallLine =
+        "A newer version was found, so this one was not installed. Press Download to get it.";
+
+    /// <summary>Lets go of the download for a release the card no longer names, so Download is offered again.</summary>
+    private void ForgetDownload()
+    {
+        DownloadedPath = null;
+        DownloadStatus = string.Empty;
+        DownloadProgressLine = string.Empty;
+        DownloadPercent = 0;
+        AutoDownloadFailed = false;
+        InstallFailed = false;
+    }
+
     /// <summary>Stops the download in flight.</summary>
     [RelayCommand]
     private void CancelDownload()
@@ -530,7 +553,7 @@ public sealed partial class AboutViewModel : ViewModelBase
         // The actual safety boundary, not just ShowDownloadButton hiding the button: a winget-managed copy
         // must never acquire a downloaded file to install, since the whole point is that this copy's exe
         // is winget's to replace, not About's (#2889).
-        if (IsManagedByWinGet || _latest is null || IsDownloading) return;
+        if (IsManagedByWinGet || _latest is not { } release || IsDownloading) return;
         IsDownloading = true;
         AutoDownloadFailed = false;
         InstallFailed = false;
@@ -558,12 +581,21 @@ public sealed partial class AboutViewModel : ViewModelBase
                 }
             });
 
-            var path = await progress.SettleAfterAsync(reporter => _updates.DownloadAsync(_latest, reporter, token));
+            var path = await progress.SettleAfterAsync(reporter => _updates.DownloadAsync(release, reporter, token));
             if (token.IsCancellationRequested)
             {
                 // The service answers a cancellation with null rather than throwing, so this is the live path and
                 // the catch below is for one that throws instead.
                 DownloadStatus = CancelledLine;
+                return;
+            }
+
+            // By tag, as the check compares: a check that found this release again with its notes edited since gets a
+            // record that differs, and the file is still this release's.
+            if (release.Tag != _latest?.Tag)
+            {
+                // A check found another release while this one downloaded, so the file is not the one the card names.
+                DownloadStatus = NewerReleaseWhileDownloadingLine;
                 return;
             }
 
@@ -1025,7 +1057,7 @@ public sealed partial class AboutViewModel : ViewModelBase
             return;
         }
 
-        if (_latest is null)
+        if (_latest is not { } release)
         {
             InstallStopped("No release info available.", unusable: false);
             return;
@@ -1064,7 +1096,16 @@ public sealed partial class AboutViewModel : ViewModelBase
             // Step 1: Verify SHA256 hash before installing — hashes from the held stream
             // so no other process can modify the bytes between verify and launch.
             DownloadStatus = "Verifying file integrity...";
-            var (verified, expected, actual) = await _updates.VerifyHashAsync(_latest, lockedStream);
+            var (verified, expected, actual) = await _updates.VerifyHashAsync(release, lockedStream);
+
+            // A check that found another release while the hash was fetched has let this file go, and the card names
+            // that release now, so the file is not installed under its name (#2728).
+            if (release.Tag != _latest?.Tag)
+            {
+                DownloadStatus = NewerReleaseBeforeInstallLine;
+                return;
+            }
+
             if (!verified && expected is not null && actual is not null)
             {
                 refused = true;

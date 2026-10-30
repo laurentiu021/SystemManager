@@ -10,6 +10,24 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.136.8] - 2026-10-30
+
+**Uninstaller's list of leftovers waiting for administrator rights can no longer ask the
+administrator session for a folder outside Program Files and ProgramData, and a damaged list is
+kept instead of written over.**
+
+### Fixed
+- The list sits in your own profile, where anything running as you can add to it, and the session
+  with administrator rights that reads it back offered every folder on it. A folder under another
+  account's profile or Users\Public, written into the list, was offered for removal with
+  administrator rights. That session now applies the rule the list was written by: only folders
+  under Program Files, Program Files (x86) or ProgramData are offered, and the rest are dropped
+  from the list.
+- A list that could not be parsed was read as empty, so the next uninstall's leftovers were
+  written over it and every leftover an earlier session had queued was lost. It is now kept beside
+  the new list as `uninstaller-leftovers.json.unreadable`, as the app's other stores keep theirs,
+  and a list that could not be read at all is left as it is.
+
 ## [1.136.7] - 2026-10-30
 
 **Edge/OneDrive Remover no longer runs OneDrive's setup as administrator. Remove and Restore

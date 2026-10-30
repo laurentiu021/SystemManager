@@ -263,8 +263,19 @@ public static partial class LeftoverFinder
 
     /// <summary>Whether removing <paramref name="path"/> needs administrator rights SysManager does not have now.</summary>
     internal static bool NeedsAdministrator(string path, ILeftoverEnvironment env) =>
-        !env.IsElevated
-        && Normalize(path) is { } full
+        !env.IsElevated && IsInAdministratorFolder(path, env);
+
+    /// <summary>
+    /// Whether <paramref name="path"/> sits in Program Files, Program Files (x86) or ProgramData: the folders only an
+    /// administrator can remove from, whether or not SysManager is elevated now.
+    /// </summary>
+    /// <remarks>
+    /// The rule the Uninstaller uses to decide what waits for an administrator session, and the one that session uses
+    /// to read the record back. The record sits in the user's own profile, so the reading side applies the writing
+    /// side's rule again rather than trusting the file (#2747).
+    /// </remarks>
+    internal static bool IsInAdministratorFolder(string path, ILeftoverEnvironment env) =>
+        Normalize(path) is { } full
         && (SystemPaths.IsInsideSubtree(full, Normalize(env.ProgramFiles))
             || SystemPaths.IsInsideSubtree(full, Normalize(env.ProgramFilesX86))
             || SystemPaths.IsInsideSubtree(full, Normalize(env.ProgramData)));

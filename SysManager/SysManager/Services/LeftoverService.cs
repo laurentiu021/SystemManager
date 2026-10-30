@@ -258,8 +258,8 @@ public sealed class LeftoverService : ILeftoverService
     {
         lock (_pendingLock)
         {
-            var stored = ReadStored();
-            if (stored.Count == 0) return [];
+            var (stored, _) = ReadStored();
+            if (stored is null || stored.Count == 0) return [];
 
             // The record is only ever read in a session that runs as administrator, which has never seen the
             // Uninstaller's list; the uninstall entries Windows holds are what decides whether a folder is in use now.
@@ -285,6 +285,11 @@ public sealed class LeftoverService : ILeftoverService
                 var keptFolders = new List<StoredFolder>();
                 foreach (var folder in group.Folders)
                 {
+                    // Only a folder the record was allowed to hold: RememberPending keeps only folders that need
+                    // administrator rights, and the record sits in the user's own profile, where anything running as
+                    // the user can add to it. Without this, another account's profile or C:\Users\Public written into
+                    // it was offered for removal in the administrator session (#2747).
+                    if (!LeftoverFinder.IsInAdministratorFolder(folder.Path, _env)) continue;
                     // Only what is still there and still allowed is offered again; the size is measured now.
                     if (!Directory.Exists(folder.Path)) continue;
                     if (LeftoverFinder.Refusal(folder.Path, _env) is not null) continue;
@@ -326,7 +331,15 @@ public sealed class LeftoverService : ILeftoverService
     {
         lock (_pendingLock)
         {
-            var stored = ReadStored().ToList();
+            // A record that could not be read is not "none": writing the new groups over it lost every leftover an
+            // earlier session had queued (#2747), the case StoreFile exists for (#2521).
+            var (read, unparsable) = ReadStored();
+            if (read is null)
+            {
+                Log.Warning("Uninstaller leftovers: pending record unreadable; these leftovers were not queued");
+                return;
+            }
+            var stored = read.ToList();
             var added = false;
             foreach (var group in groups)
             {
@@ -340,7 +353,10 @@ public sealed class LeftoverService : ILeftoverService
                 stored.Add(new StoredGroup(group.AppName, group.Publisher, folders));
                 added = true;
             }
-            if (added) WriteStored(stored);
+            if (!added) return;
+            // One that does not parse is kept beside the new record, never written over.
+            if (unparsable && !StoreFile.SetAside(_pendingPath)) return;
+            WriteStored(stored);
         }
     }
 
@@ -348,8 +364,8 @@ public sealed class LeftoverService : ILeftoverService
     {
         lock (_pendingLock)
         {
-            var stored = ReadStored();
-            if (stored.Count == 0 || folders.Count == 0) return;
+            var (stored, _) = ReadStored();
+            if (stored is null || stored.Count == 0 || folders.Count == 0) return;
             var kept = stored
                 .Select(s => s with
                 {
@@ -361,14 +377,15 @@ public sealed class LeftoverService : ILeftoverService
         }
     }
 
-    private IReadOnlyList<StoredGroup> ReadStored()
+    /// <summary>
+    /// The stored groups: empty when there is no record yet, null when the record is there and could not be read.
+    /// Unparsable is true when it was read and is not a record, and then the groups are empty.
+    /// </summary>
+    private (IReadOnlyList<StoredGroup>? Groups, bool Unparsable) ReadStored()
     {
-        try
-        {
-            return File.Exists(_pendingPath) ? Parse(File.ReadAllText(_pendingPath)) : [];
-        }
-        catch (IOException ex) { Log.Debug("Uninstaller leftovers: pending record unreadable: {Error}", ex.Message); return []; }
-        catch (UnauthorizedAccessException ex) { Log.Debug("Uninstaller leftovers: pending record denied: {Error}", ex.Message); return []; }
+        var json = StoreFile.ReadText(_pendingPath);
+        if (json is null) return (null, false);
+        return ParseOrNull(json) is { } groups ? (groups, false) : ([], true);
     }
 
     private void WriteStored(IReadOnlyList<StoredGroup> stored)
@@ -394,7 +411,10 @@ public sealed class LeftoverService : ILeftoverService
     internal sealed record StoredGroup(string AppName, string Publisher, List<StoredFolder> Folders);
 
     /// <summary>The stored groups, or none for a record that is empty, malformed or from a future shape.</summary>
-    internal static IReadOnlyList<StoredGroup> Parse(string? json)
+    internal static IReadOnlyList<StoredGroup> Parse(string? json) => ParseOrNull(json) ?? [];
+
+    /// <summary>The stored groups, none for an empty record, or null for one that is not a record at all.</summary>
+    private static IReadOnlyList<StoredGroup>? ParseOrNull(string? json)
     {
         if (string.IsNullOrWhiteSpace(json)) return [];
         try
@@ -413,7 +433,7 @@ public sealed class LeftoverService : ILeftoverService
         catch (JsonException ex)
         {
             Log.Debug("Uninstaller leftovers: pending record malformed: {Error}", ex.Message);
-            return [];
+            return null;
         }
     }
 

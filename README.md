@@ -1888,7 +1888,9 @@ offers, "rate us" prompts:
   the key back. You confirm the exact list first, and every folder is checked again just before it goes
 - **Leftovers that need administrator rights wait for them** — uninstalling runs without them,
   so a leftover under Program Files or ProgramData is kept on a list and offered again, unticked,
-  the next time you open Uninstaller with SysManager running as administrator
+  the next time you open Uninstaller with SysManager running as administrator. The list lives in
+  your own profile, so the administrator session offers only folders still under Program Files or
+  ProgramData, whatever else the list says
 
 ### Gaming Profile 🔬
 - **One-click "game mode"** — apply a bundle of reversible optimizations together,

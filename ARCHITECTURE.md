@@ -694,7 +694,10 @@ Key services:
   which call site produced it. Sanitizing at the sink rather than per call site is deliberate:
   `SanitizePath` was called at 15 of 75 path-logging sites, so exposure depended on which
   service happened to fail, and no call-site fix can reach a path inside exception text —
-  Serilog renders that separately from the message properties.
+  Serilog renders that separately from the message properties. The name ends where a path
+  component does, so the rest of the line is kept, and the user's own folder is matched as the
+  literal it is, spaces and apostrophes included; `BuildUserPathRegexes` builds both scrubs for a
+  profile a test chooses (#2713).
 - `FixedDriveService` — enumerate fixed NTFS/ReFS volumes. `Describe` builds each record with the sizes as read,
   not rounded, since the Health Score's free-space floors compare them (#2802).
 - `DeepCleanupService` — scan-first safe cleanup (vendor caches, gaming

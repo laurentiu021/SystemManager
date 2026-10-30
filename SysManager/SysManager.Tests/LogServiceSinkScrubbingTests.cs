@@ -12,7 +12,7 @@ using SysManager.Services;
 namespace SysManager.Tests;
 
 /// <summary>
-/// Proves the log sink actually applies <see cref="LogService.SanitizePath"/> to what it writes.
+/// Proves the log sink actually applies <see cref="LogService.SanitizePath(string?)"/> to what it writes.
 /// <para>The existing <c>LogServiceSanitize*Tests</c> cover the regex itself; these cover the
 /// wiring, which is where the defect was. <c>SanitizePath</c> existed and worked, but only 15 of
 /// 75 path-logging call sites called it — so whether a user name reached the log depended on
@@ -89,6 +89,24 @@ public sealed class LogServiceSinkScrubbingTests : IDisposable
         });
 
         Assert.Contains("Cannot open", text);          // the exception is still logged
+        Assert.DoesNotContain(CurrentUserName, text, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public void Sink_KeepsTheExceptionText_AfterAPathThatEndsAtTheUsersFolder()
+    {
+        // The scrub ran from Users\ to the next backslash, so a path that ended at the user's own folder took the rest
+        // of the event with it: "is denied.", the exception type on the next line and the stack trace (#2713).
+        var text = WriteAndRead(log =>
+        {
+            try { throw new UnauthorizedAccessException($"Access to the path '{UserPath()}' is denied."); }
+            catch (UnauthorizedAccessException ex) { log.Warning(ex, "Failed to open folder {Folder}", UserPath()); }
+        });
+
+        Assert.Contains("' is denied.", text);
+        Assert.Contains("System.UnauthorizedAccessException", text);
+        Assert.Contains(nameof(Sink_KeepsTheExceptionText_AfterAPathThatEndsAtTheUsersFolder), text);
+        Assert.Equal(2, text.Split("[user]").Length - 1);
         Assert.DoesNotContain(CurrentUserName, text, StringComparison.OrdinalIgnoreCase);
     }
 

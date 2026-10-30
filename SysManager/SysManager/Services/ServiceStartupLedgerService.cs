@@ -141,6 +141,25 @@ public sealed class ServiceStartupLedgerService
     }
 
     /// <summary>
+    /// Removes several services' records in one write. Serialized against <see cref="Remember"/> by
+    /// <see cref="_mutateLock"/>; a ledger that could not be read is left as it is, as <see cref="Forget"/> leaves it.
+    /// </summary>
+    public void ForgetAll(IReadOnlyCollection<string> serviceNames)
+    {
+        if (serviceNames.Count == 0) return;
+
+        lock (_mutateLock)
+        {
+            if (Read().Records is not { } records) return;
+            var ledger = new Dictionary<string, ServiceStartupRecord>(records, StringComparer.OrdinalIgnoreCase);
+            var removed = false;
+            foreach (var name in serviceNames)
+                removed |= !string.IsNullOrWhiteSpace(name) && ledger.Remove(name);
+            if (removed) Persist(ledger);
+        }
+    }
+
+    /// <summary>
     /// The startup type to restore for a service, or null when nothing is recorded or the ledger could not be read.
     /// A caller that must tell those two apart uses <see cref="Load"/>.
     /// </summary>

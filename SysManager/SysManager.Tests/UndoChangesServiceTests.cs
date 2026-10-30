@@ -95,6 +95,10 @@ public sealed class UndoChangesServiceTests
         public bool Elevated { get; set; }
         public Dictionary<string, ServiceEntry> ServicesOnPc { get; } = new(StringComparer.OrdinalIgnoreCase);
 
+        /// <summary>How each service is read, when a test needs more than <see cref="ServicesOnPc"/>: a different
+        /// answer on a second read, for one.</summary>
+        public Func<string, ServiceEntry?>? ReadService { get; set; }
+
         /// <summary>What the Performance Mode settings are now; the original unless a test says otherwise.</summary>
         public Func<PerformanceService.OriginalSnapshot> Now { get; set; } = Original;
 
@@ -113,7 +117,7 @@ public sealed class UndoChangesServiceTests
         public UndoChangesService Service => new(
             Performance, Ledger, Runner, Hosts, Environment.Service, Gaming, Watchdog, RestorePoints, Signal,
             () => Elevated,
-            name => ServicesOnPc.TryGetValue(name, out var entry) ? entry : null,
+            name => ReadService is { } read ? read(name) : ServicesOnPc.TryGetValue(name, out var entry) ? entry : null,
             readPerformanceNow: _ => Task.FromResult(Now()),
             readGraphics: subKey => Graphics(subKey),
             restorePerformance: (snapshot, card, _) =>
@@ -890,6 +894,96 @@ public sealed class UndoChangesServiceTests
         await rig.Runner.DidNotReceive().RunProcessAsync("sc.exe", Arg.Any<string>(), Arg.Any<CancellationToken>(),
             Arg.Any<System.Text.Encoding?>());
         Assert.Empty(rig.Raised);
+    }
+
+    // ── a record does not outlive the change it describes (#2747) ──────────
+
+    private static ServiceEntry StartingAs(string name, string displayName, string startType) =>
+        new() { Name = name, DisplayName = displayName, StartType = startType };
+
+    /// <summary>
+    /// Records went only after SysManager's own Enable or Undo, so a service turned back on in Windows' own Services
+    /// console kept its record. Once something else turned it off again for its own reasons, this tab offered to turn
+    /// it back on as if SysManager had. A look now drops the record of a service that is on.
+    /// </summary>
+    [Fact]
+    public async Task AServiceTurnedBackOnOutsideSysManager_IsForgotten_AndNotOfferedWhenItGoesOffAgain()
+    {
+        using var rig = new Rig();
+        rig.TurnedOff("Fax", "Fax", "Manual", Recorded);
+        rig.TurnedOff("RetailDemo", "Retail Demo Service", "Manual", Recorded);
+        rig.ServicesOnPc["Fax"] = StartingAs("Fax", "Fax", "Manual");   // turned back on in services.msc
+
+        await rig.Service.ScanAsync();
+
+        Assert.Equal(["RetailDemo"], rig.Ledger.Load()!.Keys);
+
+        // Turned off again, by whatever the user or a policy chose, not by SysManager.
+        rig.ServicesOnPc["Fax"] = StartingAs("Fax", "Fax", "Disabled");
+        var change = await OnlyChangeAsync(rig, UndoChangeKind.Services);
+        Assert.Equal(["Retail Demo Service: Disabled → Manual"], change.Lines);
+    }
+
+    /// <summary>
+    /// Disable writes its record before it turns the service off, so a service seen on may be one being turned off
+    /// right now. The look takes the lock every system change takes before it drops anything, and leaves the record
+    /// when another change holds it.
+    /// </summary>
+    [Fact]
+    public async Task WhileAnotherSystemChangeHoldsTheLock_ALookForgetsNothing()
+    {
+        using var rig = new Rig();
+        rig.TurnedOff("Fax", "Fax", "Manual", Recorded);
+        rig.ServicesOnPc["Fax"] = StartingAs("Fax", "Fax", "Manual");   // between Disable's record and its change
+        using var held = OperationLockService.Instance.TryAcquire(OperationCategory.SystemModification, "Services");
+        Assert.NotNull(held);
+
+        await rig.Service.ScanAsync();
+
+        Assert.Equal(["Fax"], rig.Ledger.Load()!.Keys);
+    }
+
+    /// <summary>
+    /// The look collects the services that are on before it takes the lock, so a Disable can run in between: it records
+    /// the service afresh and turns it off. The look reads each service again once it holds the lock, and keeps a record
+    /// whose service is off by then.
+    /// </summary>
+    [Fact]
+    public async Task AServiceTurnedOffBetweenTheLookAndTheLock_KeepsItsFreshRecord()
+    {
+        using var rig = new Rig();
+        rig.TurnedOff("Fax", "Fax", "Manual", Recorded);
+        var reads = 0;
+        rig.ReadService = name => name == "Fax"
+            ? StartingAs("Fax", "Fax", ++reads == 1 ? "Manual" : "Disabled")
+            : null;
+
+        await rig.Service.ScanAsync();
+
+        Assert.True(reads >= 2, "the look did not read the service again under the lock");
+        Assert.Equal(["Fax"], rig.Ledger.Load()!.Keys);
+    }
+
+    /// <summary>
+    /// The ledger records only a startup type Enable can put back, and the file is in the user's own profile, so a
+    /// record carrying another type did not come from SysManager and is not listed. The ledger's parser is what drops
+    /// it; this pins that the drop reaches Undo Changes.
+    /// </summary>
+    [Fact]
+    public async Task ARecordWithAStartupTypeTheLedgerNeverRecords_IsNotListed()
+    {
+        using var rig = new Rig();
+        rig.TurnedOff("RetailDemo", "Retail Demo Service", "Manual", Recorded);
+        var withForged = new Dictionary<string, ServiceStartupRecord>(rig.Ledger.Load()!, StringComparer.OrdinalIgnoreCase)
+        {
+            ["Fax"] = new("Fax", "Boot", Recorded),
+        };
+        File.WriteAllText(Path.Combine(rig.Dir, "service-startup-ledger.json"), ServiceStartupLedgerService.Serialize(withForged));
+        rig.ServicesOnPc["Fax"] = StartingAs("Fax", "Fax", "Disabled");
+
+        var change = await OnlyChangeAsync(rig, UndoChangeKind.Services);
+
+        Assert.Equal(["Retail Demo Service: Disabled → Manual"], change.Lines);
     }
 
     [Fact]

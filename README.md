@@ -592,7 +592,9 @@ Edit Windows environment variables without the cramped built-in dialog:
     until game mode is off and the status line says why. The graphics setting takes effect after a
     restart, and the setting of an NVIDIA card that is no longer found is left as it is
   - **Services** — the services SysManager turned off that are still off, in one row: putting it back
-    returns each one to the startup type it had
+    returns each one to the startup type it had. A service turned back on elsewhere, in Windows' own
+    Services console for example, is dropped from SysManager's record the next time it looks, so it is
+    not offered later if something else turns it off again
   - **Hosts file** — once SysManager has written the hosts file, the copy kept beside it, for as long as
     the file still differs from it. Restoring it replaces everything written to the file since, by
     SysManager or by any other program, and the question says so

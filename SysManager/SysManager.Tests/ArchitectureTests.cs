@@ -12233,6 +12233,32 @@ public partial class ArchitectureTests
         Assert.Contains("retainOutgoing: !isRollback", swap, StringComparison.Ordinal);
     }
 
+    /// <summary>
+    /// The runner resolves what it starts with its own elevation, which decides where winget runs from (#2699).
+    /// </summary>
+    /// <remarks>
+    /// Without administrator rights winget runs from the user's own execution alias, and elevated from the App
+    /// Installer's folder under WindowsApps, which only an administrator can list. Read from source because the start
+    /// happens inside the runner, on a process a unit test cannot see; how each elevation resolves is tested in
+    /// <c>SystemPathsTests</c>.
+    /// </remarks>
+    [Fact]
+    public void ThePowerShellRunner_ResolvesWhatItStartsWithItsOwnElevation()
+    {
+        var source = WithoutComments(File.ReadAllText(
+            Path.Combine(TestPaths.AppProject(), "Services", "PowerShellRunner.cs")));
+
+        var resolutions = RunnerToolResolution().Matches(source).Select(m => m.Groups["args"].Value.Trim()).ToList();
+
+        Assert.True(resolutions.Count >= 2,
+            $"only {resolutions.Count} resolutions were found in PowerShellRunner, and 2 were measured: the process and "
+            + "the shell start. The match stopped working, so this would pass while checking nothing.");
+        Assert.All(resolutions, args => Assert.Equal("fileName, _isElevated", args));
+    }
+
+    [GeneratedRegex(@"SystemPaths\.ResolveSystemTool\((?<args>[^()]*)\)", RegexOptions.Compiled)]
+    private static partial Regex RunnerToolResolution();
+
     /// <summary>Go back checks the saved build off the UI thread, as Install checks its download.</summary>
     /// <remarks>
     /// The check hashes a file the size of the app. Called in <c>RollBackAsync</c> before its first await, it froze the

@@ -71,8 +71,9 @@ What the app can and cannot do by design:
   Scheduler, Drivers, System Fixes, Windows Features, and the Windows Update history).
 - Launch Windows' own tools — `sc.exe`, `powercfg`, `netsh`, `ipconfig`, `DISM`, `sfc`,
   `chkdsk`, `schtasks`, `reg`, `powershell.exe` — always from their System32 path, plus
-  `winget`, the Ookla `speedtest` CLI, OneDrive's own setup and a program's own
-  uninstaller. Ping and traceroute are sent by SysManager itself, not through `ping.exe`
+  `winget` (as administrator only from the App Installer's own folder, which only an
+  administrator can change, and otherwise from your account's own winget shortcut), the
+  Ookla `speedtest` CLI, OneDrive's own setup and a program's own uninstaller. Ping and traceroute are sent by SysManager itself, not through `ping.exe`
   or `tracert.exe`.
 - Change Windows settings through the registry on the tabs built for it — Privacy &
   Telemetry, Right-Click Menu, Startup Manager, Notification Blocker, Performance Mode, Gaming

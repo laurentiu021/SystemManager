@@ -280,6 +280,33 @@ public class BulkInstallerViewModelTests
         Assert.Equal("Done. Installed: 0, Already installed: 1, Failed: 0.", vm.StatusMessage);
     }
 
+    // ── winget that cannot start stops the run and says so (#2699) ──
+
+    [Fact]
+    public async Task InstallSelected_WhenWingetCannotStart_StopsAtTheFirstApp_AndKeepsSayingWhy()
+    {
+        // The sentence was shown for an instant: the next app's "Installing…" wrote over it, every app failed the same
+        // way, and the run ended "Done. Installed: 0, Failed: N." with a "Bulk Install complete" toast.
+        var runner = Substitute.For<IPowerShellRunner>();
+        runner.RunProcessAsync("winget", Arg.Is<string>(args => args.StartsWith("install", StringComparison.Ordinal)),
+                               Arg.Any<CancellationToken>(), Arg.Any<System.Text.Encoding?>())
+              .Returns<Task<int>>(_ => throw new System.ComponentModel.Win32Exception(2));
+        var vm = VmWithSubstitutedRunner(runner);
+        vm.DeselectAllCommand.Execute(null);
+        vm.Apps[0].IsSelected = true;
+        vm.Apps[1].IsSelected = true;
+        using var dialog = new DialogAnswer(confirm: true);
+
+        await vm.InstallSelectedCommand.ExecuteAsync(null);
+
+        Assert.Equal(WingetFailure.WingetUnavailable, vm.StatusMessage);
+        Assert.Equal("Failed — winget is not available", vm.Apps[0].Status);
+        await runner.Received(1).RunProcessAsync(
+            "winget", Arg.Is<string>(args => args.StartsWith("install", StringComparison.Ordinal)),
+            Arg.Any<CancellationToken>(), Arg.Any<System.Text.Encoding?>());
+        Assert.False(vm.IsBusy);
+    }
+
     // ── Install Selected asks first, because an install can be an upgrade (#2482) ──
 
     [Fact]

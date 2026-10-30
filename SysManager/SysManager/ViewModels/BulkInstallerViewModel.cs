@@ -165,8 +165,8 @@ public sealed partial class BulkInstallerViewModel : ElevatedViewModelBase
         try
         {
             // Route through the service (IPowerShellRunner seam) rather than a hand-built
-            // ProcessStartInfo: the runner resolves winget to its trusted, admin-only-writable
-            // WindowsApps install path (SystemPaths.ResolveWinget), so the CreateProcess search
+            // ProcessStartInfo: the runner resolves winget to a rooted path (SystemPaths.ResolveWinget), the
+            // admin-only-writable WindowsApps install when elevated, so the CreateProcess search
             // order can't be hijacked by an attacker-planted winget.exe in the app's own
             // (user-writable) directory.
             var lines = await _service.ListInstalledAsync().ConfigureAwait(false);
@@ -279,6 +279,7 @@ public sealed partial class BulkInstallerViewModel : ElevatedViewModelBase
         var alreadyInstalled = 0;
         var failed = 0;
         var restartRequired = 0;
+        var wingetUnavailable = false;
         InstallEtaText = string.Empty;
         _installEta.Reset();
 
@@ -331,13 +332,16 @@ public sealed partial class BulkInstallerViewModel : ElevatedViewModelBase
                 }
                 // winget.exe missing entirely: Process.Start throws Win32Exception. The two sibling
                 // winget tabs already catch this and show the same sentence; this tab was surfacing
-                // raw OS text per row instead ("The system cannot find the file specified").
+                // raw OS text per row instead ("The system cannot find the file specified"). And it stops,
+                // as App Updates does: every app left would fail the same way, and the next one's
+                // "Installing…" wrote over the one sentence that said why (#2699).
                 catch (System.ComponentModel.Win32Exception ex)
                 {
                     app.Status = "Failed — winget is not available";
-                    StatusMessage = WingetFailure.WingetUnavailable;
                     failed++;
+                    wingetUnavailable = true;
                     Log.Warning(ex, "winget unavailable while installing {WingetId}", app.WingetId);
+                    break;
                 }
                 catch (Exception ex)
                 {
@@ -350,8 +354,15 @@ public sealed partial class BulkInstallerViewModel : ElevatedViewModelBase
                 finally { _installing = null; }
             }
 
-            Progress = 100;
             InstallEtaText = string.Empty;
+            if (wingetUnavailable)
+            {
+                // Nothing completed, so no "complete" toast either.
+                StatusMessage = WingetFailure.WingetUnavailable;
+                return;
+            }
+
+            Progress = 100;
             var summary = $"{DescribeInstallRun(installed, alreadyInstalled, failed)}."
                 + WingetFailure.DescribeRestartRequired(restartRequired);
             StatusMessage = $"Done. {summary}";

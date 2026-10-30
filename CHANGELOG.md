@@ -10,6 +10,25 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.136.18] - 2026-10-30
+
+**App Updates, Bulk Installer and the Uninstaller find winget again when SysManager is not run
+as administrator.**
+
+### Fixed
+- Without administrator rights, which is how SysManager starts, every winget call failed and the
+  tabs said winget (App Installer) isn't available on this PC. SysManager looked for winget only
+  in the App Installer's own folder, which only an administrator can list. App Updates and the
+  Dashboard's app-update check sent you to the Store for an app already installed, Bulk Installer
+  could not search or install, and the Uninstaller listed nothing. Without administrator rights
+  winget now runs from your account's own shortcut to it, the one that runs when you type winget
+  yourself; as administrator it still runs only from the App Installer's folder. Present since
+  1.52.98.
+- When winget could not be started, Bulk Installer said why for an instant, then went on to fail
+  every remaining app the same way and ended "Done. Installed: 0, Failed: N." with a "Bulk
+  Install complete" notification. It now stops at the first app and keeps saying that winget is
+  not available. Present since 1.57.3.
+
 ## [1.136.17] - 2026-10-30
 
 **When an update or Go back cannot finish after SysManager has closed, SysManager opens again

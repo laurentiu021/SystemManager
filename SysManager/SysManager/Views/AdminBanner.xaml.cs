@@ -4,6 +4,7 @@
 
 using System.Windows;
 using System.Windows.Controls;
+using SysManager.Helpers;
 
 namespace SysManager.Views;
 
@@ -46,4 +47,19 @@ public partial class AdminBanner : UserControl
         get => (string)GetValue(ElevatedMessageProperty);
         set => SetValue(ElevatedMessageProperty, value);
     }
+
+    /// <summary>
+    /// True when SysManager is running elevated as an account DIFFERENT from the one signed in to the
+    /// active console session — the family-PC case where "Run as administrator" used a parent's
+    /// password, and a per-user switch changed here would otherwise land in the administrator's own
+    /// profile instead of the signed-in person's (#2826).
+    /// </summary>
+    /// <remarks>
+    /// Read directly here rather than bound ambiently per view model like <c>IsElevated</c>: it is a fact
+    /// about the PROCESS, identical at every one of this control's 30-plus call sites, so exposing it on
+    /// the banner itself applies everywhere with no per-tab wiring. Fixed for the life of the process, the
+    /// same assumption <see cref="AdminHelper.ElevationProbe"/>'s own remarks make for elevation itself, so
+    /// this needs no change notification.
+    /// </remarks>
+    public bool IsElevatedAsAnotherUser => AdminHelper.IsElevatedAsAnotherUser();
 }

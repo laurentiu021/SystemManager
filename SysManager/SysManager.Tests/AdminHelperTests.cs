@@ -269,6 +269,7 @@ public class AdminHelperTests
     [InlineData("Services", "PrivacyMonitorService.cs", "AdminHelper.PerUserRegistryRoot()")]
     [InlineData("Services", "NotificationBlockerService.cs", "AdminHelper.PerUserRegistryRoot()")]
     [InlineData("Services", "MaintenanceSchedulerService.cs", "AdminHelper.IsElevatedAsAnotherUser()")]
+    [InlineData("Services", "PerformanceService.cs", "AdminHelper.PerUserRegistryRoot()")]
     public void EachPerUserService_ActuallyConsultsTheSignedInAccount(string folder, string file, string mustContain)
     {
         // Asserted against the source, not behaviourally: the real redirect needs a second real signed-in
@@ -276,5 +277,37 @@ public class AdminHelperTests
         // defaulting straight to Registry.CurrentUser / WindowsIdentity.GetCurrent() again.
         var source = File.ReadAllText(TestPaths.AppFile(folder, file));
         Assert.Contains(mustContain, source, StringComparison.Ordinal);
+    }
+
+    // ── the admin banner's "different account" line (#2826) ──
+    //
+    // Same testability constraint as PerUserRegistryRoot_StillActuallyTriesTheInteractiveAccountsHive above:
+    // proving the line actually RENDERS when elevation mismatches needs a second real signed-in account this
+    // suite cannot create. Asserted against the source at the rigor the rest of this file already uses for
+    // that same constraint, rather than skipped.
+
+    [Fact]
+    public void AdminBanner_ExposesIsElevatedAsAnotherUser_ForwardingToTheHelper()
+    {
+        var source = File.ReadAllText(TestPaths.AppFile("Views", "AdminBanner.xaml.cs"));
+        Assert.Contains("bool IsElevatedAsAnotherUser", source, StringComparison.Ordinal);
+        Assert.Contains("AdminHelper.IsElevatedAsAnotherUser()", source, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void AdminBanner_Xaml_ShowsALineBoundToIsElevatedAsAnotherUser()
+    {
+        var xaml = File.ReadAllText(TestPaths.AppFile("Views", "AdminBanner.xaml"));
+        // Scoped to the golden (elevated) block, not the whole file: the line must sit where IsElevated is
+        // already true, not in the grey not-elevated block where it could never apply.
+        var elevatedBlockStart = xaml.IndexOf("Elevated: golden", StringComparison.Ordinal);
+        Assert.True(elevatedBlockStart >= 0, "the elevated block's own comment was not found — update this guard.");
+        var elevatedBlock = xaml[elevatedBlockStart..];
+
+        Assert.Contains("IsElevatedAsAnotherUser", elevatedBlock, StringComparison.Ordinal);
+        Assert.Contains("different account", elevatedBlock, StringComparison.OrdinalIgnoreCase);
+        // The architecture guard EveryGoldElevationBanner_PromisesMoreAccess requires every message shown in
+        // the gold ("you have more access now") banner to start this way, which this line must honour too.
+        Assert.Contains("Running as administrator", elevatedBlock, StringComparison.Ordinal);
     }
 }

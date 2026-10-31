@@ -390,8 +390,7 @@ public sealed partial class PerformanceService : IDisposable
 
         if (snapshot.PowerPlanGuid is null)
             return RejectSnapshot("the power-plan GUID is missing", out reason);
-        if (snapshot.PowerPlanGuid.Length > 0 &&
-            !Guid.TryParseExact(snapshot.PowerPlanGuid, "D", out _))
+        if (snapshot.PowerPlanGuid.Length > 0 && CanonicalPlan(snapshot.PowerPlanGuid) is null)
         {
             return RejectSnapshot("the power-plan GUID is not canonical", out reason);
         }
@@ -515,10 +514,23 @@ public sealed partial class PerformanceService : IDisposable
         return ("Unknown", "");
     }
 
+    /// <summary>
+    /// <paramref name="value"/> as powercfg prints a plan, the 36 characters of the D format, or null when it is not
+    /// one.
+    /// </summary>
+    /// <remarks>
+    /// Guid parsing allows white space around a GUID, so the parse alone let a plan with a line break after it through,
+    /// and the plan went on to powercfg's command line as it was written. Each plan checked here was read back from a
+    /// file in the user's profile: the snapshot Restore puts back, game mode's record, and the Ultimate Performance
+    /// copy's (#2741).
+    /// </remarks>
+    internal static string? CanonicalPlan(string? value) =>
+        value is { Length: 36 } && Guid.TryParseExact(value, "D", out var plan) ? plan.ToString("D") : null;
+
     /// <summary>Activate a power plan by GUID.</summary>
     public async Task SetActivePlanAsync(string guid, CancellationToken ct = default)
     {
-        if (!Guid.TryParseExact(guid, "D", out _))
+        if (CanonicalPlan(guid) is not { } plan)
             throw new ArgumentException("Power-plan GUID must use canonical D format.", nameof(guid));
 
         // Serialize on the same gate the readers use: they own the shared
@@ -529,7 +541,7 @@ public sealed partial class PerformanceService : IDisposable
         {
             var exitCode = await _ps.RunProcessAsync(
                 "powercfg.exe",
-                $"/setactive {guid}",
+                $"/setactive {plan}",
                 ct,
                 PowerShellRunner.OemEncoding).ConfigureAwait(false);
             if (exitCode != 0)
@@ -610,7 +622,7 @@ public sealed partial class PerformanceService : IDisposable
         {
             if (!File.Exists(_ultimateCopyPath)) return null;
             var guid = JsonSerializer.Deserialize<UltimateCopy>(ReadBounded(_ultimateCopyPath), SnapshotJsonOptions)?.PlanGuid;
-            return Guid.TryParseExact(guid, "D", out _) ? guid : null;
+            return CanonicalPlan(guid);
         }
         catch (InvalidDataException ex) { Log.Debug("The Ultimate Performance copy's record cannot be used: {Error}", ex.Message); }
         catch (JsonException ex) { Log.Debug("The Ultimate Performance copy's record cannot be used: {Error}", ex.Message); }

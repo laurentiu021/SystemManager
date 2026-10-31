@@ -10,6 +10,25 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.136.59] - 2026-10-31
+
+**SysManager checks the drive it hands the disk check, and the power plan it switches to, more strictly.**
+
+### Security
+- System Health checked the drive letter it hands to chkdsk with `^` and `$`, which also match
+  before a final line break, so a drive letter with a line break after it passed. The other checks
+  of this kind were moved off those anchors in 1.51.14, and this one was missed. It now takes a
+  letter and a colon and nothing else. This was there since the check was added, in 0.35.11.
+- The check on a power plan before SysManager switches to it allowed white space around the plan,
+  and the plan then went to powercfg as it was written. Each plan it checks is read back from a
+  file in your user folder: the snapshot Performance Mode's Restore puts back, Gaming Profile's
+  record of what it changed, and the record of the Ultimate Performance copy. It now takes the 36
+  characters of a plan and nothing else, and hands powercfg the plan it read from them. This was
+  there since the check was added, in 1.56.7, and in the Ultimate Performance copy's record since
+  1.136.40.
+- Neither chkdsk nor powercfg is started through a command shell, so a line break could not run a
+  second command. Both checks now allow only what they say they allow.
+
 ## [1.136.58] - 2026-10-31
 
 **Shortcut Cleaner says when exporting the list failed, before you delete anything.**

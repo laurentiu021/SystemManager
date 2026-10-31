@@ -449,7 +449,9 @@ public sealed partial class SystemHealthViewModel : ElevatedViewModelBase
     }
 
 
-    [GeneratedRegex(@"^[A-Z]:$", RegexOptions.IgnoreCase)]
+    // \A and \z, not ^ and $: $ also matches before a final line break, which every other validator was moved off
+    // for, and this one was missed (#2741).
+    [GeneratedRegex(@"\A[A-Z]:\z", RegexOptions.IgnoreCase)]
     private static partial Regex DriveLetterPattern();
 
     [RelayCommand]

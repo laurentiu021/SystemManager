@@ -876,6 +876,10 @@ public class WindowsFeaturesTests
     [InlineData("Telnet Client")]
     [InlineData("TelnetClient\n")]
     [InlineData("")]
+    [InlineData("TelnetClient;calc")]
+    [InlineData("TelnetClient`calc")]
+    [InlineData("$(calc)")]
+    [InlineData(TooLong)]   // one past the 128 characters a name may have (#2741)
     public async Task EveryCallThatPutsTheNameInAScript_RefusesANameThatIsNotOne(string name)
     {
         // The pattern is the only thing between the name and the script it is pasted into.
@@ -886,5 +890,39 @@ public class WindowsFeaturesTests
         await Assert.ThrowsAsync<ArgumentException>(() => service.DisableFeatureAsync(name));
         await Assert.ThrowsAsync<ArgumentException>(() => service.ReadFeatureAsync(name));
         await runner.DidNotReceiveWithAnyArgs().RunProcessAsync(default!, default!, default, default);
+    }
+
+    private const string TooLong =
+        "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
+
+    [Theory]
+    [InlineData("TelnetClient")]
+    [InlineData("Microsoft-Windows-Subsystem-Linux")]
+    [InlineData("Printing-PrintToPDFServices-Features")]
+    [InlineData("NetFx4-AdvSrvs")]
+    [InlineData("WCF-HTTP-Activation45")]
+    public async Task ANameThatIsOne_ReachesTheScript(string name)
+    {
+        // The other half: the pattern must not refuse the names Windows uses, or every row of the tab would fail.
+        var runner = Substitute.For<IPowerShellRunner>();
+        var service = new WindowsFeaturesService(runner);
+
+        await service.ReadFeatureAsync(name);
+
+        await runner.Received(1).RunProcessAsync("powershell.exe",
+            Arg.Is<string>(a => a.Contains($"'{name}'", StringComparison.Ordinal)),
+            Arg.Any<CancellationToken>(), Arg.Any<System.Text.Encoding?>());
+    }
+
+    [Fact]
+    public async Task ANameOfTheLongestLength_ReachesTheScript()
+    {
+        Assert.Equal(129, TooLong.Length);   // the premise: one past the bound
+        var runner = Substitute.For<IPowerShellRunner>();
+        var service = new WindowsFeaturesService(runner);
+
+        await service.ReadFeatureAsync(TooLong[1..]);
+
+        await runner.ReceivedWithAnyArgs(1).RunProcessAsync(default!, default!, default, default);
     }
 }

@@ -16,7 +16,7 @@ namespace SysManager.Tests;
 [Collection("ProcessWideStatics")]
 public class SystemHealthViewModelTests
 {
-    private static SystemHealthViewModel NewVm(MemoryTestService? memTest = null) => new(new SystemInfoService(), new DiskHealthService(), memTest ?? new MemoryTestService(), new FixedDriveService(), new PowerShellRunner(), new BiosService());
+    private static SystemHealthViewModel NewVm(MemoryTestService? memTest = null, IPowerShellRunner? runner = null) => new(new SystemInfoService(), new DiskHealthService(), memTest ?? new MemoryTestService(), new FixedDriveService(), runner ?? new PowerShellRunner(), new BiosService());
 
     // ---------- construction ----------
 
@@ -483,5 +483,44 @@ public class SystemHealthViewModelTests
 
         Assert.Equal("No memory errors reported in the last 30 days.", verdict);
         Assert.Equal(StatusColors.Good, colour);
+    }
+
+    // ---------- the drive letter chkdsk is handed (#2741) ----------
+    // It is pasted into chkdsk's arguments, and the check on it is the only thing in between. ^ and $ let a final line
+    // break through, and no test sent it anything but a drive letter.
+
+    [Theory]
+    [InlineData("C:\n")]
+    [InlineData("C: /F")]
+    [InlineData("C:\\")]
+    [InlineData("CC:")]
+    [InlineData("1:")]
+    [InlineData(" C:")]
+    [InlineData("C")]
+    public async Task RunChkdsk_RefusesAnythingButADriveLetter_BeforeRunningAnything(string drive)
+    {
+        var runner = Substitute.For<IPowerShellRunner>();
+        var vm = NewVm(runner: runner);
+        await vm.InitializationComplete;
+
+        await vm.RunChkdskCommand.ExecuteAsync(drive);
+
+        Assert.Equal("Invalid drive letter format.", vm.StatusMessage);
+        Assert.DoesNotContain(runner.ReceivedCalls(), c => c.GetMethodInfo().Name == nameof(IPowerShellRunner.RunProcessAsync));
+    }
+
+    [StaFact]
+    public async Task RunChkdsk_TakesALowerCaseDriveLetter()
+    {
+        // Past the check, a session that is not elevated is told chkdsk needs administrator, as
+        // RunChkdsk_SingleDrive_WhenNotElevated_SaysSo shows for "D:": proof the letter was taken as one.
+        using var notElevated = AdminHelper.ForceElevation(false);
+        var vm = NewVm();
+        await vm.InitializationComplete;
+
+        await vm.RunChkdskCommand.ExecuteAsync("d:");
+
+        Assert.Contains("admin", vm.StatusMessage, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("d:", vm.StatusMessage, StringComparison.Ordinal);
     }
 }

@@ -126,6 +126,7 @@ public sealed partial class DuplicateFileViewModel : ViewModelBase
             if (e.PropertyName != nameof(IsBusy)) return;
             OnPropertyChanged(nameof(EmptyTitle));
             OnPropertyChanged(nameof(EmptyMessage));
+            BrowseFolderCommand.NotifyCanExecuteChanged();
         };
         // Resolve known-folder paths + probe drives off the UI thread: DriveInfo.IsReady can stall on
         // a disconnected mapped/removable volume. This tab is LAZY — NavItem.ContentFactory builds it
@@ -169,10 +170,22 @@ public sealed partial class DuplicateFileViewModel : ViewModelBase
         return result;
     }
 
+    /// <summary>What the status line says when Scan is pressed with no folder in the box.</summary>
+    internal const string NoFolderStatus = "Type a folder, or pick one, to scan.";
+
+    /// <summary>Browse changes the folder, so it waits for the scan running, as the folder box does.</summary>
+    private bool NotBusy => !IsBusy;
+
     [RelayCommand]
     private async Task ScanAsync()
     {
-        if (string.IsNullOrWhiteSpace(SelectedFolder)) return;
+        // The quotes are what Explorer's Copy as path puts around a path. An empty box used to do nothing (#2731).
+        var folder = SelectedFolder?.Trim().Trim('"');
+        if (string.IsNullOrWhiteSpace(folder))
+        {
+            StatusMessage = NoFolderStatus;
+            return;
+        }
 
         using var opLock = OperationLockService.Instance.TryAcquire(OperationCategory.Disk, "Duplicate File Scan");
         if (opLock is null)
@@ -200,7 +213,7 @@ public sealed partial class DuplicateFileViewModel : ViewModelBase
             var progress = new SettlingProgress<DuplicateFileService.ScanProgress>(ApplyScanProgress);
 
             var scan = await progress.SettleAfterAsync(
-                reporter => _service.ScanAsync(SelectedFolder, minBytes, reporter, ct));
+                reporter => _service.ScanAsync(folder, minBytes, reporter, ct));
 
             if (scan.Failure != DuplicateFileService.ScanFailure.None)
             {
@@ -419,7 +432,7 @@ public sealed partial class DuplicateFileViewModel : ViewModelBase
         group?.SetKeeper(entry);
     }
 
-    [RelayCommand]
+    [RelayCommand(CanExecute = nameof(NotBusy))]
     private void BrowseFolder()
     {
         var folder = _dialog.PickFolder("Select folder to scan for duplicates");

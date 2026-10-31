@@ -10,6 +10,30 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.136.50] - 2026-10-31
+
+**Disk Analyzer and Duplicate Finder scan a folder you type or paste, and Disk Analyzer copes with
+a network folder and saves each result under the folder it measured.**
+
+### Fixed
+- A folder typed or pasted into Disk Analyzer's or Duplicate Finder's path box, rather than picked
+  from the list, was ignored: Analyze or Scan did nothing at all, and an empty box did the same.
+  The typed folder is now used, with quotes taken off, as Explorer's Copy as path adds them, and
+  an empty box says to type or pick a folder.
+- A network folder, picked with Browse, brought up the app's error dialog in Disk Analyzer and
+  left the tab looking busy, with its progress bar running, until a local folder was analysed. Its
+  analysis now ends like any other, with its result or the reason it has none, and without the
+  drive bar, which Windows does not give for a network folder.
+- Disk Analyzer read the folder again after measuring it, so a folder changed while an analysis
+  ran, by Up or a click into a folder, got this analysis's result saved as its own, and every
+  later "since last scan" figure for it was wrong. The result is now saved under the folder it
+  measured, and the folder box, Up, Browse and the click into a folder wait while an analysis
+  runs, as Duplicate Finder's box and Browse do while it scans.
+
+The typed folder was ignored since the tabs were added, in 0.7.0 and 0.8.0, the network folder
+broke Disk Analyzer since 0.8.0, and the result went under the wrong folder since Disk Analyzer
+started remembering each folder's last scan in 1.73.0.
+
 ## [1.136.49] - 2026-10-31
 
 **A scan you cancel, or one that fails, leaves the list as it was, and App Updates no longer

@@ -458,6 +458,46 @@ public class DuplicateFileViewModelTests
         Assert.Equal(DuplicateFileViewModel.CouldNotScanTitle, vm.EmptyTitle);
     }
 
+    // ---------- the folder it is given (#2731) ----------
+
+    [Fact]
+    public async Task ScanWithNoFolder_SaysSo_RatherThanDoingNothing()
+    {
+        var vm = NewVm();
+        vm.SelectedFolder = "";
+
+        await vm.ScanCommand.ExecuteAsync(null);
+
+        Assert.Equal(DuplicateFileViewModel.NoFolderStatus, vm.StatusMessage);
+        Assert.False(vm.HasScanned);
+    }
+
+    [Fact]
+    public async Task AFolderPastedWithQuotes_IsScanned()
+    {
+        // Explorer's Copy as path puts quotes around it.
+        using var copies = new TwoCopies();
+        var vm = new DuplicateFileViewModel(copies.Service, Substitute.For<IDialogService>());
+        await vm.InitializationComplete;
+        vm.SelectedFolder = "\"" + copies.Folder + "\"";
+
+        await vm.ScanCommand.ExecuteAsync(null);
+
+        Assert.Single(vm.Groups);
+    }
+
+    [Fact]
+    public void Browse_WaitsForTheScanRunning()
+    {
+        var vm = NewVm();
+
+        vm.IsBusy = true;
+        Assert.False(vm.BrowseFolderCommand.CanExecute(null));
+
+        vm.IsBusy = false;
+        Assert.True(vm.BrowseFolderCommand.CanExecute(null));
+    }
+
     [Fact]
     public void WhileAScanRuns_TheEmptyStateSaysSo_RatherThanAVerdict()
     {

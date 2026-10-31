@@ -73,6 +73,17 @@ public sealed partial class CleanupCategory : ObservableObject, Helpers.ISelecta
     /// </remarks>
     public bool IsDeliveryOptimizationCache { get; init; }
 
+    /// <summary>
+    /// True for Windows.old, which is removed through Windows' own "Previous Installations" cleanup rather than the
+    /// generic file-delete path (#2720).
+    /// </summary>
+    /// <remarks>
+    /// Most of a previous installation is owned by TrustedInstaller, so a delete file by file is refused for most of
+    /// it, and what it does remove leaves a rollback that no longer works. Carried here, like
+    /// <see cref="IsDeliveryOptimizationCache"/>, because the cleaner is handed categories rather than looking them up.
+    /// </remarks>
+    public bool IsPreviousWindowsInstallation { get; init; }
+
     public string SizeDisplay => FormatHelper.FormatSize(TotalSizeBytes);
 
     /// <summary>

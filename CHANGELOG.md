@@ -10,6 +10,22 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.136.42] - 2026-10-31
+
+**Deep Cleanup removes Windows.old completely, through Windows' own cleanup for it, instead of
+leaving a damaged half of it behind.**
+
+### Fixed
+- Deep Cleanup deleted Windows.old, the previous Windows installation, file by file. Windows moves
+  the old system there with its permissions, so most of it belongs to Windows itself, and even as
+  administrator most of the deletes were refused. The parts that did go were enough to stop "Go
+  back" in Settings from working, the rescan still listed most of the folder, and the result
+  counted thousands of skipped files, one line each. Windows.old is now removed by Windows' own
+  "Previous Installations" cleanup, the one Disk Cleanup and Storage Sense use, which removes all
+  of it. It needs administrator rights, and the page says so; without them nothing is touched. If
+  Windows leaves part of it, the result says how much. This was there since Deep Cleanup arrived in
+  0.5.0.
+
 ## [1.136.41] - 2026-10-31
 
 **Ending a process, or changing one in CPU Core Affinity or Gaming Profile, no longer reaches

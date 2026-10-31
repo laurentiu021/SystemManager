@@ -24,10 +24,11 @@
                      Seven of the buckets live under %WinDir% — the Windows Update download cache, Delivery
                      Optimization, the Installer patch cache, Windows\Temp, Prefetch, the blue-screen memory
                      dumps and the old servicing logs — and without admin they read as "skipped", or as
-                     empty where Windows will not even list the folder, with no stated reason (#2611). -->
+                     empty where Windows will not even list the folder, with no stated reason (#2611).
+                     Windows.old is removed through Windows' own cleanup, which needs admin too (#2720). -->
                 <v:AdminBanner Margin="0,12,0,0"
-                               NotElevatedMessage="Some of the biggest items — the Windows Update download cache, Delivery Optimization, the Installer patch cache, Windows\Temp, Prefetch, the blue-screen memory dumps and the old servicing logs — can only be deleted as administrator. Without it, some of them show as empty or as skipped, because Windows will not let SysManager look inside."
-                               ElevatedMessage="Running as administrator — the Windows Update, Delivery Optimization, Installer patch cache, Windows\Temp, Prefetch, blue-screen memory dump and old servicing log items can be deleted too."/>
+                               NotElevatedMessage="Some of the biggest items — the Windows Update download cache, Delivery Optimization, the Installer patch cache, Windows\Temp, Prefetch, the blue-screen memory dumps, the old servicing logs and a previous Windows installation (Windows.old) — can only be deleted as administrator. Without it, some of them show as empty or as skipped, because Windows will not let SysManager look inside."
+                               ElevatedMessage="Running as administrator — the Windows Update, Delivery Optimization, Installer patch cache, Windows\Temp, Prefetch, blue-screen memory dump, old servicing log and Windows.old items can be deleted too."/>
 
                 <!-- Safety note -->
                 <Border Style="{StaticResource Card}" Margin="0,16,0,0"

@@ -925,7 +925,10 @@ System → System Fixes, where the tab name matches what they do.
   Launcher (web cache and logs), Battle.net, Riot / League of Legends (logs only), GOG Galaxy,
   EA app / Origin (cache and logs).
 - **Windows.old** is detected and flagged as irreversible, never selected
-  by default.
+  by default. It is removed by Windows' own "Previous Installations" cleanup, the one Disk
+  Cleanup and Storage Sense use, rather than file by file, because most of it belongs to Windows
+  itself and a delete file by file left a previous installation that "Go back" could no longer use.
+  That needs administrator rights, and the result says how much, if any, Windows left
 - Safe by design: never touches browsers, passwords, the registry, active
   drivers, or actual game files. Locked files are skipped, never forced.
 

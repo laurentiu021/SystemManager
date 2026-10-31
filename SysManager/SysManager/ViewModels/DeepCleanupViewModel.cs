@@ -39,7 +39,8 @@ public sealed partial class DeepCleanupViewModel : ElevatedViewModelBase
     /// memory dumps and the old servicing logs — so an unelevated run cannot delete them. It did not fail
     /// visibly either: the files landed in <see cref="Models.CleanupCategory.SkippedCount"/>, or a folder Windows
     /// would not list read as empty, without ever saying that administrator rights were the reason, which is the
-    /// one thing the user could have acted on.
+    /// one thing the user could have acted on. Windows.old is removed through Windows' own cleanup for it, which
+    /// needs administrator rights too (#2720).
     /// </remarks>
 
     [ObservableProperty] private bool _isScanning;

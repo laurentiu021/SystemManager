@@ -2,6 +2,7 @@
 // Author: laurentiu021 · https://github.com/laurentiu021/SystemManager
 // License: MIT
 
+using System.Globalization;
 using System.IO;
 using System.IO.Enumeration;
 using System.Management.Automation;
@@ -24,18 +25,20 @@ public sealed class DeepCleanupService
     private readonly ICleanupRoots _roots;
     private readonly IPowerShellRunner? _ps;
     private readonly IRecycleBin? _recycleBin;
+    private readonly IPreviousInstallationCleanup? _previousInstallation;
 
     /// <summary>
     /// Builds the service production uses: the real machine's roots, the runner the Delivery Optimization
-    /// cache is emptied through, and the Recycle Bin.
+    /// cache is emptied through, the Recycle Bin, and Windows' own cleanup of a previous installation.
     /// </summary>
     /// <remarks>
     /// It passes the same roots the service read inline before that seam existed, so the default behaviour is
     /// unchanged by construction rather than by inspection (#2176).
     /// </remarks>
-    public DeepCleanupService(IPowerShellRunner ps, IRecycleBin recycleBin)
+    public DeepCleanupService(IPowerShellRunner ps, IRecycleBin recycleBin, IPreviousInstallationCleanup previousInstallation)
         : this(new SystemCleanupRoots(), ps ?? throw new ArgumentNullException(nameof(ps)),
-               recycleBin ?? throw new ArgumentNullException(nameof(recycleBin)))
+               recycleBin ?? throw new ArgumentNullException(nameof(recycleBin)),
+               previousInstallation ?? throw new ArgumentNullException(nameof(previousInstallation)))
     {
     }
 
@@ -48,12 +51,17 @@ public sealed class DeepCleanupService
     /// never falls back to deleting the service's files itself (#2602).
     /// <para>Without <paramref name="recycleBin"/> the Recycle Bin is neither measured nor emptied, for the same
     /// reason: a test that leaves it out cannot empty the bin of the PC running it.</para>
+    /// <para>Without <paramref name="previousInstallation"/> Windows.old is left as it is, and its clean reports
+    /// that it was not removed: a test that leaves it out cannot remove the previous installation of the PC running
+    /// it, and the bucket never falls back to deleting it file by file (#2720).</para>
     /// </remarks>
-    public DeepCleanupService(ICleanupRoots roots, IPowerShellRunner? ps = null, IRecycleBin? recycleBin = null)
+    public DeepCleanupService(ICleanupRoots roots, IPowerShellRunner? ps = null, IRecycleBin? recycleBin = null,
+                              IPreviousInstallationCleanup? previousInstallation = null)
     {
         _roots = roots ?? throw new ArgumentNullException(nameof(roots));
         _ps = ps;
         _recycleBin = recycleBin;
+        _previousInstallation = previousInstallation;
     }
 
     public sealed record ScanProgress(int Current, int Total, string CategoryName);
@@ -102,6 +110,10 @@ public sealed class DeepCleanupService
     /// True for the one bucket emptied through <see cref="EmptyDeliveryOptimizationCacheScript"/> instead of file by
     /// file. See <see cref="CleanupCategory.IsDeliveryOptimizationCache"/>.
     /// </param>
+    /// <param name="IsPreviousWindowsInstallation">
+    /// True for Windows.old, removed through Windows' own cleanup instead of file by file. See
+    /// <see cref="CleanupCategory.IsPreviousWindowsInstallation"/>.
+    /// </param>
     private sealed record Def(
         string Name,
         string Description,
@@ -111,7 +123,8 @@ public sealed class DeepCleanupService
         bool IsDestructiveHint = false,
         bool IsRecycleBin = false,
         bool IsWindowsUpdateCache = false,
-        bool IsDeliveryOptimizationCache = false);
+        bool IsDeliveryOptimizationCache = false,
+        bool IsPreviousWindowsInstallation = false);
 
     private static List<Def> BuildDefinitions(ICleanupRoots roots)
     {
@@ -281,9 +294,11 @@ public sealed class DeepCleanupService
         {
             defs.Add(new Def(
                 "Windows.old (previous Windows installation)",
-                "Remove only if you're sure you don't want to roll back to your previous Windows version. Windows normally auto-deletes this after 10 days.",
+                "Remove only if you're sure you don't want to roll back to your previous Windows version. Windows normally auto-deletes this after 10 days. "
+                + "It is removed by Windows' own cleanup, which needs administrator rights.",
                 [windowsOld],
-                IsDestructiveHint: true));
+                IsDestructiveHint: true,
+                IsPreviousWindowsInstallation: true));
         }
 
         return defs;
@@ -372,6 +387,7 @@ public sealed class DeepCleanupService
                 IsRecycleBin = d.IsRecycleBin,
                 IsWindowsUpdateCache = d.IsWindowsUpdateCache,
                 IsDeliveryOptimizationCache = d.IsDeliveryOptimizationCache,
+                IsPreviousWindowsInstallation = d.IsPreviousWindowsInstallation,
                 IsSelected = size > 0 && !d.IsDestructiveHint
             });
         }
@@ -510,6 +526,16 @@ public sealed class DeepCleanupService
                 continue;
             }
 
+            // Windows.old is removed through Windows' own cleanup for it, never file by file (#2720). See
+            // RemovePreviousInstallationAsync.
+            if (cat.IsPreviousWindowsInstallation)
+            {
+                var (bytes, files) = await RemovePreviousInstallationAsync(cat, errors, ct).ConfigureAwait(false);
+                freed += bytes;
+                filesDeleted += files;
+                continue;
+            }
+
             var cutoff = cat.OlderThan.HasValue ? DateTime.UtcNow - cat.OlderThan.Value : (DateTime?)null;
             var patterns = cat.FilePatterns?.ToArray();
             foreach (var path in cat.Paths)
@@ -619,6 +645,63 @@ public sealed class DeepCleanupService
         }
 
         var (bytesAfter, filesAfter) = Measure(cat, ct);
+        return (Math.Max(0, bytesBefore - bytesAfter), Math.Max(0, filesBefore - filesAfter));
+    }
+
+    /// <summary>
+    /// Removes Windows.old through Windows' own cleanup for it, and returns what that freed, measured on the bucket's
+    /// folder before and after.
+    /// </summary>
+    /// <remarks>
+    /// Most of a previous installation is owned by TrustedInstaller, so a delete file by file was refused for most of
+    /// it, and what it did remove left a rollback that no longer works (#2720). It needs administrator rights; a
+    /// refusal, or a Windows without that cleanup, is reported with the bucket's name, and never falls back to
+    /// deleting the files one by one.
+    /// <para>Not cancelled once it has started: stopping Windows' cleanup part-way would leave the part-removed
+    /// installation that cleanup is there to avoid. A clean cancelled meanwhile stops after it.</para>
+    /// </remarks>
+    private async Task<(long Bytes, int Files)> RemovePreviousInstallationAsync(
+        CleanupCategory cat, List<string> errors, CancellationToken ct)
+    {
+        if (_previousInstallation is null)
+        {
+            errors.Add($"{cat.Name}: not removed, because Windows' own cleanup for it is not available here.");
+            return (0, 0);
+        }
+
+        var (bytesBefore, filesBefore) = Measure(cat, ct);
+        try
+        {
+            var exitCode = await _previousInstallation.RemoveAsync(CancellationToken.None).ConfigureAwait(false);
+            if (exitCode != 0)
+                errors.Add(string.Create(CultureInfo.InvariantCulture, $"{cat.Name}: Windows' Disk Cleanup stopped with code {exitCode}."));
+        }
+        catch (Exception ex) when (ex is UnauthorizedAccessException or System.Security.SecurityException)
+        {
+            errors.Add($"{cat.Name}: not removed. Windows removes a previous installation only for an administrator: "
+                       + "use Run as administrator at the top of the page.");
+            Log.Debug(ex, "Deep cleanup: the previous installation needs administrator rights");
+            return (0, 0);
+        }
+        catch (Exception ex) when (ex is InvalidOperationException or IOException)
+        {
+            errors.Add($"{cat.Name}: not removed. {ex.Message}");
+            Log.Debug(ex, "Deep cleanup: Windows' cleanup of the previous installation could not run");
+            return (0, 0);
+        }
+        // cleanmgr.exe itself could not be started: an edition of Windows without Disk Cleanup.
+        catch (System.ComponentModel.Win32Exception ex)
+        {
+            errors.Add($"{cat.Name}: not removed, because Windows' Disk Cleanup could not be started: {ex.Message}");
+            Log.Debug(ex, "Deep cleanup: cleanmgr.exe could not be started");
+            return (0, 0);
+        }
+
+        var (bytesAfter, filesAfter) = Measure(cat, ct);
+        if (bytesAfter > 0)
+            errors.Add($"{cat.Name}: Windows left {FormatHelper.FormatSize(bytesAfter)} of it in place.");
+        Log.Information("Deep cleanup: Windows' cleanup of the previous installation freed {Bytes} bytes, {Left} bytes left",
+            Math.Max(0, bytesBefore - bytesAfter), bytesAfter);
         return (Math.Max(0, bytesBefore - bytesAfter), Math.Max(0, filesBefore - filesAfter));
     }
 

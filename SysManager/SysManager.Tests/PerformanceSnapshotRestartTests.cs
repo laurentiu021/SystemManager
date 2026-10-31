@@ -367,6 +367,143 @@ public sealed class PerformanceSnapshotRestartTests
         }
     }
 
+    // ---------- the NVIDIA setting, written only when it differs (#2716) ----------
+    // The restore wrote the card's setting back on every Restore All, set as recorded or not, and only an administrator
+    // can write it: a standard user's restore put four settings back and stopped at the card, before the processor
+    // minimum, every time, and an administrator's always asked for a restart.
+
+    /// <summary>A service over <paramref name="dir"/> whose recorded card is there, set as <paramref name="maxPerformanceNow"/>.</summary>
+    private static PerformanceService ServiceWithCard(
+        string dir, IPowerShellRunner runner, bool? maxPerformanceNow, bool elevated, List<bool> uiEffects,
+        List<(string SubKey, bool MaxPerformance)> gpuWrites, bool gpuWriteWorks = true) =>
+        new(runner, new RestorePointService(runner), dir,
+            findAdapter: _ => PerformanceService.RecordedAdapter.Present,
+            setUiEffects: uiEffects.Add,
+            restoreGpu: (subKey, maxPerformance) =>
+            {
+                gpuWrites.Add((subKey, maxPerformance));
+                return gpuWriteWorks;
+            },
+            readGpu: _ => maxPerformanceNow,
+            isElevated: () => elevated);
+
+    // Adaptive when it was recorded.
+    private static PerformanceService.OriginalSnapshot WithAdaptiveCard() =>
+        ValidSnapshot() with { GpuDynamicPstate = true, NvidiaSubKey = "0001" };
+
+    [Fact]
+    public async Task RestoreAll_ThatHasToWriteTheCard_WithoutAdministratorRights_AsksNothing_AndChangesNothing()
+    {
+        var dir = CreateTempDirectory();
+        try
+        {
+            var runner = NewRunner();
+            List<bool> uiEffects = [];
+            List<(string, bool)> gpuWrites = [];
+            using var service = ServiceWithCard(dir, runner, maxPerformanceNow: true, elevated: false, uiEffects, gpuWrites);
+            Assert.True(service.SaveSnapshot(WithAdaptiveCard()));
+            using var vm = new PerformanceViewModel(service, NoGamingSession());
+            await vm.InitializationComplete;
+            runner.ClearReceivedCalls();
+
+            var asked = await RestoreAllAnsweringAsync(vm, answer: true);
+
+            Assert.Null(asked);
+            Assert.Equal(PerformanceService.GraphicsNeedsAdministrator, vm.StatusMessage);
+            Assert.Empty(uiEffects);
+            Assert.Empty(gpuWrites);
+            Assert.Empty(runner.ReceivedCalls());
+            Assert.NotNull(service.LoadSnapshot());
+        }
+        finally
+        {
+            Directory.Delete(dir, recursive: true);
+        }
+    }
+
+    [Fact]
+    public async Task RestoreAll_ForACardSetAsRecorded_NeedsNoAdministrator_NorARestart()
+    {
+        var dir = CreateTempDirectory();
+        try
+        {
+            var runner = NewRunner();
+            List<bool> uiEffects = [];
+            List<(string, bool)> gpuWrites = [];
+            using var service = ServiceWithCard(dir, runner, maxPerformanceNow: false, elevated: false, uiEffects, gpuWrites);
+            Assert.True(service.SaveSnapshot(WithAdaptiveCard()));
+            using var vm = new PerformanceViewModel(service, NoGamingSession());
+            await vm.InitializationComplete;
+
+            var asked = await RestoreAllAnsweringAsync(vm, answer: true);
+
+            Assert.Contains("• GPU → Dynamic P-state (set already)", asked, StringComparison.Ordinal);
+            Assert.DoesNotContain("reboot needed", asked, StringComparison.Ordinal);
+            Assert.Empty(gpuWrites);
+            Assert.Equal([true], uiEffects);
+            Assert.Null(service.LoadSnapshot());
+            Assert.Equal("Original settings restored.", vm.StatusMessage);
+            Assert.False(vm.NeedsReboot);
+        }
+        finally
+        {
+            Directory.Delete(dir, recursive: true);
+        }
+    }
+
+    [Fact]
+    public async Task TheRestore_RefusesBeforeChangingAnything_WhenTheCardNeedsAWriteWithoutAdministratorRights()
+    {
+        // Undo Changes reaches the same restore, so it refuses too, whatever asked.
+        var dir = CreateTempDirectory();
+        try
+        {
+            var runner = NewRunner();
+            List<bool> uiEffects = [];
+            List<(string, bool)> gpuWrites = [];
+            using var service = ServiceWithCard(dir, runner, maxPerformanceNow: null, elevated: false, uiEffects, gpuWrites);
+            Assert.True(service.SaveSnapshot(WithAdaptiveCard()));
+
+            var thrown = await Assert.ThrowsAsync<UnauthorizedAccessException>(() =>
+                service.RestoreOriginalAsync(WithAdaptiveCard(), PerformanceService.RecordedAdapter.Present));
+
+            Assert.Equal(PerformanceService.GraphicsNeedsAdministrator, thrown.Message);
+            Assert.Empty(runner.ReceivedCalls());
+            Assert.Empty(uiEffects);
+            Assert.Empty(gpuWrites);
+            Assert.NotNull(service.LoadSnapshot());
+        }
+        finally
+        {
+            Directory.Delete(dir, recursive: true);
+        }
+    }
+
+    [Fact]
+    public async Task TheRestore_WritesTheCardLast_SoAWriteThatFailsLeavesTheProcessorMinimumBack()
+    {
+        var dir = CreateTempDirectory();
+        try
+        {
+            var runner = NewRunner();
+            List<(string, bool)> gpuWrites = [];
+            using var service = ServiceWithCard(dir, runner, maxPerformanceNow: true, elevated: true, [], gpuWrites,
+                gpuWriteWorks: false);
+
+            await Assert.ThrowsAsync<InvalidOperationException>(() =>
+                service.RestoreOriginalAsync(WithAdaptiveCard(), PerformanceService.RecordedAdapter.Present));
+
+            await runner.Received(1).RunProcessAsync("powercfg.exe",
+                "/setacvalueindex SCHEME_CURRENT SUB_PROCESSOR PROCTHROTTLEMIN 5", Arg.Any<CancellationToken>(),
+                Arg.Any<System.Text.Encoding?>());
+            Assert.Equal([("0001", false)], gpuWrites);
+        }
+        finally
+        {
+            Directory.Delete(dir, recursive: true);
+        }
+    }
+
     [Fact]
     public async Task RestoreAll_ForAPlanTheRecordCouldNotRead_SaysItIsUnchanged()
     {

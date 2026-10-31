@@ -1080,7 +1080,11 @@ Key services:
   seam the test constructor leaves not known. It is read that way rather than through powercfg because a powercfg
   read waits behind any other, and Restore All's question has to come up while the tab's own read is stuck. A plan
   that is gone (`RecordedPlan`) is left out of the restore, when the question found it gone and when it is gone by
-  the time of the restore, and Undo Changes leaves it out of its list (#2716).
+  the time of the restore, and Undo Changes leaves it out of its list (#2716). What the restore does with the card
+  is decided before it changes anything (`GraphicsStepOf`, a `GraphicsStep`): nothing for a card that is gone or set
+  as recorded already, by the `readGpu` seam, and a write otherwise, which `RestoreNeedsAdministrator` refuses
+  without administrator rights, by the `isElevated` seam, before anything else is put back. The write is the
+  restore's last step, and Undo Changes asks for administrator rights only when its list has the card's line (#2716).
 - `NetworkRepairService` — DNS flush, Winsock reset, TCP/IP reset via
   system commands with live output capture.
 - `ServiceManagerService` — enumerate Windows services, gaming

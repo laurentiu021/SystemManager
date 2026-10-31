@@ -10,6 +10,22 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.136.36] - 2026-10-31
+
+**Restore All in Performance Mode needs administrator rights only when the NVIDIA setting has to go
+back, and no longer stops half-way without them.**
+
+### Fixed
+- On a PC with an NVIDIA card, Restore All wrote the card's setting back on every restore, set as
+  recorded or not, and only an administrator can write it. Without administrator rights it put the
+  power plan, visual effects, Game Mode and the Xbox settings back, then stopped at the graphics
+  setting with "The NVIDIA graphics setting could not be restored.", before the processor
+  minimum, every time. As administrator, every Restore All asked for a restart for GPU changes. The
+  card's setting is now written only when it differs, which is then the only part that needs
+  administrator rights or a restart; without them Restore All changes nothing and says why, and the
+  graphics setting goes back last. Undo Changes asks for administrator rights only in that case too.
+  This was there from the first version.
+
 ## [1.136.35] - 2026-10-31
 
 **Restore All in Performance Mode finishes when the power plan it recorded has been deleted.**

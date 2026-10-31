@@ -964,11 +964,15 @@ public sealed partial class PerformanceViewModel : ElevatedViewModelBase
         // held stays and the user is told to try again.
         // The graphics card is looked for with it, off the UI thread: one the record names that is no longer in the PC is
         // left out of the restore, so the question leaves it out too. So is a power plan that is no longer on it (#2716).
-        var (onDisk, problem, card, plan) = await Task.Run(() =>
+        // And whether the card is set as recorded already, which leaves nothing to write and no restart to need.
+        var (onDisk, problem, card, plan, graphics) = await Task.Run(() =>
         {
             var loaded = _service.LoadSnapshot(out var why);
-            return (loaded, why, loaded is null ? null : _service.AdapterOf(loaded),
-                loaded is null ? null : _service.PlanOf(loaded));
+            if (loaded is null)
+                return (loaded, why, (PerformanceService.RecordedAdapter?)null, (PerformanceService.RecordedPlan?)null,
+                    PerformanceService.GraphicsStep.None);
+            var adapter = _service.AdapterOf(loaded);
+            return (loaded, why, adapter, _service.PlanOf(loaded), _service.GraphicsStepOf(loaded, adapter));
         });
         if (onDisk is null && problem == PerformanceService.SnapshotProblem.Unreadable)
         {
@@ -989,8 +993,17 @@ public sealed partial class PerformanceViewModel : ElevatedViewModelBase
         // Game mode's end would put its own record back over what this restores (#2711).
         if (await RefusedForGameModeAsync()) return;
 
-        var gpuWillBeRestored = card is not null and not PerformanceService.RecordedAdapter.Gone;
-        var gpuLeftOut = card is PerformanceService.RecordedAdapter.Gone;
+        // Only an administrator can write the card's setting, and the restore refuses before it changes anything, so
+        // nothing is asked. It used to put four settings back and stop at the card, on every retry (#2716).
+        if (_service.RestoreNeedsAdministrator(graphics))
+        {
+            StatusMessage = PerformanceService.GraphicsNeedsAdministrator;
+            return;
+        }
+
+        var gpuWillBeRestored = graphics == PerformanceService.GraphicsStep.Write;
+        var gpuAlreadySet = graphics == PerformanceService.GraphicsStep.AlreadySet;
+        var gpuLeftOut = graphics == PerformanceService.GraphicsStep.LeftOut;
         var capturedAt = onDisk.CapturedAtUtc is DateTimeOffset timestamp
             ? timestamp.ToLocalTime().ToString("f")
             : "Unknown (snapshot created by an earlier SysManager version)";
@@ -1015,6 +1028,7 @@ public sealed partial class PerformanceViewModel : ElevatedViewModelBase
             + $"• Game DVR → {(onDisk.XboxGameDvrEnabled ? "ON" : "OFF")}\n"
             + $"• Processor min state → {(onDisk.ProcessorMinPercentAc is int p ? $"{p}%" : "unchanged")}\n"
             + (gpuWillBeRestored ? $"• GPU → {gpuRestoreState} (reboot needed)\n" : "")
+            + (gpuAlreadySet ? $"• GPU → {gpuRestoreState} (set already)\n" : "")
             + (gpuLeftOut ? "• GPU → unchanged (SysManager no longer finds the NVIDIA card this was recorded on)\n" : "")
             + "\nContinue?",
             "Restore Original Settings — Confirm")) return;

@@ -2089,9 +2089,9 @@ offers, "rate us" prompts:
   by an OEM tool. There is no plan to switch back to, so the question lists it as "unchanged (… is no
   longer on this PC)", and every other setting goes back. Undo Changes says the same
 - **The NVIDIA setting and the hibernation toggle need administrator rights**, and so does Restore All
-  while the NVIDIA card it recorded is still found: without them it puts back the power plan, visual
-  effects, Game Mode and the Xbox settings, then stops at the graphics setting, before the processor
-  minimum, and keeps the record so you can finish as administrator
+  when it has to put the NVIDIA setting back. A card set as it was recorded is left as it is, with no
+  administrator rights and no restart needed; when it does need them, Restore All changes nothing
+  without them and says so, and the graphics setting is the last one it puts back
 - **Undo Changes can put Performance Mode back too.** When it does, this tab reads its settings again
   ("Settings read again after Undo Changes."), so Restore All and the switches never describe a change
   that is gone

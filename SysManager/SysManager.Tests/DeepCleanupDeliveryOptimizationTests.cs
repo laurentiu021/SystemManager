@@ -151,10 +151,11 @@ public sealed class DeepCleanupDeliveryOptimizationTests
     }
 
     /// <summary>
-    /// A clean stopped while the command runs is reported as cancelled, like a clean stopped anywhere else.
+    /// A cancellation the clean did not ask for, the runner's own, still ends the clean as cancelled: only a cancel of
+    /// the clean itself returns what was freed (#2736).
     /// </summary>
     [Fact]
-    public async Task Clean_StoppedDuringTheCommand_IsCancelled()
+    public async Task Clean_WhenTheRunnerCancelsOnItsOwn_StillEndsAsCancelled()
     {
         using var roots = new TempCleanupRoots();
         TempCleanupRoots.WriteFile(Path.Combine(CacheDir(roots), "piece.bin"), 10);
@@ -165,6 +166,48 @@ public sealed class DeepCleanupDeliveryOptimizationTests
         var categories = await ScanAndTickAsync(service, BucketName);
 
         await Assert.ThrowsAnyAsync<OperationCanceledException>(() => service.CleanAsync(categories));
+    }
+
+    /// <summary>
+    /// A clean cancelled while the command runs returns what the command emptied by then, marked cancelled, and cleans
+    /// no bucket after it (#2736).
+    /// </summary>
+    /// <remarks>
+    /// It used to throw, and the count of what was gone went with the exception. Both ways a cancel can meet the
+    /// command are covered: the command ends with the cancel, or it finishes and the clean stops after it. The cache is
+    /// measured to the end after the cancel: a walk cut short would have counted the file the command left as freed.
+    /// </remarks>
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task Clean_CancelledWhileTheCommandRuns_ReturnsWhatItFreed_AndStops(bool commandEndsWithTheCancel)
+    {
+        using var roots = new TempCleanupRoots();
+        var piece = TempCleanupRoots.WriteFile(Path.Combine(CacheDir(roots), "a", "piece.bin"), 10);
+        TempCleanupRoots.WriteFile(Path.Combine(CacheDir(roots), "b", "kept.bin"), 5);
+        var temp = TempCleanupRoots.WriteFile(Path.Combine(roots.UserTemp, "leftover.tmp"), 7);
+        // Older than the week the temporary-files bucket leaves alone (#2890).
+        File.SetCreationTimeUtc(temp, DateTime.UtcNow - TimeSpan.FromDays(30));
+        File.SetLastWriteTimeUtc(temp, DateTime.UtcNow - TimeSpan.FromDays(30));
+        using var cts = new CancellationTokenSource();
+        var ps = Substitute.For<IPowerShellRunner>();
+        ps.RunAsync(Arg.Any<string>(), Arg.Any<IDictionary<string, object?>?>(), Arg.Any<CancellationToken>())
+          .Returns(call =>
+          {
+              File.Delete(piece);   // the part the command emptied before the cancel
+              cts.Cancel();
+              return commandEndsWithTheCancel
+                  ? Task.FromCanceled<Collection<PSObject>>(call.Arg<CancellationToken>())
+                  : Task.FromResult(new Collection<PSObject>());
+          });
+        var service = new DeepCleanupService(roots, ps);
+        var categories = await ScanAndTickAsync(service, BucketName, "Temporary files");
+
+        var result = await service.CleanAsync(categories, ct: cts.Token);
+
+        Assert.True(result.Cancelled);
+        Assert.Equal((10L, 1), (result.BytesFreed, result.FilesDeleted));
+        Assert.True(File.Exists(temp), "a bucket after the cancel was cleaned");
     }
 
     /// <summary>

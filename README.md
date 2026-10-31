@@ -1910,7 +1910,9 @@ offers, "rate us" prompts:
   whether SysManager runs its uninstaller directly or through winget. Some uninstallers hand over
   to a second copy of themselves and return straight away; those apps stay on the list, marked as
   still installed, until the uninstaller finishes and you scan again
-- Runs uninstall actions only from an unelevated SysManager session; each package requests its own UAC elevation when required
+- Runs uninstall actions only from an unelevated SysManager session; each package requests its own UAC elevation when required.
+  A Windows Installer package is removed with its progress bar showing rather than silently, because that is
+  the only way it can ask for administrator rights
 - **Cancel stops a batch between apps** — the uninstaller already running finishes first, because ending one
   half-way can leave its program half-removed. `Escape` does the same
 - **What it left behind** — after an uninstall, a Left behind card lists what the app left on

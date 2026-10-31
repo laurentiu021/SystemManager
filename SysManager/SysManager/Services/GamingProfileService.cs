@@ -594,8 +594,9 @@ public sealed class GamingProfileService : IGamingProfileService, IDisposable
         {
             proc = Process.GetProcessById(game.ProcessId);
             // The game can close after ApplyAsync checked it and its ID pass to another program. Watching that program
-            // would end game mode when it exits, so a start time that does not match is a game that has gone (#2559).
-            if (game.StartTime is { } started && proc.StartTime != started)
+            // would end game mode when it exits, so a process that did not start as the game did is a game that has
+            // gone (#2559), with or without a start time to compare (#2719).
+            if (!ProcessManagerService.StartedAsListed(proc, game.StartTime ?? default))
             {
                 Log.Information("Gaming Profile: {Game} ({Pid}) closed while game mode was starting, and another process "
                     + "has its ID now", game.Name, game.ProcessId);

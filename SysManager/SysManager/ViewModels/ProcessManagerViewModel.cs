@@ -24,7 +24,7 @@ public sealed partial class ProcessManagerViewModel : ElevatedViewModelBase
     protected internal override IRelayCommand? RefreshOnF5 => RefreshCommand;
 
     private readonly ProcessManagerService _service;
-    private readonly Func<int, DateTime, ProcessManagerService.KillOutcome> _killProcess;
+    private readonly Func<int, DateTime, string?, ProcessManagerService.KillOutcome> _killProcess;
     private readonly IDialogService _dialog;
     private CancellationTokenSource? _autoRefreshCts;
 
@@ -47,12 +47,12 @@ public sealed partial class ProcessManagerViewModel : ElevatedViewModelBase
     /// <summary>Test seam: the same view-model with the call that ends a process supplied.</summary>
     /// <param name="service">The process list source.</param>
     /// <param name="killProcess">
-    /// Ends a process by ID and listed start time. Injected so a test can drive each outcome of a confirmed kill
+    /// Ends a process by ID, listed start time and name. Injected so a test can drive each outcome of a confirmed kill
     /// without ending anything real.
     /// </param>
     /// <param name="dialog">Defaults to <see cref="DialogService.Instance"/> (#2860).</param>
     internal ProcessManagerViewModel(ProcessManagerService service,
-                                     Func<int, DateTime, ProcessManagerService.KillOutcome> killProcess,
+                                     Func<int, DateTime, string?, ProcessManagerService.KillOutcome> killProcess,
                                      IDialogService? dialog = null)
     {
         _service = service;
@@ -123,16 +123,17 @@ public sealed partial class ProcessManagerViewModel : ElevatedViewModelBase
         {
             // PERF-007: snapshot + enrichment on a background thread to avoid UI freezes.
             // Icon extraction (the expensive part) is done ONLY for processes not already
-            // shown — see ReconcileInto, which is handed the set of PIDs we already track.
-            var existingPids = Processes.Select(p => p.Pid).ToHashSet();
+            // shown — see ReconcileInto, which keeps what the rows of those already have.
+            var shown = Processes.Select(ProcessManagerService.ProcessIdentity.Of).ToHashSet();
             var enriched = await Task.Run(async () =>
             {
-                var snapshot = await _service.SnapshotAsync(existingPids);
+                var snapshot = await _service.SnapshotAsync(shown);
                 foreach (var p in snapshot)
                 {
                     // Only the volatile metrics change per tick; identity/description are
-                    // stable, so enrich (and extract icons) just for newly-seen PIDs.
-                    if (!existingPids.Contains(p.Pid))
+                    // stable, so enrich (and extract icons) just for processes not shown yet. A process, not
+                    // an ID: one that took the ID of a shown process that exited was never enriched (#2719).
+                    if (!shown.Contains(ProcessManagerService.ProcessIdentity.Of(p)))
                     {
                         p.Icon = IconExtractorService.GetProcessIcon(p.FilePath, p.Name);
                         var dbEntry = ProcessDescriptionService.Instance.Lookup(p.Name, p.FilePath);
@@ -268,8 +269,9 @@ public sealed partial class ProcessManagerViewModel : ElevatedViewModelBase
 
     /// <summary>
     /// Merges <paramref name="snapshot"/> into <paramref name="target"/> in place, keyed by
-    /// PID: surviving processes keep their existing <see cref="ProcessEntry"/> instance (with
-    /// volatile metrics updated), new processes are added, and exited processes are removed.
+    /// process (<see cref="ProcessManagerService.ProcessIdentity"/>): surviving processes keep their
+    /// existing <see cref="ProcessEntry"/> instance (with volatile metrics updated), new processes
+    /// are added, and exited processes are removed.
     /// Preserving the instances is what lets the DataGrid keep the user's selection across a
     /// refresh. Newly-added entries from <paramref name="snapshot"/> are already enriched
     /// (icon/description) by the caller; surviving entries keep their existing icon/description.
@@ -284,9 +286,11 @@ public sealed partial class ProcessManagerViewModel : ElevatedViewModelBase
         foreach (var fresh in snapshot)
         {
             seen.Add(fresh.Pid);
-            // Match on PID AND start time: a PID alone is not a stable identity because Windows
-            // reuses PIDs, so the same number can belong to a different process between polls.
-            if (existing.TryGetValue(fresh.Pid, out var current) && current.StartTime == fresh.StartTime)
+            // Match on the PID, the start time AND the name: a PID alone is not a stable identity because
+            // Windows reuses PIDs, so the same number can belong to a different process between polls, and
+            // where Windows gives no start time the name is what still tells two processes apart.
+            if (existing.TryGetValue(fresh.Pid, out var current)
+                && ProcessManagerService.ProcessIdentity.Of(current) == ProcessManagerService.ProcessIdentity.Of(fresh))
             {
                 // Same process instance — update only the volatile metrics; identity fields
                 // (Name, FilePath, Icon, PlainDescription, Category, SafetyLevel, Signature,
@@ -303,7 +307,7 @@ public sealed partial class ProcessManagerViewModel : ElevatedViewModelBase
             else
             {
                 // A brand-new PID, or a PID the OS reused for a DIFFERENT process (its start time
-                // changed). In the reuse case the existing row still carries the OLD process's
+                // or its name changed). In the reuse case the existing row still carries the OLD process's
                 // identity, so keeping it would show — and let the user kill — the wrong process.
                 // Drop the stale row and add the fresh entry.
                 if (current is not null) target.Remove(current);
@@ -368,9 +372,9 @@ public sealed partial class ProcessManagerViewModel : ElevatedViewModelBase
 
         if (!DialogService.Instance.Confirm(prompt, "Kill process")) return;
 
-        // The start time goes with the ID, because the prompt can stay open while the process exits and Windows
-        // hands its ID to another one.
-        var outcome = _killProcess(entry.Pid, entry.StartTime);
+        // The start time and the name go with the ID, because the prompt can stay open while the process exits and
+        // Windows hands its ID to another one.
+        var outcome = _killProcess(entry.Pid, entry.StartTime, entry.Name);
         var (rowGone, status) = DescribeKill(entry, outcome);
         StatusMessage = status;
         if (!rowGone)

@@ -10,8 +10,8 @@ using SysManager.Services;
 namespace SysManager.IntegrationTests;
 
 /// <summary>
-/// <see cref="ProcessManagerService.KillProcess"/> against real processes. What matters is what happens to the
-/// processes around the one being ended, and only Windows can show that.
+/// <see cref="ProcessManagerService.KillProcess(int, DateTime, string)"/> against real processes. What matters is what
+/// happens to the processes around the one being ended, and only Windows can show that.
 /// </summary>
 /// <remarks>
 /// The subject is a <c>cmd.exe</c> whose child is a Windows PowerShell that prints its own process ID and then
@@ -44,7 +44,7 @@ public class ProcessManagerKillTests
 
         try
         {
-            var outcome = ProcessManagerService.KillProcess(parent.Id);
+            var outcome = ProcessManagerService.KillProcess(parent.Id, parent.StartTime, parent.ProcessName);
 
             Assert.Equal(ProcessManagerService.KillOutcome.Ended, outcome);
             await parent.WaitForExitAsync(bounded.Token);
@@ -79,6 +79,57 @@ public class ProcessManagerKillTests
             Assert.Equal(ProcessManagerService.KillOutcome.NotRunning, outcome);
             Assert.True(await ChildAnswersAsync(parent, bounded.Token),
                 "a process whose start time did not match was ended anyway");
+        }
+        finally
+        {
+            End(parent, child);
+        }
+    }
+
+    /// <summary>
+    /// A row with no start time is not ended by its ID alone (#2719).
+    /// </summary>
+    /// <remarks>
+    /// The list has no start time only where Windows would not give one with SysManager's rights, as for most of the
+    /// system's processes without administrator rights. The child's start time Windows gives, so it stands in for a
+    /// process that was given such a row's ID while the confirmation was open.
+    /// </remarks>
+    [Fact]
+    public async Task KillProcess_ListedWithNoStartTime_LeavesAProcessWhoseStartTimeWindowsGivesRunning()
+    {
+        using var bounded = new CancellationTokenSource(TimeSpan.FromSeconds(60));
+        using var parent = StartParentWithEchoingChild();
+        using var child = await HoldChildAsync(parent, bounded.Token);
+
+        try
+        {
+            var outcome = ProcessManagerService.KillProcess(child.Id, default, child.ProcessName);
+
+            Assert.Equal(ProcessManagerService.KillOutcome.NotRunning, outcome);
+            Assert.True(await ChildAnswersAsync(parent, bounded.Token),
+                "a process listed with no start time was ended by its ID alone");
+        }
+        finally
+        {
+            End(parent, child);
+        }
+    }
+
+    /// <summary>A process of another name than the listed one is left alone, whatever its start time (#2719).</summary>
+    [Fact]
+    public async Task KillProcess_ListedUnderAnotherName_LeavesTheProcessRunning()
+    {
+        using var bounded = new CancellationTokenSource(TimeSpan.FromSeconds(60));
+        using var parent = StartParentWithEchoingChild();
+        using var child = await HoldChildAsync(parent, bounded.Token);
+
+        try
+        {
+            var outcome = ProcessManagerService.KillProcess(child.Id, child.StartTime, "another-program");
+
+            Assert.Equal(ProcessManagerService.KillOutcome.NotRunning, outcome);
+            Assert.True(await ChildAnswersAsync(parent, bounded.Token),
+                "a process of another name than the listed one was ended");
         }
         finally
         {

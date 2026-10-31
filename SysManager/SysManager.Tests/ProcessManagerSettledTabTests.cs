@@ -4,6 +4,7 @@
 
 using System.Collections.Concurrent;
 using System.ComponentModel;
+using System.Diagnostics;
 using SysManager.Models;
 using SysManager.Services;
 using SysManager.ViewModels;
@@ -26,15 +27,15 @@ namespace SysManager.Tests;
 public sealed class SettledProcessTab : IAsyncLifetime
 {
     /// <summary>What the tab's kill call does. Each test that confirms a kill sets it first.</summary>
-    public Func<int, DateTime, ProcessManagerService.KillOutcome> Kill { get; set; } =
-        (_, _) => throw new InvalidOperationException("a test confirmed a kill without saying what the kill does");
+    public Func<int, DateTime, string?, ProcessManagerService.KillOutcome> Kill { get; set; } =
+        (_, _, _) => throw new InvalidOperationException("a test confirmed a kill without saying what the kill does");
 
     /// <summary>The tab. Its first load has finished and its automatic refresh is parked.</summary>
     public ProcessManagerViewModel Vm { get; private set; } = null!;
 
     public async ValueTask InitializeAsync()
     {
-        Vm = new ProcessManagerViewModel(new ProcessManagerService(), (pid, start) => Kill(pid, start));
+        Vm = new ProcessManagerViewModel(new ProcessManagerService(), (pid, start, name) => Kill(pid, start, name));
         await Vm.InitializationComplete;
         Vm.IsActive = false;
     }
@@ -69,14 +70,15 @@ public class ProcessManagerSettledTabTests(SettledProcessTab tab) : IClassFixtur
     }
 
     [Fact]
-    public void ConfirmedKill_EndsTheListedProcessByIdAndStartTime_AndDropsItsRow()
+    public void ConfirmedKill_EndsTheListedProcessByIdStartTimeAndName_AndDropsItsRow()
     {
-        // The start time travels with the ID: the prompt can stay open while the process exits and Windows gives
-        // its ID to another one, and the ID alone would then end that one.
-        (int Pid, DateTime Start)? asked = null;
-        tab.Kill = (pid, start) =>
+        // The start time and the name travel with the ID: the prompt can stay open while the process exits and Windows
+        // gives its ID to another one, and the ID alone would then end that one. The name is what still tells them
+        // apart where Windows gives no start time (#2719).
+        (int Pid, DateTime Start, string? Name)? asked = null;
+        tab.Kill = (pid, start, name) =>
         {
-            asked = (pid, start);
+            asked = (pid, start, name);
             return ProcessManagerService.KillOutcome.Ended;
         };
         var entry = Listed();
@@ -84,7 +86,7 @@ public class ProcessManagerSettledTabTests(SettledProcessTab tab) : IClassFixtur
 
         tab.Vm.KillProcessCommand.Execute(entry);
 
-        Assert.Equal((entry.Pid, entry.StartTime), asked);
+        Assert.Equal((entry.Pid, entry.StartTime, entry.Name), asked);
         Assert.DoesNotContain(entry, tab.Vm.Processes);
         Assert.DoesNotContain(entry, tab.Vm.FilteredProcesses);
         Assert.Equal("Killed SomeApp.exe (PID 4242).", tab.Vm.StatusMessage);
@@ -93,7 +95,7 @@ public class ProcessManagerSettledTabTests(SettledProcessTab tab) : IClassFixtur
     [Fact]
     public void RefusedKill_KeepsTheRow()
     {
-        tab.Kill = (_, _) => ProcessManagerService.KillOutcome.Refused;
+        tab.Kill = (_, _, _) => ProcessManagerService.KillOutcome.Refused;
         var entry = Listed();
         using var dialog = new DialogAnswer(confirm: true);
 
@@ -119,7 +121,7 @@ public class ProcessManagerSettledTabTests(SettledProcessTab tab) : IClassFixtur
         // rather than with the other refusals because it asserts on the status line, which the tab's first load
         // also writes: this fixture has already settled that load.
         var called = false;
-        tab.Kill = (_, _) =>
+        tab.Kill = (_, _, _) =>
         {
             called = true;
             return ProcessManagerService.KillOutcome.Ended;
@@ -168,6 +170,25 @@ public class ProcessManagerSettledTabTests(SettledProcessTab tab) : IClassFixtur
         Assert.DoesNotContain(nameof(tab.Vm.StatusMessage), raised);
         Assert.DoesNotContain(nameof(tab.Vm.IsBusy), raised);
         Assert.DoesNotContain(nameof(tab.Vm.IsProgressIndeterminate), raised);
+    }
+
+    [Fact]
+    public async Task AProcessAtTheIdOfOneShown_GetsItsDetails()
+    {
+        // Windows gives a closed process's ID to the next one. What was shown was a set of IDs, so the new process
+        // had its path, description and icon skipped as the old one's, and its row stayed bare for its whole
+        // lifetime (#2719). This test process stands in for it: its row is made to read as an earlier process.
+        using var self = Process.GetCurrentProcess();
+        var shown = tab.Vm.Processes.Single(p => p.Pid == self.Id);
+        shown.StartTime = self.StartTime.AddMinutes(-5);
+
+        await tab.Vm.RefreshListAsync(announce: false);
+
+        var row = tab.Vm.Processes.Single(p => p.Pid == self.Id);
+        Assert.NotSame(shown, row);
+        Assert.Equal(self.StartTime, row.StartTime);
+        Assert.NotEqual("", row.FilePath);    // the service read it
+        Assert.NotNull(row.Icon);              // and the tab filled it in
     }
 
     [Fact]

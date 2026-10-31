@@ -216,6 +216,23 @@ public class GamingProfileViewModelTests
     }
 
     [Fact]
+    public async Task Refresh_DoesNotCarryTheSelectionToAnotherProcessWithTheId_WhenNeitherHasAStartTime()
+    {
+        // Where Windows gives no start time, the name is what tells the picked game from another program that was
+        // given its ID (#2719).
+        var cpu = Substitute.For<ICpuAffinityService>();
+        cpu.GetProcesses().Returns(
+            new List<RunningProcess> { new(4242, "doom.exe", 0, null) },
+            new List<RunningProcess> { new(4242, "updater.exe", 0, null) });
+        var vm = NewVm(ServiceWith(), cpu);
+        vm.SelectedGame = vm.Processes.Single();
+
+        await vm.RefreshProcessesCommand.ExecuteAsync(null);
+
+        Assert.Null(vm.SelectedGame);
+    }
+
+    [Fact]
     public async Task Start_WhenTheServiceCouldNotReadItsStore_SaysSo_AndStartsNothing()
     {
         var service = ServiceWith(new GamingProfile());

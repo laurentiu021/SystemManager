@@ -60,19 +60,12 @@ public sealed class CpuAffinityService : ICpuAffinityService
                 long mask;
                 try { mask = (long)p.ProcessorAffinity; }
                 catch (Win32Exception) { mask = 0; }
-                result.Add(new RunningProcess(p.Id, p.ProcessName, mask, StartTimeOf(p)));
+                result.Add(new RunningProcess(p.Id, p.ProcessName, mask, ProcessManagerService.StartTimeOf(p)));
             }
             catch (InvalidOperationException) { /* exited between enumerate and read */ }
             finally { p.Dispose(); }
         }
         return result.OrderBy(r => r.Name, StringComparer.OrdinalIgnoreCase).ToList();
-    }
-
-    /// <summary>When <paramref name="p"/> started, or null when Windows will not say.</summary>
-    private static DateTime? StartTimeOf(Process p)
-    {
-        try { return p.StartTime; }
-        catch (Win32Exception) { return null; }
     }
 
     /// <summary>
@@ -145,8 +138,8 @@ public sealed class CpuAffinityService : ICpuAffinityService
 
     /// <summary>
     /// True when the process listed with <paramref name="processId"/> and <paramref name="startTime"/> is no longer
-    /// running: nothing has that ID, or the ID now belongs to a process that started at another time. False while it
-    /// runs, and when Windows will not say when the process with that ID started.
+    /// running: nothing has that ID, or the ID now belongs to a process that did not start as listed. False while it
+    /// runs, and when the list has a start time and Windows will not say when the process with that ID started.
     /// </summary>
     /// <remarks>
     /// A process that has exited while another program still holds a handle to it keeps its ID and start time until
@@ -166,17 +159,19 @@ public sealed class CpuAffinityService : ICpuAffinityService
     }
 
     /// <summary>
-    /// Whether <paramref name="p"/> is the process listed as starting at <paramref name="startTime"/>. Always so when
-    /// the list had no start time to give.
+    /// Whether <paramref name="p"/> is the process listed as starting at <paramref name="startTime"/>, which is null
+    /// when the list had no start time to give.
     /// </summary>
     /// <remarks>
-    /// The check <see cref="ProcessManagerService.KillProcess"/> makes before ending a process, for the same reason:
-    /// the list can be minutes old, and Windows gives a closed process's ID to the next one started (#2514). Reading
-    /// the start time throws <see cref="Win32Exception"/> when Windows will not say, and
+    /// The check <see cref="ProcessManagerService.KillProcess(int, DateTime, string)"/> makes before ending a process,
+    /// for the same reason: the list can be minutes old, and Windows gives a closed process's ID to the next one
+    /// started (#2514). Without a start time it was always so, and a change was made to whatever held the ID; now it
+    /// is so only while Windows still gives none for the process (#2719). Reading the start time throws
+    /// <see cref="Win32Exception"/> when the list has one and Windows will not say, and
     /// <see cref="InvalidOperationException"/> when the process has exited; each caller handles both.
     /// </remarks>
     private static bool IsListed(Process p, DateTime? startTime) =>
-        startTime is not { } listed || p.StartTime == listed;
+        ProcessManagerService.StartedAsListed(p, startTime ?? default);
 
     /// <summary>
     /// Read the current scheduling priority class for a process, or null if unavailable. Null too when the process

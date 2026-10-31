@@ -1098,7 +1098,8 @@ Answers "what is actually using my space?" by listing the biggest files in one p
 ### Process Manager
 - Lists running Windows processes with PID, memory, threads, status, and when each one started. A
   program whose file was renamed or moved while it runs is listed without a description, rather than
-  emptying the list
+  emptying the list. A program that starts at the process ID of one that has just closed gets its own
+  details like any new one
 - Real-time filter by name, description, category, or PID
 - **Show only apps** narrows the list to programs with a window, and a program whose window has
   stopped responding reads **Not responding** in the status column. A Store app such as Settings
@@ -1161,7 +1162,8 @@ Answers "what is actually using my space?" by listing the biggest files in one p
 - **Kill ends that one program**, as Task Manager's End task does. The programs it
   started keep running, so ending Explorer to fix a frozen taskbar does not close
   everything you opened from it. If the program closed while the confirmation was open
-  and Windows gave its process ID to another one, that other program is left alone.
+  and Windows gave its process ID to another one, that other program is left alone, and so
+  it is for a process whose start time Windows does not reveal.
   SysManager's own row is refused: close it from its window or the tray instead
 - Open file location in Explorer
 
@@ -1239,7 +1241,8 @@ Answers "what is actually using my space?" by listing the biggest files in one p
   the file; critical system processes are protected from termination
 - **Ends the locker you picked, and no other** — if it closed after the check and
   Windows gave its process ID to another program, that program is left alone, the tab
-  says the locker had already closed, and the file is checked again
+  says the locker had already closed, and the file is checked again. That holds for a
+  locker Windows gave no start time for too
 - Detection works as a standard user; ending a process owned by SYSTEM or
   another user needs administrator rights (surfaced, not crashed)
 
@@ -1934,7 +1937,8 @@ offers, "rate us" prompts:
   starting
 - **Changes the game you picked, and no other** — if it closed after the list was read and
   Windows gave its process ID to another program, Start changes nothing and says the game had
-  already closed, and neither raising, restoring nor waiting for the game ever reaches that program
+  already closed, and neither raising, restoring nor waiting for the game ever reaches that program,
+  even for a game whose start time Windows does not reveal
 - **System-wide optimizations** — Ultimate Performance power plan, reduced visual
   effects, finest (~0.5 ms) timer resolution (for games that ask Windows for a fine timer,
   see Timer Resolution), freeing standby memory, pausing Windows Search indexing, and
@@ -2022,7 +2026,8 @@ offers, "rate us" prompts:
   process is surfaced as needing admin, not a crash)
 - **Changes the process you picked, and no other** — if it closed after the list was
   read and Windows gave its process ID to another program, Apply and Restore leave that
-  program alone, say the process had already closed, and refresh the list
+  program alone, say the process had already closed, and refresh the list. That holds for a
+  process whose start time Windows does not reveal too
 - **Says when Windows will not tell** — a process whose cores Windows does not let SysManager
   read, such as one of Windows' own or another account's, shows no cores ticked, cannot be
   applied, and the status line says why; one that closed after the list was read is taken off it

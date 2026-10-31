@@ -124,10 +124,11 @@ public sealed partial class GamingProfileViewModel : ElevatedViewModelBase
         var procs = await System.Threading.Tasks.Task.Run(_cpu.GetProcesses).ConfigureAwait(true);
         Processes.ReplaceWith(procs);
         // Preserve the selection across a refresh if that process is still running. The start time is what tells it
-        // from a new process Windows has given the same ID (#2559).
+        // from a new process Windows has given the same ID (#2559), and the name what still does where Windows gives
+        // no start time (#2719).
         if (current is not null)
             SelectedGame = Processes.FirstOrDefault(
-                p => p.ProcessId == current.ProcessId && p.StartTime == current.StartTime);
+                p => p.ProcessId == current.ProcessId && p.StartTime == current.StartTime && p.Name == current.Name);
     }
 
     /// <summary>True when nothing is applied yet and at least one optimization is ticked.</summary>

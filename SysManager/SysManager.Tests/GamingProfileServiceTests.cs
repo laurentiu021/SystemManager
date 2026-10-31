@@ -1246,6 +1246,30 @@ public class GamingProfileServiceTests
     }
 
     [Fact]
+    public async Task ApplyAsync_ForAGamePickedWithNoStartTime_WhoseIdAProcessWithOneHasNow_EndsTheSessionAtOnce()
+    {
+        // A game is picked with no start time only where Windows would not give one, so this test process, whose start
+        // time it gives, stands in for a program given the closed game's ID. It was watched as the game, with no start
+        // time to compare, and its exit would have ended game mode (#2719).
+        using var self = System.Diagnostics.Process.GetCurrentProcess();
+        var path = NewStorePath();
+        try
+        {
+            var timer = TimerThatAccepts();
+            var svc = StoreOnlyService(path, cpu: CpuThatChangesAnything(), timer: timer);
+
+            var result = await svc.ApplyAsync(new GamingProfile { FinestTimerResolution = true },
+                new GameTarget(self.Id, "game", StartTime: null));
+
+            Assert.NotNull(result.EndedAtStart);
+            Assert.False(svc.IsActive);
+            Assert.Null(svc.BoundGamePid);
+            timer.Received(1).Disable();
+        }
+        finally { DeleteStore(path); }
+    }
+
+    [Fact]
     public async Task ApplyAsync_ThatChangesNothing_WatchesNothing()
     {
         // The test process is the game, and the one step fails: the substitute refuses every change. No session is on,

@@ -156,13 +156,15 @@ public sealed class FileLockService : IFileLockService
     /// <param name="processId">The locker's process ID.</param>
     /// <param name="startTime">
     /// When the locker started, as Restart Manager reported it (<see cref="FileLocker.StartTime"/>), or null when it
-    /// did not say, which skips the check. The list can be minutes old, and Windows gives a closed process's ID to
-    /// the next one started, so the ID alone can name a different program (#2514). Restart Manager's time is the
-    /// creation time <c>GetProcessTimes</c> reports, the one <see cref="Process.StartTime"/> reads.
+    /// did not say. The list can be minutes old, and Windows gives a closed process's ID to the next one started, so
+    /// the ID alone can name a different program (#2514). Restart Manager's time is the creation time
+    /// <c>GetProcessTimes</c> reports, the one <see cref="Process.StartTime"/> reads. Without one, the process is
+    /// ended only while Windows still gives no start time for it, as for a Process Manager row (#2719). No name is
+    /// compared: Restart Manager names a locker by its program's description, not its process name.
     /// </param>
     /// <remarks>
-    /// Process Manager's <see cref="ProcessManagerService.KillProcess"/> does the work, so the two tabs end a process
-    /// the same way: the process alone, not its tree, after the same start-time check.
+    /// Process Manager's <see cref="ProcessManagerService.KillProcess(int, DateTime)"/> does the work, so the two tabs
+    /// end a process the same way: the process alone, not its tree, after the same start-time check.
     /// </remarks>
     public ProcessManagerService.KillOutcome KillProcess(int processId, DateTime? startTime)
     {

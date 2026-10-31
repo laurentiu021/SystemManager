@@ -193,6 +193,23 @@ public class ProcessManagerViewModelTests
         Assert.DoesNotContain(old, target);
     }
 
+    [Fact]
+    public void ReconcileInto_ReusedPid_WithNoStartTimeEitherSide_ReplacesTheRowOfAnotherName()
+    {
+        // Where Windows gives no start time, both rows read the default, and the name is what still tells the two
+        // processes apart. The row kept the old process's name over the new one's numbers (#2719).
+        var target = new BulkObservableCollection<ProcessEntry>();
+        var old = Proc(100, mem: 10);
+        old.Name = "old-service";
+        target.Add(old);
+        var fresh = Proc(100, mem: 50);
+        fresh.Name = "new-service";
+
+        ProcessManagerViewModel.ReconcileInto(target, new List<ProcessEntry> { fresh });
+
+        Assert.Same(fresh, Assert.Single(target));
+    }
+
     // ── SyncOrdered (regression: filtered view reorders without a Reset) ──
 
     [Fact]

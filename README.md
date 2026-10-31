@@ -754,7 +754,9 @@ Across the tab:
 - Read-only; reading the log requires administrator (elevation banner shown)
 - **A read that fails says so.** "No boot performance events found yet" is kept for a history
   Windows returned empty. When the log could not be read, the tab says that instead, and a
-  refresh that fails keeps what was already shown
+  refresh that fails keeps what was already shown. The list of what slowed boot says "Nothing
+  slowed boot" only after a read that found nothing; otherwise it says that it needs
+  administrator, could not be read, or has no boot history to look at yet
 
 ### Task Scheduler
 - **Browse every Windows scheduled task** with its state, type, and what the task is for in Windows'

@@ -10,6 +10,19 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.136.54] - 2026-10-31
+
+**A Deep Cleanup you cancel part-way says what it had already removed, and records it.**
+
+### Fixed
+- Cancelling a Deep Cleanup part-way said only "Clean cancelled.", although everything it had
+  deleted by then was gone for good. Recent activity recorded nothing, and every category went
+  on showing the files that were gone. The result now says the clean was cancelled and how much
+  it had freed, Recent activity records it, and the categories are scanned again. A cancel while
+  Windows emptied the Delivery Optimization cache or removed Windows.old also counts what went,
+  and only what went. This was there since a cancelled clean began to end with an exception, in
+  1.52.16.
+
 ## [1.136.53] - 2026-10-31
 
 **Refresh and F5 ask before they throw away changes you have not applied yet.**

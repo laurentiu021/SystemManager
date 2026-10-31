@@ -204,6 +204,35 @@ public sealed class DeepCleanupPreviousInstallationTests
     }
 
     /// <summary>
+    /// A clean cancelled while Windows' cleanup runs lets it finish, and returns what it removed, marked cancelled
+    /// (#2736).
+    /// </summary>
+    /// <remarks>
+    /// Measured to the end after the cancel: a walk cut short would have counted what Windows left as freed.
+    /// </remarks>
+    [Fact]
+    public async Task Clean_CancelledWhileWindowsCleanupRuns_ReturnsWhatItRemoved()
+    {
+        using var roots = new TempCleanupRoots();
+        TempCleanupRoots.WriteFile(Path.Combine(WindowsOld(roots), "Windows", "System32", "notepad.exe"), 10);
+        TempCleanupRoots.WriteFile(Path.Combine(WindowsOld(roots), "Users", "left.dat"), 4);
+        using var cts = new CancellationTokenSource();
+        var cleanup = Cleanup(() =>
+        {
+            Directory.Delete(Path.Combine(WindowsOld(roots), "Windows"), recursive: true);
+            cts.Cancel();
+        });
+        var service = new DeepCleanupService(roots, previousInstallation: cleanup);
+        var categories = await ScanAndTickAsync(service, BucketName);
+
+        var result = await service.CleanAsync(categories, ct: cts.Token);
+
+        Assert.True(result.Cancelled);
+        Assert.Equal((10L, 1), (result.BytesFreed, result.FilesDeleted));
+        Assert.Contains(result.Errors, e => e.EndsWith("Windows left 4 B of it in place.", StringComparison.Ordinal));
+    }
+
+    /// <summary>
     /// Only this bucket goes through Windows' cleanup: a bucket cleaned beside it still deletes its own files.
     /// </summary>
     [Fact]

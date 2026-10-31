@@ -596,19 +596,19 @@ public sealed class DeepCleanupService
             }
         }
 
-        // A cancelled clean stops mid-way with partial deletions (already done + logged);
-        // reporting "Done" + returning a result would fire a success toast for a cancelled
-        // op. Throw so the ViewModel reports "Clean cancelled" instead. The work already
-        // performed is real and logged — throwing only changes the outcome message.
-        ct.ThrowIfCancellationRequested();
-
-        progress?.Report(new ScanProgress(total, total, "Done"));
+        // A cancelled clean stops part-way, and what it removed before it stopped is gone for good. It used to throw
+        // here, and the counts went with the exception: the tab said only "Clean cancelled.", recorded nothing and
+        // left every category showing files that were gone. The result carries them instead, marked cancelled, so the
+        // tab says what went, records it and scans again (#2736).
+        var cancelled = ct.IsCancellationRequested;
+        if (!cancelled) progress?.Report(new ScanProgress(total, total, "Done"));
         return new CleanupResult
         {
             BytesFreed = freed,
             FilesDeleted = filesDeleted,
             Errors = errors,
             RecycleBinEmptied = emptiedBin,
+            Cancelled = cancelled,
         };
     }
 
@@ -634,6 +634,8 @@ public sealed class DeepCleanupService
         }
 
         var (bytesBefore, filesBefore) = Measure(cat, ct);
+        // Cancelled while it was measured: the command has not run, and does not.
+        if (ct.IsCancellationRequested) return (0, 0);
         try
         {
             await _ps.RunAsync(EmptyDeliveryOptimizationCacheScript, null, ct).ConfigureAwait(false);
@@ -643,8 +645,15 @@ public sealed class DeepCleanupService
             errors.Add($"{cat.Name}: {ex.Message}");
             Log.Debug(ex, "Deep cleanup: Delete-DeliveryOptimizationCache failed");
         }
+        // Cancelled while the command ran, which may have emptied part of the cache by then: the measure below finds
+        // what it did, and the clean returns it as cancelled (#2736).
+        catch (OperationCanceledException) when (ct.IsCancellationRequested)
+        {
+            Log.Debug("Deep cleanup: Delete-DeliveryOptimizationCache was cancelled");
+        }
 
-        var (bytesAfter, filesAfter) = Measure(cat, ct);
+        // To the end even after a cancel: a walk cut short would count every file it did not reach as freed.
+        var (bytesAfter, filesAfter) = Measure(cat, CancellationToken.None);
         return (Math.Max(0, bytesBefore - bytesAfter), Math.Max(0, filesBefore - filesAfter));
     }
 
@@ -670,6 +679,8 @@ public sealed class DeepCleanupService
         }
 
         var (bytesBefore, filesBefore) = Measure(cat, ct);
+        // Cancelled while it was measured: Windows' cleanup has not started, and does not.
+        if (ct.IsCancellationRequested) return (0, 0);
         try
         {
             var exitCode = await _previousInstallation.RemoveAsync(CancellationToken.None).ConfigureAwait(false);
@@ -697,7 +708,9 @@ public sealed class DeepCleanupService
             return (0, 0);
         }
 
-        var (bytesAfter, filesAfter) = Measure(cat, ct);
+        // To the end even when the clean was cancelled meanwhile: a walk cut short would count every file it did not
+        // reach as freed, and the clean now reports what a cancelled run freed (#2736).
+        var (bytesAfter, filesAfter) = Measure(cat, CancellationToken.None);
         if (bytesAfter > 0)
             errors.Add($"{cat.Name}: Windows left {FormatHelper.FormatSize(bytesAfter)} of it in place.");
         Log.Information("Deep cleanup: Windows' cleanup of the previous installation freed {Bytes} bytes, {Left} bytes left",

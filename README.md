@@ -936,6 +936,11 @@ System → System Fixes, where the tab name matches what they do.
   Cleanup and Storage Sense use, rather than file by file, because most of it belongs to Windows
   itself and a delete file by file left a previous installation that "Go back" could no longer use.
   That needs administrator rights, and the result says how much, if any, Windows left
+- **A cancelled clean still says what it removed.** What it deleted before Cancel is gone
+  for good, so the result says the clean was cancelled and how much it had freed by then,
+  Recent activity records it, and the categories are scanned again so their sizes are current.
+  Windows' own cleanup of Windows.old is never stopped part-way: a cancel then takes effect
+  once it has finished
 - Safe by design: never touches browsers, passwords, the registry, active
   drivers, or actual game files. Locked files are skipped, never forced.
 

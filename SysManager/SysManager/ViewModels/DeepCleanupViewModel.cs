@@ -312,13 +312,17 @@ public sealed partial class DeepCleanupViewModel : ElevatedViewModelBase
             // The using above still releases it if the clean throws; a second Dispose does nothing.
             systemLock?.Dispose();
             CleanSummary = result.Summary;
-            CleanStatusLine = "Clean complete.";
-            ToastService.Instance.Show("Deep cleanup complete", result.Summary);
+            // A cancelled clean has still deleted what it reached, for good. It used to say only "Clean cancelled.",
+            // record nothing and leave every category showing files that were gone, so it is said, recorded and
+            // scanned again like a finished one, and only the status line and the missing notification differ (#2736).
+            CleanStatusLine = result.Cancelled ? "Cancelled." : "Clean complete.";
+            if (!result.Cancelled) ToastService.Instance.Show("Deep cleanup complete", result.Summary);
             // This is the least reversible operation in the app — files are deleted outright, not sent
             // to the Recycle Bin — and it left no trace in the app's own history. Summary is counts and
             // sizes only, never paths: activity.json is plain text under %LocalAppData%.
-            ActivityLogService.Instance.Log("Deep Cleanup", result.Summary);
-            Log.Information("Deep cleanup completed");
+            if (!result.Cancelled || result.RemovedAnything)
+                ActivityLogService.Instance.Log("Deep Cleanup", result.Summary);
+            Log.Information(result.Cancelled ? "Deep cleanup cancelled part-way" : "Deep cleanup completed");
             await ScanCoreAsync();
         }
         catch (OperationCanceledException) { CleanSummary = "Clean cancelled."; CleanStatusLine = "Cancelled."; }

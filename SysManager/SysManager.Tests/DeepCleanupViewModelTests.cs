@@ -3,7 +3,9 @@
 // License: MIT
 
 using System.Collections.Concurrent;
+using System.Collections.ObjectModel;
 using System.IO;
+using System.Management.Automation;
 using System.Reflection;
 using NSubstitute;
 using SysManager.Models;
@@ -822,5 +824,42 @@ public class DeepCleanupViewModelTests : IDisposable
         vm.CleanProgress = 70;
         Assert.True(vm.IsBusy);
         Assert.Equal(70, vm.Progress);
+    }
+
+    // ---------- a cancelled clean (#2736) ----------
+
+    [Fact]
+    public async Task ACleanCancelledPartWay_SaysAndRecordsWhatItFreed_AndScansAgain()
+    {
+        // It said only "Clean cancelled.", recorded nothing and left the category showing files that were gone. The
+        // cancel lands while the Delivery Optimization command runs, after it emptied the cache, through a substitute
+        // runner, so nothing of this PC is cleaned.
+        using var activity = new ActivityLogScope();
+        using var confirm = new DialogAnswer(confirm: true);
+        var cache = Path.Combine(_roots.WindowsDirectory, "ServiceProfiles", "NetworkService", "AppData", "Local",
+            "Microsoft", "Windows", "DeliveryOptimization", "Cache");
+        var piece = TempCleanupRoots.WriteFile(Path.Combine(cache, "piece.bin"), 10);
+        DeepCleanupViewModel? vm = null;
+        var ps = Substitute.For<IPowerShellRunner>();
+        ps.RunAsync(Arg.Any<string>(), Arg.Any<IDictionary<string, object?>?>(), Arg.Any<CancellationToken>())
+          .Returns(_ =>
+          {
+              File.Delete(piece);
+              vm!.CancelCommand.Execute(null);
+              return Task.FromResult(new Collection<PSObject>());
+          });
+        vm = new DeepCleanupViewModel(new Services.DeepCleanupService(_roots, ps));
+        await vm.ScanCommand.ExecuteAsync(null);
+        foreach (var c in vm.Categories) c.IsSelected = c.Name == "Delivery Optimization cache";
+        Assert.Equal(10, Assert.Single(vm.Categories, c => c.IsSelected).TotalSizeBytes);
+
+        await vm.CleanCommand.ExecuteAsync(null);
+
+        Assert.Equal("Cancelled.", vm.CleanStatusLine);
+        Assert.Equal("Cancelled after it freed 10 B across 1 files", vm.CleanSummary);
+        var entry = Assert.Single(ActivityLogService.Instance.GetRecent(10));
+        Assert.Equal(("Deep Cleanup", "Cancelled after it freed 10 B across 1 files"), (entry.Action, entry.Detail));
+        Assert.Equal(0, Assert.Single(vm.Categories, c => c.Name == "Delivery Optimization cache").TotalSizeBytes);
+        Assert.Equal("Scan complete.", vm.ScanStatusLine);   // the sizes were read again
     }
 }

@@ -117,22 +117,36 @@ public sealed record CleanupResult
     public RecycleBinContents? RecycleBinEmptied { get; init; }
 
     /// <summary>
+    /// True when the clean was cancelled part-way. What it removed before it stopped is in the counts, and is gone for
+    /// good: a cancelled clean used to throw, and the counts went with the exception, so the tab said only "Clean
+    /// cancelled." and recorded nothing (#2736).
+    /// </summary>
+    public bool Cancelled { get; init; }
+
+    /// <summary>Whether the clean removed anything at all: a file, or what the Recycle Bin held.</summary>
+    public bool RemovedAnything => FilesDeleted > 0 || BytesFreed > 0 || RecycleBinEmptied is not null;
+
+    /// <summary>
     /// The result in one line, which Deep Cleanup also writes to Recent activity. An emptied Recycle Bin is named,
-    /// because it is the part of a clean someone may later come looking for.
+    /// because it is the part of a clean someone may later come looking for, and a cancelled clean says that it
+    /// stopped, with what it had already removed.
     /// </summary>
     public string Summary
     {
         get
         {
+            if (Cancelled && !RemovedAnything) return "Cancelled before anything was removed";
+
             var freed = FormatHelper.FormatSize(BytesFreed);
             var what = (FilesDeleted, RecycleBinEmptied) switch
             {
-                (0, { } bin) => $"Freed {freed} by emptying the Recycle Bin ({bin.Display})",
+                (0, { } bin) => $"{freed} by emptying the Recycle Bin ({bin.Display})",
                 (var files, { } bin) => string.Create(CultureInfo.InvariantCulture,
-                    $"Freed {freed} across {files:N0} files, and emptied the Recycle Bin ({bin.Display})"),
-                (var files, null) => string.Create(CultureInfo.InvariantCulture, $"Freed {freed} across {files:N0} files"),
+                    $"{freed} across {files:N0} files, and emptied the Recycle Bin ({bin.Display})"),
+                (var files, null) => string.Create(CultureInfo.InvariantCulture, $"{freed} across {files:N0} files"),
             };
-            return Errors.Count > 0 ? $"{what} · {Errors.Count} skipped" : what;
+            var line = Cancelled ? $"Cancelled after it freed {what}" : $"Freed {what}";
+            return Errors.Count > 0 ? $"{line} · {Errors.Count} skipped" : line;
         }
     }
 }

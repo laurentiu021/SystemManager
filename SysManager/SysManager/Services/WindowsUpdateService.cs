@@ -24,9 +24,18 @@ public sealed class WindowsUpdateService : IWindowsUpdateService
 
     private void Emit(string text) => Log?.Invoke(text);
 
+    /// <summary>What the scan and the install ask Windows Update for: updates not installed and not hidden.</summary>
+    /// <remarks>
+    /// A criteria string replaces the search's default, which is these same two conditions, rather than adding to it.
+    /// Both searches passed <c>IsInstalled=0</c> alone, so an update the user had hidden with "Show or hide updates",
+    /// usually a driver that breaks the PC, was listed, ticked and installed, and the Dashboard counted it as pending
+    /// (#2727). It still includes optional drivers and feature upgrades.
+    /// </remarks>
+    internal const string PendingCriteria = "IsInstalled=0 and IsHidden=0";
+
     /// <summary>
-    /// Scan for available updates (IsInstalled=0). Returns one entry per
-    /// update with stable UpdateID for later install.
+    /// Scan for the updates Windows has pending, leaving out the ones the user hid (<see cref="PendingCriteria"/>).
+    /// Returns one entry per update with stable UpdateID for later install.
     /// </summary>
     public Task<IReadOnlyList<UpdateEntry>> ScanAsync(CancellationToken ct = default) =>
         Task.Run<IReadOnlyList<UpdateEntry>>(() =>
@@ -44,9 +53,7 @@ public sealed class WindowsUpdateService : IWindowsUpdateService
                 searcher = session.CreateUpdateSearcher();
                 searcher.IncludePotentiallySupersededUpdates = false;
 
-                // "IsInstalled=0" returns everything not yet installed,
-                // including optional drivers and feature upgrades.
-                result = searcher.Search("IsInstalled=0");
+                result = searcher.Search(PendingCriteria);
                 ct.ThrowIfCancellationRequested();
 
                 updates = result.Updates;
@@ -103,7 +110,7 @@ public sealed class WindowsUpdateService : IWindowsUpdateService
             {
                 session = CreateSession();
                 searcher = session.CreateUpdateSearcher();
-                search = searcher.Search("IsInstalled=0");
+                search = searcher.Search(PendingCriteria);
                 liveUpdates = search.Updates;
                 ct.ThrowIfCancellationRequested();
 

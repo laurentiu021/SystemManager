@@ -779,6 +779,8 @@ Across the tab:
   that PSWindowsUpdate filters out client-side
 - Unified DataGrid for **everything** in one scan — standard updates, feature
   upgrades and optional drivers
+- An update you hid with Microsoft's "Show or hide updates" tool, usually a driver that breaks
+  your PC, is left out of the scan and the install, so it is never ticked or installed again
 - Categorized with colored pills: Security, Cumulative, Defender, Driver,
   Servicing, .NET, Feature upgrade, and Update for everything else — click headers to sort,
   with Size in the order of the download size

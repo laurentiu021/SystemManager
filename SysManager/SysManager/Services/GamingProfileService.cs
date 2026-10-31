@@ -320,7 +320,7 @@ public sealed class GamingProfileService : IGamingProfileService, IDisposable
         finally
         {
             _starting = false;
-            _gate.Release();
+            ReleaseGate();
         }
 
         Log.Information("Gaming Profile applied: {Applied} applied, {Admin} need admin, {NoChange} no-op, {Failed} failed",
@@ -355,7 +355,7 @@ public sealed class GamingProfileService : IGamingProfileService, IDisposable
         {
             return await RevertLockedAsync(ct).ConfigureAwait(false);
         }
-        finally { _gate.Release(); }
+        finally { ReleaseGate(); }
     }
 
     // Must be called while holding _gate: from RevertAsync, and from ApplyAsync when the game closed while game mode
@@ -471,7 +471,7 @@ public sealed class GamingProfileService : IGamingProfileService, IDisposable
                 result.NotRestored.Count);
             return result;
         }
-        finally { _gate.Release(); }
+        finally { ReleaseGate(); }
     }
 
     // ── Snapshot + step construction ───────────────────────────────────────────
@@ -779,6 +779,18 @@ public sealed class GamingProfileService : IGamingProfileService, IDisposable
         catch (IOException ex) { Log.Warning(ex, "Failed to save gaming profile store"); }
         catch (UnauthorizedAccessException ex) { Log.Warning(ex, "Failed to save gaming profile store"); }
         return false;
+    }
+
+    /// <summary>
+    /// Releases the gate, unless <see cref="Dispose"/> gave up waiting for it and disposed it. Releasing a disposed
+    /// <see cref="SemaphoreSlim"/> throws, and every call site is a <c>finally</c> block, where that would replace
+    /// a revert's or an apply's own outcome with an unhandled exception (#2742). Released even once disposal has
+    /// begun, since <see cref="Dispose"/> waits for exactly this release.
+    /// </summary>
+    private void ReleaseGate()
+    {
+        try { _gate.Release(); }
+        catch (ObjectDisposedException) { /* Dispose stopped waiting for this operation and disposed the gate */ }
     }
 
     public void Dispose()

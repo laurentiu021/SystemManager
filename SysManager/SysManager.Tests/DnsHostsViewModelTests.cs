@@ -19,6 +19,8 @@ namespace SysManager.Tests;
 /// management, and validation without performing actual DNS or file operations.
 /// Uses StaFact for tests that instantiate the full ViewModel (requires WPF Dispatcher).
 /// </summary>
+// Serialized: it runs the tab's commands, and the tab takes the process-wide operation lock (#2742).
+[Collection("ProcessWideStatics")]
 public class DnsHostsViewModelTests
 {
     // Without the startup read. It reads this machine's hosts file, and since #2734 it runs beside the DNS query

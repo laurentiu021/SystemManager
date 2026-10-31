@@ -10,6 +10,17 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.136.62] - 2026-10-31
+
+**Closing SysManager while Performance Mode or Gaming Profile is still changing a setting no longer ends that change in an error.**
+
+### Fixed
+- A power plan, processor or hibernation change Performance Mode had asked Windows for, still
+  running when SysManager closed, ended in an error that took the place of its own result and was
+  written to the log: the change let go of a lock SysManager had already put away. A Gaming Profile
+  start or revert still running once closing stopped waiting for it did the same. Both now end with
+  their own result. This was there since 0.48.34, and in Gaming Profile since 1.52.38.
+
 ## [1.136.61] - 2026-10-31
 
 **The Uninstaller runs an app's own uninstaller when Windows lists the app twice.**

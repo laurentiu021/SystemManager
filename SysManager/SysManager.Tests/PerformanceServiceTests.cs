@@ -629,6 +629,45 @@ public class PerformanceServiceTests : IDisposable
             Arg.Any<CancellationToken>(), Arg.Any<System.Text.Encoding?>());
     }
 
+    // ── A call still running when SysManager closes (#2742) ──
+    // The service is a singleton App.OnExit disposes, and every powercfg call released its gate in a finally, so
+    // one still running then released a disposed gate: the ObjectDisposedException took the place of the call's
+    // own outcome.
+
+    /// <summary>A plan switch waiting for powercfg, which answers with the exit code the test gives it.</summary>
+    private (PerformanceService Service, Task Call, TaskCompletionSource<int> Powercfg) SwitchWaitingForPowercfg()
+    {
+        var powercfg = new TaskCompletionSource<int>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var runner = Substitute.For<IPowerShellRunner>();
+        runner.RunProcessAsync(Arg.Any<string>(), Arg.Any<string>(), Arg.Any<CancellationToken>(),
+                Arg.Any<System.Text.Encoding?>())
+            .Returns(powercfg.Task);
+        var service = NewService(runner);
+        return (service, service.SetActivePlanAsync(PerformanceService.BalancedGuid), powercfg);
+    }
+
+    [Fact]
+    public async Task ACallStillRunningWhenTheServiceIsDisposed_EndsAsItsCallEnds()
+    {
+        var (service, call, powercfg) = SwitchWaitingForPowercfg();
+
+        service.Dispose();   // SysManager closing
+        powercfg.SetResult(0);
+
+        Assert.Null(await Record.ExceptionAsync(() => call));
+    }
+
+    [Fact]
+    public async Task ACallStillRunningWhenTheServiceIsDisposed_StillReportsItsOwnFailure()
+    {
+        var (service, call, powercfg) = SwitchWaitingForPowercfg();
+
+        service.Dispose();
+        powercfg.SetResult(5);
+
+        Assert.IsType<InvalidOperationException>(await Record.ExceptionAsync(() => call));
+    }
+
     [Fact]
     public async Task SetProcessorMinimum_NonzeroExitCode_ThrowsBeforeReportingSuccess()
     {

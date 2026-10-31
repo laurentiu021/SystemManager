@@ -423,6 +423,17 @@ public sealed class TemperatureService : IDisposable
         }
     }
 
+    /// <summary>
+    /// Releases the enrichment gate unless <see cref="Dispose"/> has already claimed it. Releasing a disposed
+    /// <see cref="SemaphoreSlim"/> throws, and both call sites are <c>finally</c> blocks (#2742).
+    /// </summary>
+    private void ReleaseEnrichGate()
+    {
+        if (_disposed) return;
+        try { _enrichGate.Release(); }
+        catch (ObjectDisposedException) { /* disposed mid-read at shutdown */ }
+    }
+
     public void Dispose()
     {
         lock (_sensorLock)
@@ -460,7 +471,7 @@ public sealed class TemperatureService : IDisposable
                     (await _diskHealth.CollectAsync().ConfigureAwait(false))
                     .Select(d => d.FriendlyName).ToList();
             }
-            finally { _enrichGate.Release(); }
+            finally { ReleaseEnrichGate(); }
 
             ApplyStorageNames(readings, diskNames);
         }
@@ -623,6 +634,6 @@ public sealed class TemperatureService : IDisposable
             _diskTemperaturesStamp = _timeProvider.GetTimestamp();
             readings.AddRange(fresh);
         }
-        finally { _enrichGate.Release(); }
+        finally { ReleaseEnrichGate(); }
     }
 }

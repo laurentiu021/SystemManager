@@ -178,6 +178,10 @@ public partial class ArchitectureTests
     /// once the Ultimate step kept the copy it made, its tests would have written theirs into it (#2717). One returned
     /// from a block body, and an object the service container builds, are out of a source scan's reach;
     /// <see cref="TestAssemblyInit"/> redirects the activity log, the one store those reach.</para>
+    /// <para>A store the type builds for itself is the same leak one step away: <c>ServicesViewModel</c> builds the
+    /// startup ledger Undo Changes acts on over the real profile when its <c>ledger</c> is left out, and its tests
+    /// left it out in eight places (#2742). So every optional constructor parameter whose type is one of these
+    /// stores is judged as <c>configDir</c> is.</para>
     /// </remarks>
     [Fact]
     public void Tests_NeverLeaveAConfigDirAtTheRealProfile()
@@ -204,6 +208,15 @@ public partial class ArchitectureTests
                 if (LeavesConfigDirAtItsDefault(arguments, seams[type]))
                     leaks.Add($"{Path.GetFileName(file)}: new {type}({string.Join(", ", arguments)})");
             }
+
+            // The log's seam is Init's folder, not a constructor. With none it falls back to the profile's log folder,
+            // which only the suite's redirect keeps off the real log (#2742).
+            foreach (Match init in LogInitCall().Matches(code))
+            {
+                var arguments = TopLevelArguments(code, init.Index + init.Length - 1);
+                if (arguments is not null && (arguments.Count == 0 || IsNullValue(arguments[0])))
+                    leaks.Add($"{Path.GetFileName(file)}: LogService.Init({string.Join(", ", arguments)})");
+            }
         }
 
         // 263 measured when target-typed constructions were added to the scan, 35 of them target-typed, so a floor above
@@ -211,6 +224,32 @@ public partial class ArchitectureTests
         Assert.True(scanned >= 240,
             $"only {scanned} constructions of those types were found in the tests, and 263 were measured. The "
             + "match stopped working, so this guard would pass while checking nothing.");
+
+        var stores = StoreSeams();
+        Assert.True(stores.Count >= 3,
+            $"only {stores.Count} types taking a store as an optional parameter were found, and 3 were "
+            + "measured. The reflection stopped matching, so the store half below would check nothing.");
+        var storeSeams = stores.ToDictionary(s => s.Key, s => s.Value.Overloads);
+        var storesScanned = 0;
+        foreach (var file in projects
+                     .SelectMany(p => Directory.EnumerateFiles(p, "*.cs", SearchOption.AllDirectories))
+                     .Where(f => !f.Contains($"{Path.DirectorySeparatorChar}obj{Path.DirectorySeparatorChar}",
+                                             StringComparison.Ordinal))
+                     .Where(f => !f.Contains($"{Path.DirectorySeparatorChar}bin{Path.DirectorySeparatorChar}",
+                                             StringComparison.Ordinal)))
+        {
+            var code = WithStringsBlanked(WithoutComments(File.ReadAllText(file)));
+            foreach (var (type, arguments) in ConfigDirConstructions(code, storeSeams))
+            {
+                storesScanned++;
+                if (LeavesConfigDirAtItsDefault(arguments, storeSeams[type], stores[type].Parameter))
+                    leaks.Add($"{Path.GetFileName(file)}: new {type}({string.Join(", ", arguments)}) leaves out "
+                              + stores[type].Parameter);
+            }
+        }
+        Assert.True(storesScanned >= 13,
+            $"only {storesScanned} constructions of those types were found in the tests, and 15 "
+            + "were measured. The match stopped working, so the store half would pass while checking nothing.");
         Assert.True(leaks.Count == 0,
             "These tests build a type over the REAL profile folder, %LocalAppData%\\SysManager: its configDir is left "
             + "at the default. Pass a temp folder, as the other tests of each type do (#2555):\n  "
@@ -242,6 +281,8 @@ public partial class ArchitectureTests
     [InlineData("PerformanceService? service = new(runner, restore, dir)", false)]
     [InlineData("private readonly SpeedTestHistoryService _history = new()", true)]
     [InlineData("private SpeedTestHistoryService History { get; } = new(dir)", false)]
+    [InlineData("new ResourceHistoryService(sys, temps, gpu: gpu)", true)]   // a named argument in configDir's place (#2742)
+    [InlineData("new ResourceHistoryService(sys, temps, dir, gpu: gpu)", false)]
     public void TheConfigDirScan_JudgesEachConstructionByTheOverloadItBindsTo(string construction, bool leaks)
     {
         // Proves the guard above from both sides, against the real overloads reflection finds: a construction that
@@ -252,6 +293,28 @@ public partial class ArchitectureTests
         var (type, arguments) = Assert.Single(ConfigDirConstructions(WithStringsBlanked(construction), seams));
 
         Assert.Equal(leaks, LeavesConfigDirAtItsDefault(arguments, seams[type]));
+    }
+
+    [Theory]
+    [InlineData("new ServicesViewModel(ps)", true)]
+    [InlineData("new ServicesViewModel(new Services.PowerShellRunner())", true)]
+    [InlineData("new ServicesViewModel(ps, readServices: () => list)", true)]
+    [InlineData("new ServicesViewModel(ps, ledger: null)", true)]
+    [InlineData("new ServicesViewModel(ps, ledger)", false)]
+    [InlineData("new ServicesViewModel(ps, ledger: new ServiceStartupLedgerService(dir), readServices: () => list)", false)]
+    [InlineData("private static ServicesViewModel NewVm() => new(ps)", true)]
+    [InlineData("private static ServicesViewModel NewVm() => new(ps, ledger ?? NewLedger())", false)]
+    public void TheStoreScan_JudgesAStoreLeftOutAsTheRealProfile(string construction, bool leaks)
+    {
+        // The store half from both sides (#2742): the startup ledger left out, or null, is built over the real
+        // profile, and one given, by position or by name, is not.
+        var stores = StoreSeams();
+        var seams = stores.ToDictionary(s => s.Key, s => s.Value.Overloads);
+
+        var (type, arguments) = Assert.Single(ConfigDirConstructions(WithStringsBlanked(construction), seams));
+
+        Assert.Equal("ledger", stores[type].Parameter);
+        Assert.Equal(leaks, LeavesConfigDirAtItsDefault(arguments, seams[type], stores[type].Parameter));
     }
 
     [Fact]
@@ -367,20 +430,62 @@ public partial class ArchitectureTests
     /// folders another way, as <c>ProfileService(local, roaming)</c> is, and is left alone.
     /// </remarks>
     private static bool LeavesConfigDirAtItsDefault(
-        IReadOnlyList<string> arguments, IReadOnlyList<(int Required, int Total, int At, bool TakesAString)> overloads)
+        IReadOnlyList<string> arguments, IReadOnlyList<(int Required, int Total, int At, bool TakesAString)> overloads,
+        string parameter = "configDir")
     {
-        var named = arguments.FirstOrDefault(a => ConfigDirNamedArgument().IsMatch(a));
+        var named = arguments.FirstOrDefault(a => Regex.IsMatch(a, $@"^{Regex.Escape(parameter)}\s*:"));
         if (named is not null) return IsNullValue(named[(named.IndexOf(':') + 1)..]);
 
+        // Only the arguments before the first named one bind by position, so a named argument of another parameter
+        // in the parameter's place does not stand in for it.
+        var positional = arguments.TakeWhile(a => !NamedArgument().IsMatch(a)).Count();
         var fits = overloads.Where(o => o.Required <= arguments.Count && arguments.Count <= o.Total).ToList();
         if (fits.Count == 0 || fits.Any(o => o.At < 0 && o.TakesAString)) return false;
-        return fits.All(o => o.At < 0 || arguments.Count <= o.At || IsNullValue(arguments[o.At]));
+        return fits.All(o => o.At < 0 || positional <= o.At || IsNullValue(arguments[o.At]));
     }
+
+    /// <summary>A call to <c>LogService.Init(</c>, up to its opening parenthesis.</summary>
+    [GeneratedRegex(@"\bLogService\.Init\s*\(")]
+    private static partial Regex LogInitCall();
+
+    /// <summary>An argument given by name, e.g. <c>readServices: () =&gt; list</c>, but not <c>global::X</c>.</summary>
+    [GeneratedRegex(@"^\s*[A-Za-z_]\w*\s*:(?!:)")]
+    private static partial Regex NamedArgument();
 
     private static bool IsNullValue(string argument) => argument.Trim() is "null" or "null!" or "default";
 
-    [GeneratedRegex(@"^configDir\s*:")]
-    private static partial Regex ConfigDirNamedArgument();
+    /// <summary>
+    /// Every type in the app whose constructor takes one of the <see cref="ConfigDirSeams"/> stores as an optional
+    /// parameter, with that parameter's name and all of its constructors, shaped as <see cref="ConfigDirSeams"/>
+    /// shapes them: left out, the type builds the store over the real profile itself (#2742).
+    /// </summary>
+    private static Dictionary<string, (string Parameter, List<(int Required, int Total, int At, bool TakesAString)> Overloads)>
+        StoreSeams()
+    {
+        var stores = ConfigDirSeams().Keys.ToHashSet(StringComparer.Ordinal);
+        return AppAssembly.GetTypes()
+            .Select(t => (Type: t, Constructors: t
+                .GetConstructors(BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic)
+                .Select(c => c.GetParameters())
+                .ToList()))
+            .Select(x => (x.Type, x.Constructors, Store: x.Constructors.SelectMany(ps => ps)
+                .FirstOrDefault(p => p.IsOptional && stores.Contains(p.ParameterType.Name))))
+            // A type that takes a configDir builds its stores there, and the configDir half judges it.
+            .Where(x => x.Store?.Name is not null && !stores.Contains(x.Type.Name))
+            .GroupBy(x => x.Type.Name)
+            .ToDictionary(g => g.Key, g =>
+            {
+                var parameter = g.First().Store!.Name!;
+                return (parameter, g
+                    .SelectMany(x => x.Constructors)
+                    .Select(ps => (
+                        Required: ps.Count(p => !p.IsOptional),
+                        Total: ps.Length,
+                        At: Array.FindIndex(ps, p => p.Name == parameter),
+                        TakesAString: false))
+                    .ToList());
+            });
+    }
 
     /// <summary>
     /// The top-level arguments of the call whose opening parenthesis is at <paramref name="open"/>, or null when it
@@ -528,6 +633,12 @@ public partial class ArchitectureTests
     /// <c>DiskAnalyzerViewModelTests</c> did exactly that outside the collection. So the view models that
     /// take the lock are read from their own sources, and running a command on one counts as touching it.
     /// </para>
+    /// <para>
+    /// Per class, not per file, and by the view model's type rather than one spelling of building it (#2742). A
+    /// file passed when the attribute sat anywhere in it, which <c>DismResultParsingTests</c> records was once the
+    /// neighbouring class; and only <c>new X(</c> counted, so a target-typed <c>new(...)</c> or a helper typed as
+    /// the view model did not. The activity log is the fifth static, replaced through <c>ActivityLogScope</c>.
+    /// </para>
     /// </remarks>
     [Fact]
     public void ProcessWideStaticUsers_AreInTheSerializedCollection()
@@ -540,6 +651,8 @@ public partial class ArchitectureTests
             ("new DialogAnswer(", "DialogService.Instance (via the DialogAnswer helper)"),
             ("OperationLockService.Instance", "OperationLockService.Instance"),
             ("AdminHelper.ForceElevation(", "AdminHelper.ElevationProbe"),
+            ("ActivityLogService.Instance =", "ActivityLogService.Instance"),
+            ("new ActivityLogScope(", "ActivityLogService.Instance (via the ActivityLogScope helper)"),
         ];
 
         // A test can also reach the operation lock without naming it, by running a command on a view model
@@ -565,27 +678,30 @@ public partial class ArchitectureTests
         foreach (var file in Directory.GetFiles(testDir, "*.cs"))
         {
             var name = Path.GetFileName(file);
-            // The helper itself, this test, and the collection definitions are not test classes.
-            if (name is "DialogAnswer.cs" or "ArchitectureTests.cs" or "TestCollections.cs") continue;
+            // The helpers themselves, the assembly's own setup, this test, and the collection definitions are not
+            // test classes.
+            if (name is "DialogAnswer.cs" or "ActivityLogScope.cs" or "TestAssemblyInit.cs" or "ArchitectureTests.cs"
+                or "TestCollections.cs") continue;
 
-            var source = File.ReadAllText(file);
-
-            var touched = watched.Where(w => source.Contains(w.Marker, StringComparison.Ordinal))
-                                 .Select(w => w.What)
-                                 .ToList();
-            if (ExecutesACommand().IsMatch(source))
+            foreach (var (className, attributes, body) in TopLevelClasses(WithoutComments(File.ReadAllText(file))))
             {
-                touched.AddRange(lockTakers
-                    .Where(vm => source.Contains($"new {vm}(", StringComparison.Ordinal))
-                    .Select(vm => $"OperationLockService.Instance (through {vm}'s commands)"));
+                var touched = watched.Where(w => body.Contains(w.Marker, StringComparison.Ordinal))
+                                     .Select(w => w.What)
+                                     .ToList();
+                if (ExecutesACommand().IsMatch(body))
+                {
+                    touched.AddRange(lockTakers
+                        .Where(vm => Regex.IsMatch(body, $@"\b{vm}\b"))
+                        .Select(vm => $"OperationLockService.Instance (through {vm}'s commands)"));
+                }
+
+                touched = touched.Distinct().ToList();
+                if (touched.Count == 0) continue;
+
+                inspected++;
+                if (!attributes.Contains("[Collection(\"ProcessWideStatics\")]", StringComparison.Ordinal))
+                    offenders.Add($"{name} · {className} — touches {string.Join(", ", touched)}");
             }
-
-            touched = touched.Distinct().ToList();
-            if (touched.Count == 0) continue;
-
-            inspected++;
-            if (!source.Contains("[Collection(\"ProcessWideStatics\")]", StringComparison.Ordinal))
-                offenders.Add($"{name} — touches {string.Join(", ", touched)}");
         }
 
         // Vacuity floor: if the markers stopped matching, this would pass while inspecting nothing.
@@ -599,6 +715,29 @@ public partial class ArchitectureTests
             + "state another test owns, and pass or fail for a foreign reason. Add "
             + "[Collection(\"ProcessWideStatics\")]:\n  " + string.Join("\n  ", offenders));
     }
+
+    /// <summary>
+    /// Each class declared at the top of a test file, with the attribute lines just above it and its body up to the
+    /// next one, so a check reads a class's own attributes rather than the file's.
+    /// </summary>
+    private static IEnumerable<(string Name, string Attributes, string Body)> TopLevelClasses(string source)
+    {
+        var lines = source.Split('\n');
+        var starts = Enumerable.Range(0, lines.Length).Where(i => TopLevelClass().IsMatch(lines[i])).ToList();
+        for (var k = 0; k < starts.Count; k++)
+        {
+            var at = starts[k];
+            var above = at;
+            while (above > 0 && (lines[above - 1].StartsWith('[') || lines[above - 1].Trim().Length == 0)) above--;
+            var end = k + 1 < starts.Count ? starts[k + 1] : lines.Length;
+            yield return (TopLevelClass().Match(lines[at]).Groups["name"].Value,
+                string.Join('\n', lines[above..at]), string.Join('\n', lines[at..end]));
+        }
+    }
+
+    /// <summary>A class declared at the top of a file-scoped namespace, e.g. <c>public sealed class Foo : IDisposable</c>.</summary>
+    [GeneratedRegex(@"^(?:(?:public|internal|sealed|static|abstract|partial)\s+)*class\s+(?<name>\w+)")]
+    private static partial Regex TopLevelClass();
 
     /// <summary>
     /// Every static method that RESOLVES a user-data path must let the caller redirect it.
@@ -3822,6 +3961,11 @@ public partial class ArchitectureTests
     /// exception. The sibling of <see cref="EveryDisposedCancellationSource_IsCancelledFirst"/>, and the
     /// same class of half-migration — the correct shape existed in three types while six others, two of
     /// them view models disposed on every tab close, had no flag at all.
+    /// <para>The flag counts where the gate is released, not where it is declared: a word anywhere in the file
+    /// satisfied this, and <c>PerformanceService</c> had the flag for <c>Dispose</c> alone, so its seven
+    /// releases threw out of their <c>finally</c> blocks when a powercfg call was still running at exit
+    /// (#2742). Each release has the flag or a catch of <see cref="ObjectDisposedException"/> within a few
+    /// lines of it, comments aside, or sits in <c>Dispose</c> itself, before the gate goes.</para>
     /// </summary>
     [Fact]
     public void EveryTypeThatDisposesAGate_TracksItsOwnDisposal()
@@ -3829,6 +3973,7 @@ public partial class ArchitectureTests
         var appDir = TestPaths.AppProject();
         var offenders = new List<string>();
         var checkedTypes = 0;
+        var releasesChecked = 0;
 
         foreach (var file in Directory.GetFiles(Path.Combine(appDir, "Services"), "*.cs")
                      .Concat(Directory.GetFiles(Path.Combine(appDir, "ViewModels"), "*.cs")))
@@ -3847,12 +3992,32 @@ public partial class ArchitectureTests
             if (!source.Contains("_disposed", StringComparison.Ordinal)
                 && !source.Contains("IsDisposed", StringComparison.Ordinal))
                 offenders.Add($"{Path.GetFileName(file)} · disposes {string.Join(", ", fields)} with no disposal flag");
+
+            var lines = source.Split('\n').Select(line => CommentTail().Replace(line, "")).ToArray();
+            foreach (var field in fields)
+            {
+                for (var i = 0; i < lines.Length; i++)
+                {
+                    if (!lines[i].Contains($"{field}.Release()", StringComparison.Ordinal)) continue;
+                    releasesChecked++;
+                    var near = string.Join("\n", lines[Math.Max(0, i - 3)..Math.Min(lines.Length, i + 3)]);
+                    if (near.Contains("_disposed", StringComparison.Ordinal)
+                        || near.Contains("IsDisposed", StringComparison.Ordinal)
+                        || near.Contains("ObjectDisposedException", StringComparison.Ordinal)
+                        || EnclosingMember(lines, i).Contains(" Dispose(", StringComparison.Ordinal))
+                        continue;
+                    offenders.Add($"{Path.GetFileName(file)}:{i + 1} · {field}.Release() with no disposal check beside it");
+                }
+            }
         }
 
         // Vacuity floor: if the declaration regex stopped matching, this would inspect nothing and pass.
         Assert.True(checkedTypes >= 10,
             $"Expected at least 10 types that dispose a gate, found {checkedTypes} — the detection is "
             + "probably no longer matching the field declarations.");
+        Assert.True(releasesChecked >= 15,
+            $"Expected at least 15 releases of those gates, found {releasesChecked} — the release search is "
+            + "probably no longer matching.");
 
         Assert.True(offenders.Count == 0,
             "These types dispose a SemaphoreSlim without tracking disposal, so an operation still inside "
@@ -3864,6 +4029,19 @@ public partial class ArchitectureTests
     /// <summary>A field declared as a gate, e.g. <c>private readonly SemaphoreSlim _gate = new(1, 1);</c>.</summary>
     [GeneratedRegex(@"SemaphoreSlim\??\s+(_[A-Za-z]\w*)", RegexOptions.Compiled)]
     private static partial Regex GateFieldDeclaration();
+
+    /// <summary>
+    /// The declaration of the member line <paramref name="index"/> sits in: the nearest
+    /// <see cref="MemberDeclaration"/> above it.
+    /// </summary>
+    private static string EnclosingMember(string[] lines, int index)
+    {
+        for (var i = index; i >= 0; i--)
+        {
+            if (MemberDeclaration().IsMatch(lines[i])) return lines[i];
+        }
+        return "";
+    }
 
     /// <summary>
     /// Every place that sends a user somewhere to ask a question must deep-link the Q&amp;A category,

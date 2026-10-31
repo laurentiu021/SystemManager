@@ -187,6 +187,33 @@ public class UninstallerViewModelGateTests
         vm.FilterText = "";    // back to empty (the SelectAll guard requires empty filter)
     }
 
+    // ── a scan that does not finish leaves the list before it (#2729) ──────
+    //
+    // The grid was cleared before the query, so a scan cancelled or failed left it empty while the count still
+    // described the apps before it, and Select all and Uninstall had nothing to act on.
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task AScanThatDoesNotFinish_LeavesTheListTheCountAndTheTicksAsTheyWere(bool cancelled)
+    {
+        var runner = Substitute.For<IPowerShellRunner>();
+        runner.RunProcessAsync("winget", Arg.Any<string>(), Arg.Any<CancellationToken>(), Arg.Any<System.Text.Encoding?>())
+              .Returns(cancelled ? Task.FromCanceled<int>(new CancellationToken(canceled: true)) : Task.FromResult(1));
+        var vm = NewVm(runner);
+        Seed(vm, 3);
+        vm.FilteredApps[1].IsSelected = true;
+        var rows = vm.FilteredApps.ToList();
+
+        await vm.ScanCommand.ExecuteAsync(null);
+
+        if (cancelled) Assert.Equal("Scan cancelled.", vm.StatusMessage);
+        else Assert.StartsWith("Error: ", vm.StatusMessage, StringComparison.Ordinal);
+        Assert.Equal(rows, vm.FilteredApps);
+        Assert.True(vm.FilteredApps[1].IsSelected);
+        Assert.Equal(3, vm.AppCount);
+    }
+
     // ── UninstallSelected (permanent, non-undoable batch removal) ─────────
 
     [Fact]

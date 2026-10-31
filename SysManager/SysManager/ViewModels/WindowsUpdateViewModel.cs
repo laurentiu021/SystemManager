@@ -378,9 +378,18 @@ public sealed partial class WindowsUpdateViewModel : ViewModelBase
     {
         IsBusy = true;
         IsProgressIndeterminate = true;
+        // The rows of a list stay until the new list arrives. They were cleared here, so a scan cancelled or failed
+        // left an empty grid while the count, the summary and Select all still described the list before it (#2729).
+        // The history's rows are not a list of updates, so they go.
+        if (IsShowingHistory)
+        {
+            Updates.Clear();
+            UpdateCount = 0;
+            TableSummary = "";
+            AllSelected = false;
+        }
         IsShowingHistory = false;
         StatusMessage = "Scanning for available Windows Updates…";
-        Updates.Clear();
         ShowConsole = false;
         _cts?.Dispose();
         _cts = new CancellationTokenSource();
@@ -392,8 +401,7 @@ public sealed partial class WindowsUpdateViewModel : ViewModelBase
             // Matched by the Windows Update id, which stays the same for an update between scans.
             SelectionCarry.Apply(_listed, fresh, u => u.UpdateId, StringComparer.OrdinalIgnoreCase);
             _listed = fresh;
-            foreach (var u in fresh)
-                Updates.Add(u);
+            Updates.ReplaceWith(fresh);
 
             UpdateCount = Updates.Count;
             // The header checkbox follows the rows, which keep what the user unticked, without re-applying to them.

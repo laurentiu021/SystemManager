@@ -83,10 +83,14 @@ public sealed partial class DuplicateFileViewModel : ViewModelBase
     [NotifyPropertyChangedFor(nameof(EmptyMessage))]
     private DuplicateFileService.ScanFailure _lastFailure;
 
-    public string EmptyTitle => LastFailure != DuplicateFileService.ScanFailure.None
+    // While a scan runs it says so: the verdicts below describe a finished scan, and the first scan, or one after a
+    // scan that found nothing, showed one of them for as long as the scan took (#2729).
+    public string EmptyTitle => IsBusy ? ScanningLabel
+        : LastFailure != DuplicateFileService.ScanFailure.None
         ? CouldNotScanTitle
         : HasScanned ? "No duplicates found" : "No scan yet";
-    public string EmptyMessage => LastFailure != DuplicateFileService.ScanFailure.None
+    public string EmptyMessage => IsBusy ? "Looking for files with identical content in the selected folder."
+        : LastFailure != DuplicateFileService.ScanFailure.None
         ? DescribeFailure(LastFailure)
         : HasScanned
             ? "No files with identical content in the selected folder."
@@ -117,6 +121,12 @@ public sealed partial class DuplicateFileViewModel : ViewModelBase
     {
         _service = service;
         _dialog = dialog ?? DialogService.Instance;
+        PropertyChanged += (_, e) =>
+        {
+            if (e.PropertyName != nameof(IsBusy)) return;
+            OnPropertyChanged(nameof(EmptyTitle));
+            OnPropertyChanged(nameof(EmptyMessage));
+        };
         // Resolve known-folder paths + probe drives off the UI thread: DriveInfo.IsReady can stall on
         // a disconnected mapped/removable volume. This tab is LAZY — NavItem.ContentFactory builds it
         // on first open, not at startup (the eager set is Dashboard, DarkMode and About; see the list
@@ -181,10 +191,8 @@ public sealed partial class DuplicateFileViewModel : ViewModelBase
         StatusMessage = ScanningLabel;
         LastFailure = DuplicateFileService.ScanFailure.None;
         _onlineOnlySkipped = 0;
-        Groups.Clear();
-        TotalWasted = 0;
-        GroupCount = 0;
-        DuplicateFileCount = 0;
+        // The groups and their counts stay until the scan answers. They were cleared here, so a scan cancelled or
+        // failed left an empty list under "No duplicates found" (#2729).
 
         try
         {
@@ -196,7 +204,9 @@ public sealed partial class DuplicateFileViewModel : ViewModelBase
 
             if (scan.Failure != DuplicateFileService.ScanFailure.None)
             {
-                // Not a scan: nothing says it completed, and nothing says no duplicates were found (#2823).
+                // Not a scan: nothing says it completed, and nothing says no duplicates were found (#2823). What an
+                // earlier scan listed goes, since it is not about the folder that could not be scanned.
+                ClearResults();
                 LastFailure = scan.Failure;
                 ScanSummary = CouldNotScanTitle + ".";
                 StatusMessage = $"{CouldNotScanTitle}. {DescribeFailure(scan.Failure)}";
@@ -247,6 +257,14 @@ public sealed partial class DuplicateFileViewModel : ViewModelBase
 
     /// <summary>The status line while a scan is starting, and the fallback if a report carries no phase.</summary>
     private const string ScanningLabel = "Scanning…";
+
+    private void ClearResults()
+    {
+        Groups.Clear();
+        TotalWasted = 0;
+        GroupCount = 0;
+        DuplicateFileCount = 0;
+    }
 
     /// <summary>
     /// Applies one progress report: the phase to the announced status line, the counts and current file to

@@ -209,6 +209,88 @@ public class DiskAnalyzerViewModelTests
         }
     }
 
+    // ---------- an analysis that does not finish leaves the one before it (#2729) ----------
+    //
+    // The folders were cleared before the analysis, so a cancelled one left an empty list under "Nothing to show".
+
+    [Fact]
+    public async Task AnAnalysisThatIsCancelled_LeavesTheFoldersAndTheirTotalsAsTheyWere()
+    {
+        var dir = Path.Combine(Path.GetTempPath(), "SysManagerTests", Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(Path.Combine(dir, "Photos"));
+        File.WriteAllBytes(Path.Combine(dir, "Photos", "one.jpg"), new byte[2048]);
+        try
+        {
+            var endEarly = false;
+            var service = new DiskAnalyzerService(
+                folder => endEarly ? throw new OperationCanceledException() : Directory.GetDirectories(folder));
+            var vm = new DiskAnalyzerViewModel(service, new DiskScanHistoryService(Path.Combine(Path.GetTempPath(),
+                "SysManagerDiskHistVm_" + Guid.NewGuid().ToString("N"))), TempPreferences());
+            await vm.InitializationComplete;
+            vm.SelectedPath = dir;
+            await vm.AnalyzeCommand.ExecuteAsync(null);
+            var entries = vm.Entries.ToList();
+            Assert.NotEmpty(entries);   // the premise: a result to keep
+            var totals = (vm.EntryCount, vm.TotalSize, vm.TotalFiles, vm.ScanSummary, vm.TrendSummary);
+
+            endEarly = true;
+            await vm.AnalyzeCommand.ExecuteAsync(null);
+
+            Assert.Equal("Analysis cancelled.", vm.StatusMessage);
+            Assert.Equal(entries, vm.Entries);
+            Assert.Equal(totals, (vm.EntryCount, vm.TotalSize, vm.TotalFiles, vm.ScanSummary, vm.TrendSummary));
+        }
+        finally
+        {
+            Directory.Delete(dir, recursive: true);
+        }
+    }
+
+    [Fact]
+    public async Task AFolderThatCannotBeMeasured_AfterAnAnalysis_SaysWhy_InPlaceOfTheFoldersBefore()
+    {
+        // Not an analysis that ended early: an answer about the folder asked for, which the earlier folders are not.
+        var dir = Path.Combine(Path.GetTempPath(), "SysManagerTests", Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(Path.Combine(dir, "Photos"));
+        File.WriteAllBytes(Path.Combine(dir, "Photos", "one.jpg"), new byte[2048]);
+        try
+        {
+            var vm = NewVm();
+            vm.SelectedPath = dir;
+            await vm.AnalyzeCommand.ExecuteAsync(null);
+            Assert.NotEmpty(vm.Entries);
+
+            vm.SelectedPath = Path.Combine(dir, "no such folder");
+            await vm.AnalyzeCommand.ExecuteAsync(null);
+
+            Assert.Empty(vm.Entries);
+            Assert.Equal((0, 0L, 0, ""), (vm.EntryCount, vm.TotalSize, vm.TotalFiles, vm.TrendSummary));
+            Assert.Equal("This folder could not be measured", vm.EmptyTitle);
+        }
+        finally
+        {
+            Directory.Delete(dir, recursive: true);
+        }
+    }
+
+    [Fact]
+    public void WhileAnAnalysisRuns_TheEmptyStateSaysSo_RatherThanAVerdict()
+    {
+        var vm = NewVm();
+        var raised = vm.RecordPropertyChanges();
+
+        vm.IsBusy = true;
+
+        Assert.Equal("Analyzing…", vm.EmptyTitle);
+        Assert.DoesNotContain("Pick a folder", vm.EmptyMessage, StringComparison.Ordinal);
+        Assert.Contains(nameof(vm.EmptyTitle), raised);
+        Assert.Contains(nameof(vm.EmptyMessage), raised);
+
+        vm.IsBusy = false;
+
+        Assert.Equal("No results yet", vm.EmptyTitle);
+    }
+
     [Fact]
     public void HasScanned_RaisesChangeNotificationsForTheEmptyStateText()
     {

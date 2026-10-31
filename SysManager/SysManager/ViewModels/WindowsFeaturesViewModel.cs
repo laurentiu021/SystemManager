@@ -77,7 +77,8 @@ public sealed partial class WindowsFeaturesViewModel : ElevatedViewModelBase
         IsScanning = true;
         IsProgressIndeterminate = true;
         StatusMessage = "Querying Windows optional features…";
-        FilteredFeatures.Clear();
+        // The list stays until the new one arrives. It was cleared here, so a scan cancelled or refused left an empty
+        // grid while the counts still described the features before it (#2729).
         _scanCts?.Cancel();
         _scanCts?.Dispose();
         _scanCts = new CancellationTokenSource();

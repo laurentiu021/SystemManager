@@ -67,9 +67,13 @@ public sealed partial class AppUpdatesViewModel : ViewModelBase
     [NotifyPropertyChangedFor(nameof(EmptyMessage))]
     private string? _scanFailure;
 
-    public string EmptyTitle => ScanFailure is not null ? CheckFailedTitle
+    // While a check runs it says so: the verdicts below describe a finished check, and the first check, or one after
+    // a check that found nothing, showed one of them for as long as winget took (#2729).
+    public string EmptyTitle => IsBusy ? "Checking for updates…"
+        : ScanFailure is not null ? CheckFailedTitle
         : HasScanned ? "No updates available" : "Not scanned yet";
-    public string EmptyMessage => ScanFailure
+    public string EmptyMessage => IsBusy ? "winget is looking for newer versions of your apps."
+        : ScanFailure
         ?? (HasScanned ? "All detected packages are up to date." : "Run a check to scan for winget upgrades.");
 
     public AppUpdatesViewModel(IWingetService winget)
@@ -127,6 +131,8 @@ public sealed partial class AppUpdatesViewModel : ViewModelBase
         if (e.PropertyName != nameof(IsBusy)) return;
         ScanCommand.NotifyCanExecuteChanged();
         UpgradeSelectedCommand.NotifyCanExecuteChanged();
+        OnPropertyChanged(nameof(EmptyTitle));
+        OnPropertyChanged(nameof(EmptyMessage));
     }
 
     [RelayCommand]
@@ -150,11 +156,11 @@ public sealed partial class AppUpdatesViewModel : ViewModelBase
         StatusMessage = "Querying winget...";
         ScanFailure = null;
 
-        // Snapshot the user's ticks BEFORE the list is cleared below — after that there is nothing left to
-        // read them from.
+        // The rows stay until the new list arrives. They were cleared here, so a check cancelled or failed left an
+        // empty list, the next check carried the ticks from nothing, as on a first check, and a package the user had
+        // unticked came back ticked for Upgrade selected (#2729).
         var previous = Packages.ToList();
 
-        Packages.Clear();
         _cts?.Dispose();
         _cts = new CancellationTokenSource();
         _winget.LineReceived += _lineHandler; // op-scoped subscription (see constructor note)

@@ -138,7 +138,9 @@ public sealed partial class UninstallerViewModel : ViewModelBase
         IsBusy = true;
         IsProgressIndeterminate = true;
         StatusMessage = "Querying winget list…";
-        FilteredApps.Clear();
+        // The list stays until the new one arrives. It was cleared here, so a scan cancelled or failed left an empty
+        // grid while the count and the summary still described the apps before it, and Select all and Uninstall
+        // then had nothing to act on (#2729).
         _cts?.Dispose();
         _cts = new CancellationTokenSource();
 

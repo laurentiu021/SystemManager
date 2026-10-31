@@ -970,12 +970,14 @@ Key services:
   groups, or why the chosen folder could not be scanned at all (`NotFound`, `IsLink`, `Unreadable`,
   `Excluded`), so a failure is never an empty scan, as with `DiskAnalyzerService`'s `Analysis` (#2823). The
   full hash asks the handle it reads for its `FileIdentity` and skips another name of a file already
-  hashed, so a hard link is not a duplicate.
+  hashed, so a hard link is not a duplicate. An internal constructor takes the file and folder listings, so a
+  test decides what a scan finds or ends it partway.
 - `DiskAnalyzerService` — folder-level space breakdown with progress
   reporting and system-path skipping. `AnalyzeAsync` returns an `Analysis`: the folders,
   or why the chosen one could not be measured at all (`NotFound`, `IsLink`, `Unreadable`),
   so a failure is never an empty scan. `LooseFilesName` names the entry for files loose in the
-  folder, which the drill-in and the map both treat as not a folder.
+  folder, which the drill-in and the map both treat as not a folder. An internal constructor takes the
+  top-level listing, so a test decides what an analysis finds or ends it partway.
 - `ProcessManagerService` — enumerate running processes, kill by PID,
   open file location. Each new row's description is read through `Helpers/FileDescription`, from the file the
   program was started from, which a file renamed or moved since cannot give: that row has none, rather than

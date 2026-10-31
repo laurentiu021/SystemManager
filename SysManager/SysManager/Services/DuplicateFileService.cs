@@ -124,7 +124,19 @@ public sealed class DuplicateFileService
         long minSizeBytes = DefaultMinSize,
         IProgress<ScanProgress>? progress = null,
         CancellationToken ct = default)
-        => Task.Run(() => Scan(rootPath, minSizeBytes, progress, ct, ListFiles, Directory.GetDirectories), ct);
+        => Task.Run(() => Scan(rootPath, minSizeBytes, progress, ct, _listFiles, _listDirectories), ct);
+
+    private readonly Func<string, FileInfo[]> _listFiles;
+    private readonly Func<string, string[]> _listDirectories;
+
+    public DuplicateFileService() : this(ListFiles, Directory.GetDirectories) { }
+
+    /// <summary>Scans through the listings given, so a test decides what a scan finds, or how it ends.</summary>
+    internal DuplicateFileService(Func<string, FileInfo[]> listFiles, Func<string, string[]> listDirectories)
+    {
+        _listFiles = listFiles;
+        _listDirectories = listDirectories;
+    }
 
     // DirectoryInfo.GetFiles, not Directory.GetFiles: it returns FileInfo objects whose attributes and length come from
     // the listing the OS already returned, so the reparse check in the walk is free and there is no second stat per

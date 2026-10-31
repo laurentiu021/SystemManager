@@ -240,6 +240,133 @@ public sealed class PerformanceSnapshotRestartTests
         }
     }
 
+    // ---------- a power plan that is gone (#2716) ----------
+    // The restore switched the recorded plan on first, and powercfg failed for one that was deleted, or whose plans an OEM
+    // tool or powercfg -restoredefaultschemes had reset: the restore stopped there, before every other setting, and
+    // every retry failed the same way. The plans are a seam, so none of the PC running the suite is read.
+
+    private static readonly Guid Balanced = Guid.Parse("381b4222-f694-41f0-9685-ff5bb260df2e");
+    private static readonly Guid HighPerformance = Guid.Parse("8c5e7fda-e8bf-4a96-9a85-a6e23a8c635c");
+
+    /// <summary>The service over <paramref name="dir"/>, with the plans on the PC and the visual-effects write given.</summary>
+    private static PerformanceService ServiceWithPlans(
+        string dir, IPowerShellRunner runner, Func<IReadOnlySet<Guid>?> plans, List<bool> uiEffects) =>
+        new(runner, new RestorePointService(runner), dir, setUiEffects: uiEffects.Add, plansOnThePc: plans);
+
+    private static async Task<string?> RestoreAllAnsweringAsync(PerformanceViewModel vm, bool answer, Action? meanwhile = null)
+    {
+        string? asked = null;
+        var previousDialog = DialogService.Instance;
+        var dialog = Substitute.For<IDialogService>();
+        dialog.Confirm(Arg.Any<string>(), Arg.Any<string>()).Returns(call =>
+        {
+            asked = call.ArgAt<string>(0);
+            meanwhile?.Invoke();
+            return answer;
+        });
+        DialogService.Instance = dialog;
+        try
+        {
+            await vm.RestoreAllCommand.ExecuteAsync(null);
+        }
+        finally
+        {
+            DialogService.Instance = previousDialog;
+        }
+        return asked;
+    }
+
+    [Fact]
+    public async Task RestoreAll_ForAPowerPlanThatIsGone_LeavesItOut_AndPutsTheRestBack()
+    {
+        var dir = CreateTempDirectory();
+        try
+        {
+            var runner = NewRunner();
+            // What powercfg answers for a plan that is not there.
+            runner.RunProcessAsync("powercfg.exe", $"/setactive {Balanced}", Arg.Any<CancellationToken>(),
+                    Arg.Any<System.Text.Encoding?>())
+                .Returns(1);
+            var uiEffects = new List<bool>();
+            using var service = ServiceWithPlans(dir, runner, () => new HashSet<Guid> { HighPerformance }, uiEffects);
+            Assert.True(service.SaveSnapshot(ValidSnapshot()));
+            using var vm = new PerformanceViewModel(service, NoGamingSession());
+            await vm.InitializationComplete;
+            runner.ClearReceivedCalls();
+
+            var asked = await RestoreAllAnsweringAsync(vm, answer: true);
+
+            Assert.Contains("• Power plan → unchanged (Balanced is no longer on this PC)", asked, StringComparison.Ordinal);
+            await runner.DidNotReceive().RunProcessAsync("powercfg.exe", $"/setactive {Balanced}",
+                Arg.Any<CancellationToken>(), Arg.Any<System.Text.Encoding?>());
+            Assert.Equal([true], uiEffects);         // the next setting went back
+            Assert.Null(service.LoadSnapshot());     // and the restore ran to its end
+            Assert.Equal("Original settings restored.", vm.StatusMessage);
+        }
+        finally
+        {
+            Directory.Delete(dir, recursive: true);
+        }
+    }
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]   // the plans could not be listed: switched on, as before
+    public async Task RestoreAll_ForAPowerPlanThatIsThere_OrNotKnown_SwitchesItOn(bool listed)
+    {
+        var dir = CreateTempDirectory();
+        try
+        {
+            var runner = NewRunner();
+            using var service = ServiceWithPlans(dir, runner,
+                () => listed ? new HashSet<Guid> { Balanced, HighPerformance } : null, []);
+            Assert.True(service.SaveSnapshot(ValidSnapshot()));
+            using var vm = new PerformanceViewModel(service, NoGamingSession());
+            await vm.InitializationComplete;
+
+            var asked = await RestoreAllAnsweringAsync(vm, answer: true);
+
+            Assert.Contains($"• Power plan → Balanced ({Balanced})", asked, StringComparison.Ordinal);
+            await runner.Received(1).RunProcessAsync("powercfg.exe", $"/setactive {Balanced}",
+                Arg.Any<CancellationToken>(), Arg.Any<System.Text.Encoding?>());
+            Assert.Null(service.LoadSnapshot());
+        }
+        finally
+        {
+            Directory.Delete(dir, recursive: true);
+        }
+    }
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task RestoreAll_LeavesThePlanAlone_WhenItWasGoneWhenAsked_OrIsGoneByTheTimeItIsRestored(bool thereWhenAsked)
+    {
+        // Gone when the question was asked and back since: the question said it stays as it is, so it does. There when
+        // asked and deleted since: there is nothing to switch on, and the rest still goes back.
+        var dir = CreateTempDirectory();
+        var plans = thereWhenAsked ? new HashSet<Guid> { Balanced } : [HighPerformance];
+        try
+        {
+            var runner = NewRunner();
+            using var service = ServiceWithPlans(dir, runner, () => plans, []);
+            Assert.True(service.SaveSnapshot(ValidSnapshot()));
+            using var vm = new PerformanceViewModel(service, NoGamingSession());
+            await vm.InitializationComplete;
+
+            await RestoreAllAnsweringAsync(vm, answer: true,
+                meanwhile: () => plans = thereWhenAsked ? [HighPerformance] : [Balanced, HighPerformance]);
+
+            await runner.DidNotReceive().RunProcessAsync("powercfg.exe", $"/setactive {Balanced}",
+                Arg.Any<CancellationToken>(), Arg.Any<System.Text.Encoding?>());
+            Assert.Null(service.LoadSnapshot());
+        }
+        finally
+        {
+            Directory.Delete(dir, recursive: true);
+        }
+    }
+
     [Fact]
     public async Task RestoreAll_ForAPlanTheRecordCouldNotRead_SaysItIsUnchanged()
     {

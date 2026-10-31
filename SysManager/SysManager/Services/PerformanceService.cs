@@ -38,6 +38,7 @@ public sealed partial class PerformanceService : IDisposable
     private readonly Func<System.Diagnostics.Process, bool> _trimWorkingSet;
     private readonly Func<string, RecordedAdapter> _findAdapter;
     private readonly Func<IReadOnlySet<string>?> _presentAdapters;
+    private readonly Func<IReadOnlySet<Guid>?> _plansOnThePc;
     private readonly Func<bool, (bool Found, bool Ok)> _writeGpu;
     private readonly Action<bool> _setUiEffects;
     private readonly Action<bool> _setGameMode;
@@ -107,7 +108,8 @@ public sealed partial class PerformanceService : IDisposable
             setGameMode: SetGameMode,
             setXboxGameBar: SetXboxGameBar,
             restoreGpu: SetGpuMaxPerformance,
-            presentAdapters: PresentAdapterKeys)
+            presentAdapters: PresentAdapterKeys,
+            plansOnThePc: PlansOnThePc)
     {
     }
 
@@ -144,6 +146,10 @@ public sealed partial class PerformanceService : IDisposable
     /// The write that puts the recorded NVIDIA adapter's setting back, by its subkey. Unless given it writes nothing
     /// and says so, so a restore that reaches a card a test did not provide for fails rather than writing this PC's.
     /// </param>
+    /// <param name="plansOnThePc">
+    /// The power plans on the PC, null when not known. Unless given they are not known, so a test reads no plans of the
+    /// PC running it, and a restore switches the recorded plan on as it did.
+    /// </param>
     internal PerformanceService(
         IPowerShellRunner ps,
         RestorePointService restorePoints,
@@ -156,7 +162,8 @@ public sealed partial class PerformanceService : IDisposable
         Action<bool>? setGameMode = null,
         Action<bool, bool>? setXboxGameBar = null,
         Func<string, bool, bool>? restoreGpu = null,
-        Func<IReadOnlySet<string>?>? presentAdapters = null)
+        Func<IReadOnlySet<string>?>? presentAdapters = null,
+        Func<IReadOnlySet<Guid>?>? plansOnThePc = null)
     {
         _ps = ps;
         _restorePoints = restorePoints;
@@ -164,6 +171,7 @@ public sealed partial class PerformanceService : IDisposable
         _processes = processes ?? (() => []);
         _trimWorkingSet = trimWorkingSet ?? TrimWorkingSet;
         _presentAdapters = presentAdapters ?? (() => null);
+        _plansOnThePc = plansOnThePc ?? (() => null);
         _findAdapter = findAdapter ?? (subKey => FindRecordedAdapter(subKey, ReadAdapterNames, _presentAdapters));
         _writeGpu = writeGpu ?? (_ => (Found: false, Ok: false));
         _setUiEffects = setUiEffects ?? (_ => { });
@@ -537,6 +545,73 @@ public sealed partial class PerformanceService : IDisposable
         return listed.Any(l => l.Contains(UltimatePerfScheme, StringComparison.OrdinalIgnoreCase))
             ? UltimatePerfScheme
             : ParsePlanGuidByName(listed, "Ultimate Performance");
+    }
+
+    /// <summary>What has become of the power plan a record names.</summary>
+    internal enum RecordedPlan
+    {
+        /// <summary>Windows still lists it, so it can be switched back on.</summary>
+        Present,
+
+        /// <summary>Windows lists its plans and this one is not among them: deleted, or the plans were reset.</summary>
+        Gone,
+
+        /// <summary>The list could not be read, so whether it is still there is not known.</summary>
+        Unreadable,
+    }
+
+    /// <summary>What has become of the power plan <paramref name="snapshot"/> names, or null when it names none.</summary>
+    /// <remarks>
+    /// What asks before a restore goes through here, and hands the answer to the restore, as it does the NVIDIA card's,
+    /// so the restore does what the question said. The plans are read through the power API rather than powercfg: a
+    /// powercfg read waits behind any other, and Restore All's question has to come up while the tab's own read is
+    /// stuck.
+    /// </remarks>
+    internal RecordedPlan? PlanOf(OriginalSnapshot snapshot) =>
+        string.IsNullOrEmpty(snapshot.PowerPlanGuid) ? null : FindRecordedPlan(snapshot.PowerPlanGuid, _plansOnThePc());
+
+    /// <summary>
+    /// What has become of the plan <paramref name="guid"/> names, among <paramref name="plans"/>, the plans on the PC,
+    /// which are not known when null.
+    /// </summary>
+    internal static RecordedPlan FindRecordedPlan(string guid, IReadOnlySet<Guid>? plans) =>
+        plans is null || !Guid.TryParse(guid, out var plan) ? RecordedPlan.Unreadable
+        : plans.Contains(plan) ? RecordedPlan.Present
+        : RecordedPlan.Gone;
+
+    // The power API's enumeration of the power plans: ACCESS_SCHEME lists the schemes, and ERROR_NO_MORE_ITEMS ends
+    // the list.
+    private const uint AccessScheme = 16;
+    private const uint ErrorNoMoreItems = 259;
+
+    [LibraryImport("powrprof.dll")]
+    private static partial uint PowerEnumerate(
+        IntPtr rootPowerKey, IntPtr schemeGuid, IntPtr subGroupOfPowerSettingsGuid, uint accessFlags, uint index,
+        ref Guid buffer, ref uint bufferSize);
+
+    /// <summary>The GUIDs of the power plans on the PC, the ones <c>powercfg /list</c> shows, or null when Windows
+    /// could not list them.</summary>
+    /// <remarks>
+    /// An empty list is a read that did not work, since Windows always has an active plan, so it is not known rather
+    /// than none: a plan found gone is left out of the restore, and lets the record be deleted.
+    /// </remarks>
+    internal static IReadOnlySet<Guid>? PlansOnThePc()
+    {
+        HashSet<Guid> plans = [];
+        for (uint index = 0; ; index++)
+        {
+            var plan = Guid.Empty;
+            var size = (uint)System.Runtime.CompilerServices.Unsafe.SizeOf<Guid>();
+            var result = PowerEnumerate(IntPtr.Zero, IntPtr.Zero, IntPtr.Zero, AccessScheme, index, ref plan, ref size);
+            if (result == ErrorNoMoreItems) break;
+            if (result != 0)
+            {
+                Log.Debug("The power plans could not be listed (error {Error})", result);
+                return null;
+            }
+            plans.Add(plan);
+        }
+        return plans.Count == 0 ? null : plans;
     }
 
     /// <summary>The first canonical GUID in powercfg output, whatever language its labels are in.</summary>
@@ -1216,16 +1291,27 @@ public sealed partial class PerformanceService : IDisposable
     /// </summary>
     /// <remarks>
     /// The NVIDIA card the snapshot names is taken as <paramref name="card"/> found it — what the question asked before
-    /// the restore said — or looked for now when it is null.
+    /// the restore said — or looked for now when it is null. Its power plan is left alone when <paramref name="plan"/>,
+    /// the question's, found it gone, and when it is gone now.
     /// </remarks>
-    internal async Task RestoreFromSnapshotAsync(OriginalSnapshot snapshot, RecordedAdapter? card, CancellationToken ct = default)
+    internal async Task RestoreFromSnapshotAsync(
+        OriginalSnapshot snapshot, RecordedAdapter? card, RecordedPlan? plan = null, CancellationToken ct = default)
     {
         if (!TryValidateSnapshot(snapshot, out var reason))
             throw new InvalidOperationException($"The saved performance snapshot is invalid: {reason}.");
 
-        // Power plan — restore the exact original plan
+        // Power plan — restore the exact original plan, unless it is gone. Deleted, or the plans reset by
+        // powercfg -restoredefaultschemes or an OEM tool, it could not be switched on, and the restore stopped here,
+        // before every other setting, with every retry failing the same way (#2716). There is nothing to switch back
+        // to then, so it is logged and the rest goes on, as for a graphics card that is gone.
         if (!string.IsNullOrEmpty(snapshot.PowerPlanGuid))
-            await SetActivePlanAsync(snapshot.PowerPlanGuid, ct).ConfigureAwait(false);
+        {
+            if (plan == RecordedPlan.Gone || PlanOf(snapshot) == RecordedPlan.Gone)
+                Log.Warning("Performance restore: the power plan it recorded ({Guid}) is no longer on this PC, so it is "
+                            + "left out", snapshot.PowerPlanGuid);
+            else
+                await SetActivePlanAsync(snapshot.PowerPlanGuid, ct).ConfigureAwait(false);
+        }
 
         // Visual effects
         _setUiEffects(snapshot.UiEffectsEnabled);
@@ -1285,11 +1371,12 @@ public sealed partial class PerformanceService : IDisposable
     /// record where it is, which is what lets it be tried again.
     /// <para>Both pass the NVIDIA card the snapshot names as <paramref name="card"/>, the way their question found it,
     /// so the restore does what that question said: a card it left out is not written to after all, and one it promised
-    /// is. Null looks for the card now.</para>
+    /// is. Null looks for the card now. <paramref name="plan"/> is the power plan, the same way.</para>
     /// </remarks>
-    internal async Task<bool> RestoreOriginalAsync(OriginalSnapshot snapshot, RecordedAdapter? card, CancellationToken ct = default)
+    internal async Task<bool> RestoreOriginalAsync(
+        OriginalSnapshot snapshot, RecordedAdapter? card, RecordedPlan? plan = null, CancellationToken ct = default)
     {
-        await RestoreFromSnapshotAsync(snapshot, card, ct).ConfigureAwait(false);
+        await RestoreFromSnapshotAsync(snapshot, card, plan, ct).ConfigureAwait(false);
         return DeleteSnapshot();
     }
 

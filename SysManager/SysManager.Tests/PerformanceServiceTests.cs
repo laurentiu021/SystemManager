@@ -651,6 +651,34 @@ public class PerformanceServiceTests
     /// The visual-effects write goes into the user's profile as well as the session. With SPIF_SENDCHANGE alone the
     /// change, and a restore of it, lasted until the next sign-out.
     /// </summary>
+    // ── The recorded power plan, among the plans on the PC (#2716) ──
+
+    [Fact]
+    public void ARecordedPlan_IsThere_WhenWindowsListsIt_InAnyLetterCase()
+    {
+        var plans = new HashSet<Guid> { Guid.Parse("381b4222-f694-41f0-9685-ff5bb260df2e") };
+
+        Assert.Equal(PerformanceService.RecordedPlan.Present,
+            PerformanceService.FindRecordedPlan("381B4222-F694-41F0-9685-FF5BB260DF2E", plans));
+    }
+
+    [Fact]
+    public void ARecordedPlan_IsGone_WhenWindowsListsItsPlansWithoutIt()
+    {
+        var plans = new HashSet<Guid> { Guid.Parse("8c5e7fda-e8bf-4a96-9a85-a6e23a8c635c") };
+
+        Assert.Equal(PerformanceService.RecordedPlan.Gone,
+            PerformanceService.FindRecordedPlan("381b4222-f694-41f0-9685-ff5bb260df2e", plans));
+    }
+
+    [Fact]
+    public void ARecordedPlan_IsNotKnown_WhenThePlansCouldNotBeListed()
+    {
+        // Not known is not gone: gone leaves the plan out of the restore and lets the record be deleted.
+        Assert.Equal(PerformanceService.RecordedPlan.Unreadable,
+            PerformanceService.FindRecordedPlan("381b4222-f694-41f0-9685-ff5bb260df2e", plans: null));
+    }
+
     [Fact]
     public void TheVisualEffectsWrite_KeepsTheChangeInTheProfile_AndAnnouncesIt()
     {

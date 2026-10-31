@@ -2085,6 +2085,9 @@ offers, "rate us" prompts:
   Windows still keeps its settings, or its driver removed. That card's setting has nothing to go back
   to, so the question lists it as "unchanged
   (SysManager no longer finds the NVIDIA card this was recorded on)", and every other setting goes back
+- **Restore All finishes even when the power plan it recorded is gone** — deleted, or the plans reset
+  by an OEM tool. There is no plan to switch back to, so the question lists it as "unchanged (… is no
+  longer on this PC)", and every other setting goes back. Undo Changes says the same
 - **The NVIDIA setting and the hibernation toggle need administrator rights**, and so does Restore All
   while the NVIDIA card it recorded is still found: without them it puts back the power plan, visual
   effects, Game Mode and the Xbox settings, then stops at the graphics setting, before the processor

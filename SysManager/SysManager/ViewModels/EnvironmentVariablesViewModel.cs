@@ -674,6 +674,15 @@ public sealed partial class EnvironmentVariablesViewModel : ElevatedViewModelBas
     [RelayCommand]
     private async Task Refresh()
     {
+        // A read replaces the variables and their baseline, so an added variable, a deletion already confirmed or a
+        // PATH reorder not applied yet went with no word, F5 included, even from the value box (#2734).
+        if (PendingChangeCount > 0
+            && !DialogService.Instance.Confirm(UnappliedChanges.Question("Apply"), UnappliedChanges.Title))
+        {
+            StatusMessage = UnappliedChanges.Kept("Apply");
+            return;
+        }
+
         await LoadAsync();
         StatusMessage = "Variables refreshed.";
         Log.Information("Environment: refreshed variable list");

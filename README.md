@@ -246,7 +246,9 @@ process list, the startup entries, the event log, the installed apps. Each tab n
 F5 runs exactly what its own toolbar button runs and nothing else: nothing that cleans, deletes, applies
 or uninstalls is reachable from a bare keypress. On Drivers, Windows Update and Disk Analyzer that is List
 drivers, List updates and Analyze. Pressing it during a refresh that is already running does nothing
-rather than starting a second one.
+rather than starting a second one. Privacy & Telemetry, Notification Blocker, Environment Variables
+and the hosts file on DNS & Hosts keep your changes until you press Apply or Save, so there F5 and
+Refresh ask first when there is a change not made yet, and No keeps it.
 
 **`Delete` in a list does nothing.** A startup program, an app, a variable or a menu entry is removed only
 through its own button and that button's confirmation, so a stray key press never takes a row off a list
@@ -401,6 +403,8 @@ Edit Windows environment variables without the cramped built-in dialog:
   is about to write or delete again first, and when one has changed since the tab read it,
   nothing is applied and the status line names it, so Refresh shows the change before you
   make yours again
+- **Refresh asks before it drops your changes.** Refresh, and F5, read the variables again,
+  so with a change not applied yet they ask first, and No keeps it
 - **Restore backup** puts every variable back to that snapshot and removes the ones added
   since, after a confirmation — the machine-wide ones only as administrator — and **Discard**
   drops the staged changes. A snapshot another program has open just then is said to be
@@ -1441,6 +1445,9 @@ Answers "what is actually using my space?" by listing the biggest files in one p
   Nothing is written until you press **Apply**, and **Discard** keeps this PC as it is.
   When SysManager is not running as administrator, the tab says beforehand how many of
   the changes need it
+- **Refresh asks before it drops your changes.** Refresh, and F5, read the switches again,
+  so with a change not applied yet, including one an imported profile staged, they ask first,
+  and No keeps it
 - Category filter
 - Requires admin for HKLM-backed toggles
 - Fully reversible — switch a toggle back and press **Apply**. Turning one off removes the
@@ -1621,6 +1628,10 @@ Answers "what is actually using my space?" by listing the biggest files in one p
   or an edit in Notepad can change the hosts file while the tab is open. Save reads the file
   again first, and when its entries are no longer the ones the list was read from, nothing is
   written and the tab says so, so Refresh shows the change before you make yours again
+- **Refresh asks before it drops your edits.** Refresh, and F5, read the hosts file again, so
+  with an Add, a Remove or a switch not saved yet they ask first, and No keeps it. The file is
+  read as the tab opens, alongside the DNS query rather than after it, and Add and Remove wait
+  until it has been read
 - **The file keeps its encoding.** A hosts file saved in the system's ANSI code page, as older
   Notepad and many localised tools save it, is written back in it, and a byte order mark stays,
   so a comment with letters outside English keeps them
@@ -1868,7 +1879,8 @@ offers, "rate us" prompts:
 - **Main switch** to silence everything at once (with a clear warning that it
   also mutes calendar and reminder alerts)
 - **Pending-changes flow** — flips stay local until you press Apply, with a
-  confirmation and a Discard to back out
+  confirmation and a Discard to back out. Refresh, and F5, ask before they drop a flip
+  not applied yet
 - Search the list by app name
 - Fully reversible (flip the switch back), per-user, no administrator needed
 

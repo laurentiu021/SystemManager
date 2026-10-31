@@ -61,7 +61,11 @@ public sealed partial class DnsHostsViewModel : ElevatedViewModelBase
 
     // True once the hosts file has been read into HostEntries, and false again when a read fails. Save rewrites
     // the whole file from HostEntries, so a list that did not come from the file would write over every mapping
-    // the file holds (#2521).
+    // the file holds (#2521). Add and Remove wait for it too: an entry added before the first read was replaced
+    // by it (#2734).
+    [ObservableProperty]
+    [NotifyCanExecuteChangedFor(nameof(AddEntryCommand))]
+    [NotifyCanExecuteChangedFor(nameof(RemoveEntryCommand))]
     private bool _hostsRead;
 
     // The entries the list was read from, as HostsFileService.Fingerprint writes them: Save writes only while the file
@@ -112,15 +116,18 @@ public sealed partial class DnsHostsViewModel : ElevatedViewModelBase
     private async Task ReloadHostsAfterPutBackAsync()
     {
         await LoadHostsAsync();
-        if (_hostsRead)
+        if (HostsRead)
             HostsStatus = $"Read again after Undo Changes: {HostEntries.Count} "
                 + $"{(HostEntries.Count == 1 ? "entry" : "entries")}.";
     }
 
     private async Task LoadInitialDataAsync()
     {
-        await RefreshDnsAsync();
+        // The hosts file alongside the DNS query, not after it: the query starts a PowerShell child that can take
+        // seconds, and the list stayed empty until it ended (#2734).
+        var dns = RefreshDnsAsync();
         await LoadHostsAsync();
+        await dns;
     }
 
     private async Task RefreshDnsAsync()
@@ -147,18 +154,18 @@ public sealed partial class DnsHostsViewModel : ElevatedViewModelBase
             var entries = await _hostsService.ReadHostsAsync(_cts.Token).ConfigureAwait(true);
             _loadedFingerprint = HostsFileService.Fingerprint(entries);
             HostEntries.ReplaceWith(entries);
-            _hostsRead = true;
+            HostsRead = true;
             HostsStatus = $"Loaded {entries.Count} entries.";
         }
         catch (OperationCanceledException) { /* expected on view teardown — nothing to report */ }
         catch (UnauthorizedAccessException)
         {
-            _hostsRead = false;
+            HostsRead = false;
             HostsStatus = "Access denied — run as administrator to read hosts file.";
         }
         catch (IOException ex)
         {
-            _hostsRead = false;
+            HostsRead = false;
             HostsStatus = $"Error reading hosts file: {ex.Message}";
             Log.Warning(ex, "Failed to read hosts file");
         }
@@ -552,7 +559,7 @@ public sealed partial class DnsHostsViewModel : ElevatedViewModelBase
 
     // ── Hosts Commands ───────────────────────────────────────────────────
 
-    [RelayCommand]
+    [RelayCommand(CanExecute = nameof(HostsRead))]
     private void AddEntry()
     {
         try
@@ -570,7 +577,7 @@ public sealed partial class DnsHostsViewModel : ElevatedViewModelBase
         }
     }
 
-    [RelayCommand]
+    [RelayCommand(CanExecute = nameof(HostsRead))]
     private void RemoveEntry(HostsEntry? entry)
     {
         if (entry is null) return;
@@ -589,7 +596,7 @@ public sealed partial class DnsHostsViewModel : ElevatedViewModelBase
 
         // Before the confirmation, which would otherwise ask to overwrite the file with a list that is not its
         // content: after a read that failed, "these 0 entries" (#2521).
-        if (!_hostsRead)
+        if (!HostsRead)
         {
             HostsStatus = "The hosts file was not saved: SysManager has not been able to read it, and saving now "
                 + "would remove the entries in it. Press Refresh, and save again once they are listed.";
@@ -740,7 +747,19 @@ public sealed partial class DnsHostsViewModel : ElevatedViewModelBase
     };
 
     [RelayCommand]
-    private Task RefreshHostsAsync() => LoadHostsAsync();
+    private async Task RefreshHostsAsync()
+    {
+        // A read replaces the list, so an Add, a Remove or a switch not saved yet went with no word, F5 included
+        // (#2734). The list differs from the file as last read exactly when one of those is waiting.
+        if (!string.Equals(HostsFileService.Fingerprint(HostEntries), _loadedFingerprint, StringComparison.Ordinal)
+            && !DialogService.Instance.Confirm(UnappliedChanges.Question("Save"), UnappliedChanges.Title))
+        {
+            HostsStatus = UnappliedChanges.Kept("Save");
+            return;
+        }
+
+        await LoadHostsAsync();
+    }
 
 
     // ── Cleanup ──────────────────────────────────────────────────────────

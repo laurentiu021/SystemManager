@@ -4,6 +4,8 @@
 
 using System.Collections.Concurrent;
 using System.IO;
+using CommunityToolkit.Mvvm.Input;
+using SysManager.Helpers;
 using SysManager.Models;
 using SysManager.Services;
 using SysManager.ViewModels;
@@ -355,5 +357,75 @@ public class EnvironmentVariablesViewModelTests : IDisposable
             && e.Attributes().Any(a => a.Name.LocalName == "AutomationProperties.Name"
                                        && a.Value == "New variable scope"));
         Assert.Equal("{Binding NewScopes}", (string?)picker.Attribute("ItemsSource"));
+    }
+
+    // ---------- F5 and Refresh over changes not applied yet (#2734) ----------
+    // A read replaced the variables and their baseline, so an added variable, a deletion already confirmed or a PATH
+    // reorder not applied yet went with no word, and F5 runs Refresh, even from the value box. Over throwaway
+    // registry keys, changed after the first read so a second read is seen.
+
+    private static async Task<EnvironmentVariablesViewModel> WithAVariableAdded(RedirectedEnvironment env)
+    {
+        env.SetUser("SAFE_USER", "before");
+        var vm = new EnvironmentVariablesViewModel(env.Service);
+        await vm.InitializationComplete;
+        vm.NewName = "SAFE_ADDED";
+        vm.NewValue = "added";
+        vm.AddVariableCommand.Execute(null);
+        Assert.Equal(1, vm.PendingChangeCount);
+        env.SetUser("SAFE_USER", "changed since");
+        return vm;
+    }
+
+    private static string ValueOf(EnvironmentVariablesViewModel vm, string name) =>
+        vm.Variables.Single(v => v.Name == name).Value;
+
+    [Fact]
+    public async Task F5_OverAChangeNotAppliedYet_AsksFirst_AndNoKeepsIt()
+    {
+        using var env = new RedirectedEnvironment();
+        var vm = await WithAVariableAdded(env);
+        using var dialog = new DialogAnswer(confirm: false);
+
+        await Assert.IsAssignableFrom<IAsyncRelayCommand>(vm.RefreshOnF5).ExecuteAsync(null);
+
+        Assert.Equal([$"{UnappliedChanges.Title}\n{UnappliedChanges.Question("Apply")}"], dialog.Messages);
+        Assert.Equal("added", ValueOf(vm, "SAFE_ADDED"));
+        Assert.Equal("before", ValueOf(vm, "SAFE_USER"));   // not read again
+        Assert.Equal(1, vm.PendingChangeCount);
+        Assert.Equal(UnappliedChanges.Kept("Apply"), vm.StatusMessage);
+    }
+
+    [Fact]
+    public async Task F5_OverAChangeNotAppliedYet_ReadsAgain_WhenTheUserSaysYes()
+    {
+        using var env = new RedirectedEnvironment();
+        var vm = await WithAVariableAdded(env);
+        using var dialog = new DialogAnswer(confirm: true);
+
+        await Assert.IsAssignableFrom<IAsyncRelayCommand>(vm.RefreshOnF5).ExecuteAsync(null);
+
+        Assert.Equal(1, dialog.Calls);
+        Assert.DoesNotContain(vm.Variables, v => v.Name == "SAFE_ADDED");
+        Assert.Equal("changed since", ValueOf(vm, "SAFE_USER"));
+        Assert.Equal(0, vm.PendingChangeCount);
+        Assert.Equal("Variables refreshed.", vm.StatusMessage);
+        Assert.Null(env.GetUser("SAFE_ADDED"));   // nothing was applied on the way
+    }
+
+    [Fact]
+    public async Task F5_WithNothingPending_ReadsAgain_WithoutAsking()
+    {
+        using var env = new RedirectedEnvironment();
+        env.SetUser("SAFE_USER", "before");
+        var vm = new EnvironmentVariablesViewModel(env.Service);
+        await vm.InitializationComplete;
+        env.SetUser("SAFE_USER", "changed since");
+        using var dialog = new DialogAnswer(confirm: false);
+
+        await Assert.IsAssignableFrom<IAsyncRelayCommand>(vm.RefreshOnF5).ExecuteAsync(null);
+
+        Assert.Equal(0, dialog.Calls);
+        Assert.Equal("changed since", ValueOf(vm, "SAFE_USER"));
     }
 }

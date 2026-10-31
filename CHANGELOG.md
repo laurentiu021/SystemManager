@@ -10,6 +10,24 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.136.53] - 2026-10-31
+
+**Refresh and F5 ask before they throw away changes you have not applied yet.**
+
+### Fixed
+- Privacy & Telemetry, Notification Blocker, Environment Variables and the hosts file on DNS &
+  Hosts keep your changes until you press Apply or Save. Refresh read everything again and
+  dropped those changes without a word, and F5 runs Refresh, even with the cursor in a box.
+  Choices staged from an imported profile could not come back afterwards without importing the
+  profile again. Refresh now asks first when there is a change not made yet, and No keeps every
+  change as it was. This was there since each list could be refreshed with changes waiting:
+  1.6.0 for the hosts file, 1.18.2 for Privacy & Telemetry, 1.22.0 for Environment Variables and
+  1.56.0 for Notification Blocker, and F5 has reached it since 1.86.0.
+- DNS & Hosts read the hosts file only once its DNS query had finished, which can take seconds,
+  and an entry added in that time was replaced when the file was read. The file is now read
+  alongside the query, and Add and Remove wait until it has been read. This was there since the
+  tab was added, in 1.6.0.
+
 ## [1.136.52] - 2026-10-31
 
 **Privacy & Telemetry shows that Apply is working, and writes exactly the changes you confirmed.**

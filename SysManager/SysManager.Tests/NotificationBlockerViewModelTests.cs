@@ -2,7 +2,9 @@
 // Author: laurentiu021 · https://github.com/laurentiu021/SystemManager
 // License: MIT
 
+using CommunityToolkit.Mvvm.Input;
 using NSubstitute;
+using SysManager.Helpers;
 using SysManager.Models;
 using SysManager.Services;
 using SysManager.ViewModels;
@@ -222,10 +224,12 @@ public class NotificationBlockerViewModelTests
         var svc = NewService(App("a.app"));
         var vm = NewVm(svc);
         vm.Apps[0].IsEnabled = false; // pending
+        using var dialog = new DialogAnswer(confirm: true);   // asked first, and told to go ahead (#2734)
 
         svc.GetApps().Returns([App("a.app"), App("new.app")]);
         await vm.RefreshCommand.ExecuteAsync(null);
 
+        Assert.Equal(1, dialog.Calls);
         Assert.Equal(2, vm.Apps.Count);
         Assert.Equal(0, vm.PendingChangeCount); // fresh baseline
     }
@@ -306,5 +310,62 @@ public class NotificationBlockerViewModelTests
 
         Assert.False(vm.IsBusy);
         Assert.False(vm.IsProgressIndeterminate);
+    }
+
+    // ---------- F5 and Refresh over changes not applied yet (#2734) ----------
+    // A read replaced every sender, the main switch and their baseline, so mutes not applied yet went with no word,
+    // and F5 runs Refresh.
+
+    [Fact]
+    public async Task F5_OverChangesNotAppliedYet_AsksFirst_AndNoKeepsThem()
+    {
+        var svc = NewService(App("a.app"));
+        var vm = NewVm(svc);
+        var muted = vm.Apps[0];
+        muted.IsEnabled = false;
+        vm.AllowNotifications = false;
+        svc.GetApps().Returns([App("a.app"), App("new.app")]);   // a read now would show it
+        using var dialog = new DialogAnswer(confirm: false);
+
+        await Assert.IsAssignableFrom<IAsyncRelayCommand>(vm.RefreshOnF5).ExecuteAsync(null);
+
+        Assert.Equal([$"{UnappliedChanges.Title}\n{UnappliedChanges.Question("Apply")}"], dialog.Messages);
+        Assert.Same(muted, Assert.Single(vm.Apps));   // not read again
+        Assert.False(muted.IsEnabled);
+        Assert.False(vm.AllowNotifications);
+        Assert.Equal(2, vm.PendingChangeCount);
+        Assert.Equal(UnappliedChanges.Kept("Apply"), vm.StatusMessage);
+    }
+
+    [Fact]
+    public async Task F5_OverChangesNotAppliedYet_ReadsAgain_WhenTheUserSaysYes()
+    {
+        var svc = NewService(App("a.app"));
+        var vm = NewVm(svc);
+        vm.Apps[0].IsEnabled = false;
+        svc.GetApps().Returns([App("a.app"), App("new.app")]);
+        using var dialog = new DialogAnswer(confirm: true);
+
+        await Assert.IsAssignableFrom<IAsyncRelayCommand>(vm.RefreshOnF5).ExecuteAsync(null);
+
+        Assert.Equal(1, dialog.Calls);
+        Assert.Equal(["a.app", "new.app"], vm.Apps.Select(a => a.Aumid));
+        Assert.True(vm.Apps[0].IsEnabled);
+        Assert.Equal(0, vm.PendingChangeCount);
+        Assert.Equal("Notification senders refreshed.", vm.StatusMessage);
+    }
+
+    [Fact]
+    public async Task F5_WithNothingPending_ReadsAgain_WithoutAsking()
+    {
+        var svc = NewService(App("a.app"));
+        var vm = NewVm(svc);
+        svc.GetApps().Returns([App("a.app"), App("new.app")]);
+        using var dialog = new DialogAnswer(confirm: false);
+
+        await Assert.IsAssignableFrom<IAsyncRelayCommand>(vm.RefreshOnF5).ExecuteAsync(null);
+
+        Assert.Equal(0, dialog.Calls);
+        Assert.Equal(2, vm.Apps.Count);
     }
 }

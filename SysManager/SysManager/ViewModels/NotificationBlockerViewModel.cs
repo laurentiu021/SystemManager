@@ -190,6 +190,15 @@ public sealed partial class NotificationBlockerViewModel : ViewModelBase
     [RelayCommand]
     private async Task RefreshAsync()
     {
+        // A read replaces every sender, the main switch and their baseline, so mutes not applied yet went with no
+        // word, F5 included (#2734).
+        if (PendingChangeCount > 0
+            && !DialogService.Instance.Confirm(UnappliedChanges.Question("Apply"), UnappliedChanges.Title))
+        {
+            StatusMessage = UnappliedChanges.Kept("Apply");
+            return;
+        }
+
         // Re-read off the UI thread — mirrors the async initial load, including its feedback.
         IsBusy = true;
         IsProgressIndeterminate = true;

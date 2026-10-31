@@ -5,6 +5,7 @@
 using System.Collections.ObjectModel;
 using System.IO;
 using System.Management.Automation;
+using CommunityToolkit.Mvvm.Input;
 using NSubstitute;
 using SysManager.Helpers;
 using SysManager.Models;
@@ -1925,5 +1926,186 @@ public class DnsHostsViewModelGateTests
         Assert.Equal("The hosts file is already the same as the copy beside it.",
             DnsHostsViewModel.DescribeUnrestorable(new HostsBackupState(DiffersFromHosts: false, true, now)));
         Assert.Null(DnsHostsViewModel.DescribeUnrestorable(new HostsBackupState(true, true, now)));
+    }
+
+    // ── F5 and Refresh over changes not saved yet (#2734) ─────────────────
+    //
+    // A read replaced the list, so an Add, a Remove or a switch not saved yet went with no word, and F5 runs Refresh.
+
+    private static void AddAnEntry(DnsHostsViewModel vm)
+    {
+        vm.NewIp = "0.0.0.0";
+        vm.NewHostname = "ads.example.com";
+        vm.AddEntryCommand.Execute(null);
+    }
+
+    [StaFact]
+    public async Task F5_OverAnEntryNotSavedYet_AsksFirst_AndNoKeepsIt()
+    {
+        var (vm, hostsPath, dir, _) = NewVm();
+        try
+        {
+            await vm.RefreshHostsCommand.ExecuteAsync(null);
+            AddAnEntry(vm);
+            File.AppendAllText(hostsPath, "10.9.9.9 vpn.local\n");   // a read now would show it
+            using var dialog = new DialogAnswer(confirm: false);
+
+            await Assert.IsAssignableFrom<IAsyncRelayCommand>(vm.RefreshOnF5).ExecuteAsync(null);
+
+            Assert.Equal([$"{UnappliedChanges.Title}\n{UnappliedChanges.Question("Save")}"], dialog.Messages);
+            Assert.Equal(["localhost", "ads.example.com"], vm.HostEntries.Select(e => e.Hostname));
+            Assert.Equal(UnappliedChanges.Kept("Save"), vm.HostsStatus);
+        }
+        finally
+        {
+            DeleteTestDirectory(dir);
+        }
+    }
+
+    [StaFact]
+    public async Task F5_OverAnEntryNotSavedYet_ReadsTheFileAgain_WhenTheUserSaysYes()
+    {
+        var (vm, hostsPath, dir, _) = NewVm();
+        try
+        {
+            await vm.RefreshHostsCommand.ExecuteAsync(null);
+            AddAnEntry(vm);
+            File.AppendAllText(hostsPath, "10.9.9.9 vpn.local\n");
+            using var dialog = new DialogAnswer(confirm: true);
+
+            await Assert.IsAssignableFrom<IAsyncRelayCommand>(vm.RefreshOnF5).ExecuteAsync(null);
+
+            Assert.Equal(1, dialog.Calls);
+            Assert.Equal(["localhost", "vpn.local"], vm.HostEntries.Select(e => e.Hostname));
+            Assert.Equal("Loaded 2 entries.", vm.HostsStatus);
+        }
+        finally
+        {
+            DeleteTestDirectory(dir);
+        }
+    }
+
+    [StaTheory]
+    [InlineData("remove")]
+    [InlineData("switch")]
+    public async Task F5_OverARemoveOrASwitchNotSavedYet_AsksFirst(string edit)
+    {
+        var (vm, hostsPath, dir, _) = NewVm();
+        File.WriteAllText(hostsPath, "127.0.0.1 localhost\n10.9.9.9 vpn.local\n");
+        try
+        {
+            await vm.RefreshHostsCommand.ExecuteAsync(null);
+            var vpn = vm.HostEntries.Single(e => e.Hostname == "vpn.local");
+            if (edit == "remove") vm.RemoveEntryCommand.Execute(vpn);
+            else vpn.IsEnabled = false;
+            List<HostsEntry> edited = [.. vm.HostEntries];
+            using var dialog = new DialogAnswer(confirm: false);
+
+            await Assert.IsAssignableFrom<IAsyncRelayCommand>(vm.RefreshOnF5).ExecuteAsync(null);
+
+            Assert.Equal(1, dialog.Calls);
+            Assert.Equal(edited, vm.HostEntries);   // the same rows, not ones read again
+            Assert.Equal(UnappliedChanges.Kept("Save"), vm.HostsStatus);
+        }
+        finally
+        {
+            DeleteTestDirectory(dir);
+        }
+    }
+
+    [StaFact]
+    public async Task F5_WithNothingNotSavedYet_ReadsTheFileAgain_WithoutAsking()
+    {
+        var (vm, hostsPath, dir, _) = NewVm();
+        try
+        {
+            await vm.RefreshHostsCommand.ExecuteAsync(null);
+            vm.HostEntries[0].IsEnabled = false;   // moved and moved back: nothing to save
+            vm.HostEntries[0].IsEnabled = true;
+            File.AppendAllText(hostsPath, "10.9.9.9 vpn.local\n");
+            using var dialog = new DialogAnswer(confirm: false);
+
+            await Assert.IsAssignableFrom<IAsyncRelayCommand>(vm.RefreshOnF5).ExecuteAsync(null);
+
+            Assert.Equal(0, dialog.Calls);
+            Assert.Equal(["localhost", "vpn.local"], vm.HostEntries.Select(e => e.Hostname));
+        }
+        finally
+        {
+            DeleteTestDirectory(dir);
+        }
+    }
+
+    [StaFact]
+    public async Task AddAndRemove_WaitUntilTheHostsFileIsRead()
+    {
+        // An entry added before the first read was replaced by it, and a list the file was not read into cannot be
+        // saved (#2521).
+        var (vm, hostsPath, dir, _) = NewVm();
+        var addChanged = 0;
+        var removeChanged = 0;
+        vm.AddEntryCommand.CanExecuteChanged += (_, _) => addChanged++;
+        vm.RemoveEntryCommand.CanExecuteChanged += (_, _) => removeChanged++;
+        try
+        {
+            Assert.False(vm.AddEntryCommand.CanExecute(null));
+            Assert.False(vm.RemoveEntryCommand.CanExecute(null));
+
+            await vm.RefreshHostsCommand.ExecuteAsync(null);
+            var entry = Assert.Single(vm.HostEntries);
+            Assert.True(vm.AddEntryCommand.CanExecute(null));
+            Assert.True(vm.RemoveEntryCommand.CanExecute(entry));
+            Assert.Equal((1, 1), (addChanged, removeChanged));   // so the buttons come on
+
+            // Held open with delete sharing only: the read fails, as in SaveHosts_AfterAReadThatFailed_SaysSo_AndWritesNothing.
+            using (new FileStream(hostsPath, FileMode.Open, FileAccess.Read, FileShare.Delete))
+                await vm.RefreshHostsCommand.ExecuteAsync(null);
+            Assert.False(vm.AddEntryCommand.CanExecute(null));
+            Assert.False(vm.RemoveEntryCommand.CanExecute(entry));
+            Assert.Equal((2, 2), (addChanged, removeChanged));
+        }
+        finally
+        {
+            DeleteTestDirectory(dir);
+        }
+    }
+
+    [StaFact]
+    public async Task OnFirstOpen_TheHostsFileIsRead_WhileTheDnsQueryIsStillRunning()
+    {
+        // The hosts file was read only once the DNS query had ended, and the query starts a PowerShell child that can
+        // take seconds: an entry added in that time was replaced by the read when it landed.
+        var dir = Path.Combine(Path.GetTempPath(), "smtest_dnsgate_" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(dir);
+        var hostsPath = Path.Combine(dir, "hosts");
+        File.WriteAllText(hostsPath, "127.0.0.1 localhost\n");
+        var query = new TaskCompletionSource<Collection<PSObject>>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var runner = Substitute.For<IPowerShellRunner>();
+        runner.RunAsync(
+                Arg.Any<string>(), Arg.Any<IDictionary<string, object?>?>(), Arg.Any<CancellationToken>())
+            .Returns(query.Task);
+        var read = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        DnsHostsViewModel? vm = null;
+        try
+        {
+            vm = new DnsHostsViewModel(new DnsService(runner), new HostsFileService(hostsPath), autoInit: true);
+            vm.PropertyChanged += (_, e) =>
+            {
+                if (e.PropertyName == nameof(DnsHostsViewModel.HostsRead)) read.TrySetResult();
+            };
+            if (vm.HostsRead) read.TrySetResult();
+
+            await read.Task.WaitAsync(TimeSpan.FromSeconds(30));
+
+            Assert.False(query.Task.IsCompleted);   // the DNS query has not answered
+            Assert.Equal(["localhost"], vm.HostEntries.Select(e => e.Hostname));
+            Assert.True(vm.AddEntryCommand.CanExecute(null));
+        }
+        finally
+        {
+            query.TrySetResult(new Collection<PSObject>());
+            if (vm is not null) await vm.InitializationComplete.WaitAsync(TimeSpan.FromSeconds(30));
+            DeleteTestDirectory(dir);
+        }
     }
 }

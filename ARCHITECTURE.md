@@ -823,6 +823,14 @@ Key services:
   them at Debug without changing what a collision does, and `DuplicateKeys` is public so a service
   can assert the invariant over its own scan output — the only way to catch a duplicate that comes
   from the DATA rather than from the choice of key (#2405).
+- `Helpers/UnappliedChanges` — what a tab that keeps changes until Apply or Save asks before Refresh
+  reads its list again, and what it says when the user keeps them, defined once for the four tabs that
+  do: Privacy & Telemetry, Notification Blocker, Environment Variables and the hosts file on DNS & Hosts.
+  A read replaced the list and the baseline the changes are counted against, so every change not made yet
+  went without a word, and `RefreshOnF5` reaches all four (#2734). They ask rather than carry the changes
+  across, because each change was made against values the new read can find different. Each tab decides
+  for itself whether something is waiting: its pending count on the three with Apply, and on DNS & Hosts
+  the list compared with the file as last read, through the fingerprint Save already checks.
 - `Helpers/SettlingProgress` — the `IProgress<T>` a tab hands to a service it awaits, defined once
   for the eleven sites across nine view models whose callback writes a property their own post-await
   code writes again as its final value. `Progress<T>` captures the `SynchronizationContext` in its

@@ -540,17 +540,31 @@ public sealed class StartupService
     /// Byte[0]: 02 = enabled, 03 = disabled. If the key/value doesn't
     /// exist, the item is considered enabled.
     /// </summary>
-    private static void ApplyApprovedState(List<StartupEntry> entries)
+    private static void ApplyApprovedState(List<StartupEntry> entries) =>
+        ApplyApprovedState(entries, Registry.CurrentUser, Registry.LocalMachine);
+
+    /// <summary>
+    /// <see cref="ApplyApprovedState(List{StartupEntry})"/> with the StartupApproved lists read under
+    /// <paramref name="currentUser"/> and <paramref name="localMachine"/>, so a test reads blobs it wrote to a
+    /// throwaway key, as <see cref="SetEnabledAsync(StartupEntry, bool, RegistryKey, RegistryKey)"/> writes them.
+    /// Reachable only over the live registry before, its one test checked that a bool could be read (#2741).
+    /// </summary>
+    internal static void ApplyApprovedState(List<StartupEntry> entries, RegistryKey currentUser, RegistryKey localMachine)
     {
-        var hkcuApproved = ReadApprovedKey(Registry.CurrentUser, ApprovedRunHKCU);
-        var hklmApproved = ReadApprovedKey(Registry.LocalMachine, ApprovedRunHKLM);
-        var hklm32Approved = ReadApprovedKey(Registry.LocalMachine, ApprovedRun32HKLM);
-        var folderApproved = ReadApprovedKey(Registry.CurrentUser, ApprovedStartupFolder);
+        var hkcuApproved = ReadApprovedKey(currentUser, ApprovedRunHKCU);
+        var hklmApproved = ReadApprovedKey(localMachine, ApprovedRunHKLM);
+        var hklm32Approved = ReadApprovedKey(localMachine, ApprovedRun32HKLM);
+        var folderApproved = ReadApprovedKey(currentUser, ApprovedStartupFolder);
         // Common (all-users) startup-folder items store their disabled-state under HKLM, not HKCU.
-        var commonFolderApproved = ReadApprovedKey(Registry.LocalMachine, ApprovedStartupFolder);
+        var commonFolderApproved = ReadApprovedKey(localMachine, ApprovedStartupFolder);
 
         foreach (var entry in entries)
         {
+            // A run-once item runs at the next start-up whatever these lists say: Windows never reads them for
+            // RunOnce, which is why SetEnabledAsync refuses to switch one. Read against its source's Run list, a
+            // run-once value named like a switched-off Run item showed as disabled, and still ran (#2741).
+            if (entry.RegistryKey.EndsWith("RunOnce", StringComparison.OrdinalIgnoreCase)) continue;
+
             Dictionary<string, byte[]>? approved = entry.Source switch
             {
                 StartupSource.RegistryCurrentUser => hkcuApproved,

@@ -11981,9 +11981,10 @@ public partial class ArchitectureTests
     /// folder, which is why <c>CommonStartupFolder</c> exists as its own source — this pins the same
     /// contract for the 32-bit registry view so the pattern cannot be reintroduced by adding a key to the
     /// array and reusing the nearest source value.</para>
-    /// <para>The read half is asserted here, at source level. The write half is exercised on throwaway roots by
-    /// <c>StartupToggleTests.Disabling_WritesTheApprovedKeyWindowsReadsForItsSource</c>, since
-    /// <c>SetEnabledAsync</c> takes its hive roots (#2740).</para>
+    /// <para>Both halves are also exercised on throwaway roots, since <c>SetEnabledAsync</c> (#2740) and
+    /// <c>ApplyApprovedState</c> (#2741) take their hive roots: the write by
+    /// <c>StartupToggleTests.Disabling_WritesTheApprovedKeyWindowsReadsForItsSource</c>, the read by
+    /// <c>StartupToggleTests.EachSource_ReadsTheApprovedListWindowsReadsForIt</c>.</para>
     /// </summary>
     [Fact]
     public void EveryMachineRunKey_ReadsAndWritesItsOwnStartupApprovedKey()
@@ -12049,7 +12050,8 @@ public partial class ArchitectureTests
     /// refused for precisely this reason.</para>
     /// <para>The enumeration and the read half are asserted here, at source level. The refusal itself is exercised
     /// on throwaway roots by <c>StartupToggleTests.APolicyRunItem_IsRefused_AndNothingIsWritten</c>, since
-    /// <c>SetEnabledAsync</c> takes its hive roots (#2740).</para>
+    /// <c>SetEnabledAsync</c> takes its hive roots (#2740), and the read by
+    /// <c>StartupToggleTests.ASourceWithNoApprovedList_IsReadFromNone</c> (#2741).</para>
     /// </summary>
     [Fact]
     public void EveryStartupSourceWithNoApprovedKey_IsRefusedInsteadOfFakingSuccess()

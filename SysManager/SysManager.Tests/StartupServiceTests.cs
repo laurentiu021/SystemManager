@@ -138,19 +138,6 @@ public class StartupServiceTests
         }
     }
 
-    [Fact]
-    public async Task ScanAsync_IsEnabledIsBoolean()
-    {
-        var svc = new StartupService();
-        var result = (await svc.ScanAsync()).Entries;
-        // Just verify no exceptions — IsEnabled is always bool by type,
-        // but we want to ensure ApplyApprovedState doesn't corrupt it.
-        foreach (var entry in result)
-        {
-            _ = entry.IsEnabled; // should not throw
-        }
-    }
-
     // ── BuildStartupFolderEntry (pure — the StartupApproved key-name toggle bug) ──
 
     [Theory]

@@ -12421,7 +12421,7 @@ public partial class ArchitectureTests
             ("EdgeOneDriveViewModel.cs", "private async Task<EdgeOneDriveOutcome?> RunOperationAsync(",
                 "await operation("),
             ("NetworkRepairViewModel.cs", "private async Task RunRepairAsync(", "await operation("),
-            ("PrivacyViewModel.cs", "private async Task ApplyChanges()", "_service.ApplyAll("),
+            ("PrivacyViewModel.cs", "private async Task WriteConfirmedAsync(", "_service.ApplyAll("),
             ("WindowsFeaturesViewModel.cs", "private async Task ToggleFeatureAsync(", "_service.DisableFeatureAsync("),
         };
 

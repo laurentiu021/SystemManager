@@ -584,6 +584,68 @@ public sealed class PrivacyViewModelTests : IDisposable
         Assert.Equal(2, vm.PendingChangeCount);
     }
 
+    // ---------- while Apply waits for its restore point (#2733) ----------
+    //
+    // The tab set no busy state through the wait, and Discard, Refresh and the switches stayed live, so a choice
+    // made then was overwritten by the write that followed.
+
+    [Fact]
+    public async Task WhileApplyWaitsForItsRestorePoint_TheTabIsBusy_AndApplyDiscardAndRefreshWait()
+    {
+        var restoring = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var restorePoint = Substitute.For<ISessionRestorePoint>();
+        restorePoint.EnsureAsync(Arg.Any<string>(), Arg.Any<CancellationToken>()).Returns(restoring.Task);
+        using var dialog = new DialogAnswer(confirm: true);
+        var vm = await StagingVmAsync(ThisPc(), new PrivacyChoicesHandoff(), restorePoint);
+        Switch(vm, "tips").IsEnabled = true;
+
+        var apply = vm.ApplyChangesCommand.ExecuteAsync(null);
+        try
+        {
+            Assert.True(vm.IsBusy);
+            Assert.True(vm.IsProgressIndeterminate);
+            Assert.Equal("Applying 1 change…", vm.StatusMessage);
+            Assert.False(vm.ApplyChangesCommand.CanExecute(null));
+            Assert.False(vm.DiscardChangesCommand.CanExecute(null));
+            Assert.False(vm.RefreshCommand.CanExecute(null));
+        }
+        finally
+        {
+            restoring.SetResult(false);
+            await apply;
+        }
+
+        Assert.False(vm.IsBusy);
+        Assert.True(vm.DiscardChangesCommand.CanExecute(null));
+        Assert.True(vm.RefreshCommand.CanExecute(null));
+    }
+
+    [Fact]
+    public async Task ASwitchMovedWhileApplyWaitsForItsRestorePoint_IsWrittenAsConfirmed()
+    {
+        // The write used each switch's value when it ran, so one turned back during the wait had its setting
+        // deleted from the registry, under "Applied 1 change".
+        var privacy = ThisPc();
+        List<(string Key, bool On)> written = [];
+        privacy.When(p => p.ApplyAll(Arg.Any<IEnumerable<PrivacyToggle>>()))
+            .Do(call => written.AddRange(call.Arg<IEnumerable<PrivacyToggle>>().Select(t => (t.Key, t.IsEnabled))));
+        var restoring = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var restorePoint = Substitute.For<ISessionRestorePoint>();
+        restorePoint.EnsureAsync(Arg.Any<string>(), Arg.Any<CancellationToken>()).Returns(restoring.Task);
+        using var dialog = new DialogAnswer(confirm: true);
+        var vm = await StagingVmAsync(privacy, new PrivacyChoicesHandoff(), restorePoint);
+        Switch(vm, "tips").IsEnabled = true;
+
+        var apply = vm.ApplyChangesCommand.ExecuteAsync(null);
+        Switch(vm, "tips").IsEnabled = false;   // the list is disabled now; this is what any other path would do
+        restoring.SetResult(false);
+        await apply;
+
+        Assert.Equal([("tips", true)], written);
+        Assert.True(Switch(vm, "tips").IsEnabled);   // the switch shows what was written
+        Assert.Equal(0, vm.PendingChangeCount);
+    }
+
     [Fact]
     public async Task TheShellMarksTheTabAsShown()
     {

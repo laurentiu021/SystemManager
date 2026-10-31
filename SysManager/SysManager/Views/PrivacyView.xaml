@@ -132,7 +132,9 @@
              the switches that change only your account and one for those that change the whole PC. -->
         <Border Grid.Row="3" Style="{StaticResource Card}" Padding="0">
             <ScrollViewer VerticalScrollBarVisibility="Auto" Padding="16,12">
-                <Grid>
+                <!-- The switches wait while they are loaded or written: one moved while Apply waited for its restore point
+                     was overwritten by the write (#2733). -->
+                <Grid IsEnabled="{Binding IsBusy, Converter={StaticResource BoolInvert}}">
                     <ItemsControl ItemsSource="{Binding FilteredToggles}" helpers:RebuildFocus.Keep="True" ItemTemplate="{StaticResource PrivacyToggleRow}"
                                   AutomationProperties.Name="Privacy switches"
                                   Visibility="{Binding IsByReach, Converter={StaticResource FlexVis}, ConverterParameter=Inverse}"/>

@@ -99,6 +99,13 @@ public sealed partial class PrivacyViewModel : ElevatedViewModelBase, ISearchDes
         _service = service;
         _restorePoint = restorePoint;
         _importedChoices = importedChoices;
+        PropertyChanged += (_, e) =>
+        {
+            if (e.PropertyName != nameof(IsBusy)) return;
+            ApplyChangesCommand.NotifyCanExecuteChanged();
+            DiscardChangesCommand.NotifyCanExecuteChanged();
+            RefreshCommand.NotifyCanExecuteChanged();
+        };
         // Read the registry-backed toggles off the UI thread so the eagerly-built VM
         // doesn't block startup; the UI update runs back on the UI thread (ConfigureAwait true).
         InitializeAsync(LoadTogglesAsync);
@@ -278,7 +285,13 @@ public sealed partial class PrivacyViewModel : ElevatedViewModelBase, ISearchDes
     }
 
 
-    [RelayCommand]
+    /// <summary>
+    /// Apply, Discard and Refresh wait while the switches are being loaded or written. An apply left the tab live
+    /// while it waited for its restore point, and a Discard or Refresh made then was overwritten by the write (#2733).
+    /// </summary>
+    private bool NotBusy => !IsBusy;
+
+    [RelayCommand(CanExecute = nameof(NotBusy))]
     private async Task ApplyChanges()
     {
         if (PendingChangeCount == 0)
@@ -315,6 +328,23 @@ public sealed partial class PrivacyViewModel : ElevatedViewModelBase, ISearchDes
         // costs nothing, and it is the session-wide seam every tab that changes the system shares.
         // The point can take long enough to open another tab and come back, so an import that arrives
         // meanwhile must not move switches this apply is about to write: it is staged at the end instead.
+        //
+        // Busy from here to the end, restore point included: the first change of an elevated session makes one,
+        // which takes tens of seconds, and the tab showed nothing and stayed live through it (#2733). What was
+        // confirmed is kept, so what is written is that and nothing else.
+        IsBusy = true;
+        IsProgressIndeterminate = true;
+        StatusMessage = $"Applying {changed.Count} change{(changed.Count == 1 ? "" : "s")}…";
+        var confirmed = changed.Select(t => (Toggle: t, On: t.IsEnabled)).ToList();
+        try
+        {
+            await WriteConfirmedAsync(changed, confirmed).ConfigureAwait(true);
+        }
+        finally { IsBusy = false; IsProgressIndeterminate = false; }
+    }
+
+    private async Task WriteConfirmedAsync(List<PrivacyToggle> changed, List<(PrivacyToggle Toggle, bool On)> confirmed)
+    {
         bool snapshotTaken;
         _awaitingRestorePoint = true;
         try
@@ -324,6 +354,8 @@ public sealed partial class PrivacyViewModel : ElevatedViewModelBase, ISearchDes
         }
         finally { _awaitingRestorePoint = false; }
 
+        foreach (var (toggle, on) in confirmed)
+            toggle.IsEnabled = on;
         var failed = _service.ApplyAll(changed);
         var failedSet = failed.ToHashSet();
 
@@ -368,7 +400,7 @@ public sealed partial class PrivacyViewModel : ElevatedViewModelBase, ISearchDes
         if (IsActive) StageImportedChoices();
     }
 
-    [RelayCommand]
+    [RelayCommand(CanExecute = nameof(NotBusy))]
     private void DiscardChanges()
     {
         foreach (var t in Toggles)
@@ -378,7 +410,7 @@ public sealed partial class PrivacyViewModel : ElevatedViewModelBase, ISearchDes
         StatusMessage = "Pending changes discarded.";
     }
 
-    [RelayCommand]
+    [RelayCommand(CanExecute = nameof(NotBusy))]
     private async Task RefreshAsync()
     {
         // Read the registry off the UI thread — the service reads every privacy key

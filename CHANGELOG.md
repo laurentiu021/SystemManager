@@ -10,6 +10,21 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.136.52] - 2026-10-31
+
+**Privacy & Telemetry shows that Apply is working, and writes exactly the changes you confirmed.**
+
+### Fixed
+- After you confirmed Apply on Privacy & Telemetry, the tab waited for its restore point, which
+  the first change of a session run as administrator makes and which can take tens of seconds,
+  with no progress and every button and switch still live. A Discard made then was overwritten:
+  the confirmed changes were written anyway, using the switches' new positions, so a setting you
+  had just cancelled could be removed from the registry under "Applied 1 change". A Refresh made
+  then reloaded the switches from before the write, so they showed the old state with nothing
+  pending. The tab now shows it is applying, the switches, Apply, Discard and Refresh wait until it
+  is done, and what is written is what you confirmed. This was there since Apply started taking a
+  restore point, in 1.69.0.
+
 ## [1.136.51] - 2026-10-31
 
 **A disk that turns unhealthy while SysManager runs is now noticed, by the tray alert and on System

@@ -1026,7 +1026,7 @@ System → System Fixes, where the tab name matches what they do.
 ### Duplicate Finder
 - Three-pass scan: group by size, partial-hash pre-filter, then full SHA-256
 - Duplicate groups sorted by wasted space (descending)
-- Preset folders or custom folder selection
+- Preset folders, custom folder selection, or a folder typed or pasted into the box
 - Configurable minimum file size filter
 - **Files OneDrive keeps online only are not downloaded to compare them.** Reading one makes
   OneDrive download it, so such files are left unread, and the summary says how many were not
@@ -1055,7 +1055,10 @@ System → System Fixes, where the tab name matches what they do.
   block, and a wider window shows more of them. Every block is a button with its name, size and
   share for a screen reader, and "Hide map" (remembered) gives the list its full height back
 - Drive usage bar showing how full the drive is
-- Preset paths (fixed drives, user profile, Program Files) or custom browse
+- Preset paths (fixed drives, user profile, Program Files), custom browse, or a folder typed or
+  pasted into the box, quotes and all, as Explorer's Copy as path gives it. A network folder has
+  no drive bar. The folder, Up, Browse and the drill-in wait while an analysis runs, so its result
+  is always saved under the folder it measured
 - Show in Explorer for each folder
 - **Export CSV** saves the breakdown to a file you choose the location for, with both the
   readable size and the raw byte count — so a spreadsheet can sort it, which it cannot do with

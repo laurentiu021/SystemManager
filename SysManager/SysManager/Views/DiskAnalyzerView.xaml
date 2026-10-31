@@ -98,9 +98,12 @@
             <WrapPanel>
                 <TextBlock Text="Path:" VerticalAlignment="Center" Margin="0,0,8,0"
                            Style="{StaticResource Subtle}"/>
+                <!-- Text, not SelectedItem: a typed folder matches no preset, and SelectedItem then went to null and
+                     Analyze did nothing (#2731). -->
                 <ComboBox AutomationProperties.Name="Folder path to analyze"
                           ItemsSource="{Binding PresetPaths}"
-                          SelectedItem="{Binding SelectedPath}"
+                          Text="{Binding SelectedPath, UpdateSourceTrigger=LostFocus}"
+                          IsEnabled="{Binding IsBusy, Converter={StaticResource BoolInvert}}"
                           Width="300" Margin="0,0,8,0" IsEditable="True"/>
                 <Button Content="Browse" AutomationProperties.Name="Browse for folder" Command="{Binding BrowseFolderCommand}"
                         Style="{StaticResource GhostButton}" Margin="0,0,8,0"/>

@@ -32,9 +32,12 @@
             <WrapPanel>
                 <TextBlock Text="Folder:" VerticalAlignment="Center" Margin="0,0,8,0"
                            Style="{StaticResource Subtle}"/>
+                <!-- Text, not SelectedItem: a typed folder matches no preset, and SelectedItem then went to null and
+                     Scan did nothing (#2731). -->
                 <ComboBox AutomationProperties.Name="Folder to scan"
                           ItemsSource="{Binding PresetFolders}"
-                          SelectedItem="{Binding SelectedFolder}"
+                          Text="{Binding SelectedFolder, UpdateSourceTrigger=LostFocus}"
+                          IsEnabled="{Binding IsBusy, Converter={StaticResource BoolInvert}}"
                           Width="320" Margin="0,0,8,0"
                           IsEditable="True"/>
                 <Button Content="Browse" AutomationProperties.Name="Browse for folder"

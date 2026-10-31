@@ -178,6 +178,9 @@ public sealed partial class DiskAnalyzerViewModel : ViewModelBase
             if (e.PropertyName != nameof(IsBusy)) return;
             OnPropertyChanged(nameof(EmptyTitle));
             OnPropertyChanged(nameof(EmptyMessage));
+            DrillDownCommand.NotifyCanExecuteChanged();
+            GoUpCommand.NotifyCanExecuteChanged();
+            BrowseFolderCommand.NotifyCanExecuteChanged();
         };
 
         _loadingPreferences = true;
@@ -220,10 +223,26 @@ public sealed partial class DiskAnalyzerViewModel : ViewModelBase
         return result;
     }
 
+    /// <summary>What the status line says when Analyze is pressed with no folder in the box.</summary>
+    internal const string NoFolderStatus = "Type a folder, or pick one, to analyze.";
+
+    /// <summary>
+    /// Up, drill-in and Browse change the folder, so they wait for the analysis running: Up and drill-in changed it
+    /// even when the lock refused their own analysis, and the running one then saved its result under it (#2731).
+    /// </summary>
+    private bool NotBusy => !IsBusy;
+
     [RelayCommand]
     private async Task AnalyzeAsync()
     {
-        if (string.IsNullOrWhiteSpace(SelectedPath)) return;
+        // Read once: the box can change while the analysis runs, and this result and its saved snapshot belong to
+        // the folder it measured. The quotes are what Explorer's Copy as path puts around a path (#2731).
+        var path = SelectedPath?.Trim().Trim('"');
+        if (string.IsNullOrWhiteSpace(path))
+        {
+            StatusMessage = NoFolderStatus;
+            return;
+        }
 
         using var opLock = OperationLockService.Instance.TryAcquire(OperationCategory.Disk, "Disk Analysis");
         if (opLock is null)
@@ -244,17 +263,19 @@ public sealed partial class DiskAnalyzerViewModel : ViewModelBase
         // The folders, the map, their totals and the trend stay until the analysis answers. They were cleared here,
         // so an analysis cancelled or failed left an empty list under "Nothing to show" (#2729).
 
-        UpdateDriveInfo();
-
         try
         {
+            // Inside the try, so whatever it meets ends here with the run, not in the app's error dialog with the tab
+            // left busy (#2731).
+            await UpdateDriveInfoAsync(path).ConfigureAwait(true);
+
             // Writes the SILENT half only. StatusMessage is set at the phase boundaries — "Analyzing…" above,
             // and the outcome below — so the announced line changes twice per scan instead of once per
             // folder. See ScanReadout for what over-announcing did here.
             var progress = new SettlingProgress<DiskAnalyzerService.AnalysisProgress>(ApplyScanProgress);
 
             var analysis = await progress.SettleAfterAsync(
-                reporter => _service.AnalyzeAsync(SelectedPath, reporter, ct));
+                reporter => _service.AnalyzeAsync(path, reporter, ct));
 
             if (analysis.Failure != DiskAnalyzerService.AnalysisFailure.None)
             {
@@ -279,7 +300,7 @@ public sealed partial class DiskAnalyzerViewModel : ViewModelBase
                 ? "No subfolders found."
                 : string.Create(CultureInfo.InvariantCulture, $"{EntryCount} folders · {FormatSize(TotalSize)} total · {TotalFiles:N0} files");
             HasScanned = true;
-            await UpdateTrendAndRememberAsync(SelectedPath, ct).ConfigureAwait(true);
+            await UpdateTrendAndRememberAsync(path, ct).ConfigureAwait(true);
             StatusMessage = "Analysis complete.";
             ToastService.Instance.Show("Disk Analysis complete", $"{EntryCount} folders, {FormatSize(TotalSize)} total");
             Log.Information("Disk analysis completed: {Folders} folders, {Size} total",
@@ -457,7 +478,7 @@ public sealed partial class DiskAnalyzerViewModel : ViewModelBase
         catch (System.ComponentModel.Win32Exception) { StatusMessage = "Could not open file location."; }
     }
 
-    [RelayCommand]
+    [RelayCommand(CanExecute = nameof(NotBusy))]
     private async Task DrillDown(DiskUsageEntry? entry)
     {
         if (entry is null || entry.Name == DiskAnalyzerService.LooseFilesName) return;
@@ -506,7 +527,7 @@ public sealed partial class DiskAnalyzerViewModel : ViewModelBase
         ExportCsvCommand.NotifyCanExecuteChanged();
     }
 
-    [RelayCommand]
+    [RelayCommand(CanExecute = nameof(NotBusy))]
     private async Task GoUp()
     {
         if (string.IsNullOrWhiteSpace(SelectedPath)) return;
@@ -518,7 +539,7 @@ public sealed partial class DiskAnalyzerViewModel : ViewModelBase
         }
     }
 
-    [RelayCommand]
+    [RelayCommand(CanExecute = nameof(NotBusy))]
     private void BrowseFolder()
     {
         var folder = _dialog.PickFolder("Select folder to analyze");
@@ -541,30 +562,44 @@ public sealed partial class DiskAnalyzerViewModel : ViewModelBase
             App.RequestShutdown();
     }
 
-    private void UpdateDriveInfo()
+    /// <summary>Shows the size and free space of the drive <paramref name="path"/> is on, read off the UI thread.</summary>
+    /// <remarks>A mapped drive that is not connected can keep <see cref="DriveInfo.IsReady"/> waiting.</remarks>
+    private async Task UpdateDriveInfoAsync(string path)
+    {
+        if (await Task.Run(() => ReadDriveFigures(path)).ConfigureAwait(true) is not { } figures)
+        {
+            HasDriveInfo = false;
+            return;
+        }
+
+        DriveTotal = figures.Total;
+        DriveFree = figures.Free;
+        DriveUsed = DriveTotal - DriveFree;
+        DriveUsedPercent = DriveTotal > 0
+            ? Math.Round(DriveUsed * 100.0 / DriveTotal, 1)
+            : 0;
+        HasDriveInfo = true;
+    }
+
+    /// <summary>The total and free space of the drive <paramref name="path"/> is on, or null when there is none to read.</summary>
+    /// <remarks>
+    /// Null for a network folder: <see cref="DriveInfo"/> takes a drive letter, and refuses <c>\\server\share</c>
+    /// with an <see cref="ArgumentException"/>, which only this read did not catch. Thrown before the analysis's try,
+    /// it reached the app's error dialog and left the tab busy (#2731).
+    /// </remarks>
+    internal static (long Total, long Free)? ReadDriveFigures(string path)
     {
         try
         {
-            var root = Path.GetPathRoot(SelectedPath);
-            if (!string.IsNullOrEmpty(root))
-            {
-                var di = new DriveInfo(root);
-                if (di.IsReady)
-                {
-                    DriveTotal = di.TotalSize;
-                    DriveFree = di.AvailableFreeSpace;
-                    DriveUsed = DriveTotal - DriveFree;
-                    DriveUsedPercent = DriveTotal > 0
-                        ? Math.Round(DriveUsed * 100.0 / DriveTotal, 1)
-                        : 0;
-                    HasDriveInfo = true;
-                    return;
-                }
-            }
+            var root = Path.GetPathRoot(path);
+            if (string.IsNullOrEmpty(root)) return null;
+            var di = new DriveInfo(root);
+            return di.IsReady ? (di.TotalSize, di.AvailableFreeSpace) : null;
         }
-        catch (IOException ex) { Log.Debug(ex, "Failed to read drive info for {Path}", SelectedPath); }
-        catch (UnauthorizedAccessException ex) { Log.Debug(ex, "Access denied reading drive info for {Path}", SelectedPath); }
-        HasDriveInfo = false;
+        catch (ArgumentException ex) { Log.Debug(ex, "No drive to read for {Path}", path); }
+        catch (IOException ex) { Log.Debug(ex, "Failed to read drive info for {Path}", path); }
+        catch (UnauthorizedAccessException ex) { Log.Debug(ex, "Access denied reading drive info for {Path}", path); }
+        return null;
     }
 
     private static string FormatSize(long bytes) => Helpers.FormatHelper.FormatSize(bytes);

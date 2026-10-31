@@ -291,6 +291,147 @@ public class DiskAnalyzerViewModelTests
         Assert.Equal("No results yet", vm.EmptyTitle);
     }
 
+    // ---------- the folder it is given, and only that one (#2731) ----------
+
+    [Fact]
+    public async Task AnalyzeWithNoFolder_SaysSo_RatherThanDoingNothing()
+    {
+        var vm = NewVm();
+        vm.SelectedPath = "  ";
+
+        await vm.AnalyzeCommand.ExecuteAsync(null);
+
+        Assert.Equal(DiskAnalyzerViewModel.NoFolderStatus, vm.StatusMessage);
+        Assert.False(vm.HasScanned);
+    }
+
+    [Fact]
+    public async Task AFolderPastedWithQuotes_IsAnalyzed()
+    {
+        // Explorer's Copy as path puts quotes around it.
+        var dir = Path.Combine(Path.GetTempPath(), "SysManagerTests", Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(Path.Combine(dir, "Photos"));
+        File.WriteAllBytes(Path.Combine(dir, "Photos", "one.jpg"), new byte[2048]);
+        try
+        {
+            var vm = NewVm();
+            vm.SelectedPath = "\"" + dir + "\"";
+
+            await vm.AnalyzeCommand.ExecuteAsync(null);
+
+            Assert.Equal("Analysis complete.", vm.StatusMessage);
+            Assert.Contains(vm.Entries, e => e.Name == "Photos");
+        }
+        finally
+        {
+            Directory.Delete(dir, recursive: true);
+        }
+    }
+
+    [Theory]
+    [InlineData(@"\\server\share\folder")]
+    [InlineData(@"\\?\C:\Windows")]
+    public void ReadDriveFigures_AFolderWithNoDriveLetter_HasNone_RatherThanThrowing(string path)
+    {
+        // DriveInfo refuses a root that starts with two backslashes. The read let that through (#2731).
+        Assert.Null(DiskAnalyzerViewModel.ReadDriveFigures(path));
+    }
+
+    [Fact]
+    public void ReadDriveFigures_ALocalFolder_IsItsDrivesSize()
+    {
+        var figures = DiskAnalyzerViewModel.ReadDriveFigures(Path.GetTempPath());
+
+        Assert.NotNull(figures);
+        Assert.True(figures.Value.Total > 0 && figures.Value.Free <= figures.Value.Total);
+    }
+
+    [Fact]
+    public async Task AnAnalysisOfAFolderWithNoDriveLetter_Ends_AndLeavesTheTabFree()
+    {
+        // A network folder threw from the drive read, before the analysis's try: the app's error dialog came up and
+        // the tab stayed busy. The long form of a local path reaches the same refusal without a network.
+        var dir = Path.Combine(Path.GetTempPath(), "SysManagerTests", Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(Path.Combine(dir, "Photos"));
+        try
+        {
+            var vm = NewVm();
+            vm.SelectedPath = @"\\?\" + dir;
+
+            await vm.AnalyzeCommand.ExecuteAsync(null);
+
+            // Ended, with its own outcome on the status line: this long form reads as a link, which the analysis
+            // does not follow, so it says the folder could not be measured.
+            Assert.False(vm.IsBusy);
+            Assert.False(vm.HasDriveInfo);
+            Assert.StartsWith("This folder could not be measured.", vm.StatusMessage, StringComparison.Ordinal);
+        }
+        finally
+        {
+            Directory.Delete(dir, recursive: true);
+        }
+    }
+
+    [Fact]
+    public async Task TheFolderIsReadOnce_SoTheResultIsSavedUnderTheFolderItMeasured()
+    {
+        // The folder was read again after the walk, for the trend and the saved snapshot, so a folder changed while
+        // it ran had its snapshot replaced by this one.
+        var root = Path.Combine(Path.GetTempPath(), "SysManagerTests", Guid.NewGuid().ToString("N"));
+        var measured = Path.Combine(root, "measured");
+        var other = Path.Combine(root, "other");
+        Directory.CreateDirectory(Path.Combine(measured, "Photos"));
+        Directory.CreateDirectory(other);
+        using var walking = new ManualResetEventSlim();
+        using var release = new ManualResetEventSlim();
+        try
+        {
+            var service = new DiskAnalyzerService(folder =>
+            {
+                walking.Set();
+                Assert.True(release.Wait(TimeSpan.FromMinutes(1)), "the test never let the walk go on");
+                return Directory.GetDirectories(folder);
+            });
+            var history = new DiskScanHistoryService(Path.Combine(root, "history"));
+            var vm = new DiskAnalyzerViewModel(service, history, TempPreferences());
+            await vm.InitializationComplete;
+            vm.SelectedPath = measured;
+
+            var run = vm.AnalyzeCommand.ExecuteAsync(null);
+            Assert.True(walking.Wait(TimeSpan.FromMinutes(1)), "the analysis never started its walk");
+            vm.SelectedPath = other;
+            release.Set();
+            await run;
+
+            Assert.NotNull((await history.FindAsync(measured, CancellationToken.None)).Snapshot);
+            Assert.Null((await history.FindAsync(other, CancellationToken.None)).Snapshot);
+        }
+        finally
+        {
+            Directory.Delete(root, recursive: true);
+        }
+    }
+
+    [Fact]
+    public void UpDrillInAndBrowse_WaitForTheAnalysisRunning()
+    {
+        // They change the folder, and Up and drill-in changed it even when their own analysis was refused.
+        var vm = NewVm();
+        var entry = new DiskUsageEntry { Name = "Photos", FullPath = @"C:\Photos" };
+
+        vm.IsBusy = true;
+
+        Assert.False(vm.GoUpCommand.CanExecute(null));
+        Assert.False(vm.DrillDownCommand.CanExecute(entry));
+        Assert.False(vm.BrowseFolderCommand.CanExecute(null));
+
+        vm.IsBusy = false;
+
+        Assert.True(vm.GoUpCommand.CanExecute(null));
+        Assert.True(vm.DrillDownCommand.CanExecute(entry));
+        Assert.True(vm.BrowseFolderCommand.CanExecute(null));
+    }
+
     [Fact]
     public void HasScanned_RaisesChangeNotificationsForTheEmptyStateText()
     {

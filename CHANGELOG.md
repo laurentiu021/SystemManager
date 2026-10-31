@@ -10,6 +10,17 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.136.57] - 2026-10-31
+
+**Boot Analyzer says "Nothing slowed boot" only once it has looked.**
+
+### Fixed
+- The "Slowed boot" list on Boot Analyzer said "Nothing slowed boot" whenever it was empty:
+  without administrator rights, beside a boot list asking for them, after a read that failed, and
+  before Windows had any boot history. It now says that it needs administrator, could not be
+  read, or has no history yet, and says nothing slowed boot only after a read that found nothing.
+  This was there since the list got its empty state, in 1.45.0.
+
 ## [1.136.56] - 2026-10-31
 
 **Preinstalled Apps finishes the app it is removing when you cancel, and records what it removed.**

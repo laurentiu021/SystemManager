@@ -34,6 +34,8 @@ public sealed partial class BootAnalyzerViewModel : ViewModelBase
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(EmptyMessage))]
+    [NotifyPropertyChangedFor(nameof(SlowedBootEmptyTitle))]
+    [NotifyPropertyChangedFor(nameof(SlowedBootEmptyMessage))]
     private bool _isElevated;
 
     /// <summary>True when the last read of the boot history failed, so an empty list is not an empty history.</summary>
@@ -52,7 +54,44 @@ public sealed partial class BootAnalyzerViewModel : ViewModelBase
             ? "Windows' boot history could not be read. Press Refresh to try again."
             : "Windows has no boot performance records yet. A few restarts build the history.";
 
-    [ObservableProperty] private bool _hasData;
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(SlowedBootEmptyTitle))]
+    [NotifyPropertyChangedFor(nameof(SlowedBootEmptyMessage))]
+    private bool _hasData;
+
+    /// <summary>
+    /// Whether the last read listed what slowed boot: true when it did, false when it could not, and null before any
+    /// read has finished.
+    /// </summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(SlowedBootEmptyTitle))]
+    [NotifyPropertyChangedFor(nameof(SlowedBootEmptyMessage))]
+    private bool? _slowedBootListed;
+
+    /// <summary>What the empty "Slowed boot" card says, which depends on whether the list was read at all.</summary>
+    /// <remarks>
+    /// It said "Nothing slowed boot" whenever the list was empty: without administrator, beside a boot list asking for
+    /// it, after a read that failed, and before any boot history existed (#2737). On a tab that diagnoses, an unearned
+    /// "nothing is wrong" is the most misleading thing it can say, so it says that only after a read that found nothing.
+    /// </remarks>
+    public string SlowedBootEmptyTitle => SlowedBootListed switch
+    {
+        true when HasData => "Nothing slowed boot",
+        true => "No boot history yet",
+        false when !IsElevated => "Needs administrator",
+        false => "Could not be read",
+        null => "Not read yet",
+    };
+
+    /// <summary>The line under <see cref="SlowedBootEmptyTitle"/>.</summary>
+    public string SlowedBootEmptyMessage => SlowedBootListed switch
+    {
+        true when HasData => "No components were flagged as delaying startup.",
+        true => "Windows has no boot performance records yet. A few restarts build the history.",
+        false when !IsElevated => "What slowed boot is in the boot history, which needs administrator to read.",
+        false => "Windows' list of what slowed boot could not be read. Press Refresh to try again.",
+        null => "Press Refresh to read what slowed boot.",
+    };
     [ObservableProperty] private BootRecord? _latestBoot;
     [ObservableProperty] private string _trend = "";
 
@@ -124,6 +163,7 @@ public sealed partial class BootAnalyzerViewModel : ViewModelBase
             ReadFailed = boots is null;
             if (boots is null)
             {
+                SlowedBootListed = false;
                 StatusMessage = IsElevated
                     ? "Windows' boot history could not be read. Try Refresh in a moment."
                     : "Reading boot history requires administrator — use \"Run as administrator\".";
@@ -132,6 +172,7 @@ public sealed partial class BootAnalyzerViewModel : ViewModelBase
 
             Boots.ReplaceWith(boots);
             if (degr is not null) Degradations.ReplaceWith(degr);
+            SlowedBootListed = degr is not null;
             LatestBoot = boots.Count > 0 ? boots[0] : null;
             HasData = boots.Count > 0;
             Trend = ComputeTrend(boots);

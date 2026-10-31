@@ -140,9 +140,10 @@
                     </DataGrid>
 
                     <!-- Empty state -->
+                    <!-- Bound: "Nothing slowed boot" was fixed text, shown also when the list was never read (#2737). -->
                     <v:EmptyState Glyph="&#xE946;"
-                                  Title="Nothing slowed boot"
-                                  Message="No components were flagged as delaying startup."
+                                  Title="{Binding SlowedBootEmptyTitle}"
+                                  Message="{Binding SlowedBootEmptyMessage}"
                                   Visibility="{Binding Degradations.Count, Converter={StaticResource FlexVis}, ConverterParameter=Inverse}"/>
                     </Grid>
                 </DockPanel>

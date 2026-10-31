@@ -10,6 +10,19 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.136.35] - 2026-10-31
+
+**Restore All in Performance Mode finishes when the power plan it recorded has been deleted.**
+
+### Fixed
+- Restore All, and putting Performance Mode back in Undo Changes, switched the recorded power plan
+  on first. When that plan had been deleted, or the plans reset by an OEM tool or by powercfg
+  -restoredefaultschemes, Windows refused, and the restore stopped there: the visual effects, Game
+  Mode, the Xbox settings, the graphics setting and the processor minimum were left as they were,
+  and every retry failed the same way with "powercfg failed to activate the power plan (exit code
+  1)". A plan that is no longer on the PC is now left as it is, the question says so, and every
+  other setting goes back. This was there from the first version.
+
 ## [1.136.34] - 2026-10-31
 
 **Reduced visual effects in Performance Mode last past a restart, and the Game Mode switch agrees

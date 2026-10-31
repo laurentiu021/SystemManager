@@ -86,7 +86,8 @@ public sealed class UndoChangesService : IUndoChangesService
     private readonly Func<string, ServiceEntry?> _readService;
     private readonly Func<CancellationToken, Task<PerformanceService.OriginalSnapshot>> _readPerformanceNow;
     private readonly Func<string, GraphicsNow> _readGraphics;
-    private readonly Func<PerformanceService.OriginalSnapshot, PerformanceService.RecordedAdapter?, CancellationToken, Task<bool>> _restorePerformance;
+    private readonly Func<PerformanceService.OriginalSnapshot, PerformanceService.RecordedPlan?> _readPlan;
+    private readonly Func<PerformanceService.OriginalSnapshot, PerformanceService.RecordedAdapter?, PerformanceService.RecordedPlan?, CancellationToken, Task<bool>> _restorePerformance;
     private readonly Func<EnvironmentVariableService.RestoreResult> _restoreEnvironment;
     private readonly Action _announceEnvironment;
     private readonly TimeZoneInfo _zone;
@@ -104,7 +105,7 @@ public sealed class UndoChangesService : IUndoChangesService
         IPutBackSignal signal)
         : this(performance, ledger, powerShell, hosts, environment, gaming, watchdog, restorePoints, signal,
             AdminHelper.IsElevated, ServiceManagerService.ReadEntry,
-            readPerformanceNow: null, readGraphics: null, restorePerformance: null, restoreEnvironment: null,
+            readPerformanceNow: null, readGraphics: null, readPlan: null, restorePerformance: null, restoreEnvironment: null,
             announceEnvironment: null, zone: null)
     {
     }
@@ -114,8 +115,9 @@ public sealed class UndoChangesService : IUndoChangesService
     /// </summary>
     /// <param name="readPerformanceNow">Reads the Performance Mode settings as they are now, in the shape of its record.</param>
     /// <param name="readGraphics">Reads the graphics setting on the adapter a Performance Mode record names, as it is now.</param>
-    /// <param name="restorePerformance">Puts the Performance Mode record back and deletes it, with its NVIDIA card as the
-    /// list found it.</param>
+    /// <param name="readPlan">Finds what has become of the power plan a Performance Mode record names.</param>
+    /// <param name="restorePerformance">Puts the Performance Mode record back and deletes it, with its NVIDIA card and its
+    /// power plan as the list found them.</param>
     /// <param name="restoreEnvironment">Puts the kept copy of the variables back.</param>
     /// <param name="announceEnvironment">Tells every open program that the variables changed — a broadcast to every
     /// window on the desktop, which a test has no business sending.</param>
@@ -134,7 +136,8 @@ public sealed class UndoChangesService : IUndoChangesService
         Func<string, ServiceEntry?> readService,
         Func<CancellationToken, Task<PerformanceService.OriginalSnapshot>>? readPerformanceNow,
         Func<string, GraphicsNow>? readGraphics,
-        Func<PerformanceService.OriginalSnapshot, PerformanceService.RecordedAdapter?, CancellationToken, Task<bool>>? restorePerformance,
+        Func<PerformanceService.OriginalSnapshot, PerformanceService.RecordedPlan?>? readPlan,
+        Func<PerformanceService.OriginalSnapshot, PerformanceService.RecordedAdapter?, PerformanceService.RecordedPlan?, CancellationToken, Task<bool>>? restorePerformance,
         Func<EnvironmentVariableService.RestoreResult>? restoreEnvironment,
         Action? announceEnvironment,
         TimeZoneInfo? zone)
@@ -152,6 +155,7 @@ public sealed class UndoChangesService : IUndoChangesService
         _readService = readService;
         _readPerformanceNow = readPerformanceNow ?? performance.TakeSnapshotAsync;
         _readGraphics = readGraphics ?? (subKey => ReadGraphics(performance, subKey));
+        _readPlan = readPlan ?? performance.PlanOf;
         _restorePerformance = restorePerformance ?? performance.RestoreOriginalAsync;
         _restoreEnvironment = restoreEnvironment ?? environment.RestoreFromBackup;
         _announceEnvironment = announceEnvironment ?? EnvironmentVariableService.BroadcastSettingChange;
@@ -327,8 +331,8 @@ public sealed class UndoChangesService : IUndoChangesService
 
     // ── Performance Mode ───────────────────────────────────────────────────────
 
-    private async Task<(Found Found, PerformanceService.OriginalSnapshot? Original, GraphicsNow? Graphics)> FindPerformanceAsync(
-        GameMode game, CancellationToken ct)
+    private async Task<(Found Found, PerformanceService.OriginalSnapshot? Original, GraphicsNow? Graphics,
+        PerformanceService.RecordedPlan? Plan)> FindPerformanceAsync(GameMode game, CancellationToken ct)
     {
         var original = _performance.LoadSnapshot(out var problem);
         if (original is null)
@@ -338,7 +342,7 @@ public sealed class UndoChangesService : IUndoChangesService
                 PerformanceService.SnapshotProblem.None => new Found(UndoChangeKind.PerformanceMode, null),
                 PerformanceService.SnapshotProblem.Invalid => Problem(UndoChangeKind.PerformanceMode, UndoProblemKind.Damaged),
                 _ => Problem(UndoChangeKind.PerformanceMode, UndoProblemKind.Unreadable),
-            }, null, null);
+            }, null, null, null);
         }
 
         // While game mode is on, or left on, the power plan and visual effects are its own, so what differs from the
@@ -348,26 +352,30 @@ public sealed class UndoChangesService : IUndoChangesService
         // session it could recover.
         var notKnown = !game.On && game.LeftOn.Kind == PendingRecoveryKind.Unreadable;
         if (game.On || game.LeftOn.Kind == PendingRecoveryKind.LeftOn || notKnown)
-            return (new Found(UndoChangeKind.PerformanceMode, null, WaitsForGameMode: true, GameModeNotKnown: notKnown), null, null);
+            return (new Found(UndoChangeKind.PerformanceMode, null, WaitsForGameMode: true, GameModeNotKnown: notKnown), null, null,
+                null);
 
         IReadOnlyList<PerformanceDifference> differences;
         GraphicsNow? graphics;
+        PerformanceService.RecordedPlan? plan;
         try
         {
             var now = await _readPerformanceNow(ct).ConfigureAwait(false);
             graphics = GraphicsFor(original);
-            differences = PerformanceDifferences(original, now, graphics);
+            plan = _readPlan(original);
+            differences = PerformanceDifferences(original, now, graphics, plan);
         }
         catch (Exception ex) when (ex is InvalidOperationException or Win32Exception or IOException or SecurityException
                                        or UnauthorizedAccessException)
         {
             // The record was read; what it would be compared with was not.
             Log.Debug(ex, "Undo Changes could not read the current Performance Mode settings");
-            return (Problem(UndoChangeKind.PerformanceMode, UndoProblemKind.CannotCompare), null, null);
+            return (Problem(UndoChangeKind.PerformanceMode, UndoProblemKind.CannotCompare), null, null, null);
         }
 
         return (new Found(UndoChangeKind.PerformanceMode,
-            differences.Count == 0 ? null : PerformanceChange(original, differences, graphics)), original, graphics);
+            differences.Count == 0 ? null : PerformanceChange(original, differences, graphics, plan)), original, graphics,
+            plan);
     }
 
     /// <summary>The graphics setting on the adapter a Performance Mode record names, as it is now.</summary>
@@ -402,8 +410,8 @@ public sealed class UndoChangesService : IUndoChangesService
     /// <remarks>
     /// Only what the restore will actually set back is listed: a plan or a processor minimum the record could not read
     /// is left alone by the restore, so it is left out here too, and so is the graphics setting of an adapter that is
-    /// no longer in the PC. A value that cannot be read now is listed rather than assumed equal, because the restore
-    /// writes it whichever way it is.
+    /// no longer in the PC, and a power plan that is no longer on it (#2716). A value that cannot be read now is listed
+    /// rather than assumed equal, because the restore writes it whichever way it is.
     /// </remarks>
     /// <param name="original">The record.</param>
     /// <param name="now">The settings as they are now.</param>
@@ -412,12 +420,15 @@ public sealed class UndoChangesService : IUndoChangesService
     /// rather than taken from <paramref name="now"/>, whose card is the first NVIDIA one found; null when the record
     /// names none.
     /// </param>
+    /// <param name="plan">What has become of the power plan the record names; null when it names none.</param>
     internal static IReadOnlyList<PerformanceDifference> PerformanceDifferences(
-        PerformanceService.OriginalSnapshot original, PerformanceService.OriginalSnapshot now, GraphicsNow? graphics)
+        PerformanceService.OriginalSnapshot original, PerformanceService.OriginalSnapshot now, GraphicsNow? graphics,
+        PerformanceService.RecordedPlan? plan = null)
     {
         List<PerformanceDifference> found = [];
 
         if (original.PowerPlanGuid.Length > 0
+            && plan is not PerformanceService.RecordedPlan.Gone
             && !string.Equals(original.PowerPlanGuid, now.PowerPlanGuid, StringComparison.OrdinalIgnoreCase))
         {
             found.Add(new("Power plan", "the power plan",
@@ -464,7 +475,8 @@ public sealed class UndoChangesService : IUndoChangesService
     }
 
     private UndoChange PerformanceChange(
-        PerformanceService.OriginalSnapshot original, IReadOnlyList<PerformanceDifference> differences, GraphicsNow? graphics)
+        PerformanceService.OriginalSnapshot original, IReadOnlyList<PerformanceDifference> differences, GraphicsNow? graphics,
+        PerformanceService.RecordedPlan? plan)
     {
         var when = original.CapturedAtUtc is { } at ? Format(at.UtcDateTime) : null;
         var lines = differences.Select(d => d.Line).ToList();
@@ -489,21 +501,25 @@ public sealed class UndoChangesService : IUndoChangesService
                     ? "The NVIDIA graphics setting stays as it is: SysManager no longer finds the card it was recorded "
                       + "on.\n\n"
                     : "")
+                // And the power plan, when the plan it recorded is no longer on the PC.
+                + (plan is PerformanceService.RecordedPlan.Gone
+                    ? $"The power plan stays as it is: {original.PowerPlanName} is no longer on this PC.\n\n"
+                    : "")
                 + "You can change any of them again in Performance Mode.",
             "Put back Performance Mode — Confirm");
     }
 
     private async Task<UndoOutcome> PutBackPerformanceAsync(UndoChange listed, CancellationToken ct)
     {
-        var (found, record, graphics) = await FindPerformanceAsync(ReadGameMode(), ct).ConfigureAwait(false);
+        var (found, record, graphics, plan) = await FindPerformanceAsync(ReadGameMode(), ct).ConfigureAwait(false);
         if (Refusal(listed, found) is { } refusal) return refusal;
         var now = found.Change!;
         var original = record!;
 
         try
         {
-            // The card as this read found it, so the restore does what the list and the question said.
-            var cleared = await _restorePerformance(original, graphics?.Adapter, ct).ConfigureAwait(false);
+            // The card and the plan as this read found them, so the restore does what the list and the question said.
+            var cleared = await _restorePerformance(original, graphics?.Adapter, plan, ct).ConfigureAwait(false);
             if (!cleared)
                 return new UndoOutcome(UndoOutcomeKind.PartlyPutBack,
                     "Your original settings are back, but SysManager could not delete its record of them. Restore All "
@@ -521,7 +537,7 @@ public sealed class UndoChangesService : IUndoChangesService
 
             // Read after the restore rather than assumed: it stops at the first setting it cannot write, so the ones
             // before it may be back already, and the record stays for whatever is not.
-            return WhatWentBack(now.Lines, await LinesLeftAsync(original, ct).ConfigureAwait(false)) switch
+            return WhatWentBack(now.Lines, await LinesLeftAsync(original, plan, ct).ConfigureAwait(false)) switch
             {
                 StoppedRestore.SomeBack => new UndoOutcome(UndoOutcomeKind.PartlyPutBack,
                     $"Performance Mode is only partly back: {ex.Message} The list shows what is still different."),
@@ -541,12 +557,13 @@ public sealed class UndoChangesService : IUndoChangesService
     }
 
     // The lines that still differ from the record, or null when the settings cannot be read.
-    private async Task<IReadOnlyList<string>?> LinesLeftAsync(PerformanceService.OriginalSnapshot original, CancellationToken ct)
+    private async Task<IReadOnlyList<string>?> LinesLeftAsync(
+        PerformanceService.OriginalSnapshot original, PerformanceService.RecordedPlan? plan, CancellationToken ct)
     {
         try
         {
             var now = await _readPerformanceNow(ct).ConfigureAwait(false);
-            return PerformanceDifferences(original, now, GraphicsFor(original)).Select(d => d.Line).ToList();
+            return PerformanceDifferences(original, now, GraphicsFor(original), plan).Select(d => d.Line).ToList();
         }
         catch (Exception ex) when (ex is InvalidOperationException or Win32Exception or IOException or SecurityException
                                        or UnauthorizedAccessException)

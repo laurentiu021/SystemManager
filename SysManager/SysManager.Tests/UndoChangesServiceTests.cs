@@ -108,6 +108,12 @@ public sealed class UndoChangesServiceTests
 
         /// <summary>The NVIDIA card each restore was handed, as the list found it.</summary>
         public List<PerformanceService.RecordedAdapter?> RestoredCards { get; } = [];
+
+        /// <summary>What has become of the power plan a record names; still there unless a test says otherwise.</summary>
+        public PerformanceService.RecordedPlan? Plan { get; set; } = PerformanceService.RecordedPlan.Present;
+
+        /// <summary>The power plan each restore was handed, as the list found it.</summary>
+        public List<PerformanceService.RecordedPlan?> RestoredPlans { get; } = [];
         public Func<PerformanceService.OriginalSnapshot, Task<bool>> RestorePerformance { get; set; }
 
         /// <summary>The environment restore, or null for the real one over the throwaway registry keys.</summary>
@@ -120,9 +126,11 @@ public sealed class UndoChangesServiceTests
             name => ReadService is { } read ? read(name) : ServicesOnPc.TryGetValue(name, out var entry) ? entry : null,
             readPerformanceNow: _ => Task.FromResult(Now()),
             readGraphics: subKey => Graphics(subKey),
-            restorePerformance: (snapshot, card, _) =>
+            readPlan: _ => Plan,
+            restorePerformance: (snapshot, card, plan, _) =>
             {
                 RestoredCards.Add(card);
+                RestoredPlans.Add(plan);
                 return RestorePerformance(snapshot);
             },
             restoreEnvironment: RestoreEnvironment,
@@ -408,6 +416,40 @@ public sealed class UndoChangesServiceTests
 
         // As the list found it, so the restore does what the question said.
         Assert.Equal([PerformanceService.RecordedAdapter.Gone], rig.RestoredCards);
+    }
+
+    [Fact]
+    public void PerformanceDifferences_LeaveOutAPowerPlanThatIsGone()
+    {
+        // Deleted, or the plans reset: the restore cannot switch it on and leaves it out (#2716), so a line for it
+        // would be a change that never happens.
+        var now = Original() with { PowerPlanGuid = Tweaked().PowerPlanGuid, PowerPlanName = "Ultimate Performance" };
+
+        Assert.Empty(UndoChangesService.PerformanceDifferences(Original(), now, graphics: null,
+            PerformanceService.RecordedPlan.Gone));
+        Assert.Equal(["Power plan: Ultimate Performance → Balanced"],
+            UndoChangesService.PerformanceDifferences(Original(), now, graphics: null,
+                PerformanceService.RecordedPlan.Unreadable).Select(d => d.Line));
+    }
+
+    [Fact]
+    public async Task PerformanceMode_WhosePowerPlanIsGone_LeavesItOut_AndSaysSo()
+    {
+        using var rig = new Rig();
+        Assert.True(rig.Performance.SaveSnapshot(Original()));
+        rig.Now = Tweaked;
+        rig.Plan = PerformanceService.RecordedPlan.Gone;
+
+        var change = await OnlyChangeAsync(rig, UndoChangeKind.PerformanceMode);
+
+        Assert.Equal(["Visual effects: reduced → normal"], change.Lines);
+        Assert.Contains("The power plan stays as it is: Balanced is no longer on this PC.", change.Question,
+            StringComparison.Ordinal);
+
+        await rig.Service.PutBackAsync(change);
+
+        // As the list found it, so the restore does what the question said.
+        Assert.Equal([PerformanceService.RecordedPlan.Gone], rig.RestoredPlans);
     }
 
     [Fact]

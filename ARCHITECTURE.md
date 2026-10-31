@@ -1075,7 +1075,12 @@ Key services:
   `WriteGpuMaxPerformance`, a constructor seam the public constructor fills with the registry write and the test
   constructor leaves finding no card (#2607). Visual effects are written with `UiEffectsWrite`, into the profile
   as well as the session, and Game Mode is read by `GameModeOn`, from the Settings switch's
-  `AutoGameModeEnabled` before the older `AllowAutoGameMode` (#2716).
+  `AutoGameModeEnabled` before the older `AllowAutoGameMode` (#2716). The power plan a record names is found the way
+  its card is: `PlanOf` looks for it among `PlansOnThePc`, the power API's list (`PowerEnumerate`), a constructor
+  seam the test constructor leaves not known. It is read that way rather than through powercfg because a powercfg
+  read waits behind any other, and Restore All's question has to come up while the tab's own read is stuck. A plan
+  that is gone (`RecordedPlan`) is left out of the restore, when the question found it gone and when it is gone by
+  the time of the restore, and Undo Changes leaves it out of its list (#2716).
 - `NetworkRepairService` — DNS flush, Winsock reset, TCP/IP reset via
   system commands with live output capture.
 - `ServiceManagerService` — enumerate Windows services, gaming

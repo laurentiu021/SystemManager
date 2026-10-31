@@ -963,11 +963,12 @@ public sealed partial class PerformanceViewModel : ElevatedViewModelBase
         // deleted it since (#1525). One that could not be read just now is not "nothing to restore", so the copy already
         // held stays and the user is told to try again.
         // The graphics card is looked for with it, off the UI thread: one the record names that is no longer in the PC is
-        // left out of the restore, so the question leaves it out too.
-        var (onDisk, problem, card) = await Task.Run(() =>
+        // left out of the restore, so the question leaves it out too. So is a power plan that is no longer on it (#2716).
+        var (onDisk, problem, card, plan) = await Task.Run(() =>
         {
             var loaded = _service.LoadSnapshot(out var why);
-            return (loaded, why, loaded is null ? null : _service.AdapterOf(loaded));
+            return (loaded, why, loaded is null ? null : _service.AdapterOf(loaded),
+                loaded is null ? null : _service.PlanOf(loaded));
         });
         if (onDisk is null && problem == PerformanceService.SnapshotProblem.Unreadable)
         {
@@ -994,10 +995,12 @@ public sealed partial class PerformanceViewModel : ElevatedViewModelBase
             ? timestamp.ToLocalTime().ToString("f")
             : "Unknown (snapshot created by an earlier SysManager version)";
         // A plan the record could not read is one the restore leaves alone, so the question says so rather than
-        // promising "Unknown".
+        // promising "Unknown". So is one that is gone.
         var powerPlan = string.IsNullOrEmpty(onDisk.PowerPlanGuid)
             ? "unchanged (it could not be read when this was recorded)"
-            : $"{onDisk.PowerPlanName} ({onDisk.PowerPlanGuid})";
+            : plan is PerformanceService.RecordedPlan.Gone
+                ? $"unchanged ({onDisk.PowerPlanName} is no longer on this PC)"
+                : $"{onDisk.PowerPlanName} ({onDisk.PowerPlanGuid})";
         var gpuRestoreState = onDisk.GpuDynamicPstate
             ? "Dynamic P-state"
             : "Max performance";
@@ -1038,8 +1041,8 @@ public sealed partial class PerformanceViewModel : ElevatedViewModelBase
             // would re-apply stale values.
             // The record the question described, held in a local: while the question was open, Undo Changes may have
             // put it back and this tab cleared its copy, and restoring it again only sets the same settings.
-            // And the card as the question found it, so the restore does what the question said.
-            var snapshotDeleted = await _service.RestoreOriginalAsync(onDisk, card);
+            // And the card and the plan as the question found them, so the restore does what the question said.
+            var snapshotDeleted = await _service.RestoreOriginalAsync(onDisk, card, plan);
             if (snapshotDeleted)
             {
                 _snapshot = null;

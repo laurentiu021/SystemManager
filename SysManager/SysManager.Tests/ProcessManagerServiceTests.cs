@@ -2,6 +2,7 @@
 // Author: laurentiu021 · https://github.com/laurentiu021/SystemManager
 // License: MIT
 
+using System.Diagnostics;
 using SysManager.Models;
 using SysManager.Services;
 
@@ -260,7 +261,7 @@ public class ProcessManagerServiceTests
     [Fact]
     public void KillProcess_InvalidPid_ReportsNotRunning()
     {
-        var result = ProcessManagerService.KillProcess(-1);
+        var result = ProcessManagerService.KillProcess(-1, default);
         Assert.Equal(ProcessManagerService.KillOutcome.NotRunning, result);
     }
 
@@ -274,8 +275,91 @@ public class ProcessManagerServiceTests
     [Fact]
     public void KillProcess_NonExistentPid_ReportsNotRunning_NotRefused()
     {
-        var result = ProcessManagerService.KillProcess(int.MaxValue);
+        var result = ProcessManagerService.KillProcess(int.MaxValue, default);
         Assert.Equal(ProcessManagerService.KillOutcome.NotRunning, result);
+    }
+
+    // ── Which process holds a listed ID (#2514, #2719) ──
+    // Windows gives a closed process's ID to the next one it starts. A list's start time tells the two apart, and where
+    // the list has none, Windows would not give one with SysManager's rights, so a process it gives one for now is
+    // another process. Such a row was acted on by its ID alone.
+
+    private static readonly DateTime ListedStart = new(2026, 10, 31, 9, 0, 0);
+
+    private static Func<DateTime> Gives(DateTime start) => () => start;
+
+    private static DateTime WillNotSay() => throw new System.ComponentModel.Win32Exception(5);
+
+    [Fact]
+    public void StartedAsListed_AtTheListedStartTime_IsTheListedProcess() =>
+        Assert.True(ProcessManagerService.StartedAsListed(ListedStart, Gives(ListedStart)));
+
+    [Fact]
+    public void StartedAsListed_AtAnotherTime_IsAnotherProcess() =>
+        Assert.False(ProcessManagerService.StartedAsListed(ListedStart, Gives(ListedStart.AddSeconds(1))));
+
+    [Fact]
+    public void StartedAsListed_WithNoListedStartTime_AndOneWindowsGivesNow_IsAnotherProcess() =>
+        Assert.False(ProcessManagerService.StartedAsListed(default, Gives(ListedStart)));
+
+    [Fact]
+    public void StartedAsListed_WithNoListedStartTime_AndNoneNow_IsTheListedProcess() =>
+        Assert.True(ProcessManagerService.StartedAsListed(default, WillNotSay));
+
+    [Fact]
+    public void StartedAsListed_WithAListedStartTime_AndNoneNow_LeavesTheAnswerToTheCaller()
+    {
+        // As before: ending a process refuses then, and the other callers each say what they did.
+        Assert.Throws<System.ComponentModel.Win32Exception>(() => ProcessManagerService.StartedAsListed(ListedStart, WillNotSay));
+    }
+
+    [Fact]
+    public void StartedAsListed_ForAProcessThatHasExited_Throws()
+    {
+        Func<DateTime> exited = () => throw new InvalidOperationException("No process is associated with this object.");
+
+        Assert.Throws<InvalidOperationException>(() => ProcessManagerService.StartedAsListed(default, exited));
+        Assert.Throws<InvalidOperationException>(() => ProcessManagerService.StartedAsListed(ListedStart, exited));
+    }
+
+    [Fact]
+    public async Task Snapshot_ReadsTheDetailsOfAProcessThatIsNotTheOneShownWithItsId()
+    {
+        // What the caller shows is a process, not an ID: one that took the ID of a shown process that exited had its
+        // path and description skipped as that one's, and its row stayed bare for its whole lifetime (#2719). This
+        // test process stands in for it, shown as one that started earlier, and as one of another name.
+        using var self = Process.GetCurrentProcess();
+        var itself = new ProcessManagerService.ProcessIdentity(self.Id, self.StartTime, self.ProcessName);
+        var everyOther = AllRunning();
+        Assert.True(everyOther.Remove(itself), "this process was not among the running ones, so nothing below is checked");
+        var service = new ProcessManagerService();
+        async Task<ProcessEntry> ListedWhileShownAs(ProcessManagerService.ProcessIdentity shown) =>
+            (await service.SnapshotAsync(new HashSet<ProcessManagerService.ProcessIdentity>(everyOther) { shown }))
+                .Single(p => p.Pid == self.Id);
+
+        var asAnEarlierProcess = await ListedWhileShownAs(new(self.Id, self.StartTime.AddMinutes(-5), self.ProcessName));
+        var asAnotherName = await ListedWhileShownAs(new(self.Id, self.StartTime, "another-program"));
+        var asItself = await ListedWhileShownAs(new(self.Id, self.StartTime, self.ProcessName));
+
+        Assert.NotEqual("", asAnEarlierProcess.FilePath);
+        Assert.NotEqual("", asAnotherName.FilePath);
+        Assert.Equal("", asItself.FilePath);   // and one that is shown still has those reads skipped
+    }
+
+    // Every process running now, as a caller that shows all of them hands them over, so a snapshot reads the details of
+    // none but the one a test changes: reading them all costs seconds.
+    private static HashSet<ProcessManagerService.ProcessIdentity> AllRunning()
+    {
+        HashSet<ProcessManagerService.ProcessIdentity> running = [];
+        foreach (var p in Process.GetProcesses())
+        {
+            using (p)
+            {
+                try { running.Add(new(p.Id, ProcessManagerService.StartTimeOf(p) ?? default, p.ProcessName)); }
+                catch (InvalidOperationException) { /* exited since it was listed */ }
+            }
+        }
+        return running;
     }
 
     // ── OpenFileLocation ──

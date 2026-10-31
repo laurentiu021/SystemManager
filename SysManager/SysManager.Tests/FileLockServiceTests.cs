@@ -172,9 +172,10 @@ public sealed class FileLockServiceTests : IDisposable
     }
 
     [Fact]
-    public void KillProcess_ForALockerWithNoStartTime_SkipsTheCheck()
+    public void KillProcess_ForALockerWithNoStartTime_PassesNone()
     {
-        // default is how ProcessManagerService.KillProcess is told there is no start time to compare.
+        // default is how ProcessManagerService.KillProcess is told there is no start time to compare. It then ends the
+        // process only while Windows still gives none for it, as for a Process Manager row (#2719).
         var calls = new List<DateTime>();
         var service = new FileLockService((_, startTime) =>
         {
@@ -201,7 +202,8 @@ public sealed class FileLockServiceTests : IDisposable
             .GetField("_killProcess", BindingFlags.NonPublic | BindingFlags.Instance)!
             .GetValue(service));
 
-        Assert.Equal(typeof(ProcessManagerService).GetMethod(nameof(ProcessManagerService.KillProcess)), kill.Method);
+        Assert.Equal(typeof(ProcessManagerService).GetMethod(
+            nameof(ProcessManagerService.KillProcess), [typeof(int), typeof(DateTime)]), kill.Method);
     }
 
     [Fact]

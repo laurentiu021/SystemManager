@@ -111,9 +111,10 @@ public sealed partial class CpuAffinityViewModel : ViewModelBase
         _refreshingProcesses = true;
         try
         {
-            // Preserve the selection across a refresh by PID and start time: the list is a fresh set of records,
-            // so the previously-selected instance is gone, but the process it named may still be running. The
-            // start time is what tells that process from a new one Windows has given the same PID (#2514).
+            // Preserve the selection across a refresh by PID, start time and name: the list is a fresh set of
+            // records, so the previously-selected instance is gone, but the process it named may still be running.
+            // The start time is what tells that process from a new one Windows has given the same PID (#2514), and
+            // the name what still does where Windows gives no start time (#2719).
             var selected = SelectedProcess;
 
             _allProcesses = (await Task.Run(_service.GetProcesses).ConfigureAwait(true)).ToList();
@@ -121,7 +122,7 @@ public sealed partial class CpuAffinityViewModel : ViewModelBase
 
             if (selected is not null)
                 SelectedProcess = Processes.FirstOrDefault(
-                    p => p.ProcessId == selected.ProcessId && p.StartTime == selected.StartTime);
+                    p => p.ProcessId == selected.ProcessId && p.StartTime == selected.StartTime && p.Name == selected.Name);
 
             // Not over the reason a selected process shows no cores: the grid stays empty, so the reason still holds.
             if (_coresRead || SelectedProcess is null) StatusMessage = Prompt;

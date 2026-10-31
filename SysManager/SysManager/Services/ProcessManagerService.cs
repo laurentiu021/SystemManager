@@ -44,13 +44,28 @@ public sealed partial class ProcessManagerService
         _readDescription = readDescription ?? FileDescription.Read;
     }
 
-    // knownPids: PIDs the caller already shows. Their identity (description/path) is static and the
-    // view model keeps it on the surviving entry (ReconcileInto), so for those PIDs we skip the
-    // expensive MainModule/FileVersionInfo/File.Exists reads and refresh only the volatile metrics.
-    public Task<IReadOnlyList<ProcessEntry>> SnapshotAsync(IReadOnlySet<int>? knownPids = null, CancellationToken ct = default)
-        => Task.Run(() => Snapshot(knownPids, ct), ct);
+    /// <summary>
+    /// What a listed process is: its ID, when it started, and its name. Windows gives a closed process's ID to the next
+    /// one it starts, so the ID alone is not the process (#2514, #2719).
+    /// </summary>
+    /// <param name="Pid">The process ID.</param>
+    /// <param name="StartTime">When it started, or <c>default</c> when Windows would not say.</param>
+    /// <param name="Name">Its name, as <see cref="Process.ProcessName"/> gives it.</param>
+    public readonly record struct ProcessIdentity(int Pid, DateTime StartTime, string Name)
+    {
+        /// <summary>The process <paramref name="entry"/> lists.</summary>
+        public static ProcessIdentity Of(ProcessEntry entry) => new(entry.Pid, entry.StartTime, entry.Name);
+    }
 
-    private IReadOnlyList<ProcessEntry> Snapshot(IReadOnlySet<int>? knownPids, CancellationToken ct)
+    // known: the processes the caller already shows. Their description and path do not change, and the view model
+    // keeps them on the surviving entry (ReconcileInto), so for those the expensive MainModule/FileVersionInfo/
+    // File.Exists reads are skipped and only the volatile metrics refreshed. A process, not an ID: one that took the
+    // ID of a listed process that exited had its reads skipped as that one, and was listed bare for its whole
+    // lifetime (#2719).
+    public Task<IReadOnlyList<ProcessEntry>> SnapshotAsync(IReadOnlySet<ProcessIdentity>? known = null, CancellationToken ct = default)
+        => Task.Run(() => Snapshot(known, ct), ct);
+
+    private IReadOnlyList<ProcessEntry> Snapshot(IReadOnlySet<ProcessIdentity>? known, CancellationToken ct)
     {
         List<ProcessEntry> results = [];
         Process[] procs;
@@ -121,10 +136,15 @@ public sealed partial class ProcessManagerService
                         catch (System.ComponentModel.Win32Exception) { /* process may have exited */ }
                     }
 
+                    // Read first: with the ID and the name, it is what says whether the caller shows this process.
+                    try { entry.StartTime = p.StartTime; }
+                    catch (InvalidOperationException) { /* access denied or process exited */ }
+                    catch (System.ComponentModel.Win32Exception) { /* access denied or process exited */ }
+
                     // Identity (description/path) is static per process and the view model keeps it
-                    // for a PID it already tracks, so only pay the expensive MainModule /
-                    // FileVersionInfo / File.Exists cost for a PID we haven't seen yet.
-                    if (knownPids is null || !knownPids.Contains(p.Id))
+                    // for a process it already shows, so only pay the expensive MainModule /
+                    // FileVersionInfo / File.Exists cost for a process it doesn't.
+                    if (known is null || !known.Contains(new ProcessIdentity(p.Id, entry.StartTime, entry.Name)))
                     {
                         try
                         {
@@ -138,9 +158,6 @@ public sealed partial class ProcessManagerService
                         entry.CanOpenFileLocation = !string.IsNullOrWhiteSpace(entry.FilePath)
                                                    && System.IO.File.Exists(entry.FilePath);
                     }
-                    try { entry.StartTime = p.StartTime; }
-                    catch (InvalidOperationException) { /* access denied or process exited */ }
-                    catch (System.ComponentModel.Win32Exception) { /* access denied or process exited */ }
 
                     results.Add(entry);
                 }
@@ -366,15 +383,15 @@ public sealed partial class ProcessManagerService
     [return: MarshalAs(UnmanagedType.Bool)]
     private static partial bool IsHungAppWindow(IntPtr window);
 
-    /// <summary>What happened when <see cref="KillProcess"/> tried to end a process.</summary>
+    /// <summary>What happened when <see cref="KillProcess(int, DateTime, string)"/> tried to end a process.</summary>
     public enum KillOutcome
     {
         /// <summary>Windows ended the process.</summary>
         Ended,
 
         /// <summary>
-        /// The process that was meant is not running: nothing has that ID, or the ID now belongs to a process
-        /// that started at a different time. Nothing was ended.
+        /// The process that was meant is not running: nothing has that ID, or the ID now belongs to another process,
+        /// one that did not start as listed or has another name. Nothing was ended.
         /// </summary>
         NotRunning,
 
@@ -383,15 +400,26 @@ public sealed partial class ProcessManagerService
     }
 
     /// <summary>
-    /// Ends the process with <paramref name="pid"/>, and only that process.
+    /// Ends the process with <paramref name="pid"/>, and only that process. <see cref="KillProcess(int, DateTime, string)"/>
+    /// with no name to compare, for a list that has none.
+    /// </summary>
+    /// <param name="pid">The process ID.</param>
+    /// <param name="startTime">When the process started, as listed, or <c>default</c> when Windows would not say.</param>
+    public static KillOutcome KillProcess(int pid, DateTime startTime) => KillProcess(pid, startTime, name: null);
+
+    /// <summary>
+    /// Ends the process with <paramref name="pid"/>, and only if it is still the process that was listed.
     /// </summary>
     /// <param name="pid">The process ID.</param>
     /// <param name="startTime">
     /// When the process started, as listed, or <c>default</c> when Windows would not say. Windows reuses a process ID
     /// once its process exits, and the confirmation can stay open for as long as the user likes, so by the time the
-    /// ID is acted on it can name a different program. When this is set, a process that started at another time is
-    /// left alone and reported as <see cref="KillOutcome.NotRunning"/>. That is the identity the list already keys
-    /// its rows by.
+    /// ID is acted on it can name a different program. A process that did not start as listed, by
+    /// <see cref="StartedAsListed(Process, DateTime)"/>, is left alone and reported as <see cref="KillOutcome.NotRunning"/>.
+    /// </param>
+    /// <param name="name">
+    /// The listed process's name, or null when the list has none to compare. A process of another name is left alone in
+    /// the same way: where Windows gives no start time, the name is what still tells two processes apart.
     /// </param>
     /// <remarks>
     /// Not <c>Kill(entireProcessTree: true)</c>, which this was until #2498. That also ends every process the target
@@ -403,18 +431,61 @@ public sealed partial class ProcessManagerService
     /// <para><see cref="Process.Kill()"/> returns quietly for a process that has already exited, so a
     /// <see cref="System.ComponentModel.Win32Exception"/> means the process is still running and Windows refused.</para>
     /// </remarks>
-    public static KillOutcome KillProcess(int pid, DateTime startTime = default)
+    public static KillOutcome KillProcess(int pid, DateTime startTime, string? name)
     {
         try
         {
             using var p = Process.GetProcessById(pid);
-            if (startTime != default && p.StartTime != startTime) return KillOutcome.NotRunning;
+            if (name is not null && !string.Equals(p.ProcessName, name, StringComparison.OrdinalIgnoreCase))
+                return KillOutcome.NotRunning;
+            if (!StartedAsListed(p, startTime)) return KillOutcome.NotRunning;
             p.Kill();
             return KillOutcome.Ended;
         }
         catch (ArgumentException) { return KillOutcome.NotRunning; }
         catch (InvalidOperationException) { return KillOutcome.NotRunning; }
         catch (System.ComponentModel.Win32Exception) { return KillOutcome.Refused; }
+    }
+
+    /// <summary>
+    /// Whether the process that holds a listed ID now, <paramref name="p"/>, started as the listed one did.
+    /// </summary>
+    /// <param name="p">The process that holds the ID now.</param>
+    /// <param name="listedStart">When the listed process started, or <c>default</c> when Windows would not say.</param>
+    /// <exception cref="System.ComponentModel.Win32Exception">
+    /// The list has a start time, and Windows will not give this process's: each caller decides what that means, as
+    /// before.
+    /// </exception>
+    /// <exception cref="InvalidOperationException">The process has exited.</exception>
+    internal static bool StartedAsListed(Process p, DateTime listedStart) => StartedAsListed(listedStart, () => p.StartTime);
+
+    /// <summary>
+    /// <see cref="StartedAsListed(Process, DateTime)"/>, with the read of the start time of the process that holds the ID
+    /// now passed in.
+    /// </summary>
+    /// <remarks>
+    /// A start time the list has decides it. One the list does not have is one Windows would not give with the rights
+    /// SysManager runs with, as for most of the system's and other users' processes without administrator rights, so a
+    /// process whose start time Windows gives now is another one. Without one, every check skipped the comparison, so
+    /// a confirmation left open while such a process exited acted on whatever Windows gave its ID to next (#2719).
+    /// </remarks>
+    internal static bool StartedAsListed(DateTime listedStart, Func<DateTime> startNow)
+    {
+        if (listedStart != default) return startNow() == listedStart;
+        try
+        {
+            startNow();
+            return false;
+        }
+        catch (System.ComponentModel.Win32Exception) { return true; }
+    }
+
+    /// <summary>When <paramref name="p"/> started, or null when Windows will not say.</summary>
+    /// <exception cref="InvalidOperationException">The process has exited.</exception>
+    internal static DateTime? StartTimeOf(Process p)
+    {
+        try { return p.StartTime; }
+        catch (System.ComponentModel.Win32Exception) { return null; }
     }
 
     /// <summary>

@@ -72,7 +72,7 @@ public sealed class SlowdownService : ISlowdownService
     /// </summary>
     private static readonly TimeSpan SameStart = TimeSpan.FromMinutes(1);
 
-    private readonly Func<IReadOnlySet<int>?, CancellationToken, Task<IReadOnlyList<ProcessEntry>>> _processes;
+    private readonly Func<IReadOnlySet<ProcessManagerService.ProcessIdentity>?, CancellationToken, Task<IReadOnlyList<ProcessEntry>>> _processes;
     private readonly Func<IReadOnlyList<FixedDriveService.FixedDrive>> _drives;
     private readonly Func<string?> _systemDrive;
     private readonly Func<CancellationToken, Task<SystemSnapshot>> _vitals;
@@ -112,7 +112,7 @@ public sealed class SlowdownService : ISlowdownService
     /// <param name="ownProcessId">SysManager's own process, which is doing the measuring and is never named.</param>
     /// <param name="clock">The time now, and the wait between the two processor samples.</param>
     internal SlowdownService(
-        Func<IReadOnlySet<int>?, CancellationToken, Task<IReadOnlyList<ProcessEntry>>> processes,
+        Func<IReadOnlySet<ProcessManagerService.ProcessIdentity>?, CancellationToken, Task<IReadOnlyList<ProcessEntry>>> processes,
         Func<IReadOnlyList<FixedDriveService.FixedDrive>> drives,
         Func<string?> systemDrive,
         Func<CancellationToken, Task<SystemSnapshot>> vitals,
@@ -198,7 +198,7 @@ public sealed class SlowdownService : ISlowdownService
         await Task.Delay(SampleGap, _clock, ct).ConfigureAwait(false);
 
         // The second pass skips what the first already read about each process, as Process Manager's refresh does.
-        var second = await _processes(first.Select(p => p.Pid).ToHashSet(), ct).ConfigureAwait(false);
+        var second = await _processes(first.Select(ProcessManagerService.ProcessIdentity.Of).ToHashSet(), ct).ConfigureAwait(false);
 
         var outcome = Processor(first, second, _ownProcessId, _describe);
         progress?.Report(outcome.Status);

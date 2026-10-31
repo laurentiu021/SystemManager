@@ -259,8 +259,9 @@ public class FileLockViewModelTests
     [Fact]
     public async Task KillSelected_ForALockerWithNoStartTime_PassesNone()
     {
-        // Restart Manager's start time is null only when it gave an unusable one. The service then skips the check, as
-        // Process Manager does for a process whose start time Windows would not give.
+        // Restart Manager's start time is null only when it gave an unusable one. The process is then ended only while
+        // Windows still gives no start time for it, as for a Process Manager row whose start time it would not give
+        // (#2719).
         var service = ServiceThatAnswers(ProcessManagerService.KillOutcome.Ended);
         using var dialog = new DialogAnswer(confirm: true);
         var vm = NewVm(service);

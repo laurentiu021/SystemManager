@@ -284,9 +284,12 @@ to scroll.
   sets and the path check, read by this view model's tiers, `ProcessDescriptionService.Lookup(name, path)`
   (downgrades a database "System" hit the same way when the path disagrees), and `ProcessEntry.SafetyTooltip`
   (so the chip's tooltip never promises something the tiers above contradict). Kill passes the listed
-  start time with the PID, so a process that closed while the confirmation was open, and whose ID Windows
-  gave to another program, is reported as already closed and left alone; SysManager's own process is
-  refused.
+  start time and name with the PID, so a process that closed while the confirmation was open, and whose ID
+  Windows gave to another program, is reported as already closed and left alone; SysManager's own process is
+  refused. What is already shown, and so not read or filled in again, is a set of
+  `ProcessManagerService.ProcessIdentity` values (PID, start time, name), not of PIDs: a process at the ID
+  of one that closed was skipped as that one, and stayed bare for its lifetime (#2719). `ReconcileInto`
+  keeps a row only for the same identity.
 - `BatteryHealthViewModel` — charge %, health %, wear, cycle count via WMI. A failed read sets `ReadFailed` and says so rather than "no battery"; a failed refresh keeps the last reading.
   After the battery read, and only when there is a battery, it reads the capacity history through
   `IBatteryReportService` into `CapacityChart`, `WearVerdict` and the card's messages; a failed history read after
@@ -967,6 +970,10 @@ Key services:
   returns a `KillOutcome` (`Ended`, `NotRunning`, `Refused`) so the tab can tell a process that had
   already closed from one Windows would not end. The start time is the listed one: a process ID
   reused while the confirmation was open names a different program, which is left alone.
+  `StartedAsListed` is the one copy of that check, for this service, `CpuAffinityService` and
+  `GamingProfileService`: a listed start time must match, and where the list has none, which is where
+  Windows would not give one with these rights, the process must still not give one. Every check used to
+  skip the comparison then (#2719). `KillProcess(pid, startTime, name)` also compares the process name.
   `VerifySignatures(entries, cache)` fills the Signature column from the
   running image's certificate, through the shared `Helpers/SignatureVerdict`.
   **Deliberately NOT called from `Snapshot`.** It was, and the cost was measured: ~25 ms per
@@ -1576,8 +1583,9 @@ Key services:
   (variable-length buffer walked by each record's `Size`). The mask helpers
   (build/test/all-cores) are pure, unit-tested static methods. Each process it lists
   carries its start time, and `GetAffinity`, `TrySetAffinity`, `GetPriority`,
-  `TrySetPriority` and `HasExited` take it with the ID: a process with that ID that started
-  at another time is not the one listed (#2514, #2559).
+  `TrySetPriority` and `HasExited` take it with the ID: a process with that ID that did not
+  start as listed, by `ProcessManagerService.StartedAsListed`, is not the one listed (#2514, #2559,
+  #2719).
 - `AudioMixerService` (`IAudioMixerService`) — per-app volume/mute/peak on every active
   render endpoint via Windows Core Audio, using raw `[ComImport]` interop for ten documented
   interfaces (`IMMDeviceEnumerator`, `IMMDevice`, `IMMDeviceCollection` and `IPropertyStore` for the

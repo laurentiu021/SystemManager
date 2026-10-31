@@ -126,13 +126,33 @@ public class CpuAffinityServiceTests
     }
 
     [Fact]
-    public void HasExited_WithNoStartTimeToCheck_AsksOnlyWhetherTheIdIsRunning()
+    public void HasExited_WithNoStartTime_IsTrueForAProcessWhoseStartTimeWindowsGives()
     {
-        // int.MaxValue names no process; a smaller made-up ID could, since Windows ignores an ID's low two bits.
+        // The list has no start time only where Windows would not give one, so this process, whose start time it
+        // gives, is not the one listed. It used to be asked only whether the ID was running (#2719). int.MaxValue
+        // names no process; a smaller made-up ID could, since Windows ignores an ID's low two bits.
         var service = new CpuAffinityService();
 
-        Assert.False(service.HasExited(Environment.ProcessId, null));
+        Assert.True(service.HasExited(Environment.ProcessId, null));
         Assert.True(service.HasExited(int.MaxValue, null));
+    }
+
+    [Fact]
+    public void ChangesWithNoStartTime_LeaveAProcessWhoseStartTimeWindowsGivesAlone()
+    {
+        // The same process as above, reached by the reads and changes. Each write passes what the process already has,
+        // so even a broken check would leave it as it was.
+        var (id, _, mask) = Self();
+        using var self = Process.GetCurrentProcess();
+        var priority = self.PriorityClass;
+        var service = new CpuAffinityService();
+
+        Assert.Null(service.GetAffinity(id, null));
+        Assert.Null(service.GetPriority(id, null));
+        Assert.False(service.TrySetAffinity(id, null, mask, out var affinityError));
+        Assert.Equal("That process is no longer running.", affinityError);
+        Assert.False(service.TrySetPriority(id, null, priority, out var priorityError));
+        Assert.Equal("That process is no longer running.", priorityError);
     }
 
     // ── The same check for the priority Gaming Profile raises (#2559) ──

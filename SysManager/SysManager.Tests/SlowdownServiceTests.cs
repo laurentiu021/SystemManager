@@ -27,7 +27,7 @@ public sealed class SlowdownServiceTests
     private Func<string?> _systemDrive = () => "C:";
     private IReadOnlyList<ProcessEntry> _first = [Proc(4, "System", 1), Proc(100, "explorer", 2)];
     private IReadOnlyList<ProcessEntry> _second = [Proc(4, "System", 1), Proc(100, "explorer", 2)];
-    private readonly List<IReadOnlySet<int>?> _asked = [];
+    private readonly List<IReadOnlySet<ProcessManagerService.ProcessIdentity>?> _asked = [];
     private Func<CancellationToken, Task<SystemSnapshot>> _vitals = _ => Task.FromResult(Vitals());
     private Func<CancellationToken, Task<StartupScan>> _startup = _ => Task.FromResult(Startup(5));
     private BootRecord? _lastStart;
@@ -349,7 +349,9 @@ public sealed class SlowdownServiceTests
         Assert.Equal([SlowdownService.SampleGap], _clock.Waits);
         Assert.Equal(2, _asked.Count);
         Assert.Null(_asked[0]);
-        Assert.Equal([10, 11], _asked[1]!.Order());
+        Assert.Equal(
+            new ProcessManagerService.ProcessIdentity[] { new(10, default, "chrome"), new(11, default, "explorer") },
+            _asked[1]!.OrderBy(p => p.Pid).ToArray());
     }
 
     [Fact]

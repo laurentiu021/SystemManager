@@ -10,6 +10,25 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.136.41] - 2026-10-31
+
+**Ending a process, or changing one in CPU Core Affinity or Gaming Profile, no longer reaches
+another program that was given its ID, and a new program at a reused ID gets its details.**
+
+### Fixed
+- Process Manager ended a process whose start time Windows would not give by its ID alone. Without
+  administrator rights that is most of the system's and other users' processes. If such a process
+  closed while the confirmation was open and Windows gave its ID to another program, Yes ended that
+  program, and the status line named the first one. A row is now ended only while it is still the
+  same process, by its start time and its name. File Lock Detector ends a locker through the same
+  check, and CPU Core Affinity and Gaming Profile change and watch a process the same way. The
+  start-time checks these tabs gained from 1.114.14 to 1.114.53 each left such a process out.
+- A program that started at the ID of one that had just closed stayed bare in Process Manager for
+  as long as it ran: no icon, no description, no category or safety, no signature and no way to
+  open its file location. A Windows component in that position got the ordinary kill prompt rather
+  than its own warning. It now gets its details like any new program. This was there since
+  1.20.63.
+
 ## [1.136.40] - 2026-10-31
 
 **Performance Mode no longer adds another copy of the Ultimate Performance plan at every Apply, on

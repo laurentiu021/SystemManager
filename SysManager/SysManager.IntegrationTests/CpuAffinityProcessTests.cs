@@ -77,6 +77,31 @@ public sealed class CpuAffinityProcessTests
     }
 
     /// <summary>
+    /// A process listed with no start time is not changed by its ID alone (#2719).
+    /// </summary>
+    /// <remarks>
+    /// The list has no start time only where Windows would not give one with SysManager's rights. The child's start
+    /// time Windows gives, so it stands in for a process that was given such a row's ID.
+    /// </remarks>
+    [Fact]
+    public async Task TrySetAffinity_WithNoStartTime_LeavesAChildWhoseStartTimeWindowsGivesAsItWas()
+    {
+        SkipOnASingleCpu();
+        using var bounded = new CancellationTokenSource(TimeSpan.FromSeconds(60));
+        using var child = await RunningChild.StartAsync(heldFile: null, bounded.Token);
+        var service = new CpuAffinityService();
+        var before = MaskOf(child);
+        Assert.NotEqual(CoreZero, before);   // the premise: pinning it would show
+
+        var changed = service.TrySetAffinity(child.Id, null, CoreZero, out var error);
+
+        Assert.False(changed);
+        Assert.Equal("That process is no longer running.", error);
+        Assert.Equal(before, MaskOf(child));
+        Assert.True(service.HasExited(child.Id, null));
+    }
+
+    /// <summary>
     /// The priority Gaming Profile raises a game to, changed only at the game's start time (#2559).
     /// </summary>
     /// <remarks>

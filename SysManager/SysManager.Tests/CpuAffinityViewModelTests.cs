@@ -673,6 +673,20 @@ public class CpuAffinityViewModelTests
     }
 
     [Fact]
+    public async Task Refresh_DoesNotCarryTheSelectionToAnotherProcessWithThePid_WhenNeitherHasAStartTime()
+    {
+        // Where Windows gives no start time, the name is what tells the selected process from another that was given
+        // its ID (#2719).
+        var service = ServiceListing(new(4242, "updater", 0b0001, null), new(4242, "game", 0b0001, null));
+        var vm = NewVm(service);
+        vm.SelectedProcess = vm.Processes.Single();
+
+        await vm.RefreshProcessesCommand.ExecuteAsync(null);
+
+        Assert.Null(vm.SelectedProcess);
+    }
+
+    [Fact]
     public void Restore_ForANewProcessWithTheSamePidAndName_UsesItsOwnOriginal()
     {
         // Restore_WhenAPidIsReused_UsesTheNewProcessOwnOriginal, in the case the name cannot tell apart.

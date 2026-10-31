@@ -14536,7 +14536,7 @@ public partial class ArchitectureTests
         // and a half seconds spent before the list appeared. Putting it back is a one-line change that
         // reintroduces that wait silently, since every verdict would still be correct.
         var snapshot = SliceMethod(service,
-            "private IReadOnlyList<ProcessEntry> Snapshot(IReadOnlySet<int>? knownPids, CancellationToken ct)");
+            "private IReadOnlyList<ProcessEntry> Snapshot(IReadOnlySet<ProcessIdentity>? known, CancellationToken ct)");
         Assert.DoesNotContain("VerifySignatures", snapshot, StringComparison.Ordinal);
     }
 

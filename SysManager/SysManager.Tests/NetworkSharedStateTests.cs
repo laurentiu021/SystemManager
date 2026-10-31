@@ -95,6 +95,34 @@ public class NetworkSharedStateTests
         Assert.True(state.Targets.Count > 0);
     }
 
+    public static TheoryData<string> PresetNames()
+    {
+        var data = new TheoryData<string>();
+        foreach (var preset in TargetPresets.All) data.Add(preset.Name);
+        return data;
+    }
+
+    /// <summary>
+    /// Every preset leaves a public DNS server among the targets, so the verdict can tell a far end's loss from the
+    /// provider's (#2712).
+    /// </summary>
+    /// <remarks>
+    /// The game and streaming presets pinged none, and the verdict said the connection to DNS was clean. Nothing is
+    /// pinged here: the monitor is never started.
+    /// </remarks>
+    [Theory]
+    [MemberData(nameof(PresetNames))]
+    public void EveryPreset_PingsAPublicDnsServer(string preset)
+    {
+        using var state = new NetworkSharedState(new Services.PingMonitorService(), new Services.TracerouteService(),
+            new Services.TracerouteMonitorService(), new Services.SpeedTestService(),
+            new Services.NetworkRepairService(new Services.PowerShellRunner()));
+
+        state.ApplyPreset(TargetPresets.All.Single(p => p.Name == preset));
+
+        Assert.Contains(state.Targets, t => t.Role == TargetRole.PublicDns);
+    }
+
     /// <summary>
     /// A target added on a light theme draws its lines, and its card's bar, in the colour that reads on that theme's
     /// card (#2818).

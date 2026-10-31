@@ -624,7 +624,11 @@ Key services:
   `EventExplainer.TryExplain` returns the written explanation for a known (source, ID) only, which
   is what the report uses.
 - `HealthAnalyzer` — the Ping tab's per-target latency, jitter and loss into one network verdict: is it the PC,
-  the ISP or the server. Pure and static; `NetworkSharedState` calls it.
+  the ISP or the server. Pure and static; `NetworkSharedState` calls it. A layer with no samples is unmeasured, not
+  clean: a far end in trouble with no public DNS reference measured is `Inconclusive`, and the wording says when the
+  router was not measured. Generic targets count as a far end (`RemoteTarget`), and each layer's trouble is named
+  by what tripped, packet loss, jitter or high latency (#2712). `TargetPresets.DnsReference` is the DNS server the
+  game and streaming presets ping beside their servers.
 - `SpeedVerdictAnalyzer` — a speed-test result into a plain-English verdict
   ("Fast connection", what that allows) plus a comparison against the previous
   run on the same engine. Pure and static like `HealthAnalyzer`, so the

@@ -84,7 +84,8 @@ public class TargetPresetTests
     [Fact]
     public void PubgEurope_UsesAwsEndpoints()
     {
-        Assert.All(TargetPresets.PubgEurope.Targets, t =>
+        // Its servers; the preset pings the DNS reference beside them (#2712).
+        Assert.All(TargetPresets.PubgEurope.Targets.Where(t => t != TargetPresets.DnsReference), t =>
             Assert.Contains("amazonaws", t.Host));
     }
 

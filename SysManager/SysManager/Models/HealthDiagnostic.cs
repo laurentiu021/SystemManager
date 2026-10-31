@@ -14,6 +14,8 @@ public enum HealthVerdict
     IspOrUpstream,      // loss/jitter on public DNS but not gateway
     GameServer,         // only the game target(s) are bad
     StreamingService,   // only streaming targets bad
+    RemoteTarget,       // only a plain target is bad: google.com, or one the user added
+    Inconclusive,       // a far end is bad, and no public DNS reference was measured to tell where
     Mixed,              // multiple layers impacted
     Unknown             // not enough data yet
 }

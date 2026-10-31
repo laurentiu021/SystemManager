@@ -10,6 +10,25 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.136.31] - 2026-10-31
+
+**Ping's verdict no longer calls your router and DNS clean without pinging them, and counts the
+targets you add.**
+
+### Fixed
+- With the CS2 Europe, FACEIT Europe, PUBG Europe or Streaming preset, nothing between your router
+  and the servers was pinged, so any loss to the servers read "It's the game server, not you" with
+  "Your connection to DNS and gateway is clean", even when the loss was at your provider. Each of
+  those presets now pings Cloudflare's DNS server as a reference, and the verdict calls a layer
+  clean only when it measured something in it. Without a reference it says it cannot tell the
+  server from your provider.
+- A target you added, and google.com in the Global preset, never counted toward the verdict, while
+  their loss showed under it: a server of your own at 15% loss read "Connection is healthy" above
+  "15.0% worst loss". They count now, and the verdict names the target in trouble.
+- The detail said "loss" whatever had tripped, so a DNS server answering every ping at 65 ms was
+  reported as losing packets. It now says what tripped: packet loss, jitter or high latency. All
+  three were there from the tab's first version.
+
 ## [1.136.30] - 2026-10-30
 
 **Bandwidth Monitor's precise mode no longer freezes the tab when its trace fails, and stops the

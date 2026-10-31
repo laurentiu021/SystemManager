@@ -15,6 +15,14 @@ public sealed record TargetPreset(
 
 public static class TargetPresets
 {
+    /// <summary>
+    /// The public DNS server every preset without one of its own pings beside its servers. With nothing between the
+    /// router and the far end measured, the verdict cannot tell a server's loss from the provider's, and the game and
+    /// streaming presets had none, so it called the connection to DNS clean without pinging any (#2712).
+    /// </summary>
+    /// <remarks>Declared first: the presets below read it as they are built.</remarks>
+    public static readonly (string Name, string Host) DnsReference = ("Cloudflare DNS", "1.1.1.1");
+
     public static readonly TargetPreset Global = new(
         "Global",
         "General connectivity: DNS servers, gateway, a common domain.",
@@ -40,6 +48,7 @@ public static class TargetPresets
             ("CS2 EU West 2",     "155.133.248.1"),
             ("CS2 EU Central",    "162.254.197.1"),
             ("CS2 EU East",       "155.133.254.1"),
+            DnsReference,
         });
 
     public static readonly TargetPreset PubgEurope = new(
@@ -50,6 +59,7 @@ public static class TargetPresets
             ("AWS Frankfurt", "ec2.eu-central-1.amazonaws.com"),
             ("AWS Ireland",   "ec2.eu-west-1.amazonaws.com"),
             ("AWS London",    "ec2.eu-west-2.amazonaws.com"),
+            DnsReference,
         });
 
     public static readonly TargetPreset Streaming = new(
@@ -60,6 +70,7 @@ public static class TargetPresets
             ("YouTube",    "youtube.com"),
             ("Twitch",     "twitch.tv"),
             ("Cloudflare", "cloudflare.com"),
+            DnsReference,
         });
 
     public static readonly TargetPreset FaceitEurope = new(
@@ -72,6 +83,7 @@ public static class TargetPresets
             ("FACEIT NL 1",  "185.165.240.191"),
             ("FACEIT NL 2",  "190.2.142.225"),
             ("FACEIT UK",    "82.145.38.1"),
+            DnsReference,
         });
 
     public static readonly IReadOnlyList<TargetPreset> All =

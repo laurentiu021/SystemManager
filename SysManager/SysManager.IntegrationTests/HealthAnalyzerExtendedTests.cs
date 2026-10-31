@@ -240,6 +240,8 @@ public class HealthAnalyzerExtendedTests
     [InlineData(HealthVerdict.IspOrUpstream, StatusColors.Warning)]
     [InlineData(HealthVerdict.GameServer, StatusColors.Info)]
     [InlineData(HealthVerdict.StreamingService, StatusColors.Info)]
+    [InlineData(HealthVerdict.RemoteTarget, StatusColors.Info)]
+    [InlineData(HealthVerdict.Inconclusive, StatusColors.Warning)]
     [InlineData(HealthVerdict.Mixed, StatusColors.Bad)]
     [InlineData(HealthVerdict.Unknown, StatusColors.Neutral)]
     public void AllVerdicts_ProduceValidColor(HealthVerdict expectedVerdict, string expectedColor)
@@ -266,6 +268,17 @@ public class HealthAnalyzerExtendedTests
                 M("gw", TargetRole.Gateway, avg: 2, jitter: 1),
                 M("dns", TargetRole.PublicDns, avg: 15, jitter: 2),
                 M("yt", TargetRole.Streaming, loss: 10)
+            },
+            HealthVerdict.RemoteTarget => new[]
+            {
+                M("gw", TargetRole.Gateway, avg: 2, jitter: 1),
+                M("dns", TargetRole.PublicDns, avg: 15, jitter: 2),
+                M("my.server", TargetRole.Generic, loss: 10)
+            },
+            HealthVerdict.Inconclusive => new[]
+            {
+                M("gw", TargetRole.Gateway, avg: 2, jitter: 1),
+                M("game", TargetRole.GameServer, loss: 10)
             },
             HealthVerdict.Mixed => new[]
             {

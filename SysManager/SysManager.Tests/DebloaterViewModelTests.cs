@@ -445,4 +445,112 @@ public class DebloaterViewModelTests
 
         Assert.False(vm.HasNoResults);
     }
+
+    // ---------- Cancel during a removal batch (#2736) ----------
+    // Cancel stopped Remove-AppxPackage part-way, which left the row at "Removing…" and the app removed or not with
+    // nothing to say which, and the apps removed before it were said and never recorded.
+
+    private static bool IsRemoval(string script) => script.Contains("Remove-AppxPackage", StringComparison.Ordinal);
+
+    [Fact]
+    public async Task Cancel_WhileAnAppIsRemoved_LetsItFinish_ThenStopsBeforeTheNext_AndRecordsWhatWent()
+    {
+        using var activity = new ActivityLogScope();
+        using var dialog = new DialogAnswer(confirm: true);
+        DebloaterViewModel? vm = null;
+        CancellationToken removalToken = default;
+        string? said = null;
+        var runner = Substitute.For<IPowerShellRunner>();
+        runner.RunAsync(Arg.Any<string>(), Arg.Any<IDictionary<string, object?>>(), Arg.Any<CancellationToken>())
+            .Returns(call =>
+            {
+                if (vm is not null && IsRemoval(call.ArgAt<string>(0)))
+                {
+                    removalToken = call.ArgAt<CancellationToken>(2);
+                    vm.CancelCommand.Execute(null);   // while the first app is being removed
+                    said = vm.StatusMessage;
+                }
+                return Task.FromResult(new Collection<PSObject> { new("__SM_RM_OK__") });
+            });
+        vm = NewVm(NoRestorePoint(), runner);
+        var a = Removable("Contoso.AppA");
+        var b = Removable("Contoso.AppB");
+        vm.Apps.Add(a);
+        vm.Apps.Add(b);
+
+        await vm.RemoveSelectedCommand.ExecuteAsync(null);
+
+        Assert.False(removalToken.IsCancellationRequested);   // the removal running was not stopped part-way
+        Assert.Equal("Stopping after Contoso.AppA. Its removal finishes first.", said);
+        Assert.Equal("Removed", a.Status);
+        Assert.Equal([b], vm.Apps);
+        Assert.Equal([b], vm.FilteredApps);   // the list follows what went
+        await runner.Received(1).RunAsync(Arg.Is<string>(s => IsRemoval(s)),
+            Arg.Any<IDictionary<string, object?>>(), Arg.Any<CancellationToken>());
+        Assert.Equal("Cancelled after removing 1 app.", vm.StatusMessage);
+        var entry = Assert.Single(ActivityLogService.Instance.GetRecent(10));
+        Assert.Equal(("Debloater", "Removed 1 app, then the removal was cancelled"), (entry.Action, entry.Detail));
+    }
+
+    [Fact]
+    public async Task Cancel_BeforeTheFirstRemoval_RemovesNothing_AndRecordsNothing()
+    {
+        using var activity = new ActivityLogScope();
+        using var dialog = new DialogAnswer(confirm: true);
+        DebloaterViewModel? vm = null;
+        var restorePoint = Substitute.For<ISessionRestorePoint>();
+        restorePoint.EnsureAsync(Arg.Any<string>(), Arg.Any<CancellationToken>()).Returns(_ =>
+        {
+            vm!.CancelCommand.Execute(null);   // while the restore point is being made
+            return Task.FromResult(false);
+        });
+        var runner = RunnerThatRemovesSuccessfully();
+        vm = NewVm(restorePoint, runner);
+        vm.Apps.Add(Removable("Contoso.AppA"));
+
+        await vm.RemoveSelectedCommand.ExecuteAsync(null);
+
+        Assert.Equal("Cancelled after removing 0 apps.", vm.StatusMessage);
+        Assert.Single(vm.Apps);
+        await runner.DidNotReceive().RunAsync(Arg.Is<string>(s => IsRemoval(s)),
+            Arg.Any<IDictionary<string, object?>>(), Arg.Any<CancellationToken>());
+        Assert.Empty(ActivityLogService.Instance.GetRecent(10));
+    }
+
+    [Fact]
+    public async Task Dispose_WhileAnAppIsRemoved_StillEndsTheRemoval()
+    {
+        // Closing SysManager asks first while the batch holds its lock, and then ends what is running, as App Updates does.
+        var started = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var pending = new TaskCompletionSource<Collection<PSObject>>(TaskCreationOptions.RunContinuationsAsynchronously);
+        CancellationToken removalToken = default;
+        var runner = Substitute.For<IPowerShellRunner>();
+        runner.RunAsync(Arg.Any<string>(), Arg.Any<IDictionary<string, object?>>(), Arg.Any<CancellationToken>())
+            .Returns(call =>
+            {
+                if (!IsRemoval(call.ArgAt<string>(0))) return Task.FromResult(new Collection<PSObject>());
+                removalToken = call.ArgAt<CancellationToken>(2);
+                removalToken.Register(() => pending.TrySetCanceled(removalToken));
+                started.TrySetResult();
+                return pending.Task;
+            });
+        using var dialog = new DialogAnswer(confirm: true);
+        var vm = NewVm(NoRestorePoint(), runner);
+        vm.Apps.Add(Removable("Contoso.AppA"));
+
+        var execution = vm.RemoveSelectedCommand.ExecuteAsync(null);
+        try
+        {
+            await started.Task.WaitAsync(TimeSpan.FromSeconds(10));
+            vm.Dispose();
+
+            Assert.True(removalToken.IsCancellationRequested);
+            await execution.WaitAsync(TimeSpan.FromSeconds(10));
+        }
+        finally
+        {
+            pending.TrySetResult([]);
+            await execution.WaitAsync(TimeSpan.FromSeconds(10));
+        }
+    }
 }

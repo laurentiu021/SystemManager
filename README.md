@@ -235,8 +235,9 @@ cycles the themes inside it, and `Escape` closes it and puts focus back on the b
 the 26 tabs that can be cancelled from the keyboard: every tab with a Cancel button but System Fixes, and Display
 Profiles, where it puts back the previous mode while a new one waits for "Keep". Every run on System Fixes repairs
 Windows, so stopping one is left to its Cancel button rather than a keypress. On Windows Features `Escape` stops a
-scan, never a change. On Uninstaller, App Updates and Bulk Installer it stops a batch before its next app, once the
-uninstaller, update or install already running has finished, and on Quick Cleanup it stops everything but a component
+scan, never a change. On Uninstaller, App Updates, Bulk Installer and Preinstalled Apps it stops a batch before its
+next app, once the uninstaller, update, install or removal already running has finished, and on Quick Cleanup it
+stops everything but a component
 store cleanup, which only its Cancel button stops. It only acts
 while something is running, and only after the control you are on has had its own chance to use the key,
 so it still closes a drop-down or undoes a text edit first.
@@ -854,7 +855,8 @@ Across the tab:
   restart to finish, the row says so, the update counts as done rather than failed, and the
   summary says how many apps need the restart. The Dashboard's Update All Apps says it too
 - **Cancel stops a batch between apps** — the update already running finishes first, because
-  ending winget half-way ends the installer it started. `Escape` does the same
+  ending winget half-way ends the installer it started. `Escape` does the same, and the apps the
+  batch never reached say "Not started"
 
 ### Quick Cleanup
 Freeing up disk space, and nothing else — the Windows repairs that used to sit here are on
@@ -1753,6 +1755,9 @@ them:
   that change system settings. Described honestly rather than reassuringly: System Restore does
   **not** bring Store apps back, so reinstalling from the Store stays the real undo and the app
   says exactly that
+- **Cancel stops a removal between apps** — the app being removed is finished first, so its row
+  says whether it went, as `Escape` does too. The apps removed before the cancel are recorded in
+  Recent activity like any others
 - Search, and the descriptions of the apps it knows, help you decide before removing
 
 ### Browser Cleaner

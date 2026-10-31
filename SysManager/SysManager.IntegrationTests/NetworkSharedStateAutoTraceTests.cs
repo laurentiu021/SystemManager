@@ -23,8 +23,9 @@ public class NetworkSharedStateAutoTraceTests
     private const string UnreachableHost = "192.0.2.1"; // RFC 5737 TEST-NET-1
 
     /// <summary>
-    /// Shared state whose ping targets cannot leave the machine. The constructor seeds a Gateway
-    /// target from the real routing table, so it is disabled before anything is started.
+    /// Shared state whose ping targets cannot leave the machine. The gateway lookup answers the
+    /// unreachable address, when the state is built and on every Start, which looks the gateway up
+    /// again (#2712), and every target is disabled before anything is started.
     /// </summary>
     private static NetworkSharedState NewIsolatedShared()
     {
@@ -33,7 +34,8 @@ public class NetworkSharedStateAutoTraceTests
             new TracerouteService(),
             new TracerouteMonitorService(),
             new SpeedTestService(),
-            new NetworkRepairService(new PowerShellRunner()));
+            new NetworkRepairService(new PowerShellRunner()),
+            () => UnreachableHost);
 
         foreach (var target in shared.Targets)
         {

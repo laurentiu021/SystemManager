@@ -1489,7 +1489,9 @@ Answers "what is actually using my space?" by listing the biggest files in one p
   - The game and streaming presets also ping Cloudflare's DNS server, 1.1.1.1, so the verdict
     can tell a server's loss from your provider's
 - **Your gateway is detected and added automatically**, so the first thing the chart can
-  tell you apart is your own network from everything beyond it
+  tell you apart is your own network from everything beyond it. It follows the network you
+  are on: the router is looked up again each time you press Start and whenever the PC's
+  connection changes, so a laptop that wakes up on another Wi-Fi pings the router there
 - **Live latency chart** with a window you pick in minutes (1, 5, 10 or 15) and a ping
   interval you type in seconds, default once per second. Each target has its own on/off
   switch

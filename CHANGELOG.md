@@ -10,6 +10,21 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.136.32] - 2026-10-31
+
+**Ping's Gateway card follows the network you are on, so a laptop that wakes up on another Wi-Fi
+pings the router there.**
+
+### Fixed
+- The Gateway card was the router found when SysManager started, and it was never looked up again.
+  SysManager stays in the notification area for days, so after the PC woke up on another network,
+  Start pinged the old router's address: every ping timed out, and the verdict read "Problem on your
+  local network" while your router was fine. If SysManager started before Wi-Fi connected, there
+  was no Gateway card until it restarted. The router is now looked up again each time you press
+  Start and whenever the PC's connection changes: the card moves to the new router, appears when
+  one is found, and goes when there is none. A card you turned off stays off. This was there from
+  the first version.
+
 ## [1.136.31] - 2026-10-31
 
 **Ping's verdict no longer calls your router and DNS clean without pinging them, and counts the

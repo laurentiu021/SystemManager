@@ -2274,7 +2274,9 @@ offers, "rate us" prompts:
   Test run in place with a progress bar, and the result says whether it worked: an app update
   that fails ends as "Failed" with winget's reason, not "Done". A Cancel button sits beside the
   bar for as long as the action is still running and stops it, same as Escape; Update All Apps
-  stops between apps rather than mid-download. Check Windows Updates asks
+  stops between apps rather than mid-download. An action ends as "Cancelled" only when you
+  cancelled it: a speed test whose server stopped answering ends as "Failed" and says it timed
+  out. Check Windows Updates asks
   Windows Update what is waiting and says how many updates it found, or that Windows is up to
   date. It installs nothing: the link under the result opens the Windows Update tab, where you
   choose what to install. Run Speed Test records its result in the Speed Test tab's history, and

@@ -24,7 +24,8 @@ that drops during it shows as an error on its card.**
 - A connection that dropped once the download had started, a Wi-Fi drop or a VPN reconnecting,
   brought up the app's error dialog, and the HTTP card stayed on "Measuring download…" for
   good. It now shows as an error on the card, and the test can be run again. A test the server
-  stopped answering says it timed out, rather than that it was cancelled.
+  stopped answering says it timed out, rather than that it was cancelled, on the tab and on the
+  Dashboard's quick speed test.
 
 ## [1.136.42] - 2026-10-31
 

@@ -21,6 +21,16 @@ public class PerformanceUiTests
     public PerformanceUiTests(AppFixture fx) => _fx = fx;
 
     [Fact]
+    public void TheApp_RunsAtNormalPriority_OnceItsTrayIconExists()
+    {
+        // The tray icon is created before the window first shows, and creating it turned Efficiency Mode on: the
+        // app, and every tool it started, ran at idle priority for the whole session (#2722).
+        using var app = Process.GetProcessById(_fx.App.ProcessId);
+
+        Assert.Equal(ProcessPriorityClass.Normal, app.PriorityClass);
+    }
+
+    [Fact]
     public void TabNavigation_RendersHeader_WithinBudget()
     {
         // Switching to a content-heavy tab must surface its header well within a

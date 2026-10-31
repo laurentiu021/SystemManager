@@ -402,7 +402,8 @@ public partial class MainWindow : Window
     /// <see cref="MainWindowViewModel.AcceleratorCommand"/>.</para>
     /// <para>All three keys are read-only in effect: F5 re-reads, Escape cancels, F1 navigates. Nothing
     /// that cleans, deletes, applies or kills is reachable from a bare keypress, which is what makes an
-    /// accelerator with no confirmation dialog behind it acceptable at all.</para>
+    /// accelerator with no confirmation dialog behind it acceptable at all. What a re-read can lose is a change
+    /// not applied yet, and the four tabs that keep those ask before they read again (#2734).</para>
     /// </remarks>
     private void Window_KeyDown(object sender, KeyEventArgs e)
     {

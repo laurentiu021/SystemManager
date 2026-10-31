@@ -413,6 +413,15 @@ public sealed partial class PrivacyViewModel : ElevatedViewModelBase, ISearchDes
     [RelayCommand(CanExecute = nameof(NotBusy))]
     private async Task RefreshAsync()
     {
+        // A read replaces every switch and the baseline, so changes not applied yet went with no word, F5 included,
+        // and choices staged from a profile could not come back: the handoff gives them once (#2734).
+        if (PendingChangeCount > 0
+            && !DialogService.Instance.Confirm(UnappliedChanges.Question("Apply"), UnappliedChanges.Title))
+        {
+            StatusMessage = UnappliedChanges.Kept("Apply");
+            return;
+        }
+
         // Read the registry off the UI thread — the service reads every privacy key
         // synchronously, which froze the UI when Refresh ran directly on the dispatcher.
         // Mirrors the async initial load (LoadTogglesAsync), including its progress feedback.

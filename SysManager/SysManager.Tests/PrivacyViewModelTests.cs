@@ -2,6 +2,7 @@
 // Author: laurentiu021 · https://github.com/laurentiu021/SystemManager
 // License: MIT
 
+using CommunityToolkit.Mvvm.Input;
 using Microsoft.Win32;
 using NSubstitute;
 using SysManager.Helpers;
@@ -804,5 +805,60 @@ public sealed class PrivacyViewModelTests : IDisposable
         tips.IsEnabled = false;
         vm.DiscardChangesCommand.Execute(null);
         Assert.False(tips.IsPending);
+    }
+
+    // ---------- F5 and Refresh over changes not applied yet (#2734) ----------
+    // A read replaced every switch and the baseline, so changes not applied yet went with no word, and F5 runs
+    // Refresh. Choices staged from a profile could not come back after it: the handoff gives them once.
+
+    [Fact]
+    public async Task F5_OverImportedChoicesNotAppliedYet_AsksFirst_AndNoKeepsThem()
+    {
+        var privacy = ThisPc();
+        var handoff = new PrivacyChoicesHandoff();
+        handoff.Offer(Choices(("tips", true)));
+        var vm = await StagingVmAsync(privacy, handoff);
+        var staged = Switch(vm, "tips");
+        Assert.Equal(1, vm.PendingChangeCount);
+        using var dialog = new DialogAnswer(confirm: false);
+
+        await Assert.IsAssignableFrom<IAsyncRelayCommand>(vm.RefreshOnF5).ExecuteAsync(null);
+
+        Assert.Equal([$"{UnappliedChanges.Title}\n{UnappliedChanges.Question("Apply")}"], dialog.Messages);
+        privacy.Received(1).LoadToggles();   // the first load, and no other
+        Assert.Same(staged, Switch(vm, "tips"));
+        Assert.True(staged.IsEnabled);
+        Assert.Equal(1, vm.PendingChangeCount);
+        Assert.Equal(UnappliedChanges.Kept("Apply"), vm.StatusMessage);
+    }
+
+    [Fact]
+    public async Task F5_OverAChangeNotAppliedYet_ReadsAgain_WhenTheUserSaysYes()
+    {
+        var vm = await StagingVmAsync(ThisPc(), new PrivacyChoicesHandoff());
+        var clicked = Switch(vm, "tips");
+        clicked.IsEnabled = true;
+        using var dialog = new DialogAnswer(confirm: true);
+
+        await Assert.IsAssignableFrom<IAsyncRelayCommand>(vm.RefreshOnF5).ExecuteAsync(null);
+
+        Assert.Equal(1, dialog.Calls);
+        Assert.NotSame(clicked, Switch(vm, "tips"));
+        Assert.False(Switch(vm, "tips").IsEnabled);
+        Assert.Equal(0, vm.PendingChangeCount);
+        Assert.Equal("Toggles refreshed from registry.", vm.StatusMessage);
+    }
+
+    [Fact]
+    public async Task F5_WithNothingPending_ReadsAgain_WithoutAsking()
+    {
+        var vm = await StagingVmAsync(ThisPc(), new PrivacyChoicesHandoff());
+        var before = Switch(vm, "tips");
+        using var dialog = new DialogAnswer(confirm: false);
+
+        await Assert.IsAssignableFrom<IAsyncRelayCommand>(vm.RefreshOnF5).ExecuteAsync(null);
+
+        Assert.Equal(0, dialog.Calls);
+        Assert.NotSame(before, Switch(vm, "tips"));
     }
 }

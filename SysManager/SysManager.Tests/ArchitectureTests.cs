@@ -4461,6 +4461,59 @@ public partial class ArchitectureTests
     }
 
     /// <summary>
+    /// A tab that keeps changes until Apply or Save asks before F5 reads it again, and asks before the read starts
+    /// (#2734).
+    /// </summary>
+    /// <remarks>
+    /// F5 runs a tab's plain reload, and on the four tabs that keep changes the reload replaced the list and the
+    /// baseline the changes are counted against, so every change not made yet went without a word. A tab keeps
+    /// changes when it declares <c>HasPendingChanges</c>; the hosts list on DNS &amp; Hosts keeps them without a
+    /// count, against the file as last read, so it is named. The method behind each F5 command must ask
+    /// <c>UnappliedChanges.Question</c> before the first thing it awaits, and the floor says how many tabs were
+    /// looked at, so a renamed property cannot leave this checking none.
+    /// </remarks>
+    [Fact]
+    public void EveryTabThatKeepsChanges_AsksBeforeF5ReadsItAgain()
+    {
+        var app = TestPaths.AppProject();
+        string[] keepsChangesWithoutACount = ["DnsHostsViewModel"];
+        var looked = new List<string>();
+        var offenders = new List<string>();
+
+        foreach (var target in F5Targets(app).Order(StringComparer.Ordinal))
+        {
+            var dot = target.IndexOf('.');
+            var viewModel = target[..dot];
+            var source = WithoutComments(File.ReadAllText(Path.Combine(app, "ViewModels", viewModel + ".cs")));
+            if (!source.Contains("bool HasPendingChanges =>", StringComparison.Ordinal)
+                && !keepsChangesWithoutACount.Contains(viewModel, StringComparer.Ordinal))
+                continue;
+
+            looked.Add(viewModel);
+            // The toolkit names a command after its method, less any Async.
+            var method = target[(dot + 1)..^"Command".Length];
+            var body = MethodBody(source, method + "Async");
+            if (body.Length == 0) body = MethodBody(source, method);
+            var ask = body.IndexOf("UnappliedChanges.Question(", StringComparison.Ordinal);
+            var firstAwait = body.IndexOf("await ", StringComparison.Ordinal);
+            if (body.Length == 0)
+                offenders.Add($"{target}: no method {method} or {method}Async was found to check");
+            else if (ask < 0)
+                offenders.Add($"{target} reads the tab again without asking UnappliedChanges.Question first");
+            else if (firstAwait >= 0 && firstAwait < ask)
+                offenders.Add($"{target} starts its read before it asks");
+        }
+
+        // Four measured: Privacy & Telemetry, Notification Blocker, Environment Variables and DNS & Hosts.
+        Assert.True(looked.Count >= 4,
+            $"only {looked.Count} tabs that keep changes were found ({string.Join(", ", looked)}), out of 4 "
+            + "measured — the parse is broken, so the check below ran over a short list.");
+        Assert.True(offenders.Count == 0,
+            "a tab that keeps changes until Apply or Save must ask before F5 reads it again:\n  "
+            + string.Join("\n  ", offenders));
+    }
+
+    /// <summary>
     /// The extension readers take every value from a browser's JSON through <c>ExtensionFiles</c>, never from the
     /// parser's own accessors (#1526).
     /// </summary>

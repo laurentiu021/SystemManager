@@ -21,8 +21,12 @@ namespace SysManager.Tests;
 /// </summary>
 public class DnsHostsViewModelTests
 {
+    // Without the startup read. It reads this machine's hosts file, and since #2734 it runs beside the DNS query
+    // instead of after it, so it lands within milliseconds: an entry a test added or removed before it landed was
+    // replaced by the file's own entries. The CI runner's file has six, so the tests failed there and passed where
+    // the file has none.
     private static DnsHostsViewModel NewVm() =>
-        new(new DnsService(new PowerShellRunner()), new HostsFileService());
+        new(new DnsService(Substitute.For<IPowerShellRunner>()), new HostsFileService(), autoInit: false);
 
     [StaFact]
     public void Constructor_PresetsListPopulated_WithFilteringVariants()

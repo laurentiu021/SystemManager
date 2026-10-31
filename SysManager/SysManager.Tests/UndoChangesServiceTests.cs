@@ -225,10 +225,11 @@ public sealed class UndoChangesServiceTests
     }
 
     [Fact]
-    public async Task PerformanceMode_RecordingAnNvidiaCard_NeedsAdministratorRights()
+    public async Task PerformanceMode_WhoseNvidiaCardIsSetAsRecorded_NeedsNoAdministrator()
     {
-        // The restore writes the card's setting whenever the record names one, unchanged or not, and only an
-        // administrator can write it — so the row says so even when only the power plan moved.
+        // The restore writes the card's setting only when it differs, and only an administrator can write it. It used to
+        // write it whenever the record named a card, unchanged or not, so the row asked for administrator rights when
+        // only the power plan moved (#2716).
         using var rig = new Rig();
         var original = Original() with { NvidiaSubKey = "0000" };
         Assert.True(rig.Performance.SaveSnapshot(original));
@@ -236,8 +237,22 @@ public sealed class UndoChangesServiceTests
 
         var change = await OnlyChangeAsync(rig, UndoChangeKind.PerformanceMode);
 
-        Assert.True(change.NeedsAdmin);
+        Assert.False(change.NeedsAdmin);
         Assert.Equal(["Power plan: Ultimate Performance → Balanced"], change.Lines);
+    }
+
+    [Fact]
+    public async Task PerformanceMode_WhoseNvidiaCardIsSetOtherwise_NeedsAdministratorRights()
+    {
+        using var rig = new Rig();
+        var original = Original() with { NvidiaSubKey = "0000", GpuDynamicPstate = true };
+        Assert.True(rig.Performance.SaveSnapshot(original));
+        rig.Now = () => original with { GpuDynamicPstate = false };
+
+        var change = await OnlyChangeAsync(rig, UndoChangeKind.PerformanceMode);
+
+        Assert.True(change.NeedsAdmin);
+        Assert.Equal(["NVIDIA graphics: maximum performance → adaptive, after a restart"], change.Lines);
     }
 
     [Fact]

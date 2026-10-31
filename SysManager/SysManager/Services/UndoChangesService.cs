@@ -385,9 +385,12 @@ public sealed class UndoChangesService : IUndoChangesService
 
     // The real read: the adapter the record names, not the first NVIDIA one found now, since that is the one the
     // restore writes to.
+    // A card whose setting could not be read is listed as not read, as the restore takes it, rather than as adaptive.
     private static GraphicsNow ReadGraphics(PerformanceService performance, string subKey) =>
         performance.FindAdapter(subKey) is var adapter && adapter == PerformanceService.RecordedAdapter.Present
-            ? new GraphicsNow(adapter, !PerformanceService.ReadGpuMaxPerformance(subKey))
+            ? PerformanceService.ReadGpuSetting(subKey) is { } maxPerformance
+                ? new GraphicsNow(adapter, !maxPerformance)
+                : new GraphicsNow(PerformanceService.RecordedAdapter.Unreadable, DynamicPstate: false)
             : new GraphicsNow(adapter, DynamicPstate: false);
 
     private GraphicsNow? GraphicsFor(PerformanceService.OriginalSnapshot original) =>
@@ -487,10 +490,10 @@ public sealed class UndoChangesService : IUndoChangesService
             PerformanceTitle,
             $"Changed since Performance Mode was first used: {JoinAnd(differences.Select(d => d.Phrase).ToList())}.",
             when is null ? "" : $"First changed {when}",
-            // The restore writes the graphics card's setting whenever the card the record names may still be there, and
-            // only an administrator can write it, so such a record needs administrator rights even when that setting
-            // never changed. A card that is gone is left out, and asks for nothing.
-            NeedsAdmin: graphics is { Adapter: not PerformanceService.RecordedAdapter.Gone },
+            // Only an administrator can write the graphics card's setting, and the restore writes it only when it differs
+            // from the record or could not be read, which is when the list has its line. It used to write it whenever the
+            // card may still be there, so a record whose card was set as recorded needed administrator rights too (#2716).
+            NeedsAdmin: differences.Any(d => d.Label == GraphicsLabel),
             "Put back…",
             lines,
             "Put back Performance Mode?\n\nThese go back to how they were before Performance Mode was first used"

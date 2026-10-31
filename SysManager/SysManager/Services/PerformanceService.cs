@@ -44,6 +44,8 @@ public sealed partial class PerformanceService : IDisposable
     private readonly Action<bool> _setGameMode;
     private readonly Action<bool, bool> _setXboxGameBar;
     private readonly Func<string, bool, bool> _restoreGpu;
+    private readonly Func<string, bool?> _readGpu;
+    private readonly Func<bool> _isElevated;
     private readonly SemaphoreSlim _psGate = new(1, 1);
     private bool _disposed;
 
@@ -109,7 +111,9 @@ public sealed partial class PerformanceService : IDisposable
             setXboxGameBar: SetXboxGameBar,
             restoreGpu: SetGpuMaxPerformance,
             presentAdapters: PresentAdapterKeys,
-            plansOnThePc: PlansOnThePc)
+            plansOnThePc: PlansOnThePc,
+            readGpu: ReadGpuSetting,
+            isElevated: AdminHelper.IsElevated)
     {
     }
 
@@ -146,6 +150,14 @@ public sealed partial class PerformanceService : IDisposable
     /// The write that puts the recorded NVIDIA adapter's setting back, by its subkey. Unless given it writes nothing
     /// and says so, so a restore that reaches a card a test did not provide for fails rather than writing this PC's.
     /// </param>
+    /// <param name="readGpu">
+    /// The NVIDIA adapter's setting as it is now, by its subkey: true for maximum performance, null when it could not
+    /// be read. Unless given it is not known, so a restore writes the card's setting through its stand-in, as it did.
+    /// </param>
+    /// <param name="isElevated">
+    /// Whether the session can write the card's setting. Unless given it can, so a restore a test drives is not
+    /// refused because of how the PC running the suite was started.
+    /// </param>
     /// <param name="plansOnThePc">
     /// The power plans on the PC, null when not known. Unless given they are not known, so a test reads no plans of the
     /// PC running it, and a restore switches the recorded plan on as it did.
@@ -163,7 +175,9 @@ public sealed partial class PerformanceService : IDisposable
         Action<bool, bool>? setXboxGameBar = null,
         Func<string, bool, bool>? restoreGpu = null,
         Func<IReadOnlySet<string>?>? presentAdapters = null,
-        Func<IReadOnlySet<Guid>?>? plansOnThePc = null)
+        Func<IReadOnlySet<Guid>?>? plansOnThePc = null,
+        Func<string, bool?>? readGpu = null,
+        Func<bool>? isElevated = null)
     {
         _ps = ps;
         _restorePoints = restorePoints;
@@ -172,6 +186,8 @@ public sealed partial class PerformanceService : IDisposable
         _trimWorkingSet = trimWorkingSet ?? TrimWorkingSet;
         _presentAdapters = presentAdapters ?? (() => null);
         _plansOnThePc = plansOnThePc ?? (() => null);
+        _readGpu = readGpu ?? (_ => null);
+        _isElevated = isElevated ?? (() => true);
         _findAdapter = findAdapter ?? (subKey => FindRecordedAdapter(subKey, ReadAdapterNames, _presentAdapters));
         _writeGpu = writeGpu ?? (_ => (Found: false, Ok: false));
         _setUiEffects = setUiEffects ?? (_ => { });
@@ -933,17 +949,20 @@ public sealed partial class PerformanceService : IDisposable
     }
 
     /// <summary>Read whether DisableDynamicPstate is set to 1.</summary>
-    internal static bool ReadGpuMaxPerformance(string subKey)
+    internal static bool ReadGpuMaxPerformance(string subKey) => ReadGpuSetting(subKey) ?? false;
+
+    /// <summary>Whether DisableDynamicPstate is set to 1 on the adapter's key, or null when the key could not be read.</summary>
+    internal static bool? ReadGpuSetting(string subKey)
     {
         try
         {
             using var key = Registry.LocalMachine.OpenSubKey($@"{GpuClassRoot}\{subKey}");
-            if (key is null) return false;
+            if (key is null) return null;
             var val = key.GetValue("DisableDynamicPstate");
             return val is int i && i == 1;
         }
-        catch (SecurityException) { return false; }
-        catch (UnauthorizedAccessException) { return false; }
+        catch (SecurityException) { return null; }
+        catch (UnauthorizedAccessException) { return null; }
     }
 
     /// <summary>
@@ -1300,6 +1319,13 @@ public sealed partial class PerformanceService : IDisposable
         if (!TryValidateSnapshot(snapshot, out var reason))
             throw new InvalidOperationException($"The saved performance snapshot is invalid: {reason}.");
 
+        // GPU — as the question found the card, so the restore does what it said. Only an administrator can write its
+        // setting, so a restore that has to is refused before it changes anything: it used to put the plan, the effects,
+        // Game Mode and the Xbox settings back and stop at the card, before the processor minimum, on every retry, and
+        // it wrote the card even when it was set as recorded already (#2716).
+        var graphics = GraphicsStepOf(snapshot, card);
+        if (RestoreNeedsAdministrator(graphics)) throw new UnauthorizedAccessException(GraphicsNeedsAdministrator);
+
         // Power plan — restore the exact original plan, unless it is gone. Deleted, or the plans reset by
         // powercfg -restoredefaultschemes or an OEM tool, it could not be switched on, and the restore stopped here,
         // before every other setting, with every retry failing the same way (#2716). There is nothing to switch back
@@ -1323,19 +1349,66 @@ public sealed partial class PerformanceService : IDisposable
         // independent (Game Bar overlay vs per-game DVR) and must not be collapsed.
         _setXboxGameBar(snapshot.XboxGameBarEnabled, snapshot.XboxGameDvrEnabled);
 
-        // GPU — as the question found the card, so the restore does what it said; the write checks the card again.
-        RestoreGraphics(snapshot, card is { } found ? _ => found : _findAdapter, _restoreGpu);
-
         // Processor state — only restore if we captured a real value. A null means the
         // snapshot couldn't read the original minimum (e.g. an unparseable powercfg output),
         // so writing anything would fabricate state; leaving it untouched is the safe choice.
         if (snapshot.ProcessorMinPercentAc is int minPct)
             await SetProcessorMinStateAsync(minPct, ct).ConfigureAwait(false);
+
+        // GPU last, so a write that fails leaves nothing else undone; the write checks the card again.
+        RestoreGraphics(snapshot, graphics, _restoreGpu);
     }
 
+    /// <summary>What a restore does with the graphics setting a record names.</summary>
+    internal enum GraphicsStep
+    {
+        /// <summary>The record names no NVIDIA card.</summary>
+        None,
+
+        /// <summary>The card is gone, so there is nothing to write its setting to.</summary>
+        LeftOut,
+
+        /// <summary>The card is set as recorded already, so nothing is written and no restart is needed.</summary>
+        AlreadySet,
+
+        /// <summary>The setting is written back, which needs administrator rights and a restart.</summary>
+        Write,
+    }
+
+    /// <summary>The message a restore that has to write the card's setting is refused with, without administrator rights.</summary>
+    internal const string GraphicsNeedsAdministrator =
+        "Putting back the NVIDIA graphics setting needs administrator rights, so nothing was changed. Use Run as "
+        + "administrator at the top of the page.";
+
     /// <summary>
-    /// Writes the record's graphics setting back to the adapter it names, or leaves it out when that adapter is gone.
-    /// Throws when the adapter may still be there and the setting could not be written.
+    /// What a restore does with <paramref name="snapshot"/>'s graphics setting, with its card as <paramref name="card"/>
+    /// found it, or looked for now when it is null.
+    /// </summary>
+    internal GraphicsStep GraphicsStepOf(OriginalSnapshot snapshot, RecordedAdapter? card) =>
+        GraphicsStepOf(snapshot, card is { } found ? _ => found : _findAdapter, _readGpu);
+
+    /// <summary>
+    /// What a restore does with <paramref name="snapshot"/>'s graphics setting: nothing for a card that is gone or set as
+    /// recorded already, and a write for one that differs or may still be there.
+    /// </summary>
+    internal static GraphicsStep GraphicsStepOf(
+        OriginalSnapshot snapshot, Func<string, RecordedAdapter> findAdapter, Func<string, bool?> readMaxPerformance)
+    {
+        if (snapshot.NvidiaSubKey is not { } subKey) return GraphicsStep.None;
+        return findAdapter(subKey) switch
+        {
+            RecordedAdapter.Gone => GraphicsStep.LeftOut,
+            RecordedAdapter.Present when readMaxPerformance(subKey) == !snapshot.GpuDynamicPstate => GraphicsStep.AlreadySet,
+            _ => GraphicsStep.Write,
+        };
+    }
+
+    /// <summary>Whether a restore taking <paramref name="graphics"/> needs administrator rights this session lacks.</summary>
+    internal bool RestoreNeedsAdministrator(GraphicsStep graphics) => graphics == GraphicsStep.Write && !_isElevated();
+
+    /// <summary>
+    /// Writes the record's graphics setting back when <paramref name="step"/> says to, and logs a card that is gone.
+    /// Throws when the setting could not be written.
     /// </summary>
     /// <remarks>
     /// An adapter that is gone used to stop the restore here, before the processor minimum and before the record was
@@ -1344,19 +1417,18 @@ public sealed partial class PerformanceService : IDisposable
     /// so it is logged and the rest goes on. The two lookups are parameters so that a test can drive each answer
     /// without the registry of the PC running it.
     /// </remarks>
-    internal static void RestoreGraphics(
-        OriginalSnapshot snapshot, Func<string, RecordedAdapter> findAdapter, Func<string, bool, bool> write)
+    internal static void RestoreGraphics(OriginalSnapshot snapshot, GraphicsStep step, Func<string, bool, bool> write)
     {
         if (snapshot.NvidiaSubKey is not { } subKey) return;
 
-        if (findAdapter(subKey) == RecordedAdapter.Gone)
+        if (step == GraphicsStep.LeftOut)
         {
             Log.Warning("Performance restore: the NVIDIA adapter it recorded ({SubKey}) is no longer found, so its "
                         + "graphics setting is left out", subKey);
             return;
         }
 
-        if (!write(subKey, !snapshot.GpuDynamicPstate))
+        if (step == GraphicsStep.Write && !write(subKey, !snapshot.GpuDynamicPstate))
             throw new InvalidOperationException("The NVIDIA graphics setting could not be restored.");
     }
 

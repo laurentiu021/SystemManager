@@ -432,28 +432,55 @@ public class PerformanceServiceTests
     private static PerformanceService.OriginalSnapshot WithCard(string? subKey, bool dynamicPstate = true) =>
         new("381b4222-f694-41f0-9685-ff5bb260df2e", "Balanced", true, true, true, true, dynamicPstate, 5, subKey);
 
+    // The card's setting as it is now: true for maximum performance, null when it could not be read.
+    private static PerformanceService.GraphicsStep StepFor(
+        PerformanceService.OriginalSnapshot snapshot, PerformanceService.RecordedAdapter adapter, bool? maxPerformanceNow) =>
+        PerformanceService.GraphicsStepOf(snapshot, _ => adapter, _ => maxPerformanceNow);
+
     [Fact]
     public void RestoringGraphics_ForACardThatIsGone_LeavesItOut_SoTheRestCanFinish()
     {
         // Taken out, or its driver removed: there is nothing to write the setting to, and stopping here left the
         // processor minimum and the record behind for good (#1525).
         var writes = new List<(string, bool)>();
+        var step = StepFor(WithCard("0000"), PerformanceService.RecordedAdapter.Gone, maxPerformanceNow: null);
 
-        PerformanceService.RestoreGraphics(WithCard("0000"), _ => PerformanceService.RecordedAdapter.Gone,
-            (key, max) => { writes.Add((key, max)); return true; });
+        PerformanceService.RestoreGraphics(WithCard("0000"), step, (key, max) => { writes.Add((key, max)); return true; });
 
+        Assert.Equal(PerformanceService.GraphicsStep.LeftOut, step);
         Assert.Empty(writes);
     }
 
-    [Fact]
-    public void RestoringGraphics_ForACardThatIsThere_WritesItsOwnSettingBack()
+    [Theory]
+    [InlineData(true)]    // set to maximum performance since, so it differs from the recorded adaptive setting
+    [InlineData(null)]    // could not be read: written, as it may differ
+    public void RestoringGraphics_ForACardThatIsThere_WritesItsOwnSettingBack(bool? maxPerformanceNow)
     {
         var writes = new List<(string, bool)>();
+        var snapshot = WithCard("0001", dynamicPstate: true);
+        var step = StepFor(snapshot, PerformanceService.RecordedAdapter.Present, maxPerformanceNow);
 
-        PerformanceService.RestoreGraphics(WithCard("0001", dynamicPstate: true), _ => PerformanceService.RecordedAdapter.Present,
-            (key, max) => { writes.Add((key, max)); return true; });
+        PerformanceService.RestoreGraphics(snapshot, step, (key, max) => { writes.Add((key, max)); return true; });
 
+        Assert.Equal(PerformanceService.GraphicsStep.Write, step);
         Assert.Equal([("0001", false)], writes);
+    }
+
+    [Theory]
+    [InlineData(true, false)]   // recorded adaptive, adaptive now
+    [InlineData(false, true)]   // recorded maximum performance, maximum performance now
+    public void RestoringGraphics_ForACardSetAsRecorded_WritesNothing(bool dynamicPstate, bool maxPerformanceNow)
+    {
+        // The write needs administrator rights and a restart, and was made on every restore whatever the card's value,
+        // so a standard user's Restore All stopped at it and an administrator's always asked for a restart (#2716).
+        var writes = new List<(string, bool)>();
+        var snapshot = WithCard("0001", dynamicPstate);
+        var step = StepFor(snapshot, PerformanceService.RecordedAdapter.Present, maxPerformanceNow);
+
+        PerformanceService.RestoreGraphics(snapshot, step, (key, max) => { writes.Add((key, max)); return true; });
+
+        Assert.Equal(PerformanceService.GraphicsStep.AlreadySet, step);
+        Assert.Empty(writes);
     }
 
     [Theory]
@@ -463,9 +490,10 @@ public class PerformanceServiceTests
     {
         // A card whose key could not be read may still be there, so leaving its setting out would lose it for good.
         var adapter = Enum.Parse<PerformanceService.RecordedAdapter>(found);
+        var step = StepFor(WithCard("0000"), adapter, maxPerformanceNow: true);
 
         var thrown = Assert.Throws<InvalidOperationException>(() =>
-            PerformanceService.RestoreGraphics(WithCard("0000"), _ => adapter, (_, _) => false));
+            PerformanceService.RestoreGraphics(WithCard("0000"), step, (_, _) => false));
 
         Assert.Equal("The NVIDIA graphics setting could not be restored.", thrown.Message);
     }
@@ -475,10 +503,12 @@ public class PerformanceServiceTests
     {
         var asked = 0;
 
-        PerformanceService.RestoreGraphics(WithCard(null),
+        var step = PerformanceService.GraphicsStepOf(WithCard(null),
             _ => { asked++; return PerformanceService.RecordedAdapter.Present; },
-            (_, _) => { asked++; return true; });
+            _ => { asked++; return true; });
+        PerformanceService.RestoreGraphics(WithCard(null), step, (_, _) => { asked++; return true; });
 
+        Assert.Equal(PerformanceService.GraphicsStep.None, step);
         Assert.Equal(0, asked);
     }
 

@@ -666,7 +666,10 @@ Key services:
   static cache empty is the one that runs the four WMI queries, claimed so nobody else joins it; every
   OTHER concurrent caller — the Dashboard's poll, the tray tooltip, the Resource History sampler all start
   by awaiting the same first snapshot — reads whatever is cached right now and moves straight to its own
-  syscalls, never waiting on someone else's round trip (#2845).
+  syscalls, never waiting on someone else's round trip (#2845). The disks are the exception to the static
+  cache: their list carries each disk's health, so one caller at a time reads it again every
+  `DiskRefreshInterval`, five minutes, timed through an injected `TimeProvider`, and a read that faults keeps
+  the disks as last read (#2732).
 - `BiosService` — read-only BIOS/firmware + motherboard info (Win32_BIOS,
   Win32_BaseBoard, UEFI/Secure-Boot registry) plus a pure manufacturer
   support-URL resolver for BIOS updates; never flashes firmware. Consumed by

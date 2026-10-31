@@ -1073,7 +1073,9 @@ Key services:
   nothing unless a test passes its own, so Restore All runs end to end in a test that checks which card it wrote
   (#2618). Performance Mode's own NVIDIA Apply goes through
   `WriteGpuMaxPerformance`, a constructor seam the public constructor fills with the registry write and the test
-  constructor leaves finding no card (#2607).
+  constructor leaves finding no card (#2607). Visual effects are written with `UiEffectsWrite`, into the profile
+  as well as the session, and Game Mode is read by `GameModeOn`, from the Settings switch's
+  `AutoGameModeEnabled` before the older `AllowAutoGameMode` (#2716).
 - `NetworkRepairService` — DNS flush, Winsock reset, TCP/IP reset via
   system commands with live output capture.
 - `ServiceManagerService` — enumerate Windows services, gaming

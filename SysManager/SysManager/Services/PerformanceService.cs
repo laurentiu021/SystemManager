@@ -74,7 +74,15 @@ public sealed partial class PerformanceService : IDisposable
     // ── P/Invoke for visual effects ──
     private const uint SPI_GETUIEFFECTS = 0x103E;
     private const uint SPI_SETUIEFFECTS = 0x103F;
+    private const uint SPIF_UPDATEINIFILE = 0x01;
     private const uint SPIF_SENDCHANGE = 0x02;
+
+    /// <summary>How the visual-effects write is made: into the user's profile, and announced to the open windows.</summary>
+    /// <remarks>
+    /// With <c>SPIF_SENDCHANGE</c> alone Windows changes the session and writes nothing to the profile, so after a
+    /// sign-out the animations were back and the tab read them as normal, and a restore lasted no longer (#2716).
+    /// </remarks>
+    internal const uint UiEffectsWrite = SPIF_UPDATEINIFILE | SPIF_SENDCHANGE;
 
     [LibraryImport("user32.dll", EntryPoint = "SystemParametersInfoW", SetLastError = true)]
     [return: MarshalAs(UnmanagedType.Bool)]
@@ -585,12 +593,12 @@ public sealed partial class PerformanceService : IDisposable
     /// <summary>
     /// Enable or disable all UI effects (animations, fades, shadows).
     /// Uses SystemParametersInfo which takes effect immediately — no
-    /// logout or registry-only hack needed.
+    /// logout or registry-only hack needed — and keeps the change in the profile, so it lasts past a sign-out.
     /// Reversible: call with true to re-enable.
     /// </summary>
     public static void SetUiEffects(bool enabled)
     {
-        SystemParametersInfoSet(SPI_SETUIEFFECTS, 0, enabled ? 1 : 0, SPIF_SENDCHANGE);
+        SystemParametersInfoSet(SPI_SETUIEFFECTS, 0, enabled ? 1 : 0, UiEffectsWrite);
         Log.Information("System: Visual effects {Action}", enabled ? "enabled" : "reduced");
     }
 
@@ -610,15 +618,27 @@ public sealed partial class PerformanceService : IDisposable
             // no-op — so this closes that handle without touching the shared static in the common case.
             using var hkcuRoot = AdminHelper.PerUserRegistryRoot();
             using var key = hkcuRoot.OpenSubKey(GameBarKey);
-            if (key is null) return true; // Windows default = ON
-            var val = key.GetValue("AllowAutoGameMode");
-            // If key exists but value doesn't, default is ON
-            if (val is null) return true;
-            return val is int i && i == 1;
+            return GameModeOn(key?.GetValue("AutoGameModeEnabled"), key?.GetValue("AllowAutoGameMode"));
         }
         catch (SecurityException) { return true; }
         catch (UnauthorizedAccessException) { return true; }
     }
+
+    /// <summary>
+    /// Whether Game Mode is on, by <c>AutoGameModeEnabled</c>, the value the Settings switch writes, then by
+    /// <c>AllowAutoGameMode</c>, Windows 10 1703's, and when neither is there by Windows' default, on.
+    /// </summary>
+    /// <remarks>
+    /// Only <c>AllowAutoGameMode</c> was read. With Game Mode off in Settings and that value absent, the tab showed it
+    /// on, refused to turn it on, and recorded "on" as the original for Restore All to put back (#2716).
+    /// </remarks>
+    internal static bool GameModeOn(object? autoGameModeEnabled, object? allowAutoGameMode) =>
+        (autoGameModeEnabled ?? allowAutoGameMode) switch
+        {
+            null => true,
+            int value => value == 1,
+            _ => false,
+        };
 
     /// <summary>
     /// Enable or disable Game Mode.

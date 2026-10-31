@@ -177,6 +177,80 @@ public class UninstallerServiceTests
             .RunProcessWithShellAsync(default!, default!, default);
     }
 
+    // ── An MSI uninstall can ask for administrator rights (#2724) ──
+    // It ran under /quiet, where Windows Installer shows no window and so cannot ask, and SysManager uninstalls only
+    // without them: an app installed for all users failed with 1603.
+
+    private const string ProductCode = "{0F2C3A4B-1234-5678-9ABC-DEF012345678}";
+
+    [Theory]
+    [InlineData("MsiExec.exe /I" + ProductCode, "", "/X" + ProductCode + " /passive /norestart")]
+    [InlineData("MsiExec.exe /X" + ProductCode, "", "/X" + ProductCode + " /passive /norestart")]
+    [InlineData("MsiExec.exe /X" + ProductCode, "MsiExec.exe /X" + ProductCode + " /qn",
+                "/X" + ProductCode + " /passive /norestart")]
+    [InlineData("MsiExec.exe /X" + ProductCode + " /quiet /norestart", "", "/X" + ProductCode + " /passive /norestart")]
+    [InlineData("MsiExec.exe /X" + ProductCode + " /QN /Quiet /promptrestart", "",
+                "/X" + ProductCode + " /passive /promptrestart")]
+    [InlineData("MsiExec.exe /x " + ProductCode + " /qn", "", "/x " + ProductCode + " /passive /norestart")]
+    [InlineData("MsiExec.exe /X" + ProductCode + " /qb", "", "/X" + ProductCode + " /qb /norestart")]
+    [InlineData("MsiExec.exe /X" + ProductCode + " /qn /qf", "", "/X" + ProductCode + " /qf /norestart")]
+    public async Task UninstallLocalAsync_AnMsiUninstall_RunsWithAWindow_SoItCanAskForAdministratorRights(
+        string uninstallString, string quietUninstallString, string expected)
+    {
+        var runner = Substitute.For<IPowerShellRunner>();
+        runner.RunProcessWithShellAsync(Arg.Any<string>(), Arg.Any<string>(), Arg.Any<CancellationToken>()).Returns(0);
+        var service = new UninstallerService(runner, () => false);
+        var app = new InstalledApp
+        {
+            Name = "OEM utility",
+            UninstallString = uninstallString,
+            QuietUninstallString = quietUninstallString,
+        };
+
+        await service.UninstallLocalAsync(app);
+
+        await runner.Received(1).RunProcessWithShellAsync(
+            System.IO.Path.Join(Environment.GetFolderPath(Environment.SpecialFolder.System), "MsiExec.exe"),
+            expected, Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task UninstallLocalAsync_AQuotedMsiExecPath_RunsWithAWindowToo()
+    {
+        // A quoted path is split before the MsiExec form is recognised, so its switches reached the launch as given.
+        var runner = Substitute.For<IPowerShellRunner>();
+        runner.RunProcessWithShellAsync(Arg.Any<string>(), Arg.Any<string>(), Arg.Any<CancellationToken>()).Returns(0);
+        var service = new UninstallerService(runner, () => false);
+        var msiExec = System.IO.Path.Join(Environment.GetFolderPath(Environment.SpecialFolder.System), "MsiExec.exe");
+        var app = new InstalledApp
+        {
+            Name = "OEM utility",
+            UninstallString = "MsiExec.exe /X" + ProductCode,
+            QuietUninstallString = $"\"{msiExec}\" /X{ProductCode} /quiet",
+        };
+
+        await service.UninstallLocalAsync(app);
+
+        await runner.Received(1).RunProcessWithShellAsync(msiExec, "/X" + ProductCode + " /passive /norestart",
+                                                          Arg.Any<CancellationToken>());
+    }
+
+    [Theory]
+    [InlineData("/X" + ProductCode + " /quiet")]
+    [InlineData("/X" + ProductCode + " /qn /norestart")]
+    [InlineData("/X" + ProductCode + " /QUIET /QN")]
+    [InlineData("/x " + ProductCode)]
+    public void WithInstallerUi_NeverLeavesASilentSwitch_AndStillPassesTheCheck(string args)
+    {
+        var ui = UninstallerService.WithInstallerUi(args);
+
+        var switches = ui.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+        Assert.DoesNotContain(switches, s => s.Equals("/quiet", StringComparison.OrdinalIgnoreCase)
+                                          || s.Equals("/qn", StringComparison.OrdinalIgnoreCase));
+        Assert.Contains("/passive", switches);
+        Assert.Equal(ui, UninstallerService.ValidateTrustedBinaryArgs("MsiExec.exe", ui, isElevated: false));
+    }
+
     // ── IsUnderTrustedDirectory (regression: prefix-boundary bypass) ──
 
     [Fact]
@@ -577,22 +651,11 @@ public class UninstallerServiceTests
     [Fact]
     public void ParseUninstallCommand_MsiExec_ConvertsToUninstall()
     {
+        // The switches it runs with are set at launch, by WithInstallerUi (#2724).
         var (exe, args) = UninstallerService.ParseUninstallCommand(
             "MsiExec.exe /I{12345-GUID}");
         Assert.Equal("MsiExec.exe", exe);
-        Assert.Contains("/X{12345-GUID}", args);
-        Assert.Contains("/quiet", args);
-    }
-
-    [Fact]
-    public void ParseUninstallCommand_MsiExecAlreadyQuiet_DoesNotDuplicate()
-    {
-        var (exe, args) = UninstallerService.ParseUninstallCommand(
-            "MsiExec.exe /X{GUID} /quiet");
-        Assert.Equal("MsiExec.exe", exe);
-        Assert.Contains("/X{GUID}", args);
-        // Should not add /quiet again
-        Assert.Equal(1, args.Split("/quiet").Length - 1);
+        Assert.Equal("/X{12345-GUID}", args);
     }
 
     [Fact]
@@ -622,13 +685,12 @@ public class UninstallerServiceTests
     }
 
     [Fact]
-    public void ParseUninstallCommand_MsiExecWithQn_DoesNotAddQuiet()
+    public void ParseUninstallCommand_MsiExec_KeepsTheSwitchesItWasGiven()
     {
         var (exe, args) = UninstallerService.ParseUninstallCommand(
             "MsiExec.exe /X{GUID} /qn");
         Assert.Equal("MsiExec.exe", exe);
-        Assert.DoesNotContain("/quiet", args);
-        Assert.Contains("/qn", args);
+        Assert.Equal("/X{GUID} /qn", args);
     }
 
     [Theory]

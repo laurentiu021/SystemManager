@@ -10,6 +10,19 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.136.46] - 2026-10-31
+
+**Uninstaller removes an app installed for all users with Windows Installer, asking for
+administrator rights instead of failing.**
+
+### Fixed
+- An app installed for all users with Windows Installer, as many PC makers' utilities are, could
+  not be removed from Uninstaller when winget did not know it. Its removal ran without any window,
+  so Windows could not ask for administrator rights, and it failed with "The app's installer
+  encountered a fatal error during removal." It now runs with Windows Installer's progress bar,
+  which asks for them when the app needs them. This was there since 1.56.1, when Uninstaller
+  stopped removing apps as administrator.
+
 ## [1.136.45] - 2026-10-31
 
 **With the theme on Auto, your chosen theme family stays instead of turning into the default

@@ -297,6 +297,8 @@ public sealed partial class UninstallerService
             // will load ANY DLL at ANY entry point, and MsiExec will run an arbitrary
             // package. Validate the payload before handing the command to the shell.
             args = ValidateTrustedBinaryArgs(resolvedName, args, runningElevated);
+            if (resolvedName.Equals("MsiExec.exe", StringComparison.OrdinalIgnoreCase))
+                args = WithInstallerUi(args);
         }
         else
         {
@@ -432,12 +434,10 @@ public sealed partial class UninstallerService
             {
                 var exe = command[..spaceIdx];
                 var args = command[(spaceIdx + 1)..].TrimStart();
-                // Convert /I (modify) to /X (uninstall) if needed, add /quiet.
+                // Convert /I (modify) to /X (uninstall) if needed. The switches it runs with are set at launch, by
+                // WithInstallerUi, for this form and a quoted MsiExec path alike.
                 // Use regex to match /I only as a standalone switch (not inside GUIDs).
                 args = MsiInstallSwitchPattern().Replace(args, "/X");
-                if (!args.Contains("/quiet", StringComparison.OrdinalIgnoreCase)
-                    && !args.Contains("/qn", StringComparison.OrdinalIgnoreCase))
-                    args += " /quiet /norestart";
                 return (exe, args);
             }
         }
@@ -589,6 +589,34 @@ public sealed partial class UninstallerService
         }
 
         return args;
+    }
+
+    /// <summary>
+    /// The arguments an MSI uninstall runs with: a progress bar rather than a silent session, so Windows Installer can
+    /// ask for administrator rights, and no restart unless the entry names how to handle one.
+    /// </summary>
+    /// <remarks>
+    /// SysManager uninstalls only at standard integrity, and removing a package installed for all users needs
+    /// administrator rights. Windows Installer asks for them only when it has a user interface: under <c>/quiet</c> or
+    /// <c>/qn</c> it cannot, and the removal failed with 1603 instead (#2724). Those become <c>/passive</c>, a
+    /// progress bar only, which is also added when no interface switch is given; <c>/qb</c>, <c>/qr</c> and
+    /// <c>/qf</c> show one and are kept. Called on arguments <see cref="ValidateTrustedBinaryArgs"/> accepted, so
+    /// every token is the product code or a switch from its list.
+    /// </remarks>
+    internal static string WithInstallerUi(string args)
+    {
+        var tokens = args.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries).ToList();
+        var silent = tokens.FindIndex(IsSilent);
+        tokens.RemoveAll(IsSilent);
+        if (!tokens.Exists(IsInterfaceLevel)) tokens.Insert(silent >= 0 ? silent : tokens.Count, "/passive");
+        if (!tokens.Exists(IsRestartOption)) tokens.Add("/norestart");
+        return string.Join(' ', tokens);
+
+        static bool IsSilent(string token) => token.ToUpperInvariant() is "/QUIET" or "/QN";
+        static bool IsInterfaceLevel(string token) =>
+            token.ToUpperInvariant() is "/PASSIVE" or "/QB" or "/QB+" or "/QB!" or "/QR" or "/QF";
+        static bool IsRestartOption(string token) =>
+            token.ToUpperInvariant() is "/NORESTART" or "/PROMPTRESTART" or "/FORCERESTART";
     }
 
     // Matches a product-code uninstall such as "/X{0F2C3A4B-...}" optionally followed

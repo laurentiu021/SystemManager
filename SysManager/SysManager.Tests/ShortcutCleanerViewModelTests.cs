@@ -319,8 +319,52 @@ public class ShortcutCleanerViewModelTests
             await vm.ExportCsvCommand.ExecuteAsync(null);
 
             Assert.True(File.Exists(path));
-            Assert.Contains(Path.GetFileName(path), vm.StatusMessage, StringComparison.Ordinal);
+            // On the line the tab shows: StatusMessage is bound by no part of this view (#2738).
+            Assert.Equal($"Exported 0 shortcut(s) to {Path.GetFileName(path)}.", vm.ScanStatus);
         }
         finally { File.Delete(path); }
+    }
+
+    // ── An export that fails says so where the tab shows it (#2738) ──
+    // The outcome went to StatusMessage, which this view never shows, so a failed export said nothing at all, and the
+    // export exists to save the list before deleting.
+
+    [Fact]
+    public async Task ExportCsvAsync_ThatFails_SaysSoOnTheLineTheTabShows()
+    {
+        var path = Path.Combine(Path.GetTempPath(), "smtest_shortcutcleaner_" + Guid.NewGuid().ToString("N"),
+            "missing folder", "list.csv");
+        var dialog = Substitute.For<IDialogService>();
+        dialog.PickSaveFile(Arg.Any<string>(), Arg.Any<string>()).Returns(path);
+        var vm = new ShortcutCleanerViewModel(new Services.ShortcutCleanerService(), dialog);
+
+        await vm.ExportCsvCommand.ExecuteAsync(null);
+
+        Assert.False(File.Exists(path));
+        Assert.StartsWith("Export failed", vm.ScanStatus, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task ExportCsvAsync_OverAFileThatCannotBeWritten_SaysSoOnTheLineTheTabShows()
+    {
+        var path = Path.Combine(Path.GetTempPath(), "smtest_shortcutcleaner_" + Guid.NewGuid().ToString("N") + ".csv");
+        File.WriteAllText(path, "kept");
+        File.SetAttributes(path, FileAttributes.ReadOnly);
+        var dialog = Substitute.For<IDialogService>();
+        dialog.PickSaveFile(Arg.Any<string>(), Arg.Any<string>()).Returns(path);
+        var vm = new ShortcutCleanerViewModel(new Services.ShortcutCleanerService(), dialog);
+
+        try
+        {
+            await vm.ExportCsvCommand.ExecuteAsync(null);
+
+            Assert.Equal("kept", File.ReadAllText(path));
+            Assert.StartsWith("Export failed", vm.ScanStatus, StringComparison.Ordinal);
+        }
+        finally
+        {
+            File.SetAttributes(path, FileAttributes.Normal);
+            File.Delete(path);
+        }
     }
 }

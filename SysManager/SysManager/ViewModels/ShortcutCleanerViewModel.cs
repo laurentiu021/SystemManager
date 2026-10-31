@@ -236,11 +236,13 @@ public sealed partial class ShortcutCleanerViewModel : ElevatedViewModelBase
         {
             var csv = ShortcutCleanerService.ToCsv(BrokenShortcuts, CultureInfo.CurrentCulture);
             await Csv.WriteAsync(path, csv);
-            StatusMessage = $"Exported {BrokenShortcuts.Count} shortcut(s) to {Path.GetFileName(path)}.";
+            // On the line this tab shows. The outcome went to StatusMessage, which its view never shows, so an export
+            // that failed said nothing and the user went on to delete believing the list was saved (#2738).
+            ScanStatus = $"Exported {BrokenShortcuts.Count} shortcut(s) to {Path.GetFileName(path)}.";
             ToastService.Instance.Show("Broken shortcuts exported", Path.GetFileName(path));
         }
-        catch (IOException ex) { StatusMessage = $"Export failed: {ex.Message}"; }
-        catch (UnauthorizedAccessException ex) { StatusMessage = $"Export failed (access denied): {ex.Message}"; }
+        catch (IOException ex) { ScanStatus = $"Export failed: {ex.Message}"; }
+        catch (UnauthorizedAccessException ex) { ScanStatus = $"Export failed (access denied): {ex.Message}"; }
     }
 
     partial void OnBrokenCountChanged(int value) => ExportCsvCommand.NotifyCanExecuteChanged();

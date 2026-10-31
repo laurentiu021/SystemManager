@@ -10,6 +10,17 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.136.47] - 2026-10-31
+
+**Windows Update no longer lists, ticks and installs an update you hid.**
+
+### Fixed
+- Windows Update listed the updates you had hidden with Microsoft's "Show or hide updates" tool,
+  usually a driver known to break that PC, ticked them with the rest, and Install installed them.
+  The Dashboard's Windows Update check counted them too, so a PC whose only pending update was
+  hidden never read as up to date. Hidden updates are now left out of the scan and the install.
+  This was there since 1.18.0, when the tab started talking to Windows Update directly.
+
 ## [1.136.46] - 2026-10-31
 
 **Uninstaller removes an app installed for all users with Windows Installer, asking for

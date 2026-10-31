@@ -20921,6 +20921,33 @@ public partial class ArchitectureTests
     private static partial Regex LookupDeclaration();
 
     /// <summary>
+    /// Every Windows Update search, the scan's and the install's, asks only for updates not installed and not hidden
+    /// (#2727).
+    /// </summary>
+    /// <remarks>
+    /// Both passed <c>IsInstalled=0</c> alone, which replaces the search's default rather than adding to it, so an
+    /// update the user had hidden was listed, ticked and installed. Read from source because the searches go through
+    /// COM.
+    /// </remarks>
+    [Fact]
+    public void EveryWindowsUpdateSearch_LeavesOutTheUpdatesTheUserHid()
+    {
+        Assert.Equal("IsInstalled=0 and IsHidden=0", WindowsUpdateService.PendingCriteria);
+
+        var code = WithoutComments(File.ReadAllText(
+            Path.Combine(TestPaths.AppProject(), "Services", "WindowsUpdateService.cs")));
+        var searches = UpdateSearch().Matches(code).Select(m => m.Groups["criteria"].Value.Trim()).ToList();
+
+        Assert.True(searches.Count >= 2,
+            $"found {searches.Count} Windows Update searches, where the scan and the install make two, so they are not "
+            + "all checked.");
+        Assert.All(searches, criteria => Assert.Equal(nameof(WindowsUpdateService.PendingCriteria), criteria));
+    }
+
+    [GeneratedRegex(@"\.Search\s*\((?<criteria>[^)]*)\)", RegexOptions.CultureInvariant)]
+    private static partial Regex UpdateSearch();
+
+    /// <summary>
     /// The tray icon is created without Efficiency Mode, and nothing else in the app turns it on (#2722).
     /// </summary>
     /// <remarks>

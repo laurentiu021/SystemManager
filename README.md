@@ -1389,7 +1389,8 @@ Answers "what is actually using my space?" by listing the biggest files in one p
   here would delete it there too. Those are left alone and counted, and the status line says why
 - Lists results with name, location, and missing target path
 - **Export CSV** saves the list before you delete anything, naming both the shortcut and its
-  missing target, so the change is reviewable rather than a batch of deletions nobody can audit
+  missing target, so the change is reviewable rather than a batch of deletions nobody can audit.
+  The line under the toolbar says where it was saved, or that it could not be, and why
 - Select all / deselect individual items — and **unticking one survives a rescan**, so
   scanning again cannot quietly put back a shortcut you decided to keep
 - Move to Recycle Bin or permanent delete, with confirmation dialog

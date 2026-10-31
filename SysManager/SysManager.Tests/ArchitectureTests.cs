@@ -752,6 +752,58 @@ public partial class ArchitectureTests
     }
 
     /// <summary>
+    /// A view model that writes the status line has a view that shows it (#2738).
+    /// </summary>
+    /// <remarks>
+    /// <c>StatusMessage</c> lives on <c>ViewModelBase</c>, so it is declared once and bound by most views, and
+    /// <see cref="EveryViewModelProperty_IsShownOrRead"/> credits it everywhere. Shortcut Cleaner wrote its CSV export's
+    /// outcome there and its view binds only <c>ScanStatus</c>, so an export that failed said nothing at all, on the
+    /// tab whose export exists to save the list before deleting. Only the tab's own view can answer for its view
+    /// model, as in <see cref="EveryExportCommand_IsBoundInItsOwnView"/>.
+    /// <para>A write is an assignment, or a call to one of the two base helpers that make it: <c>RequireElevation</c>
+    /// and <c>ShowRefreshStatus</c>. Shown means a <c>Text</c> binding or the shared <c>StatusFooter</c>, which binds it
+    /// itself; a binding that only decides visibility shows nothing.</para>
+    /// </remarks>
+    [Fact]
+    public void EveryViewModelThatWritesTheStatusLine_HasAViewThatShowsIt()
+    {
+        var appDir = TestPaths.AppProject();
+        var offenders = new List<string>();
+        var writers = 0;
+
+        foreach (var file in Directory.EnumerateFiles(Path.Combine(appDir, "ViewModels"), "*ViewModel.cs")
+                     .OrderBy(f => f, StringComparer.Ordinal))
+        {
+            var name = Path.GetFileNameWithoutExtension(file);
+            var view = Path.Combine(appDir, "Views", name[..^"Model".Length] + ".xaml");
+            if (!File.Exists(view)) continue;
+            if (!StatusLineWrite().IsMatch(WithoutComments(File.ReadAllText(file)))) continue;
+
+            writers++;
+            var markup = WithoutXamlComments(File.ReadAllText(view));
+            if (!markup.Contains("Text=\"{Binding StatusMessage}\"", StringComparison.Ordinal)
+                && !markup.Contains("<v:StatusFooter", StringComparison.Ordinal))
+                offenders.Add($"{name} writes StatusMessage, and {Path.GetFileName(view)} neither binds it to a Text nor "
+                              + "hosts the StatusFooter");
+        }
+
+        // Measured: 53 view models with a view of the same name write the status line.
+        Assert.True(writers >= 50,
+            $"only {writers} view models that write the status line were found, out of 53 measured — the write "
+            + "pattern stopped matching, so a pass here means nothing.");
+        Assert.True(offenders.Count == 0,
+            "these view models write a status line their view never shows, so what they say is lost. Show it, or "
+            + "write to a line the view does show:\n  " + string.Join("\n  ", offenders));
+    }
+
+    /// <summary>
+    /// A write of <c>StatusMessage</c>: an assignment, not a comparison, or a call to a base helper that makes one.
+    /// </summary>
+    [GeneratedRegex(@"(?<![\w.])StatusMessage\s*\+?=(?!=)|(?<![\w.])(?:RequireElevation|ShowRefreshStatus)\s*\(",
+        RegexOptions.CultureInvariant)]
+    private static partial Regex StatusLineWrite();
+
+    /// <summary>
     /// Every <c>ExportCsvCommand</c> is bound in ITS OWN view, not merely somewhere in the app's markup.
     /// </summary>
     /// <remarks>

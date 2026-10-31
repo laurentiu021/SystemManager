@@ -10,6 +10,17 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.136.58] - 2026-10-31
+
+**Shortcut Cleaner says when exporting the list failed, before you delete anything.**
+
+### Fixed
+- When Export CSV on Shortcut Cleaner could not save the list, to a file open in Excel or a folder
+  you cannot write to, the tab said nothing at all, because the result went to a line this tab
+  never shows. The export exists to save the list before deleting, so you could go on to delete
+  believing it was saved. The line under the toolbar now says where the list was saved, or that it
+  could not be saved and why. This was there since the tab got Export CSV, in 1.91.0.
+
 ## [1.136.57] - 2026-10-31
 
 **Boot Analyzer says "Nothing slowed boot" only once it has looked.**

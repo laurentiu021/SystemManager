@@ -2,6 +2,7 @@
 // Author: laurentiu021 · https://github.com/laurentiu021/SystemManager
 // License: MIT
 
+using System.IO;
 using NSubstitute;
 using SysManager.Services;
 
@@ -11,10 +12,23 @@ namespace SysManager.Tests;
 /// Tests for <see cref="PerformanceService"/>. Focuses on parsing logic
 /// since powercfg/registry calls are integration-level.
 /// </summary>
-public class PerformanceServiceTests
+public class PerformanceServiceTests : IDisposable
 {
-    private static PerformanceService NewService(IPowerShellRunner runner) =>
-        new(runner, new RestorePointService(runner));
+    // The folder each test's service keeps its files in. The Ultimate step records the copy it makes, and over the
+    // real profile a test would write its made-up copy into the records of whoever runs the suite.
+    private readonly string _dir =
+        Path.Combine(Path.GetTempPath(), "SysManagerPerformanceTests", Guid.NewGuid().ToString("N"));
+
+    public void Dispose()
+    {
+        try { if (Directory.Exists(_dir)) Directory.Delete(_dir, recursive: true); }
+        catch (IOException) { /* a leftover temp dir must never fail a test run */ }
+    }
+
+    // Through the test constructor, which writes nothing to the PC unless given a write: the public one passes the
+    // real ones.
+    private PerformanceService NewService(IPowerShellRunner runner) =>
+        new(runner, new RestorePointService(runner), _dir, processes: null);
 
     // ── ParseActivePlan ──
 
@@ -199,6 +213,140 @@ public class PerformanceServiceTests
         var runner = PowercfgAnswering([], ["Unable to perform operation. An unexpected error (0x65b) has occurred."]);
 
         Assert.Equal("", await NewService(runner).EnsureUltimatePerformancePlanAsync());
+    }
+
+    // ── The Ultimate copy it made, used again in any language (#2717) ──
+    //
+    // Home and Pro hide the stock scheme, so Ultimate Performance there is a copy of it, and Windows names the copy in
+    // the display language. Looked for only by its English name, the copy was never found again outside English, and
+    // every Ultimate step made another.
+
+    private const string BalancedListed = "Identificador del esquema: 381b4222-f694-41f0-9685-ff5bb260df2e  (Equilibrado) *";
+    private const string SecondCopyGuid = "5c1f9e2a-7b3d-4e8f-9a6c-1d2e3f4a5b6c";
+
+    /// <summary>
+    /// powercfg on a Spanish Windows that does not list the stock scheme: /list shows <paramref name="listed"/>, and
+    /// each -duplicatescheme makes the next of <paramref name="copies"/>, which /list shows from then on.
+    /// </summary>
+    private static IPowerShellRunner TranslatedWindows(List<string> listed, params string[] copies)
+    {
+        var runner = Substitute.For<IPowerShellRunner>();
+        var next = new Queue<string>(copies);
+        void Say(string line) =>
+            runner.LineReceived += Raise.Event<Action<SysManager.Models.PowerShellLine>>(
+                SysManager.Models.PowerShellLine.Output(line));
+        runner.RunProcessAsync("powercfg.exe", "/list", Arg.Any<CancellationToken>(), Arg.Any<System.Text.Encoding?>())
+              .Returns(_ =>
+              {
+                  foreach (var line in listed.ToArray()) Say(line);
+                  return 0;
+              });
+        runner.RunProcessAsync("powercfg.exe", $"-duplicatescheme {PerformanceService.UltimatePerfScheme}",
+                               Arg.Any<CancellationToken>(), Arg.Any<System.Text.Encoding?>())
+              .Returns(_ =>
+              {
+                  var made = $"Identificador del esquema: {next.Dequeue()}  (Máximo rendimiento)";
+                  listed.Add(made);
+                  Say(made);
+                  return 0;
+              });
+        return runner;
+    }
+
+    /// <summary>powercfg reports <paramref name="line"/> as the active plan.</summary>
+    private static void ActivePlanIs(IPowerShellRunner runner, string line) =>
+        runner.RunProcessAsync("powercfg.exe", "/getactivescheme", Arg.Any<CancellationToken>(), Arg.Any<System.Text.Encoding?>())
+              .Returns(_ =>
+              {
+                  runner.LineReceived += Raise.Event<Action<SysManager.Models.PowerShellLine>>(
+                      SysManager.Models.PowerShellLine.Output(line));
+                  return 0;
+              });
+
+    private static Task<int> CopiesMade(IPowerShellRunner runner, int count) =>
+        runner.Received(count).RunProcessAsync(
+            "powercfg.exe", Arg.Is<string>(a => a.StartsWith("-duplicatescheme", StringComparison.Ordinal)),
+            Arg.Any<CancellationToken>(), Arg.Any<System.Text.Encoding?>());
+
+    [Fact]
+    public async Task EnsureUltimatePerformancePlan_OnTranslatedWindows_UsesTheCopyItMadeAgain_AfterARestartToo()
+    {
+        var runner = TranslatedWindows([BalancedListed], NewPlanGuid, SecondCopyGuid);
+
+        using (var service = NewService(runner))
+        {
+            Assert.Equal(NewPlanGuid, await service.EnsureUltimatePerformancePlanAsync());
+            Assert.Equal(NewPlanGuid, await service.EnsureUltimatePerformancePlanAsync());
+        }
+        // A new service, as when SysManager is started again, finds it through the record the first one kept.
+        using (var restarted = NewService(runner))
+            Assert.Equal(NewPlanGuid, await restarted.EnsureUltimatePerformancePlanAsync());
+
+        await CopiesMade(runner, 1);
+    }
+
+    [Fact]
+    public async Task EnsureUltimatePerformancePlan_WhenTheCopyItMadeIsGone_MakesAnother_AndUsesThatOneAgain()
+    {
+        List<string> listed = [BalancedListed];
+        var runner = TranslatedWindows(listed, NewPlanGuid, SecondCopyGuid);
+        using var service = NewService(runner);
+        Assert.Equal(NewPlanGuid, await service.EnsureUltimatePerformancePlanAsync());
+
+        // Deleted in Power Options: switching to a plan that is no longer there would fail.
+        listed.RemoveAll(line => line.Contains(NewPlanGuid, StringComparison.Ordinal));
+
+        Assert.Equal(SecondCopyGuid, await service.EnsureUltimatePerformancePlanAsync());
+        Assert.Equal(SecondCopyGuid, await service.EnsureUltimatePerformancePlanAsync());
+        await CopiesMade(runner, 2);
+    }
+
+    [Theory]
+    [InlineData("Máximo rendimiento")]                                             // not JSON
+    [InlineData("{}")]                                                             // no GUID
+    [InlineData("{\"PlanGuid\":null}")]
+    [InlineData("{\"PlanGuid\":\"3ff9831b-6f80-4830-8178-736cd4229e7b /delete\"}")]    // more than a GUID
+    [InlineData("{\"PlanGuid\":\"3ff9831b-6f80-4830-8178-736cd4229e7b\",\"PlanGuid\":\"5c1f9e2a-7b3d-4e8f-9a6c-1d2e3f4a5b6c\"}")]
+    public async Task EnsureUltimatePerformancePlan_WithARecordThatCannotBeUsed_MakesACopy_AndKeepsThatOne(string record)
+    {
+        Directory.CreateDirectory(_dir);
+        await File.WriteAllTextAsync(Path.Combine(_dir, PerformanceService.UltimateCopyFileName), record);
+        var runner = TranslatedWindows([BalancedListed], NewPlanGuid, SecondCopyGuid);
+        using var service = NewService(runner);
+        Assert.Null(service.ReadUltimateCopy());
+
+        Assert.Equal(NewPlanGuid, await service.EnsureUltimatePerformancePlanAsync());
+        Assert.Equal(NewPlanGuid, await service.EnsureUltimatePerformancePlanAsync());
+        await CopiesMade(runner, 1);
+    }
+
+    [Fact]
+    public void TheUltimateCopysRecord_IsNotReadPastTheSizeOfARecord()
+    {
+        // The app often runs as administrator and the record is in the user's own folder, so a file grown large is
+        // not read whole into memory.
+        Directory.CreateDirectory(_dir);
+        File.WriteAllText(Path.Combine(_dir, PerformanceService.UltimateCopyFileName),
+            $"{{\"PlanGuid\":\"{NewPlanGuid}\"}}" + new string(' ', PerformanceService.MaxSnapshotBytes));
+
+        Assert.Null(NewService(Substitute.For<IPowerShellRunner>()).ReadUltimateCopy());
+    }
+
+    [Theory]
+    [InlineData(NewPlanGuid, "Máximo rendimiento", true, "Ultimate Performance")]
+    [InlineData("0d2e9b4f-1a0c-4c6b-8d7e-2f3a4b5c6d7e", "Mi plan", false, "Mi plan")]
+    public async Task ReadProfile_KnowsTheCopyItMade_UnderItsTranslatedName(
+        string activeGuid, string activeName, bool isTheCopy, string summary)
+    {
+        var runner = TranslatedWindows([BalancedListed], NewPlanGuid);
+        using var service = NewService(runner);
+        Assert.Equal(NewPlanGuid, await service.EnsureUltimatePerformancePlanAsync());
+        ActivePlanIs(runner, $"Identificador del esquema: {activeGuid}  ({activeName})");
+
+        var profile = await service.ReadProfileAsync();
+
+        Assert.Equal(isTheCopy, profile.IsUltimateCopy);
+        Assert.Equal(summary, profile.ProfileSummary);
     }
 
     [Fact]

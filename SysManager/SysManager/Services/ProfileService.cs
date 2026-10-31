@@ -91,6 +91,8 @@ public sealed class ProfileService
     ///   same reason.</item>
     /// <item><c>welcome.json</c> — that the Welcome screen has been seen on THIS PC (#1635). Carried over, a new PC's
     ///   first launch would open without saying what the app is.</item>
+    /// <item><c>ultimate-performance-copy.json</c> — the GUID of the copy of the Ultimate Performance plan SysManager
+    ///   made on THIS PC (#2717). Another PC has no plan of that GUID.</item>
     /// </list>
     /// </summary>
     private static readonly (string Key, string DisplayName, string FileName, Base Base)[] Catalog =

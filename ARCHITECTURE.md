@@ -1055,6 +1055,10 @@ Key services:
   list trims nothing (#2557). Its
   timestamped restore snapshot is persisted locally, bounded and validated at load, then rehydrated by
   `PerformanceViewModel` before live profile probes during initialization.
+  The Ultimate step keeps the GUID of the copy it makes of the hidden Ultimate Performance scheme in
+  `ultimate-performance-copy.json`, beside the snapshot, and uses that copy again while `powercfg /list` shows
+  it: Windows names a copy in the display language, and its English name was the only other way to find it
+  (#2717). `ReadProfileAsync` sets `PerformanceProfile.IsUltimateCopy` when the copy is the active plan.
   `RestoreOriginalAsync` puts the snapshot back and then deletes it, for Restore All and Undo Changes alike, and
   `PerformanceViewModel` reads the snapshot from disk before every change and every Restore All, since Undo
   Changes can delete it while the tab holds a copy (#1525).

@@ -32,13 +32,15 @@ public class PerformanceViewModelTests
     /// <param name="setUiEffects">The visual-effects write. Left out, nothing, never this PC's own.</param>
     /// <param name="setGameMode">The Game Mode write, as above.</param>
     /// <param name="setXboxGameBar">The Xbox Game Bar write, as above.</param>
+    /// <param name="configDir">The folder the service keeps its files in; a new one of the test's own unless given.</param>
     private static PerformanceViewModel NewVm(bool completeInitialization = false, Action<IPowerShellRunner>? configure = null,
                                               Func<System.Diagnostics.Process[]>? processes = null,
                                               Func<System.Diagnostics.Process, bool>? trim = null,
                                               Func<bool, (bool Found, bool Ok)>? writeGpu = null,
                                               Action<bool>? setUiEffects = null,
                                               Action<bool>? setGameMode = null,
-                                              Action<bool, bool>? setXboxGameBar = null)
+                                              Action<bool, bool>? setXboxGameBar = null,
+                                              string? configDir = null)
     {
         var ps = Substitute.For<IPowerShellRunner>();
         var processCall = ps.RunProcessAsync(
@@ -59,7 +61,7 @@ public class PerformanceViewModelTests
                 TaskCreationOptions.RunContinuationsAsynchronously);
             processCall.Returns(pending.Task);
         }
-        var configDir = Path.Combine(
+        configDir ??= Path.Combine(
             Path.GetTempPath(),
             "SysManagerPerformanceTests",
             Guid.NewGuid().ToString("N"));
@@ -494,6 +496,52 @@ public class PerformanceViewModelTests
         await vm.InitializationComplete;
 
         Assert.Equal("ultimate", vm.SelectedPlan);
+    }
+
+    [Fact]
+    public async Task TheUltimateCopyItMade_UnderATranslatedName_SelectsUltimate_AndApplyMakesNoOther()
+    {
+        // Home and Pro hide the stock scheme, so the Ultimate plan there is a copy, named in the display language. It
+        // read as a plan that is none of the three, and every Apply on Ultimate made another copy (#2717).
+        const string copy = "3ff9831b-6f80-4830-8178-736cd4229e7b";
+        var dir = Path.Combine(Path.GetTempPath(), "SysManagerPerformanceTests", Guid.NewGuid().ToString("N"));
+        try
+        {
+            var maker = Substitute.For<IPowerShellRunner>();
+            maker.RunProcessAsync("powercfg.exe", $"-duplicatescheme {PerformanceService.UltimatePerfScheme}",
+                                  Arg.Any<CancellationToken>(), Arg.Any<System.Text.Encoding?>())
+                 .Returns(_ =>
+                 {
+                     maker.LineReceived += Raise.Event<Action<PowerShellLine>>(
+                         PowerShellLine.Output($"Identificador del esquema: {copy}  (Máximo rendimiento)"));
+                     return 0;
+                 });
+            using (var made = new PerformanceService(maker, new RestorePointService(maker), dir, processes: null))
+                Assert.Equal(copy, await made.EnsureUltimatePerformancePlanAsync());
+
+            IPowerShellRunner? runner = null;
+            var vm = NewVm(completeInitialization: true, ps =>
+            {
+                runner = ps;
+                ActivePlanIs($"Identificador del esquema: {copy}  (Máximo rendimiento)")(ps);
+            }, configDir: dir);
+            await vm.InitializationComplete;
+
+            Assert.Equal("ultimate", vm.SelectedPlan);
+            Assert.True(vm.IsProcessorStateLocked);
+
+            using (AnswerYesWhile(() => { }))
+                await vm.ApplyPowerPlanCommand.ExecuteAsync(null);
+
+            Assert.Equal("Power plan is already set to the selected option.", vm.StatusMessage);
+            await runner!.DidNotReceive().RunProcessAsync(
+                "powercfg.exe", Arg.Is<string>(a => a.StartsWith("-duplicatescheme", StringComparison.Ordinal)),
+                Arg.Any<CancellationToken>(), Arg.Any<System.Text.Encoding?>());
+        }
+        finally
+        {
+            if (Directory.Exists(dir)) Directory.Delete(dir, recursive: true);
+        }
     }
 
     [Fact]

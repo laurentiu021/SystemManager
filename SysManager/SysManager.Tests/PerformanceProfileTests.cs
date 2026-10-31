@@ -103,6 +103,23 @@ public class PerformanceProfileTests
     }
 
     [Fact]
+    public void ProfileSummary_TheUltimateCopyItMade_IsUltimatePerformance_UnderATranslatedName()
+    {
+        // A copy carries the name in the display language, so the English name check never caught it (#2717).
+        var p = new PerformanceProfile
+        {
+            ActivePlanGuid = "3ff9831b-6f80-4830-8178-736cd4229e7b",
+            ActivePlanName = "Ultimative Leistung",
+        };
+        var changed = p.RecordPropertyChanges();
+
+        p.IsUltimateCopy = true;
+
+        Assert.Equal("Ultimate Performance", p.ProfileSummary);
+        Assert.Contains(nameof(PerformanceProfile.ProfileSummary), changed);
+    }
+
+    [Fact]
     public void ProfileSummary_ADuplicatedUltimateScheme_IsStillRecognisedByName()
     {
         // A duplicated scheme gets a fresh random GUID but keeps its name, so the name check still

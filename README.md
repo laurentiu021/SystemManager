@@ -2051,7 +2051,8 @@ offers, "rate us" prompts:
 - **Power Plan**: Balanced / High Performance / Ultimate Performance — Ultimate is switched on in any
   Windows display language, and reported as failed rather than set when Windows does not provide it.
   Another active plan, Power saver or one from your PC's maker, ticks none of the three, and any of
-  them can be applied from it
+  them can be applied from it. Where Windows hides Ultimate Performance, as Home and Pro do, the copy
+  SysManager makes of it is used again, rather than another added to Power Options at every Apply
 - **Visual Effects**: reduce animations via P/Invoke, instantly and kept past a sign-out or restart
 - **Game Mode**: enable/disable via registry, read from the value the Settings switch writes, so the
   tab and Windows Settings agree

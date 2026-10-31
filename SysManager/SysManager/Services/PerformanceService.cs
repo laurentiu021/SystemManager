@@ -34,6 +34,7 @@ public sealed partial class PerformanceService : IDisposable
     private readonly IPowerShellRunner _ps;
     private readonly RestorePointService _restorePoints;
     private readonly string _snapshotPath;
+    private readonly string _ultimateCopyPath;
     private readonly Func<System.Diagnostics.Process[]> _processes;
     private readonly Func<System.Diagnostics.Process, bool> _trimWorkingSet;
     private readonly Func<string, RecordedAdapter> _findAdapter;
@@ -55,6 +56,9 @@ public sealed partial class PerformanceService : IDisposable
     internal const string BalancedGuid = PowerPlans.Balanced;
     internal const string HighPerfGuid = PowerPlans.HighPerformance;
     internal const string UltimatePerfScheme = PowerPlans.UltimatePerformance;
+
+    /// <summary>The file the copy of the Ultimate Performance scheme SysManager made is kept in, beside the record.</summary>
+    internal const string UltimateCopyFileName = "ultimate-performance-copy.json";
 
     internal const int MaxSnapshotBytes = 64 * 1024;
     private static readonly JsonSerializerOptions SnapshotJsonOptions = new()
@@ -98,7 +102,10 @@ public sealed partial class PerformanceService : IDisposable
         uint uiAction, uint uiParam, int pvParam, uint fWinIni);
 
     /// <summary>The service over the machine, with its record in <paramref name="configDir"/>.</summary>
-    /// <param name="configDir">Where the record lives; the real profile unless the shell's no-container graph passes its own.</param>
+    /// <param name="configDir">
+    /// Where the record and the Ultimate Performance copy's GUID live; the real profile unless the shell's no-container
+    /// graph passes its own.
+    /// </param>
     public PerformanceService(IPowerShellRunner ps, RestorePointService restorePoints, string? configDir = null)
         : this(
             ps,
@@ -182,6 +189,7 @@ public sealed partial class PerformanceService : IDisposable
         _ps = ps;
         _restorePoints = restorePoints;
         _snapshotPath = Path.Combine(configDir, "performance-snapshot.json");
+        _ultimateCopyPath = Path.Combine(configDir, UltimateCopyFileName);
         _processes = processes ?? (() => []);
         _trimWorkingSet = trimWorkingSet ?? TrimWorkingSet;
         _presentAdapters = presentAdapters ?? (() => null);
@@ -329,7 +337,7 @@ public sealed partial class PerformanceService : IDisposable
         {
             if (!File.Exists(_snapshotPath)) return null;
             var snapshot = JsonSerializer.Deserialize<OriginalSnapshot>(
-                ReadBoundedSnapshot(),
+                ReadBounded(_snapshotPath),
                 SnapshotJsonOptions);
             if (!TryValidateSnapshot(snapshot, out var reason))
             {
@@ -353,10 +361,12 @@ public sealed partial class PerformanceService : IDisposable
     /// </summary>
     internal bool SetSnapshotAside() => StoreFile.SetAside(_snapshotPath);
 
-    private byte[] ReadBoundedSnapshot()
+    // One of this service's two files, whole. Neither is ever larger than MaxSnapshotBytes, so a file that is larger, or
+    // empty, or changes while it is read, is refused.
+    private static byte[] ReadBounded(string path)
     {
         using var stream = new FileStream(
-            _snapshotPath,
+            path,
             FileMode.Open,
             FileAccess.Read,
             FileShare.Read,
@@ -364,12 +374,12 @@ public sealed partial class PerformanceService : IDisposable
             FileOptions.SequentialScan);
 
         if (stream.Length is <= 0 or > MaxSnapshotBytes)
-            throw new InvalidDataException("The performance snapshot has an invalid size.");
+            throw new InvalidDataException($"{Path.GetFileName(path)} has an invalid size.");
 
         var bytes = new byte[(int)stream.Length];
         stream.ReadExactly(bytes);
         if (stream.ReadByte() != -1)
-            throw new InvalidDataException("The performance snapshot changed while it was being read.");
+            throw new InvalidDataException($"{Path.GetFileName(path)} changed while it was being read.");
         return bytes;
     }
 
@@ -430,6 +440,7 @@ public sealed partial class PerformanceService : IDisposable
         var (name, guid) = await GetActivePlanAsync(ct).ConfigureAwait(false);
         profile.ActivePlanName = name;
         profile.ActivePlanGuid = guid;
+        profile.IsUltimateCopy = guid.Length > 0 && string.Equals(ReadUltimateCopy(), guid, StringComparison.OrdinalIgnoreCase);
 
         profile.VisualEffectsReduced = !GetUiEffectsEnabled();
         profile.GameModeEnabled = ReadGameMode();
@@ -536,9 +547,11 @@ public sealed partial class PerformanceService : IDisposable
     /// already stopped trusting because powercfg translates it. On other display languages the lookup missed,
     /// each click duplicated the plan again, no GUID was parsed, and the caller was handed "". The new copy's GUID
     /// is now read as the canonical token, the same in every language, and the built-in scheme is used as it is
-    /// whenever Windows lists it. What is still English-only is recognising an EARLIER copy by name: where the
-    /// built-in scheme is hidden and the display language is not English, a click can still add a copy — but that
-    /// copy is now switched on rather than skipped.
+    /// whenever Windows lists it.
+    /// <para>An earlier copy was still found only by its English name, so where the built-in scheme is hidden, as on
+    /// Home and Pro, and the display language is not English, every Ultimate step, from this tab or from a game mode
+    /// start, added another copy to Power Options (#2717). The GUID of the copy made here is now kept, and the copy is
+    /// used again while Windows lists it. A copy made before that is still found only by its English name.</para>
     /// </remarks>
     public async Task<string> EnsureUltimatePerformancePlanAsync(CancellationToken ct = default)
     {
@@ -557,21 +570,69 @@ public sealed partial class PerformanceService : IDisposable
         // "Power Scheme GUID: <new guid>  (Ultimate Performance)" in English; the label and the name are translated
         // elsewhere, the GUID never is.
         var created = ParseFirstPlanGuid([.. lines]);
-        if (created is not null) return created;
+        if (created is not null)
+        {
+            RecordUltimateCopy(created);
+            return created;
+        }
 
         return await FindUltimatePlanGuidAsync(ct).ConfigureAwait(false) ?? "";
     }
 
     /// <summary>
     /// The Ultimate Performance plan already on this PC: the built-in scheme itself when <c>powercfg /list</c> shows
-    /// it (its GUID is the same in every language), otherwise an earlier copy found by its English name.
+    /// it (its GUID is the same in every language), then the copy SysManager made while the list shows it, by its
+    /// GUID, so in any language, then an earlier copy found by its English name.
     /// </summary>
     private async Task<string?> FindUltimatePlanGuidAsync(CancellationToken ct)
     {
         var listed = await ListPlansAsync(ct).ConfigureAwait(false);
-        return listed.Any(l => l.Contains(UltimatePerfScheme, StringComparison.OrdinalIgnoreCase))
-            ? UltimatePerfScheme
-            : ParsePlanGuidByName(listed, "Ultimate Performance");
+        if (listed.Any(l => l.Contains(UltimatePerfScheme, StringComparison.OrdinalIgnoreCase))) return UltimatePerfScheme;
+        if (ReadUltimateCopy() is { } copy && listed.Any(l => l.Contains(copy, StringComparison.OrdinalIgnoreCase)))
+            return copy;
+        return ParsePlanGuidByName(listed, "Ultimate Performance");
+    }
+
+    // The copy as its file holds it.
+    private sealed record UltimateCopy([property: JsonRequired] string PlanGuid);
+
+    /// <summary>
+    /// The GUID of the copy of the Ultimate Performance scheme SysManager made, or null when it made none or the
+    /// record of it cannot be used.
+    /// </summary>
+    /// <remarks>
+    /// Only a GUID in its canonical form is taken, as powercfg prints one and <see cref="SetActivePlanAsync"/> passes
+    /// one. A record that cannot be used names no copy, and the next Ultimate step makes one and keeps that.
+    /// </remarks>
+    internal string? ReadUltimateCopy()
+    {
+        try
+        {
+            if (!File.Exists(_ultimateCopyPath)) return null;
+            var guid = JsonSerializer.Deserialize<UltimateCopy>(ReadBounded(_ultimateCopyPath), SnapshotJsonOptions)?.PlanGuid;
+            return Guid.TryParseExact(guid, "D", out _) ? guid : null;
+        }
+        catch (InvalidDataException ex) { Log.Debug("The Ultimate Performance copy's record cannot be used: {Error}", ex.Message); }
+        catch (JsonException ex) { Log.Debug("The Ultimate Performance copy's record cannot be used: {Error}", ex.Message); }
+        catch (IOException ex) { Log.Debug("The Ultimate Performance copy's record could not be read: {Error}", ex.Message); }
+        catch (SecurityException ex) { Log.Debug("The Ultimate Performance copy's record could not be read: {Error}", ex.Message); }
+        catch (UnauthorizedAccessException ex) { Log.Debug("The Ultimate Performance copy's record could not be read: {Error}", ex.Message); }
+        return null;
+    }
+
+    // Keeps the GUID of the copy just made. A record that could not be used is written over: it named no copy that
+    // could be found, and keeping it would mean another copy at every Ultimate step. Both callers hold the
+    // system-modification lock, so two copies are never made at once.
+    private void RecordUltimateCopy(string guid)
+    {
+        try
+        {
+            Directory.CreateDirectory(Path.GetDirectoryName(_ultimateCopyPath)!);
+            AtomicFile.WriteAllBytes(_ultimateCopyPath, JsonSerializer.SerializeToUtf8Bytes(new UltimateCopy(guid), SnapshotJsonOptions));
+        }
+        catch (IOException ex) { Log.Warning(ex, "The Ultimate Performance copy could not be recorded"); }
+        catch (SecurityException ex) { Log.Warning(ex, "The Ultimate Performance copy could not be recorded"); }
+        catch (UnauthorizedAccessException ex) { Log.Warning(ex, "The Ultimate Performance copy could not be recorded"); }
     }
 
     /// <summary>What has become of the power plan a record names.</summary>

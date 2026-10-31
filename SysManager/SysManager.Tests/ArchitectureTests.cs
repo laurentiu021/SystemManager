@@ -172,8 +172,12 @@ public partial class ArchitectureTests
     /// <para>The types are found by reflection: every constructor in the app with a parameter named
     /// <c>configDir</c>, so a store is covered from the day it gains the seam. A construction passes when it gives
     /// <c>configDir</c> a value other than <c>null</c>, by name or at its position in the overload its argument count
-    /// binds to. A target-typed <c>new(...)</c> and an object the service container builds are out of a source
-    /// scan's reach; <see cref="TestAssemblyInit"/> redirects the activity log, the one store those reach.</para>
+    /// binds to. A target-typed <c>new(...)</c> is read where the type is written beside it: a declaration, a field or
+    /// property initializer, or a member returning the type with an expression body, as a test's <c>NewService</c>
+    /// helper is written. <c>PerformanceServiceTests</c> built its service that way over the real profile, unseen, and
+    /// once the Ultimate step kept the copy it made, its tests would have written theirs into it (#2717). One returned
+    /// from a block body, and an object the service container builds, are out of a source scan's reach;
+    /// <see cref="TestAssemblyInit"/> redirects the activity log, the one store those reach.</para>
     /// </remarks>
     [Fact]
     public void Tests_NeverLeaveAConfigDirAtTheRealProfile()
@@ -202,8 +206,10 @@ public partial class ArchitectureTests
             }
         }
 
-        Assert.True(scanned >= 130,
-            $"only {scanned} constructions of those types were found in the tests, and 148 were measured. The "
+        // 263 measured when target-typed constructions were added to the scan, 35 of them target-typed, so a floor above
+        // the other 228 notices that half going blind too.
+        Assert.True(scanned >= 240,
+            $"only {scanned} constructions of those types were found in the tests, and 263 were measured. The "
             + "match stopped working, so this guard would pass while checking nothing.");
         Assert.True(leaks.Count == 0,
             "These tests build a type over the REAL profile folder, %LocalAppData%\\SysManager: its configDir is left "
@@ -230,6 +236,12 @@ public partial class ArchitectureTests
     [InlineData("new PerformanceService(runner, restore, dir)", false)]
     [InlineData("new ProfileService(privacy, gaming)", true)]
     [InlineData("new ProfileService(privacy, gaming, local, roaming)", false)]
+    [InlineData("private static PerformanceService NewService(IPowerShellRunner runner) => new(runner, new RestorePointService(runner))", true)]
+    [InlineData("private PerformanceService NewService(IPowerShellRunner runner) => new(runner, new RestorePointService(runner), _dir, processes: null)", false)]
+    [InlineData("using PerformanceService service = new(runner, restore)", true)]
+    [InlineData("PerformanceService? service = new(runner, restore, dir)", false)]
+    [InlineData("private readonly SpeedTestHistoryService _history = new()", true)]
+    [InlineData("private SpeedTestHistoryService History { get; } = new(dir)", false)]
     public void TheConfigDirScan_JudgesEachConstructionByTheOverloadItBindsTo(string construction, bool leaks)
     {
         // Proves the guard above from both sides, against the real overloads reflection finds: a construction that
@@ -318,14 +330,24 @@ public partial class ArchitectureTests
                     TakesAString: ps.Any(p => p.ParameterType == typeof(string))))
                 .ToList());
 
-    /// <summary>Each <c>new T(...)</c> in <paramref name="code"/> for one of the seam types, with its top-level
-    /// arguments.</summary>
+    /// <summary>Each <c>new T(...)</c> in <paramref name="code"/> for one of the seam types, and each target-typed
+    /// <c>new(...)</c> with one of them written beside it, with its top-level arguments.</summary>
     private static IEnumerable<(string Type, List<string> Arguments)> ConfigDirConstructions(
         string code, Dictionary<string, List<(int Required, int Total, int At, bool TakesAString)>> seams)
     {
         foreach (var type in seams.Keys)
         {
             foreach (Match m in Regex.Matches(code, @"\bnew\s+(?:[A-Za-z_]\w*\.)*" + Regex.Escape(type) + @"\s*\("))
+            {
+                var arguments = TopLevelArguments(code, m.Index + m.Length - 1);
+                if (arguments is not null) yield return (type, arguments);
+            }
+
+            // Target-typed: the type, a name, then a parameter list and "=>", an accessor list and "=", or "=" alone,
+            // then new(.
+            foreach (Match m in Regex.Matches(code,
+                         @"\b(?:[A-Za-z_]\w*\.)*" + Regex.Escape(type)
+                         + @"\??\s+[A-Za-z_]\w*\s*(?:\([^;{}]*?\)\s*=>|(?:\{[^{}]*\}\s*)?=)\s*new\s*\("))
             {
                 var arguments = TopLevelArguments(code, m.Index + m.Length - 1);
                 if (arguments is not null) yield return (type, arguments);

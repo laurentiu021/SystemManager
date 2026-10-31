@@ -401,6 +401,8 @@ public class ProfileServiceTests : IDisposable
     // That the Welcome screen has been seen on THIS PC (#1635). Carried over, a new PC's first launch would not say what
     // the app is.
     [InlineData("welcome.json")]
+    // The GUID of the copy of the Ultimate Performance plan made on THIS PC (#2717). Another PC has no plan of that GUID.
+    [InlineData(PerformanceService.UltimateCopyFileName)]
     public void AvailableSections_NeverCarriesMachineSpecificState(string fileName)
     {
         WriteConfig(fileName, "{\"machine\":\"specific\"}");

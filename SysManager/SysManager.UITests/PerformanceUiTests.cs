@@ -21,13 +21,22 @@ public class PerformanceUiTests
     public PerformanceUiTests(AppFixture fx) => _fx = fx;
 
     [Fact]
-    public void TheApp_RunsAtNormalPriority_OnceItsTrayIconExists()
+    public void TheApp_KeepsThePriorityItStartedAt_OnceItsTrayIconExists()
     {
         // The tray icon is created before the window first shows, and creating it turned Efficiency Mode on: the
-        // app, and every tool it started, ran at idle priority for the whole session (#2722).
+        // app, and every tool it started, ran at idle priority for the whole session (#2722). A process starts at
+        // Normal unless its parent runs at one of the two lowest classes, which it then inherits; on CI the app
+        // starts at BelowNormal.
+        using var self = Process.GetCurrentProcess();
+        if (self.PriorityClass == ProcessPriorityClass.Idle)
+            Assert.Skip("These tests run at idle priority, so the app starts there too and this check cannot tell.");
+        var started = self.PriorityClass == ProcessPriorityClass.BelowNormal
+            ? ProcessPriorityClass.BelowNormal
+            : ProcessPriorityClass.Normal;
+
         using var app = Process.GetProcessById(_fx.App.ProcessId);
 
-        Assert.Equal(ProcessPriorityClass.Normal, app.PriorityClass);
+        Assert.Equal(started, app.PriorityClass);
     }
 
     [Fact]

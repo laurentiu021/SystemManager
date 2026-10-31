@@ -10,6 +10,20 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.136.45] - 2026-10-31
+
+**With the theme on Auto, your chosen theme family stays instead of turning into the default
+indigo.**
+
+### Fixed
+- Auto, which follows Windows' light or dark setting, replaced a theme that was already on the
+  side Windows was on with the default indigo one: Warm Ember with Windows dark became Midnight
+  Indigo the moment Auto was turned on, a saved Warm Sand with Windows light became Clean Indigo at
+  every start, and any Windows setting change put the default back and saved it. Leaving Auto for
+  Light or Dark in the Appearance menu, on the side your theme was on, did the same. Your theme
+  now stays, and only moves between its light and dark versions. This was there since Auto was
+  added in 1.82.0.
+
 ## [1.136.44] - 2026-10-31
 
 **SysManager, and every tool it starts, runs at normal priority again instead of in Efficiency

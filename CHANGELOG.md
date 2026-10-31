@@ -10,6 +10,21 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.136.37] - 2026-10-31
+
+**Performance Mode puts the processor minimum on battery back too, instead of giving it the
+plugged-in value.**
+
+### Fixed
+- Performance Mode recorded only the processor minimum used when plugged in, and wrote that one
+  value to both plugged in and on battery. On any power plan whose battery minimum differs, Restore
+  All, putting Performance Mode back in Undo Changes, and turning the processor switch off all left
+  the battery value changed, which can drain a laptop's battery faster. The battery minimum is now
+  recorded with the other, and each is put back from its own value; Restore All's question names
+  both when they differ, and Undo Changes lists the battery one. A record made before this has no
+  battery value, and the plugged-in one goes on both, as before. This was there from the first
+  version.
+
 ## [1.136.36] - 2026-10-31
 
 **Restore All in Performance Mode needs administrator rights only when the NVIDIA setting has to go

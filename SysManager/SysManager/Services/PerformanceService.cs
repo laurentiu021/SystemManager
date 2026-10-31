@@ -204,6 +204,12 @@ public sealed partial class PerformanceService : IDisposable
     /// Immutable snapshot of the system state taken before any changes.
     /// Used by Restore to revert to the exact original state.
     /// </summary>
+    /// <remarks>
+    /// <c>ProcessorMinPercentDc</c>, the minimum on battery, is not required, so a record from before it was kept still
+    /// loads, and its restore gives the battery the plugged-in value, as every record's did. Only that one was kept, so
+    /// Restore All, Undo Changes and the processor switch set the battery minimum to it on any plan where the two
+    /// differ (#2716).
+    /// </remarks>
     public sealed record OriginalSnapshot(
         [property: JsonRequired] string PowerPlanGuid,
         [property: JsonRequired] string PowerPlanName,
@@ -214,7 +220,8 @@ public sealed partial class PerformanceService : IDisposable
         [property: JsonRequired] bool GpuDynamicPstate,       // true = dynamic (default), false = disabled
         [property: JsonRequired] int? ProcessorMinPercentAc,  // null = couldn't read (don't restore rather than guess)
         [property: JsonRequired] string? NvidiaSubKey,        // null = no NVIDIA GPU
-        DateTimeOffset? CapturedAtUtc = null); // null = legacy snapshot without timestamp
+        DateTimeOffset? CapturedAtUtc = null, // null = legacy snapshot without timestamp
+        int? ProcessorMinPercentDc = null);   // on battery; null = legacy snapshot or couldn't read (the AC value goes on both)
 
     /// <summary>
     /// Take a snapshot of the current system state.
@@ -228,6 +235,7 @@ public sealed partial class PerformanceService : IDisposable
     {
         var (name, guid) = await GetActivePlanAsync(ct).ConfigureAwait(false);
         var nvidiaKey = FindNvidiaSubKey(_presentAdapters());
+        var minimum = await ReadProcessorMinPercentsAsync(ct).ConfigureAwait(false);
 
         return new OriginalSnapshot(
             PowerPlanGuid: guid,
@@ -237,9 +245,10 @@ public sealed partial class PerformanceService : IDisposable
             XboxGameBarEnabled: ReadXboxGameBarEnabled(),
             XboxGameDvrEnabled: ReadXboxGameDvrEnabled(),
             GpuDynamicPstate: nvidiaKey is not null && !ReadGpuMaxPerformance(nvidiaKey),
-            ProcessorMinPercentAc: await ReadProcessorMinPercentAsync(ct).ConfigureAwait(false),
+            ProcessorMinPercentAc: minimum.Ac,
             NvidiaSubKey: nvidiaKey,
-            CapturedAtUtc: DateTimeOffset.UtcNow);
+            CapturedAtUtc: DateTimeOffset.UtcNow,
+            ProcessorMinPercentDc: minimum.Dc);
     }
 
     /// <summary>Persist a snapshot to disk so it survives app restarts.</summary>
@@ -388,6 +397,8 @@ public sealed partial class PerformanceService : IDisposable
 
         if (snapshot.ProcessorMinPercentAc is < 0 or > 100)
             return RejectSnapshot("the processor minimum is outside 0-100", out reason);
+        if (snapshot.ProcessorMinPercentDc is < 0 or > 100)
+            return RejectSnapshot("the processor minimum on battery is outside 0-100", out reason);
 
         if (snapshot.NvidiaSubKey is not null &&
             !NvidiaSubKeyRegex().IsMatch(snapshot.NvidiaSubKey))
@@ -1109,7 +1120,11 @@ public sealed partial class PerformanceService : IDisposable
     /// parsed. Callers that persist it for restore MUST keep the null (never substitute a
     /// default), so a snapshot on a machine we couldn't read doesn't write back a wrong value.
     /// </summary>
-    internal async Task<int?> ReadProcessorMinPercentAsync(CancellationToken ct = default)
+    internal async Task<int?> ReadProcessorMinPercentAsync(CancellationToken ct = default) =>
+        (await ReadProcessorMinPercentsAsync(ct).ConfigureAwait(false)).Ac;
+
+    /// <summary>The processor minimum plugged in and on battery, each null when it could not be parsed.</summary>
+    internal async Task<(int? Ac, int? Dc)> ReadProcessorMinPercentsAsync(CancellationToken ct = default)
     {
         await _psGate.WaitAsync(ct).ConfigureAwait(false);
         // ConcurrentQueue: LineReceived fires from BOTH the stdout and stderr reader threads,
@@ -1124,10 +1139,17 @@ public sealed partial class PerformanceService : IDisposable
         }
         finally { _ps.LineReceived -= OnLine; _psGate.Release(); }
 
-        return ParseProcessorMinPercent([.. lines]);
+        return ParseProcessorMinPercents([.. lines]);
     }
 
-    internal static int? ParseProcessorMinPercent(IList<string> lines)
+    internal static int? ParseProcessorMinPercent(IList<string> lines) => ParseProcessorMinPercents(lines).Ac;
+
+    /// <summary>
+    /// The plugged-in and the battery processor minimum in <c>powercfg /query</c>'s output: by their English labels,
+    /// and in another display language as the last two hex values, which come AC first. Each is null when it is not
+    /// there.
+    /// </summary>
+    internal static (int? Ac, int? Dc) ParseProcessorMinPercents(IList<string> lines)
     {
         // powercfg /query SCHEME_CURRENT SUB_PROCESSOR PROCTHROTTLEMIN prints, in an order that
         // is identical in every display language, up to five hex values:
@@ -1137,11 +1159,9 @@ public sealed partial class PerformanceService : IDisposable
         // "current index" lines come LAST never change — so the AC index we want is always the
         // second-to-last hex token in the output, and DC the last.
         //
-        // Fast path (en-US): match the English AC label exactly — cheap and unambiguous.
-        foreach (var line in lines.Where(l => l.Contains("Current AC Power Setting Index", StringComparison.OrdinalIgnoreCase)))
-        {
-            if (TryParseHexToken(line, out var acVal)) return acVal;
-        }
+        // Fast path (en-US): match the English AC label exactly — cheap and unambiguous — and the DC one beside it.
+        if (HexAfter(lines, "Current AC Power Setting Index") is int ac)
+            return (ac, HexAfter(lines, "Current DC Power Setting Index"));
         // Locale-agnostic fallback: on non-English Windows the label above is translated, so the
         // fast path misses. Collect every hex token in order and take the second-to-last (AC).
         // The previous fallback returned the FIRST hex token — "Minimum Possible Setting" (0x0) —
@@ -1153,7 +1173,17 @@ public sealed partial class PerformanceService : IDisposable
         }
         // Need both current-index tokens (AC + DC) to trust the ordering; AC is second-to-last.
         // Fewer than two = ambiguous, so return null rather than guess — never fabricate a value.
-        return hexValues.Count >= 2 ? hexValues[^2] : null;
+        return hexValues.Count >= 2 ? (hexValues[^2], hexValues[^1]) : (null, null);
+    }
+
+    // The hex value on the first line that carries the label and one.
+    private static int? HexAfter(IList<string> lines, string label)
+    {
+        foreach (var line in lines.Where(l => l.Contains(label, StringComparison.OrdinalIgnoreCase)))
+        {
+            if (TryParseHexToken(line, out var value)) return value;
+        }
+        return null;
     }
 
     private static bool TryParseHexToken(string line, out int value)
@@ -1169,22 +1199,28 @@ public sealed partial class PerformanceService : IDisposable
     /// Set processor minimum state to a specific percentage.
     /// Reversible: call with the original percentage to restore.
     /// </summary>
-    public async Task SetProcessorMinStateAsync(int percent, CancellationToken ct = default)
+    public Task SetProcessorMinStateAsync(int percent, CancellationToken ct = default) =>
+        SetProcessorMinStateAsync(percent, percent, ct);
+
+    /// <summary>Set the processor minimum plugged in to <paramref name="ac"/> and on battery to <paramref name="dc"/>.</summary>
+    public async Task SetProcessorMinStateAsync(int ac, int dc, CancellationToken ct = default)
     {
-        if (percent is < 0 or > 100)
-            throw new ArgumentOutOfRangeException(nameof(percent), percent, "Processor minimum must be between 0 and 100.");
+        if (ac is < 0 or > 100)
+            throw new ArgumentOutOfRangeException(nameof(ac), ac, "Processor minimum must be between 0 and 100.");
+        if (dc is < 0 or > 100)
+            throw new ArgumentOutOfRangeException(nameof(dc), dc, "Processor minimum must be between 0 and 100.");
 
         // Serialize on the shared gate — see SetActivePlanAsync.
         await _psGate.WaitAsync(ct).ConfigureAwait(false);
         try
         {
             var acExitCode = await _ps.RunProcessAsync("powercfg.exe",
-                $"/setacvalueindex SCHEME_CURRENT SUB_PROCESSOR PROCTHROTTLEMIN {percent}", ct, PowerShellRunner.OemEncoding).ConfigureAwait(false);
+                $"/setacvalueindex SCHEME_CURRENT SUB_PROCESSOR PROCTHROTTLEMIN {ac}", ct, PowerShellRunner.OemEncoding).ConfigureAwait(false);
             if (acExitCode != 0)
                 throw new InvalidOperationException($"powercfg failed to set the AC processor minimum (exit code {acExitCode}).");
 
             var dcExitCode = await _ps.RunProcessAsync("powercfg.exe",
-                $"/setdcvalueindex SCHEME_CURRENT SUB_PROCESSOR PROCTHROTTLEMIN {percent}", ct, PowerShellRunner.OemEncoding).ConfigureAwait(false);
+                $"/setdcvalueindex SCHEME_CURRENT SUB_PROCESSOR PROCTHROTTLEMIN {dc}", ct, PowerShellRunner.OemEncoding).ConfigureAwait(false);
             if (dcExitCode != 0)
                 throw new InvalidOperationException($"powercfg failed to set the DC processor minimum (exit code {dcExitCode}).");
 
@@ -1352,8 +1388,9 @@ public sealed partial class PerformanceService : IDisposable
         // Processor state — only restore if we captured a real value. A null means the
         // snapshot couldn't read the original minimum (e.g. an unparseable powercfg output),
         // so writing anything would fabricate state; leaving it untouched is the safe choice.
+        // Each from its own field: the battery minimum got the plugged-in value (#2716).
         if (snapshot.ProcessorMinPercentAc is int minPct)
-            await SetProcessorMinStateAsync(minPct, ct).ConfigureAwait(false);
+            await SetProcessorMinStateAsync(minPct, snapshot.ProcessorMinPercentDc ?? minPct, ct).ConfigureAwait(false);
 
         // GPU last, so a write that fails leaves nothing else undone; the write checks the card again.
         RestoreGraphics(snapshot, graphics, _restoreGpu);

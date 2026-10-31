@@ -504,6 +504,181 @@ public sealed class PerformanceSnapshotRestartTests
         }
     }
 
+    // ---------- the battery processor minimum (#2716) ----------
+    // Only the plugged-in minimum was recorded, and the restore wrote it to both, so on any plan whose battery minimum
+    // differs, Restore All, Undo Changes and turning the processor switch off left the battery value changed.
+
+    private const string AcIndex = "/setacvalueindex SCHEME_CURRENT SUB_PROCESSOR PROCTHROTTLEMIN";
+    private const string DcIndex = "/setdcvalueindex SCHEME_CURRENT SUB_PROCESSOR PROCTHROTTLEMIN";
+
+    /// <summary>A runner that answers powercfg's processor-minimum query with <paramref name="ac"/> and <paramref name="dc"/>.</summary>
+    private static IPowerShellRunner AnsweringTheMinimum(int ac, int dc)
+    {
+        var runner = NewRunner();
+        runner.RunProcessAsync("powercfg.exe", "/query SCHEME_CURRENT SUB_PROCESSOR PROCTHROTTLEMIN",
+                Arg.Any<CancellationToken>(), Arg.Any<System.Text.Encoding?>())
+            .Returns(_ =>
+            {
+                foreach (var line in new[]
+                         {
+                             $"  Current AC Power Setting Index: 0x{ac:x8}",
+                             $"  Current DC Power Setting Index: 0x{dc:x8}",
+                         })
+                {
+                    runner.LineReceived += Raise.Event<Action<SysManager.Models.PowerShellLine>>(
+                        SysManager.Models.PowerShellLine.Output(line));
+                }
+                return 0;
+            });
+        return runner;
+    }
+
+    private static Task ReceivedTheMinimum(IPowerShellRunner runner, string index, int percent) =>
+        runner.Received(1).RunProcessAsync("powercfg.exe", $"{index} {percent}", Arg.Any<CancellationToken>(),
+            Arg.Any<System.Text.Encoding?>());
+
+    [Fact]
+    public async Task TheRecord_KeepsTheBatteryMinimum_AndTheRestorePutsEachBack()
+    {
+        var dir = CreateTempDirectory();
+        try
+        {
+            var runner = AnsweringTheMinimum(ac: 5, dc: 10);
+            using var service = NewService(dir, runner);
+
+            var recorded = await service.TakeSnapshotAsync();
+            Assert.Equal(5, recorded.ProcessorMinPercentAc);
+            Assert.Equal(10, recorded.ProcessorMinPercentDc);
+            Assert.True(service.SaveSnapshot(recorded));
+            Assert.Equal(recorded, service.LoadSnapshot());
+
+            // The rest of the record is this PC's, an NVIDIA card among it on some, so the one restored names none.
+            await service.RestoreOriginalAsync(ValidSnapshot() with { ProcessorMinPercentDc = 10 }, card: null);
+
+            await ReceivedTheMinimum(runner, AcIndex, 5);
+            await ReceivedTheMinimum(runner, DcIndex, 10);
+        }
+        finally
+        {
+            Directory.Delete(dir, recursive: true);
+        }
+    }
+
+    [Fact]
+    public async Task ARecordFromBeforeTheBatteryMinimumWasKept_StillLoads_AndPutsThePluggedInOneOnBoth()
+    {
+        var dir = CreateTempDirectory();
+        try
+        {
+            File.WriteAllText(Path.Combine(dir, "performance-snapshot.json"),
+                """
+                {
+                  "PowerPlanGuid": "381b4222-f694-41f0-9685-ff5bb260df2e",
+                  "PowerPlanName": "Balanced",
+                  "UiEffectsEnabled": true,
+                  "GameModeEnabled": true,
+                  "XboxGameBarEnabled": true,
+                  "XboxGameDvrEnabled": true,
+                  "GpuDynamicPstate": true,
+                  "ProcessorMinPercentAc": 5,
+                  "NvidiaSubKey": null
+                }
+                """);
+            var runner = NewRunner();
+            using var service = NewService(dir, runner);
+
+            var loaded = service.LoadSnapshot();
+            Assert.NotNull(loaded);
+            Assert.Null(loaded.ProcessorMinPercentDc);
+
+            await service.RestoreOriginalAsync(loaded, card: null);
+
+            await ReceivedTheMinimum(runner, AcIndex, 5);
+            await ReceivedTheMinimum(runner, DcIndex, 5);
+        }
+        finally
+        {
+            Directory.Delete(dir, recursive: true);
+        }
+    }
+
+    [Fact]
+    public void ARecordWhoseBatteryMinimumIsOutOfRange_IsRefused()
+    {
+        var dir = CreateTempDirectory();
+        try
+        {
+            using var service = NewService(dir);
+
+            Assert.False(service.SaveSnapshot(ValidSnapshot() with { ProcessorMinPercentDc = 101 }));
+            Assert.False(File.Exists(Path.Combine(dir, "performance-snapshot.json")));
+        }
+        finally
+        {
+            Directory.Delete(dir, recursive: true);
+        }
+    }
+
+    [Fact]
+    public async Task RestoreAll_SaysBothMinimums_WhenTheyDiffer()
+    {
+        var dir = CreateTempDirectory();
+        try
+        {
+            using var service = NewService(dir);
+            Assert.True(service.SaveSnapshot(ValidSnapshot() with { ProcessorMinPercentDc = 10 }));
+            using var vm = new PerformanceViewModel(service, NoGamingSession());
+            await vm.InitializationComplete;
+
+            var asked = await RestoreAllAnsweringAsync(vm, answer: false);
+
+            Assert.Contains("• Processor min state → 5% plugged in, 10% on battery", asked, StringComparison.Ordinal);
+        }
+        finally
+        {
+            Directory.Delete(dir, recursive: true);
+        }
+    }
+
+    [Fact]
+    public async Task TurningTheProcessorSwitchOff_PutsEachRecordedMinimumBack()
+    {
+        var dir = CreateTempDirectory();
+        try
+        {
+            // At 100% plugged in and on battery now, so the switch reads on.
+            var runner = AnsweringTheMinimum(ac: 100, dc: 100);
+            using var service = NewService(dir, runner);
+            Assert.True(service.SaveSnapshot(ValidSnapshot() with { ProcessorMinPercentDc = 10 }));
+            using var vm = new PerformanceViewModel(service, NoGamingSession());
+            await vm.InitializationComplete;
+            Assert.True(vm.Profile.ProcessorMaxState);
+            vm.WantProcessorMaxState = false;
+            runner.ClearReceivedCalls();
+
+            var previousDialog = DialogService.Instance;
+            var dialog = Substitute.For<IDialogService>();
+            dialog.Confirm(Arg.Any<string>(), Arg.Any<string>()).Returns(true);
+            DialogService.Instance = dialog;
+            try
+            {
+                await vm.ApplyProcessorStateCommand.ExecuteAsync(null);
+            }
+            finally
+            {
+                DialogService.Instance = previousDialog;
+            }
+
+            await ReceivedTheMinimum(runner, AcIndex, 5);
+            await ReceivedTheMinimum(runner, DcIndex, 10);
+            Assert.Equal("Processor min state set to 5% plugged in, 10% on battery.", vm.StatusMessage);
+        }
+        finally
+        {
+            Directory.Delete(dir, recursive: true);
+        }
+    }
+
     [Fact]
     public async Task RestoreAll_ForAPlanTheRecordCouldNotRead_SaysItIsUnchanged()
     {

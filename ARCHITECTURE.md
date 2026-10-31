@@ -1085,6 +1085,10 @@ Key services:
   as recorded already, by the `readGpu` seam, and a write otherwise, which `RestoreNeedsAdministrator` refuses
   without administrator rights, by the `isElevated` seam, before anything else is put back. The write is the
   restore's last step, and Undo Changes asks for administrator rights only when its list has the card's line (#2716).
+  The record keeps the processor minimum on battery beside the plugged-in one (`ProcessorMinPercentDc`, not
+  required, so an older record loads without it), read from the same powercfg query (`ParseProcessorMinPercents`),
+  and the restore, the processor switch and Undo Changes put each back from its own value; a record without it gives
+  the battery the plugged-in value, as every record did (#2716).
 - `NetworkRepairService` — DNS flush, Winsock reset, TCP/IP reset via
   system commands with live output capture.
 - `ServiceManagerService` — enumerate Windows services, gaming

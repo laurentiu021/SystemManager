@@ -10,7 +10,8 @@ namespace SysManager.Tests;
 
 /// <summary>
 /// Tests for <see cref="StartupService.SetEnabledAsync(StartupEntry, bool)"/> covering registry-based
-/// and Task Scheduler entries, plus specific error messages (#159, #160).
+/// and Task Scheduler entries, plus specific error messages (#159, #160), and for the scan's read of the same
+/// StartupApproved lists (#2741).
 /// </summary>
 public sealed class StartupToggleTests : IDisposable
 {
@@ -233,5 +234,144 @@ public sealed class StartupToggleTests : IDisposable
         Assert.True(entry.IsEnabled);
         Assert.Empty(_currentUser.GetSubKeyNames());
         Assert.Empty(_localMachine.GetSubKeyNames());
+    }
+
+    // ---------- each source reads the StartupApproved list Windows reads for it (#2741) ----------
+    // The scan's read of these lists could only run over the live registry, and its one test checked that IsEnabled
+    // could be read, which a bool always can: an inverted bit or the wrong list would have passed.
+
+    private static readonly string[] Hives = ["HKCU", "HKLM"];
+    private static readonly string[] Lists = ["Run", "Run32", "StartupFolder"];
+
+    /// <summary>An item as the scan builds it, before the lists are read: on, and saying so.</summary>
+    private static StartupEntry Scanned(StartupSource source, string valueName = "Probe",
+        string registryKey = @"SOFTWARE\Microsoft\Windows\CurrentVersion\Run") => new()
+        {
+            Name = valueName,
+            Command = "probe.exe",
+            Source = source,
+            RegistryKey = registryKey,
+            ValueName = valueName,
+            IsEnabled = true,
+            StatusText = "Enabled"
+        };
+
+    /// <summary>Writes a 12-byte blob whose first byte is <paramref name="state"/>, as Task Manager does.</summary>
+    private void Approve(string hive, string list, string valueName, byte state)
+    {
+        using var key = (hive == "HKCU" ? _currentUser : _localMachine).CreateSubKey($@"{ApprovedLists}\{list}");
+        var blob = new byte[12];
+        blob[0] = state;
+        key.SetValue(valueName, blob, RegistryValueKind.Binary);
+    }
+
+    private StartupEntry ReadBack(StartupEntry entry)
+    {
+        StartupService.ApplyApprovedState([entry], _currentUser, _localMachine);
+        return entry;
+    }
+
+    [Theory]
+    [InlineData((byte)0x02, true)]
+    [InlineData((byte)0x03, false)]
+    [InlineData((byte)0x06, true)]   // Windows 11 writes 06 and 07 as well
+    [InlineData((byte)0x07, false)]
+    public void TheStateIsTheLowBitOfTheBlobsFirstByte(byte state, bool enabled)
+    {
+        Approve("HKCU", "Run", "Probe", state);
+
+        var entry = ReadBack(Scanned(StartupSource.RegistryCurrentUser));
+
+        Assert.Equal(enabled, entry.IsEnabled);
+        Assert.Equal(enabled ? "Enabled" : "Disabled", entry.StatusText);
+    }
+
+    [Theory]
+    [InlineData(StartupSource.RegistryCurrentUser, "HKCU", "Run")]
+    [InlineData(StartupSource.StartupFolder, "HKCU", "StartupFolder")]
+    [InlineData(StartupSource.RegistryLocalMachine, "HKLM", "Run")]
+    [InlineData(StartupSource.RegistryLocalMachine32, "HKLM", "Run32")]
+    [InlineData(StartupSource.CommonStartupFolder, "HKLM", "StartupFolder")]
+    public void EachSource_ReadsTheApprovedListWindowsReadsForIt(StartupSource source, string hive, string list)
+    {
+        // Off in its own list and on in every other, so only a read of the right list says off.
+        foreach (var h in Hives)
+            foreach (var l in Lists)
+                Approve(h, l, "Probe", h == hive && l == list ? (byte)3 : (byte)2);
+
+        Assert.False(ReadBack(Scanned(source)).IsEnabled);
+    }
+
+    [Theory]
+    [InlineData(StartupSource.PolicyRun)]
+    [InlineData(StartupSource.TaskScheduler)]
+    public void ASourceWithNoApprovedList_IsReadFromNone(StartupSource source)
+    {
+        foreach (var h in Hives)
+            foreach (var l in Lists)
+                Approve(h, l, "Probe", 3);
+
+        Assert.True(ReadBack(Scanned(source)).IsEnabled);
+    }
+
+    [Theory]
+    [InlineData(StartupSource.RegistryCurrentUser, "HKCU")]
+    [InlineData(StartupSource.RegistryLocalMachine, "HKLM")]
+    [InlineData(StartupSource.RegistryLocalMachine32, "HKLM")]
+    public void ARunOnceItem_IsNotReadAsOffByARunItemOfTheSameName(StartupSource source, string hive)
+    {
+        // It runs at the next start-up whatever the lists say, so it must not show as off.
+        foreach (var l in Lists)
+            Approve(hive, l, "Probe", 3);
+
+        var entry = ReadBack(Scanned(source, registryKey: @"SOFTWARE\Microsoft\Windows\CurrentVersion\RunOnce"));
+
+        Assert.True(entry.IsEnabled);
+        Assert.Equal("Enabled", entry.StatusText);
+    }
+
+    [Fact]
+    public void AnItemNoListNames_StaysAsTheScanFoundIt()
+    {
+        Approve("HKCU", "Run", "Another", 3);
+
+        var entry = ReadBack(Scanned(StartupSource.RegistryCurrentUser));
+
+        Assert.True(entry.IsEnabled);
+        Assert.Equal("Enabled", entry.StatusText);
+    }
+
+    [Fact]
+    public void AnEmptyBlob_LeavesTheItemAsTheScanFoundIt()
+    {
+        using (var key = _currentUser.CreateSubKey($@"{ApprovedLists}\Run"))
+            key.SetValue("Probe", Array.Empty<byte>(), RegistryValueKind.Binary);
+
+        Assert.True(ReadBack(Scanned(StartupSource.RegistryCurrentUser)).IsEnabled);
+    }
+
+    [Fact]
+    public void AValueNameInAnotherCase_NamesTheSameItem()
+    {
+        // Registry value names are not case-sensitive, so neither is Windows' read of the list.
+        Approve("HKCU", "Run", "PROBE", 3);
+
+        Assert.False(ReadBack(Scanned(StartupSource.RegistryCurrentUser, "Probe")).IsEnabled);
+    }
+
+    [Theory]
+    [InlineData(StartupSource.RegistryCurrentUser)]
+    [InlineData(StartupSource.StartupFolder)]
+    [InlineData(StartupSource.RegistryLocalMachine)]
+    [InlineData(StartupSource.RegistryLocalMachine32)]
+    [InlineData(StartupSource.CommonStartupFolder)]
+    public async Task WhatASwitchWrites_TheScanReadsBack(StartupSource source)
+    {
+        // The two halves agree on the list and on the bit.
+        Assert.True(await SetEnabledAsync(Scanned(source), false));
+        Assert.False(ReadBack(Scanned(source)).IsEnabled);
+
+        Assert.True(await SetEnabledAsync(Scanned(source), true));
+        Assert.True(ReadBack(Scanned(source)).IsEnabled);
     }
 }

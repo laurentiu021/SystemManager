@@ -254,7 +254,15 @@ public sealed partial class ShortcutCleanerService
     /// <summary>
     /// Deletes selected shortcuts. Returns count of successfully deleted items.
     /// </summary>
-    public static int DeleteShortcuts(IEnumerable<BrokenShortcut> shortcuts, bool toRecycleBin)
+    public static int DeleteShortcuts(IEnumerable<BrokenShortcut> shortcuts, bool toRecycleBin) =>
+        DeleteShortcuts(shortcuts, toRecycleBin, Helpers.RecycleBinHelper.SendToRecycleBin);
+
+    /// <summary>
+    /// <see cref="DeleteShortcuts(IEnumerable{BrokenShortcut}, bool)"/> with the Recycle Bin handed in, so a test
+    /// sees what is recycled without putting files in the Recycle Bin of the machine running it. No test reached
+    /// this before (#2741).
+    /// </summary>
+    internal static int DeleteShortcuts(IEnumerable<BrokenShortcut> shortcuts, bool toRecycleBin, Func<string, bool> recycle)
     {
         int deleted = 0;
         foreach (var s in shortcuts.Where(x => x.IsSelected))
@@ -266,7 +274,7 @@ public sealed partial class ShortcutCleanerService
                 if (toRecycleBin)
                 {
                     // Only count it if the shell actually recycled the file.
-                    if (Helpers.RecycleBinHelper.SendToRecycleBin(s.ShortcutPath))
+                    if (recycle(s.ShortcutPath))
                         deleted++;
                     else
                         Log.Warning("Recycle failed (shell reported error): {Path}", s.ShortcutPath);

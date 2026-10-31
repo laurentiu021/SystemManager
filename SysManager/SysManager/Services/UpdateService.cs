@@ -497,70 +497,17 @@ public sealed class UpdateService : IUpdateService
     }
 
     /// <summary>
-    /// Downloads the .sha256 file for a release and verifies the local file matches.
+    /// Downloads the .sha256 file for a release and verifies the file on <paramref name="fileStream"/> matches.
     /// Returns true only when the hash matches. A mismatch, a .sha256 file that cannot be
-    /// downloaded or parsed, a local file that cannot be read and a cancellation all return
+    /// downloaded or parsed, a file that cannot be read and a cancellation all return
     /// false: verification failed, and the update must not be installed (SEC-001).
     /// </summary>
-    public async Task<(bool Verified, string? ExpectedHash, string? ActualHash)> VerifyHashAsync(
-        ReleaseInfo rel, string filePath, CancellationToken ct = default)
-    {
-        try
-        {
-            var sha256Url = $"https://github.com/{Owner}/{Repo}/releases/download/{rel.Tag}/SysManager-{rel.Tag}.exe.sha256";
-            var hashText = await _http.GetStringAsync(sha256Url, ct).ConfigureAwait(false);
-
-            var expectedHash = ParseExpectedHash(hashText);
-            if (expectedHash is null)
-                return (false, null, null);
-
-            var actualHash = await Task.Run(() =>
-            {
-                using var stream = File.OpenRead(filePath);
-                var hash = SHA256.HashData(stream);
-                return Convert.ToHexString(hash);
-            }, ct).ConfigureAwait(false);
-
-            var match = string.Equals(expectedHash, actualHash, StringComparison.OrdinalIgnoreCase);
-            if (!match)
-                Serilog.Log.Warning("SHA256 mismatch for {File}: expected {Expected}, got {Actual}",
-                    LogService.SanitizePath(filePath), expectedHash, actualHash);
-            else
-                Serilog.Log.Information("SHA256 verified for {File}: {Hash}", LogService.SanitizePath(filePath), actualHash);
-
-            return (match, expectedHash, actualHash);
-        }
-        catch (HttpRequestException ex)
-        {
-            Serilog.Log.Warning(ex, "Could not download .sha256 file for verification");
-            return (false, null, null); // SEC-001: treat missing hash as verification failure
-        }
-        catch (OperationCanceledException)
-        {
-            return (false, null, null);
-        }
-        catch (IOException ex)
-        {
-            Serilog.Log.Warning(ex, "Could not read downloaded file for hash verification");
-            return (false, null, null);
-        }
-        // UnauthorizedAccessException is a SIBLING of IOException, not a subclass, so it escaped the
-        // catch above — File.OpenRead raises it for an ACL-denied cached binary. This method's whole
-        // contract is "false means verification failed", so letting it propagate turned a safe
-        // refusal into a crash on the install path. Treated like every other failure mode here.
-        catch (UnauthorizedAccessException ex)
-        {
-            Serilog.Log.Warning(ex, "Could not read downloaded file for hash verification (access denied)");
-            return (false, null, null);
-        }
-    }
-
-    /// <summary>
-    /// Verifies a release's SHA-256 hash against an already-opened stream. The caller
-    /// holds the file handle and keeps it open across <c>Process.Start</c> — closing
-    /// the TOCTOU window between verify and execute that the path-based overload has.
+    /// <remarks>
+    /// The caller opens the file and holds the handle across <c>Process.Start</c>, so nothing can change the bytes
+    /// between the check and the start. The overload that took a path opened the file itself and closed it before
+    /// the start, and nothing has called it since Install moved to the held handle (#1395), so it went (#2741).
     /// The stream is rewound to position 0 before hashing.
-    /// </summary>
+    /// </remarks>
     public async Task<(bool Verified, string? ExpectedHash, string? ActualHash)> VerifyHashAsync(
         ReleaseInfo rel, Stream fileStream, CancellationToken ct = default)
     {

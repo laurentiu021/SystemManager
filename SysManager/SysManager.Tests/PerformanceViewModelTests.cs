@@ -912,4 +912,118 @@ public class PerformanceViewModelTests
 
         Assert.Equal([(false, false)], writes);
     }
+
+    // ── The three section Applies write only once asked, under the lock, with the snapshot on disk (#2741) ──
+    //
+    // The snapshot is what Restore All puts back, so a write made before it is on disk cannot be undone. Each write
+    // goes to a recorder that notes whether the snapshot was there at that moment.
+
+    /// <summary>
+    /// A view model set so the Apply of <paramref name="section"/> has a change to make: every effect on, and each
+    /// switch asking for it off. Only that section's write is recorded; the other two do nothing.
+    /// </summary>
+    private static async Task<(PerformanceViewModel Vm, List<bool> SnapshotOnDiskAtEachWrite)> ReadyToApplyAsync(
+        string section, string configDir)
+    {
+        List<bool> writes = [];
+        void Write() => writes.Add(File.Exists(Path.Combine(configDir, "performance-snapshot.json")));
+        var vm = NewVm(completeInitialization: true, configDir: configDir,
+            setUiEffects: section == "visual effects" ? _ => Write() : null,
+            setGameMode: section == "Game Mode" ? _ => Write() : null,
+            setXboxGameBar: section == "Xbox Game Bar" ? (_, _) => Write() : null);
+        await vm.InitializationComplete;
+        vm.Profile = new PerformanceProfile
+        {
+            VisualEffectsReduced = false,
+            GameModeEnabled = true,
+            XboxGameBarOn = true,
+            XboxGameDvrOn = true,
+        };
+        vm.WantVisualEffectsReduced = true;
+        vm.WantGameModeOff = true;
+        vm.WantXboxGameBarOff = true;
+        return (vm, writes);
+    }
+
+    private static Task ApplyAsync(PerformanceViewModel vm, string section) => section switch
+    {
+        "visual effects" => vm.ApplyVisualEffectsCommand.ExecuteAsync(null),
+        "Game Mode" => vm.ApplyGameModeCommand.ExecuteAsync(null),
+        "Xbox Game Bar" => vm.ApplyXboxGameBarCommand.ExecuteAsync(null),
+        _ => throw new ArgumentOutOfRangeException(nameof(section), section, "not one of the three sections"),
+    };
+
+    private static string NewConfigDir() =>
+        Path.Combine(Path.GetTempPath(), "SysManagerPerformanceTests", Guid.NewGuid().ToString("N"));
+
+    private static void DeleteConfigDir(string dir)
+    {
+        try { if (Directory.Exists(dir)) Directory.Delete(dir, recursive: true); }
+        catch (IOException) { /* a leftover temp folder must never fail a test */ }
+    }
+
+    [Theory]
+    [InlineData("visual effects")]
+    [InlineData("Game Mode")]
+    [InlineData("Xbox Game Bar")]
+    public async Task AConfirmedApply_WritesOnce_WithTheSnapshotAlreadyOnDisk(string section)
+    {
+        var dir = NewConfigDir();
+        try
+        {
+            var (vm, writes) = await ReadyToApplyAsync(section, dir);
+            using var _ = vm;
+            using var dialog = new DialogAnswer(confirm: true);
+
+            await ApplyAsync(vm, section);
+
+            Assert.Equal([true], writes);
+            Assert.True(vm.HasSnapshot);
+        }
+        finally { DeleteConfigDir(dir); }
+    }
+
+    [Theory]
+    [InlineData("visual effects")]
+    [InlineData("Game Mode")]
+    [InlineData("Xbox Game Bar")]
+    public async Task ADeclinedApply_WritesNothing(string section)
+    {
+        var dir = NewConfigDir();
+        try
+        {
+            var (vm, writes) = await ReadyToApplyAsync(section, dir);
+            using var _ = vm;
+            using var dialog = new DialogAnswer(confirm: false);
+
+            await ApplyAsync(vm, section);
+
+            Assert.Equal(1, dialog.Calls);
+            Assert.Empty(writes);
+        }
+        finally { DeleteConfigDir(dir); }
+    }
+
+    [Theory]
+    [InlineData("visual effects")]
+    [InlineData("Game Mode")]
+    [InlineData("Xbox Game Bar")]
+    public async Task AnApplyTheLockRefuses_WritesNothing(string section)
+    {
+        var dir = NewConfigDir();
+        try
+        {
+            var (vm, writes) = await ReadyToApplyAsync(section, dir);
+            using var _ = vm;
+            using var dialog = new DialogAnswer(confirm: true);
+            using var held = OperationLockService.Instance.TryAcquire(OperationCategory.SystemModification, "Undo");
+            Assert.NotNull(held);
+
+            await ApplyAsync(vm, section);
+
+            Assert.Empty(writes);
+            Assert.StartsWith("Cannot start", vm.StatusMessage, StringComparison.Ordinal);
+        }
+        finally { DeleteConfigDir(dir); }
+    }
 }

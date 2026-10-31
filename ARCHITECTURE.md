@@ -556,6 +556,10 @@ Key services:
   Dashboard's quick test. A ping nobody
   answered and an upload the server refused are null, not 0: `MeasurePingAsync` is handed the single ping and
   `UploadMbps` is pure, so both are tested without a network. `SpeedTestResult` formats them, "—" when missing.
+  The upload is measured for at most `UploadWindow` (30 s), on what it had sent when the window ends, since the
+  shared client's two-minute timeout cancelled a slow upload and the whole test with it (#2721).
+  `MeasureUploadAsync` takes the client, the window's token and a `TimeProvider`, so a test drives it with a
+  handler that reads part of the body and ends the window.
 - `PowerShellRunner` — wraps `System.Management.Automation` to run scripts
   and stream output line-by-line. Always launches spawned processes from
   `System32` so `Access is denied` never bites on `chkdsk` etc. Every runspace,

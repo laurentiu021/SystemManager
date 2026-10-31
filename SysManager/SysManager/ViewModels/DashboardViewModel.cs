@@ -1405,6 +1405,9 @@ public sealed partial class DashboardViewModel : ElevatedViewModelBase
 
     private bool CanRunQuickAction() => !IsQuickActionRunning || IsQuickActionDone;
 
+    /// <summary>What a quick action's card says when a time limit of its own ended it, not the Cancel button (#2721).</summary>
+    internal const string QuickActionTimedOut = "It timed out waiting for an answer.";
+
     /// <summary>
     /// Runs one of the Dashboard's quick actions on its card, which says it is running and then that it is done or
     /// why it failed, with a link to the tab that has more.
@@ -1446,9 +1449,18 @@ public sealed partial class DashboardViewModel : ElevatedViewModelBase
             LoadActivity();
             done = true;
         }
-        catch (OperationCanceledException)
+        catch (OperationCanceledException) when (_quickActionCts?.IsCancellationRequested == true)
         {
             QuickActionStatus = "Cancelled";
+            IsQuickActionDone = true;
+        }
+        // Not the Cancel button: a time limit of the action's own, the speed test's server not answering within the
+        // client's two minutes. It read as "Cancelled" although nothing was (#2721).
+        catch (OperationCanceledException ex)
+        {
+            Log.Debug(ex, "Quick action {Name} timed out", name);
+            QuickActionStatus = "Failed";
+            QuickActionDetail = QuickActionTimedOut;
             IsQuickActionDone = true;
         }
         catch (Exception ex)

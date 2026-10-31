@@ -1549,6 +1549,10 @@ Answers "what is actually using my space?" by listing the biggest files in one p
 - **A reading it could not take says so.** When no ping gets an answer, which is common on
   networks that block ping, or the server refuses the upload, the card shows "—" and the line
   under it says why. The history records it as not measured, never as a perfect 0 ms ping
+- **A slow upload is still measured.** The HTTP upload is measured for at most 30 seconds, on
+  what it sent in that time, so a slow line finishes with all three readings rather than
+  timing out and losing them. A connection that drops during a test shows as an error on its
+  card, and a server that stops answering as a timeout, not as "Cancelled"
 - Progress bar with a time-remaining estimate and a Cancel button, on the card of the test
   that is running and not on the other; the Ookla CLI is downloaded on first run
 - **The Ookla CLI is checked before every run** against the SHA-256 of Ookla's 1.2.0 release,
@@ -2270,7 +2274,9 @@ offers, "rate us" prompts:
   Test run in place with a progress bar, and the result says whether it worked: an app update
   that fails ends as "Failed" with winget's reason, not "Done". A Cancel button sits beside the
   bar for as long as the action is still running and stops it, same as Escape; Update All Apps
-  stops between apps rather than mid-download. Check Windows Updates asks
+  stops between apps rather than mid-download. An action ends as "Cancelled" only when you
+  cancelled it: a speed test whose server stopped answering ends as "Failed" and says it timed
+  out. Check Windows Updates asks
   Windows Update what is waiting and says how many updates it found, or that Windows is up to
   date. It installs nothing: the link under the result opens the Windows Update tab, where you
   choose what to install. Run Speed Test records its result in the Speed Test tab's history, and

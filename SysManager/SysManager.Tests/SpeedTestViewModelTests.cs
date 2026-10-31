@@ -399,6 +399,68 @@ public sealed class SpeedTestViewModelTests : IDisposable
         return engine;
     }
 
+    // ---------- a run that fails partway (#2721) ----------
+    //
+    // A connection that dropped once the download had started went to the app's error dialog, with the card left on
+    // "Measuring download…", and a time limit the user did not set off read as "Cancelled".
+
+    private static Services.ISpeedTestService EngineThrowing(Exception thrown)
+    {
+        var engine = Substitute.For<Services.ISpeedTestService>();
+        engine.RunHttpAsync(Arg.Any<IProgress<(int Percent, string Message)>?>(), Arg.Any<CancellationToken>())
+              .Returns(Task.FromException<Models.SpeedTestResult>(thrown));
+        return engine;
+    }
+
+    [Fact]
+    public async Task AnHttpRunWhoseConnectionDrops_SaysSoOnItsCard_AndEnds()
+    {
+        var dropped = new System.Net.Http.HttpIOException(System.Net.Http.HttpRequestError.ResponseEnded,
+                                                          "The response ended prematurely.");
+        var vm = new SpeedTestViewModel(NewShared(), NewHistory(), EngineThrowing(dropped));
+        await vm.InitializationComplete;
+
+        await vm.RunHttpSpeedCommand.ExecuteAsync(null);
+
+        Assert.Equal("Error: the connection dropped during the test. " + dropped.Message, vm.HttpStatus);
+        Assert.False(vm.IsSpeedTesting);
+    }
+
+    [Fact]
+    public async Task AnHttpRunTheClientGivesUpOn_SaysItTimedOut_NotThatItWasCancelled()
+    {
+        var vm = new SpeedTestViewModel(NewShared(), NewHistory(), EngineThrowing(new TaskCanceledException(
+            "The request was canceled due to the configured HttpClient.Timeout of 120 seconds elapsing.")));
+        await vm.InitializationComplete;
+
+        await vm.RunHttpSpeedCommand.ExecuteAsync(null);
+
+        Assert.Equal(SpeedTestViewModel.HttpTimedOut, vm.HttpStatus);
+    }
+
+    [Fact]
+    public async Task AnHttpRunTheUserCancels_SaysCancelled()
+    {
+        // The engine waits for the run's own token, as a real run does until Cancel is pressed.
+        var engine = Substitute.For<Services.ISpeedTestService>();
+        engine.RunHttpAsync(Arg.Any<IProgress<(int Percent, string Message)>?>(), Arg.Any<CancellationToken>())
+              .Returns(call => UntilCancelledAsync(call.Arg<CancellationToken>()));
+        var vm = new SpeedTestViewModel(NewShared(), NewHistory(), engine);
+        await vm.InitializationComplete;
+
+        var run = vm.RunHttpSpeedCommand.ExecuteAsync(null);
+        vm.CancelSpeedCommand.Execute(null);
+        await run;
+
+        Assert.Equal("Cancelled", vm.HttpStatus);
+    }
+
+    private static async Task<Models.SpeedTestResult> UntilCancelledAsync(CancellationToken ct)
+    {
+        await new TaskCompletionSource().Task.WaitAsync(ct);
+        throw new InvalidOperationException("a wait that only a cancellation ends ended without one");
+    }
+
     [Fact]
     public async Task AnHttpRunWhosePingGotNoAnswer_ShowsNoPing_SaysWhy_AndSavesNoPing()
     {

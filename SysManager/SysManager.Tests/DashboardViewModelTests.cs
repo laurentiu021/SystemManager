@@ -1125,6 +1125,53 @@ public sealed class DashboardViewModelTests : IDisposable
         await engine.DidNotReceiveWithAnyArgs().RunHttpAsync(default, default);
     }
 
+    // A time limit the user did not set off read as "Cancelled" (#2721).
+
+    [Fact]
+    public async Task QuickSpeedTest_TheClientGivingUp_SaysItTimedOut_NotThatItWasCancelled()
+    {
+        var engine = Substitute.For<ISpeedTestService>();
+        engine.RunHttpAsync(Arg.Any<IProgress<(int Percent, string Message)>?>(), Arg.Any<CancellationToken>())
+              .Returns(Task.FromException<SpeedTestResult>(new TaskCanceledException(
+                  "The request was canceled due to the configured HttpClient.Timeout of 120 seconds elapsing.")));
+        var vm = NewVm(QuietWinget(), speedTest: engine);
+
+        await vm.QuickSpeedTestCommand.ExecuteAsync(null);
+
+        Assert.Equal("Failed", vm.QuickActionStatus);
+        Assert.Equal(DashboardViewModel.QuickActionTimedOut, vm.QuickActionDetail);
+        Assert.True(vm.IsQuickActionDone);
+    }
+
+    [Fact]
+    public async Task QuickSpeedTest_TheUserCancelling_SaysCancelled()
+    {
+        // The engine waits for the run's own token, as a real run does until Cancel is pressed.
+        var engine = Substitute.For<ISpeedTestService>();
+        var tokenCaptured = new TaskCompletionSource();
+        engine.RunHttpAsync(Arg.Any<IProgress<(int Percent, string Message)>?>(), Arg.Any<CancellationToken>())
+              .Returns(call =>
+              {
+                  tokenCaptured.TrySetResult();
+                  return UntilCancelledAsync(call.Arg<CancellationToken>());
+              });
+        var vm = NewVm(QuietWinget(), speedTest: engine);
+
+        var run = vm.QuickSpeedTestCommand.ExecuteAsync(null);
+        await tokenCaptured.Task;
+        vm.CancelQuickActionCommand.Execute(null);
+        await run;
+
+        Assert.Equal("Cancelled", vm.QuickActionStatus);
+        Assert.True(vm.IsQuickActionDone);
+    }
+
+    private static async Task<SpeedTestResult> UntilCancelledAsync(CancellationToken ct)
+    {
+        await new TaskCompletionSource().Task.WaitAsync(ct);
+        throw new InvalidOperationException("a wait that only a cancellation ends ended without one");
+    }
+
     [Theory]
     [InlineData(true, "↓ 312 Mbps · ↑ 42 Mbps · Ping 12ms")]
     [InlineData(false, "↓ 312 Mbps · ↑ 42 Mbps · Ping 12ms — not saved to the Speed Test history")]

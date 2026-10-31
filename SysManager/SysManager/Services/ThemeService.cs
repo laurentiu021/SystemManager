@@ -157,8 +157,20 @@ public sealed class ThemeService
         if (CurrentPresetId != before) Save();
     }
 
+    /// <summary>
+    /// The preset of the current family on the <paramref name="targetMode"/> side: the current one when it is
+    /// already there, its companion when it is on the other side, and the default only for a preset with none.
+    /// </summary>
+    /// <remarks>
+    /// The companion lookups were the only ones, so a preset already on the side asked for had none and fell
+    /// through to the default: Auto turned Warm Ember into Midnight Indigo while Windows was dark, at the switch, at
+    /// every start and at every General preference event, which then saved it, and leaving Auto for the side the
+    /// preset was on did the same (#2723).
+    /// </remarks>
     public string GetCompanionPreset(string targetMode)
     {
+        if (ThemePreset.Defaults.TryGetValue(CurrentPresetId, out var current) && current.IsDark == (targetMode == "dark"))
+            return CurrentPresetId;
         if (targetMode == "dark" && LightToDark.TryGetValue(CurrentPresetId, out var darkId))
             return darkId;
         if (targetMode == "light" && DarkToLight.TryGetValue(CurrentPresetId, out var lightId))

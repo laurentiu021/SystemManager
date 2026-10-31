@@ -369,6 +369,79 @@ public class ThemeServiceTests : IDisposable
         Assert.Equal("warm-sand", svc.CurrentPresetId);
     }
 
+    // ---------- the family kept on the side it is already on (#2723) ----------
+    //
+    // Only the cross-side lookups existed, so a preset already on the side asked for fell through to the default.
+
+    [Fact]
+    public void GetCompanionPreset_ForTheSideAShippedPresetIsAlreadyOn_IsThatPreset()
+    {
+        var svc = new ThemeService(_dir, () => true, paintsTheApp: false);
+        Assert.True(ThemePreset.Defaults.Count >= 12, "the shipped presets were not read, so nothing below is checked");
+
+        foreach (var (id, preset) in ThemePreset.Defaults)
+        {
+            svc.SetPreset(id);
+            Assert.Equal(id, svc.GetCompanionPreset(preset.IsDark ? "dark" : "light"));
+        }
+    }
+
+    [Fact]
+    public void FollowWindows_OnTheSideThePresetIsAlreadyOn_KeepsThePreset()
+    {
+        // Warm Ember with Windows on dark became Midnight Indigo the moment Auto was turned on.
+        var svc = new ThemeService(_dir, () => true);
+        svc.SetPreset("warm-ember");
+
+        svc.FollowWindows();
+
+        Assert.Equal("warm-ember", svc.CurrentPresetId);
+        Assert.Equal(ThemeService.AutoMode, svc.CurrentMode);
+    }
+
+    [Fact]
+    public void AutoMode_StartingOnTheSideTheSavedPresetIsOn_KeepsIt()
+    {
+        // A saved Warm Sand with Windows on light became Clean Indigo at every start.
+        var saved = new ThemeService(_dir, () => false);
+        saved.SetPreset("warm-sand");
+        saved.FollowWindows();
+
+        var reloaded = new ThemeService(_dir, () => false);
+        reloaded.Initialize();
+
+        Assert.Equal("warm-sand", reloaded.CurrentPresetId);
+        Assert.Equal(ThemeService.AutoMode, reloaded.CurrentMode);
+    }
+
+    [Fact]
+    public void AWindowsPreferenceChange_OnTheSideThePresetIsOn_ChangesNothing_AndSavesNothing()
+    {
+        // Windows raises General for a great deal that is not the app theme, and each one reset the family to the
+        // default and saved it. Raised through the handler the app subscribes, the way Windows reaches it.
+        var windowsIsDark = true;
+        var svc = new ThemeService(_dir, () => windowsIsDark, paintsTheApp: false);
+        svc.SetPreset("warm-ember");
+        svc.FollowWindows();
+        var before = File.ReadAllBytes(ThemeFile);
+
+        RaiseAGeneralPreferenceChange(svc);
+
+        Assert.Equal("warm-ember", svc.CurrentPresetId);
+        Assert.Equal(before, File.ReadAllBytes(ThemeFile));
+
+        // The same event once Windows is on light does move the family, so the handler ran and the two checks
+        // above checked something.
+        windowsIsDark = false;
+        RaiseAGeneralPreferenceChange(svc);
+        Assert.Equal("warm-sand", svc.CurrentPresetId);
+    }
+
+    private static void RaiseAGeneralPreferenceChange(ThemeService svc) =>
+        typeof(ThemeService)
+            .GetMethod("OnUserPreferenceChanged", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)!
+            .Invoke(svc, [null, new Microsoft.Win32.UserPreferenceChangedEventArgs(Microsoft.Win32.UserPreferenceCategory.General)]);
+
     [Fact]
     public void PickingAPresetLeavesAutoMode()
     {

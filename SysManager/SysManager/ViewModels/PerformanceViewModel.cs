@@ -792,12 +792,14 @@ public sealed partial class PerformanceViewModel : ElevatedViewModelBase
         {
             await EnsureSnapshotAsync();
             // "Restore default" targets the captured original; if it couldn't be read
-            // (null), fall back to the Windows default of 5% for this explicit user action.
+            // (null), fall back to the Windows default of 5% for this explicit user action. The battery one is its own,
+            // and the plugged-in one for a record from before it was kept (#2716).
             var target = maxState ? 100 : (_snapshot!.ProcessorMinPercentAc ?? 5);
-            await _service.SetProcessorMinStateAsync(target);
+            var onBattery = maxState ? 100 : (_snapshot!.ProcessorMinPercentDc ?? target);
+            await _service.SetProcessorMinStateAsync(target, onBattery);
             await ReadAfterApplyAsync();
-            StatusMessage = $"Processor min state set to {target}%.";
-            Log.Information("Processor min state set to {Percent}%", target);
+            StatusMessage = $"Processor min state set to {Minimum(target, onBattery)}.";
+            Log.Information("Processor min state set to {Percent}% plugged in and {Battery}% on battery", target, onBattery);
         }
         catch (InvalidOperationException ex) { StatusMessage = $"Processor state change failed: {ex.Message}"; }
         catch (SecurityException ex) { StatusMessage = $"Processor state change failed: {ex.Message}"; }
@@ -1026,7 +1028,7 @@ public sealed partial class PerformanceViewModel : ElevatedViewModelBase
             + $"• Game Mode → {(onDisk.GameModeEnabled ? "ON" : "OFF")}\n"
             + $"• Xbox Game Bar → {(onDisk.XboxGameBarEnabled ? "ON" : "OFF")}\n"
             + $"• Game DVR → {(onDisk.XboxGameDvrEnabled ? "ON" : "OFF")}\n"
-            + $"• Processor min state → {(onDisk.ProcessorMinPercentAc is int p ? $"{p}%" : "unchanged")}\n"
+            + $"• Processor min state → {(onDisk.ProcessorMinPercentAc is int p ? Minimum(p, onDisk.ProcessorMinPercentDc ?? p) : "unchanged")}\n"
             + (gpuWillBeRestored ? $"• GPU → {gpuRestoreState} (reboot needed)\n" : "")
             + (gpuAlreadySet ? $"• GPU → {gpuRestoreState} (set already)\n" : "")
             + (gpuLeftOut ? "• GPU → unchanged (SysManager no longer finds the NVIDIA card this was recorded on)\n" : "")
@@ -1086,6 +1088,10 @@ public sealed partial class PerformanceViewModel : ElevatedViewModelBase
     // ═══════════════════════════════════════════════════════════════
     //  HELPERS
     // ═══════════════════════════════════════════════════════════════
+
+    /// <summary>A processor minimum as the tab says it: one value, or the two when on battery differs.</summary>
+    internal static string Minimum(int pluggedIn, int onBattery) =>
+        pluggedIn == onBattery ? $"{pluggedIn}%" : $"{pluggedIn}% plugged in, {onBattery}% on battery";
 
     /// <summary>
     /// Which of the three plan options is shown as selected. GUID first: the plan's display name is

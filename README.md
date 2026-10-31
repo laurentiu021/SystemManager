@@ -2064,7 +2064,8 @@ offers, "rate us" prompts:
 - **Overlays info**: manual instructions for Discord, Steam, NVIDIA GFE, EA App
 - **Your original settings are recorded before the first change** and kept on disk, so Restore All still
   works after a restart. Restore All puts back seven settings — the power plan, visual effects, Game
-  Mode, the Xbox Game Bar, Game DVR, the NVIDIA setting and the processor minimum; hibernation is not
+  Mode, the Xbox Game Bar, Game DVR, the NVIDIA setting and the processor minimum, plugged in and on
+  battery each as it was; hibernation is not
   one of them, so turn it back on with its own switch. Each Apply, and Restore All, reads that record
   from disk when you press it; it is checked before use, and the question shows when it was taken. A
   power plan the record could not read is listed as "unchanged", because Restore All leaves it alone

@@ -291,6 +291,43 @@ public class PerformanceServiceTests
         Assert.Equal(0x32, result); // 50 — AC (2nd-to-last), NOT Minimum-Possible 0x0 or DC 0x19
     }
 
+    // ── the battery minimum beside it (#2716) ──
+
+    [Fact]
+    public void ParseProcessorMinPercents_InEnglish_ReadEachByItsLabel()
+    {
+        var lines = new List<string>
+        {
+            "  Minimum Possible Setting: 0x00000000",
+            "  Maximum Possible Setting: 0x00000064",
+            "  Current AC Power Setting Index: 0x00000005",
+            "  Current DC Power Setting Index: 0x0000000a",
+        };
+
+        Assert.Equal((5, 10), PerformanceService.ParseProcessorMinPercents(lines));
+    }
+
+    [Fact]
+    public void ParseProcessorMinPercents_InAnotherLanguage_ReadTheLastTwoValues_AcFirst()
+    {
+        var lines = new List<string>
+        {
+            "  Mögliche Mindesteinstellung: 0x00000000",
+            "  Mögliche Höchsteinstellung: 0x00000064",
+            "  Inkrement für mögliche Einstellungen: 0x00000001",
+            "  Index für aktuelle Wechselstromeinstellung: 0x00000032",
+            "  Index für aktuelle Gleichstromeinstellung: 0x00000019",
+        };
+
+        Assert.Equal((0x32, 0x19), PerformanceService.ParseProcessorMinPercents(lines));
+    }
+
+    [Fact]
+    public void ParseProcessorMinPercents_WithOneValue_ReadNeither()
+    {
+        Assert.Equal((null, null), PerformanceService.ParseProcessorMinPercents(["  Index: 0x00000032"]));
+    }
+
     [Fact]
     public void ParseProcessorMinPercent_NonEnglishLabel_TwoTokensOnly_ReturnsAcNotDc()
     {

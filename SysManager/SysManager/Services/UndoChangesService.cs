@@ -470,6 +470,15 @@ public sealed class UndoChangesService : IUndoChangesService
                 now.ProcessorMinPercentAc is int current ? $"{current}%" : "could not be read", $"{before}%"));
         }
 
+        // The battery minimum, which the restore sets from its own field (#2716). A record from before it was kept has
+        // none to compare with.
+        if (original.ProcessorMinPercentAc is int && original.ProcessorMinPercentDc is int beforeDc
+            && now.ProcessorMinPercentDc != beforeDc)
+        {
+            found.Add(new("Processor minimum on battery", "the processor minimum on battery",
+                now.ProcessorMinPercentDc is int current ? $"{current}%" : "could not be read", $"{beforeDc}%"));
+        }
+
         return found;
 
         static string Effects(bool enabled) => enabled ? "normal" : "reduced";

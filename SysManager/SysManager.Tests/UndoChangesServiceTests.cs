@@ -434,6 +434,20 @@ public sealed class UndoChangesServiceTests
     }
 
     [Fact]
+    public void PerformanceDifferences_ListTheBatteryMinimum_OfARecordThatKeepsIt()
+    {
+        // The restore sets it from its own field now (#2716), so a change to it is something to put back.
+        var original = Original() with { ProcessorMinPercentDc = 10 };
+
+        Assert.Equal(["Processor minimum on battery: 100% → 10%"],
+            UndoChangesService.PerformanceDifferences(original, original with { ProcessorMinPercentDc = 100 }, graphics: null)
+                .Select(d => d.Line));
+        // A record from before it was kept has none to compare with.
+        Assert.Empty(UndoChangesService.PerformanceDifferences(Original(), Original() with { ProcessorMinPercentDc = 100 },
+            graphics: null));
+    }
+
+    [Fact]
     public void PerformanceDifferences_LeaveOutAPowerPlanThatIsGone()
     {
         // Deleted, or the plans reset: the restore cannot switch it on and leaves it out (#2716), so a line for it

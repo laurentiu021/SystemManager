@@ -623,4 +623,38 @@ public class PerformanceServiceTests
 
         Assert.NotEqual(a, b);
     }
+
+    // ── Game Mode and visual effects as Windows keeps them (#2716) ──
+
+    /// <summary>
+    /// Game Mode is read from the value the Settings switch writes first. Only the Windows 10 1703 value was read, so
+    /// with Game Mode off in Settings and that value absent the tab showed it on and recorded "on" to put back.
+    /// </summary>
+    [Theory]
+    [InlineData(0, null, false)] // off in Settings, the old value absent: the case that read as on
+    [InlineData(1, null, true)]
+    [InlineData(0, 1, false)]    // the Settings value wins over a stale old one
+    [InlineData(1, 0, true)]
+    [InlineData(null, 0, false)] // only the old value
+    [InlineData(null, 1, true)]
+    [InlineData(null, null, true)] // neither: Windows' default, on
+    public void GameMode_IsReadFromTheSettingsSwitchsValueFirst(int? autoGameModeEnabled, int? allowAutoGameMode, bool on) =>
+        Assert.Equal(on, PerformanceService.GameModeOn(autoGameModeEnabled, allowAutoGameMode));
+
+    [Fact]
+    public void GameMode_ThatIsNotADword_ReadsOff()
+    {
+        Assert.False(PerformanceService.GameModeOn("1", null));
+    }
+
+    /// <summary>
+    /// The visual-effects write goes into the user's profile as well as the session. With SPIF_SENDCHANGE alone the
+    /// change, and a restore of it, lasted until the next sign-out.
+    /// </summary>
+    [Fact]
+    public void TheVisualEffectsWrite_KeepsTheChangeInTheProfile_AndAnnouncesIt()
+    {
+        const uint updateIniFile = 0x01, sendChange = 0x02;
+        Assert.Equal(updateIniFile | sendChange, PerformanceService.UiEffectsWrite);
+    }
 }

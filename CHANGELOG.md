@@ -10,6 +10,22 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.136.34] - 2026-10-31
+
+**Reduced visual effects in Performance Mode last past a restart, and the Game Mode switch agrees
+with Windows Settings.**
+
+### Fixed
+- Reduced visual effects lasted only until you signed out: Windows changed the session and kept
+  nothing in your profile, so after a restart the animations were back and Performance Mode read
+  them as normal, and a restore of them lasted no longer. They are kept in your profile now, also
+  while game mode has them reduced, which it puts back when it ends, as before. This was there
+  from the first version.
+- With Game Mode turned off in Windows Settings, Performance Mode could show it on, refuse to turn it
+  on because it was "already in the selected state", and record "on" as your original, so Restore
+  All turned it on. The tab read only the value Windows 10 1703 used, not the one the Settings
+  switch writes. It reads the Settings one first now. This was there from the first version.
+
 ## [1.136.33] - 2026-10-31
 
 **The memory check counts memory errors only, and a memory test that passed no longer reads as a

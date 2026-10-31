@@ -714,6 +714,10 @@ Key services:
   `TimeProvider` and compare `GetElapsedTime` against a monotonic timestamp, not a subtracted
   `DateTime.UtcNow`: a clock set back makes a wall-clock cooldown stay silent for LONGER than
   four hours rather than shorter, and was untestable without a real multi-hour wait (#2855).
+  The icon is created with `ForceCreate(enablesEfficiencyMode: false)`: the library turns Efficiency Mode on
+  otherwise, which put the app and every tool it starts at idle priority under EcoQoS (#2722). A source guard,
+  `TheTrayIcon_IsCreatedWithoutEfficiencyMode`, keeps any other mention of Efficiency Mode out of the app, and
+  the library's Hide and Show extensions, which switch it, from being called on a window.
 - `LogService` — Serilog wrapper with a rolling file sink, wrapped by
   `UserPathScrubbingSink`. That wrapper renders each event and runs the finished line through
   `SanitizePath` before writing, so the Windows user name cannot reach the log regardless of

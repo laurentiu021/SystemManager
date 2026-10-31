@@ -20921,6 +20921,62 @@ public partial class ArchitectureTests
     private static partial Regex LookupDeclaration();
 
     /// <summary>
+    /// The tray icon is created without Efficiency Mode, and nothing else in the app turns it on (#2722).
+    /// </summary>
+    /// <remarks>
+    /// H.NotifyIcon's <c>ForceCreate</c> turns Efficiency Mode on unless told not to: it sets EcoQoS on the process and
+    /// its priority class to idle, which every child inherits. Called with no argument at every start since 1.7.16, it
+    /// put SysManager's UI, and every PowerShell runspace, winget, DISM and SFC run it started, at idle priority for the
+    /// whole session. Read from source because creating the icon in a test registers it with the notification area.
+    /// The library's other ways in are its Efficiency Mode utilities, caught as any mention of Efficiency Mode beyond
+    /// the argument that turns it off, and its Hide and Show extensions on a window. Those take the switch as a plain
+    /// bool and win over the window's own Hide and Show only when given an argument, so in a file that uses the library
+    /// neither is called with one.
+    /// </remarks>
+    [Fact]
+    public void TheTrayIcon_IsCreatedWithoutEfficiencyMode()
+    {
+        const string Off = ".ForceCreate(enablesEfficiencyMode: false)";
+        var created = 0;
+        var usingTheLibrary = 0;
+        var offenders = new List<string>();
+        foreach (var file in Directory.EnumerateFiles(TestPaths.AppProject(), "*.cs", SearchOption.AllDirectories)
+                     .Where(f => !f.Contains($"{Path.DirectorySeparatorChar}obj{Path.DirectorySeparatorChar}", StringComparison.Ordinal))
+                     .Where(f => !f.Contains($"{Path.DirectorySeparatorChar}bin{Path.DirectorySeparatorChar}", StringComparison.Ordinal)))
+        {
+            var code = WithoutComments(File.ReadAllText(file));
+            created += Regex.Matches(code, Regex.Escape(Off)).Count;
+            var rest = code.Replace(Off, "", StringComparison.Ordinal);
+            foreach (Match call in ForceCreateCall().Matches(rest))
+                offenders.Add($"{Path.GetFileName(file)}: {call.Value}");
+            if (rest.Contains("EfficiencyMode", StringComparison.Ordinal))
+                offenders.Add($"{Path.GetFileName(file)}: mentions Efficiency Mode");
+            if (code.Contains("H.NotifyIcon", StringComparison.Ordinal))
+            {
+                usingTheLibrary++;
+                foreach (Match call in WindowCallWithAnArgument().Matches(code))
+                    offenders.Add($"{Path.GetFileName(file)}: {call.Value}");
+                if (code.Contains("WindowExtensions", StringComparison.Ordinal))
+                    offenders.Add($"{Path.GetFileName(file)}: names the library's WindowExtensions");
+            }
+        }
+
+        Assert.True(created >= 1,
+            "no ForceCreate(enablesEfficiencyMode: false) was found in the app, so the tray icon's creation is not checked.");
+        Assert.True(usingTheLibrary >= 1,
+            "no file of the app uses H.NotifyIcon, so its window extensions are not checked.");
+        Assert.True(offenders.Count == 0,
+            "These can put SysManager, and every tool it starts, into Efficiency Mode at idle priority. Create the tray "
+            + "icon with ForceCreate(enablesEfficiencyMode: false) and switch nothing else:\n  " + string.Join("\n  ", offenders));
+    }
+
+    [GeneratedRegex(@"\.ForceCreate\s*\([^)]*\)", RegexOptions.CultureInvariant)]
+    private static partial Regex ForceCreateCall();
+
+    [GeneratedRegex(@"\.(?:Hide|Show)\s*\(\s*[^)\s][^)]*\)", RegexOptions.CultureInvariant)]
+    private static partial Regex WindowCallWithAnArgument();
+
+    /// <summary>
     /// How many services sit behind a constructor-injected interface seam is spelled out in ARCHITECTURE.md,
     /// and the list beside the number names each one — so both are derived here from the registrations
     /// themselves, which is the only place a seam actually becomes injectable.

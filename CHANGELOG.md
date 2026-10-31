@@ -10,6 +10,20 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.136.44] - 2026-10-31
+
+**SysManager, and every tool it starts, runs at normal priority again instead of in Efficiency
+Mode.**
+
+### Fixed
+- Creating the tray icon at every start also turned on Windows' Efficiency Mode for SysManager:
+  the tray library does that unless told not to, and nothing turned it off again. SysManager ran
+  at the lowest priority for the whole session, even in the foreground, which Task Manager shows
+  as "Efficiency mode", and every program it started inherited it: the PowerShell that runs every
+  script, winget, DISM, SFC, chkdsk and uninstallers. Under any other load the app stuttered, its
+  scans slowed down, and a starved PowerShell could take long enough to fail a script. The tray
+  icon is now created without it. This was there since 1.7.16.
+
 ## [1.136.43] - 2026-10-31
 
 **The HTTP speed test measures a slow upload instead of ending as "Cancelled", and a connection
@@ -25,7 +39,8 @@ that drops during it shows as an error on its card.**
   brought up the app's error dialog, and the HTTP card stayed on "Measuring download…" for
   good. It now shows as an error on the card, and the test can be run again. A test the server
   stopped answering says it timed out, rather than that it was cancelled, on the tab and on the
-  Dashboard's quick speed test.
+  Dashboard's quick speed test. The dropped connection was there since the Speed Test tab got
+  its own page in 0.19.0.
 
 ## [1.136.42] - 2026-10-31
 

@@ -117,7 +117,10 @@ public sealed class TrayIconService : IDisposable
             ContextMenu = BuildContextMenu(mainWindow, navigateToTab),
             Visibility = System.Windows.Visibility.Visible
         };
-        _trayIcon.ForceCreate();
+        // Without Efficiency Mode, which ForceCreate turns on unless told not to: EcoQoS and the idle priority class,
+        // which every program SysManager starts inherits. Called with no argument, it put the app and every
+        // PowerShell, winget, DISM and SFC run at idle priority for the whole session (#2722).
+        _trayIcon.ForceCreate(enablesEfficiencyMode: false);
 
         _trayIcon.TrayLeftMouseDown += (_, _) => ShowWindow(mainWindow);
 

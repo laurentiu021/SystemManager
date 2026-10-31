@@ -10,6 +10,21 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.136.56] - 2026-10-31
+
+**Preinstalled Apps finishes the app it is removing when you cancel, and records what it removed.**
+
+### Fixed
+- Cancelling a removal on Preinstalled Apps stopped Windows' removal of the app in progress
+  part-way, so its row stayed at "Removing…" and nothing said whether it went. The apps removed
+  before the cancel were named on the status line and never recorded in Recent activity, and the
+  list kept them until the next scan. Cancel and `Escape` now stop the batch before the next app,
+  as App Updates does, the apps removed are recorded, and the list follows what went. This was
+  there since the tab was added, in 1.24.0.
+- After an update batch on App Updates was stopped part-way, the apps it never reached still said
+  "Pending", so the list read as a batch still going. They now say "Not started". This was there
+  since the tab was added, in 0.3.0.
+
 ## [1.136.55] - 2026-10-31
 
 **Quick Cleanup and the Quick Tune-Up say what they had already removed when you cancel them.**

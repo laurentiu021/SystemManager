@@ -73,7 +73,7 @@ public sealed partial class WingetService : IWingetService
                 CurrentVersion = row.Version,
                 AvailableVersion = row.Available,
                 Source = string.IsNullOrWhiteSpace(row.Source) ? "winget" : row.Source,
-                Status = "Pending"
+                Status = AppPackage.PendingStatus
             };
             // Listed, but not ticked: winget cannot tell whether what it offers is newer than what is installed.
             package.IsSelected = !package.HasUnknownVersion;

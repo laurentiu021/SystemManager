@@ -275,6 +275,13 @@ public sealed partial class AppUpdatesViewModel : ViewModelBase
                 attempted++;
             }
             if (!stopped) Progress = 100;
+            else
+            {
+                // The apps a stopped batch never reached kept the "Pending" the scan gave them, so the list read as a
+                // batch still going (#2736).
+                foreach (var pkg in toUpgrade.Where(p => p.Status == AppPackage.PendingStatus))
+                    pkg.Status = NotStartedStatus;
+            }
             UpgradeEtaText = string.Empty;
             // Honest summary: separate succeeded from failed, and only mention failures
             // when there are any. If winget itself is missing, keep the friendly
@@ -291,6 +298,9 @@ public sealed partial class AppUpdatesViewModel : ViewModelBase
         }
         finally { _winget.LineReceived -= _lineHandler; IsBusy = false; UpgradeEtaText = string.Empty; }
     }
+
+    /// <summary>What an app a stopped batch never reached says, in place of the scan's "Pending".</summary>
+    internal const string NotStartedStatus = "Not started";
 
     /// <summary>Stops a scan, or a batch before its next app: the update running now finishes.</summary>
     [RelayCommand]

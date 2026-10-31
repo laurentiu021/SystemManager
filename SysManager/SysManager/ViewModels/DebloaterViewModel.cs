@@ -33,6 +33,12 @@ public sealed partial class DebloaterViewModel : ViewModelBase
     private readonly ISessionRestorePoint _restorePoint;
     private CancellationTokenSource? _cts;
 
+    // The removal running now is ended only by closing SysManager, as an update on App Updates is: Cancel stops the
+    // batch before the next app. Cancel used to stop Remove-AppxPackage part-way, which left the row at "Removing…"
+    // and the app removed or not with nothing to say which, so the count of what went was not known (#2736).
+    private CancellationTokenSource? _removerCts;
+    private StoreApp? _removing;
+
     public BulkObservableCollection<StoreApp> Apps { get; } = new();
     public BulkObservableCollection<StoreApp> FilteredApps { get; } = new();
 
@@ -229,6 +235,8 @@ public sealed partial class DebloaterViewModel : ViewModelBase
         Progress = 0;
         _cts?.Dispose();
         _cts = new CancellationTokenSource();
+        _removerCts?.Dispose();
+        _removerCts = new CancellationTokenSource();
         var removed = 0;
         var failed = 0;
         try
@@ -246,9 +254,10 @@ public sealed partial class DebloaterViewModel : ViewModelBase
                 var app = targets[i];
                 app.Status = "Removing…";
                 StatusMessage = $"Removing {app.DisplayName} ({i + 1} of {targets.Count})…";
+                _removing = app;
                 try
                 {
-                    var ok = await _service.RemoveAsync(app, _cts.Token).ConfigureAwait(true);
+                    var ok = await _service.RemoveAsync(app, _removerCts.Token).ConfigureAwait(true);
                     if (ok)
                     {
                         removed++;
@@ -279,6 +288,7 @@ public sealed partial class DebloaterViewModel : ViewModelBase
                     app.Status = "Failed";
                     Log.Warning(ex, "Debloater: removal of {App} faulted", app.DisplayName);
                 }
+                finally { _removing = null; }
                 Progress = (int)((i + 1) * 100.0 / targets.Count);
             }
             HasApps = Apps.Count > 0;
@@ -304,7 +314,15 @@ public sealed partial class DebloaterViewModel : ViewModelBase
         }
         catch (OperationCanceledException)
         {
+            // The apps removed before the cancel are gone like any others. They were said and never recorded, and the
+            // list kept its filter and empty state from before the batch (#2736).
+            HasApps = Apps.Count > 0;
+            ApplyFilter();
             StatusMessage = $"Cancelled after removing {removed} app{(removed == 1 ? "" : "s")}.";
+            Log.Information("Debloater: cancelled after removing {Removed}, failed {Failed}", removed, failed);
+            if (removed > 0)
+                ActivityLogService.Instance.Log("Debloater",
+                    $"Removed {removed} app{(removed == 1 ? "" : "s")}, then the removal was cancelled");
         }
         finally
         {
@@ -313,8 +331,14 @@ public sealed partial class DebloaterViewModel : ViewModelBase
         }
     }
 
+    /// <summary>Stops a scan, or a removal batch before its next app: the removal running now finishes.</summary>
     [RelayCommand]
-    private void Cancel() => _cts?.Cancel();
+    private void Cancel()
+    {
+        _cts?.Cancel();
+        if (_removing is { } app)
+            StatusMessage = $"Stopping after {app.DisplayName}. Its removal finishes first.";
+    }
 
     protected override void Dispose(bool disposing)
     {
@@ -323,6 +347,8 @@ public sealed partial class DebloaterViewModel : ViewModelBase
             PropertyChanged -= OnVmPropertyChanged;
             _cts?.Cancel();
             _cts?.Dispose();
+            _removerCts?.Cancel();
+            _removerCts?.Dispose();
         }
         base.Dispose(disposing);
     }

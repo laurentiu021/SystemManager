@@ -16,7 +16,10 @@ public sealed partial class AppPackage : ObservableObject, Helpers.ISelectableRo
     private string _currentVersion = string.Empty;
     [ObservableProperty] private string _availableVersion = string.Empty;
     [ObservableProperty] private string _source = "winget";
-    [ObservableProperty] private string _status = "Pending";
+    [ObservableProperty] private string _status = PendingStatus;
+
+    /// <summary>What an app the scan listed says until an update of it is attempted.</summary>
+    public const string PendingStatus = "Pending";
 
     /// <summary>
     /// What winget prints in the Version column when it cannot read the installed version. It lists such an app only

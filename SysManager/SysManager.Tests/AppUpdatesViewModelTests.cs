@@ -540,4 +540,48 @@ public class AppUpdatesViewModelTests
         Assert.Equal("Updated 2 of 2. Restart required for 1 app.", vm.StatusMessage);
         Assert.Equal("Update installed — restart required", vm.Packages.Single(p => p.Id == "a").Status);
     }
+
+    // ---------- the apps a stopped batch never reached (#2736) ----------
+    // They kept the "Pending" the scan gave them, so the list read as a batch still going.
+
+    [Fact]
+    public async Task UpgradeSelected_StoppedPartWay_MarksTheAppsItNeverReached_NotStarted()
+    {
+        AppUpdatesViewModel? vm = null;
+        var winget = Substitute.For<IWingetService>();
+        winget.UpgradeAsync("a", Arg.Any<CancellationToken>()).Returns(_ =>
+        {
+            vm!.CancelCommand.Execute(null);   // while App A is being updated
+            return Task.FromResult(new WingetResult(0, true, ""));
+        });
+        vm = new AppUpdatesViewModel(winget);
+        var a = Package("App A", "a");
+        var b = Package("App B", "b");
+        var c = Package("App C", "c");
+        vm.Packages.Add(a);
+        vm.Packages.Add(b);
+        vm.Packages.Add(c);
+        using var dialog = new DialogAnswer(confirm: true);
+
+        await vm.UpgradeSelectedCommand.ExecuteAsync(null);
+
+        Assert.Equal("Stopped after 1 of 3. Updated 1.", vm.StatusMessage);
+        Assert.NotEqual(AppUpdatesViewModel.NotStartedStatus, a.Status);
+        Assert.Equal([AppUpdatesViewModel.NotStartedStatus, AppUpdatesViewModel.NotStartedStatus], [b.Status, c.Status]);
+    }
+
+    [Fact]
+    public async Task UpgradeSelected_ThatFinished_LeavesNoAppNotStarted()
+    {
+        var winget = Substitute.For<IWingetService>();
+        winget.UpgradeAsync(Arg.Any<string>(), Arg.Any<CancellationToken>()).Returns(new WingetResult(0, true, ""));
+        var vm = new AppUpdatesViewModel(winget);
+        vm.Packages.Add(Package("App A", "a"));
+        vm.Packages.Add(Package("App B", "b"));
+        using var dialog = new DialogAnswer(confirm: true);
+
+        await vm.UpgradeSelectedCommand.ExecuteAsync(null);
+
+        Assert.DoesNotContain(vm.Packages, p => p.Status == AppUpdatesViewModel.NotStartedStatus);
+    }
 }

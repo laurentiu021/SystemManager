@@ -363,6 +363,33 @@ public class ProcessManagerServiceTests
         Assert.Contains("ThreadCount", changed);
     }
 
+    /// <summary>
+    /// A program whose file cannot be read is listed without a description, and every other one as usual (#2718).
+    /// </summary>
+    /// <remarks>
+    /// The read of the first file asked about throws as the real one does for a file renamed while its program runs;
+    /// the rest are stand-ins. It used to fail the whole list.
+    /// </remarks>
+    [Fact]
+    public async Task Snapshot_WithAProgramWhoseFileCannotBeRead_ListsItWithoutADescription_AndTheRestAsUsual()
+    {
+        string? gone = null;
+        var service = new ProcessManagerService(() => new Dictionary<int, IntPtr>(), _ => false,
+            readDescription: path =>
+            {
+                gone ??= path;
+                return path == gone ? throw new System.IO.FileNotFoundException(null, path) : "described";
+            });
+
+        var listed = await service.SnapshotAsync();
+
+        Assert.NotNull(gone);
+        Assert.Contains(listed, e => e.FilePath == gone && e.Description == "");
+        var others = listed.Where(e => e.FilePath.Length > 0 && e.FilePath != gone).ToList();
+        Assert.NotEmpty(others);
+        Assert.All(others, e => Assert.Equal("described", e.Description));
+    }
+
     [Fact]
     public void ProcessEntry_DefaultValues()
     {

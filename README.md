@@ -1096,7 +1096,9 @@ Answers "what is actually using my space?" by listing the biggest files in one p
   the deletion
 
 ### Process Manager
-- Lists running Windows processes with PID, memory, threads, status, and when each one started
+- Lists running Windows processes with PID, memory, threads, status, and when each one started. A
+  program whose file was renamed or moved while it runs is listed without a description, rather than
+  emptying the list
 - Real-time filter by name, description, category, or PID
 - **Show only apps** narrows the list to programs with a window, and a program whose window has
   stopped responding reads **Not responding** in the status column. A Store app such as Settings

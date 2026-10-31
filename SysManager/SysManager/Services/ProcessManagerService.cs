@@ -22,6 +22,7 @@ public sealed partial class ProcessManagerService
     private readonly Func<IReadOnlyDictionary<int, IntPtr>> _mainWindowsByPid;
     private readonly Func<IntPtr, bool> _isHungWindow;
     private readonly TimeProvider _time;
+    private readonly Func<string, string> _readDescription;
 
     public ProcessManagerService() : this(QueryMainWindowsByPid, IsHungAppWindow) { }
 
@@ -29,12 +30,18 @@ public sealed partial class ProcessManagerService
     /// Test seam for the two window probes, so "one enumeration per refresh" can be asserted by counting
     /// rather than measured with a stopwatch.
     /// </summary>
+    /// <param name="readDescription">
+    /// The description in a program file's version resource, by its path: the file's own unless a test passes a read,
+    /// so one can fail for a single row.
+    /// </param>
     internal ProcessManagerService(Func<IReadOnlyDictionary<int, IntPtr>> mainWindowsByPid,
-                                   Func<IntPtr, bool> isHungWindow, TimeProvider? timeProvider = null)
+                                   Func<IntPtr, bool> isHungWindow, TimeProvider? timeProvider = null,
+                                   Func<string, string>? readDescription = null)
     {
         _mainWindowsByPid = mainWindowsByPid;
         _isHungWindow = isHungWindow;
         _time = timeProvider ?? TimeProvider.System;
+        _readDescription = readDescription ?? FileDescription.Read;
     }
 
     // knownPids: PIDs the caller already shows. Their identity (description/path) is static and the
@@ -121,12 +128,13 @@ public sealed partial class ProcessManagerService
                     {
                         try
                         {
-                            var module = p.MainModule;
-                            entry.Description = module?.FileVersionInfo.FileDescription ?? "";
-                            entry.FilePath = module?.FileName ?? "";
+                            entry.FilePath = p.MainModule?.FileName ?? "";
                         }
                         catch (InvalidOperationException) { /* access denied or process exited */ }
                         catch (System.ComponentModel.Win32Exception) { /* access denied or process exited */ }
+                        // Its own read, so a program whose file was renamed while it runs loses only its description,
+                        // not the whole list (#2718).
+                        entry.Description = FileDescription.Of(entry.FilePath, _readDescription);
                         entry.CanOpenFileLocation = !string.IsNullOrWhiteSpace(entry.FilePath)
                                                    && System.IO.File.Exists(entry.FilePath);
                     }

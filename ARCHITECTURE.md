@@ -958,7 +958,9 @@ Key services:
   so a failure is never an empty scan. `LooseFilesName` names the entry for files loose in the
   folder, which the drill-in and the map both treat as not a folder.
 - `ProcessManagerService` — enumerate running processes, kill by PID,
-  open file location. `Snapshot`'s CPU-delta window (capture, `Thread.Sleep(100)`, re-read) measures
+  open file location. Each new row's description is read through `Helpers/FileDescription`, from the file the
+  program was started from, which a file renamed or moved since cannot give: that row has none, rather than
+  the whole snapshot failing, and the read is a constructor seam (#2718). `Snapshot`'s CPU-delta window (capture, `Thread.Sleep(100)`, re-read) measures
   elapsed time through an optional `TimeProvider`'s monotonic `GetTimestamp`/`GetElapsedTime`, not a
   subtracted `DateTime.UtcNow`: a clock STEP during that 100&#160;ms window would otherwise corrupt
   every process's CPU% for that one refresh (#2855). `KillProcess(pid, startTime)` ends that process alone, never its tree, and
@@ -2147,6 +2149,8 @@ Key utility classes that don't fit neatly into Services or ViewModels (not an ex
   language and in US English, beside the English kept in code, so a verdict does not depend on
   Windows being in English. System Fixes shows the worst outcome a run names, and
   `SfcMessageTableTests` reads this Windows' own table.
+- `FileDescription` — a running program's description from its file's version resource, or none when the file
+  is gone, for Process Manager and Volume Control alike (#2718).
 - `FormatHelper` — byte-size and transfer-rate formatting, and `JoinForSentence` for an
   "a, b and c" list. Durations are `EtaCalculator.FormatTimeSpan`'s.
 - `GatewayHelper` — default gateway IP lookup for network tabs. `NetworkSharedState` calls it at launch,

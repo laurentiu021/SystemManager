@@ -10,6 +10,19 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.136.39] - 2026-10-31
+
+**Process Manager no longer stays empty when a running program's file was renamed or moved.**
+
+### Fixed
+- One running program whose file had been renamed or moved, as a self-updater does when it swaps
+  its exe, or a portable app moved out of Downloads, made the whole process list fail. Process
+  Manager stayed empty for the session, Refresh showed an error with only a file path, and the
+  Dashboard's "Why is it slow?" ended in the same error. Volume Control stopped updating while such
+  a program played sound. That program is now listed without a description, and every other one
+  loads as usual. The once-a-second refresh also starts now even when the first one fails. This
+  was there from the first version.
+
 ## [1.136.38] - 2026-10-31
 
 **Performance Mode shows when another power plan is active, and switches to Balanced from it.**

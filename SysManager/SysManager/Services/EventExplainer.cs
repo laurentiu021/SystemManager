@@ -123,9 +123,7 @@ public static class EventExplainer
             "Update Adrenalin drivers. Reset overclocks if applicable."),
 
         // ---------- Memory ----------
-        [new("Microsoft-Windows-MemoryDiagnostics-Results", 1201)] = (
-            "Windows Memory Diagnostic detected memory errors.",
-            "Your RAM is likely faulty. Test each stick individually to find the culprit."),
+        // The memory test's results are MemoryTestResults', below.
 
         // ---------- Power / battery ----------
         [new("Microsoft-Windows-Kernel-Power", 42)] = (
@@ -134,7 +132,24 @@ public static class EventExplainer
         [new("Microsoft-Windows-Power-Troubleshooter", 1)] = (
             "The system resumed from sleep.",
             "Informational."),
-    }.ToFrozenDictionary();
+    }.Concat(MemoryTestResults()).ToFrozenDictionary();
+
+    /// <summary>
+    /// Windows Memory Diagnostic's results, by the IDs the memory check counts with.
+    /// </summary>
+    /// <remarks>
+    /// 1201 was explained as "detected memory errors" with "Your RAM is likely faulty", under a message saying the
+    /// test detected no errors, and the results that found errors had no explanation (#2715).
+    /// </remarks>
+    private static IEnumerable<KeyValuePair<Key, (string Explanation, string Recommendation)>> MemoryTestResults() =>
+        MemoryEvents.DiagnosticFoundNone
+            .Select(id => KeyValuePair.Create(new Key(MemoryEvents.DiagnosticProvider, id), (
+                "Windows Memory Diagnostic tested your RAM and found no errors.",
+                "Nothing to do: your RAM passed the test.")))
+            .Concat(MemoryEvents.DiagnosticFoundErrors
+                .Select(id => KeyValuePair.Create(new Key(MemoryEvents.DiagnosticProvider, id), (
+                    "Windows Memory Diagnostic tested your RAM and found hardware errors.",
+                    "Your RAM is likely faulty. Test each stick individually to find the culprit."))));
 
     // Fallbacks by EventId only (when provider varies or isn't known)
     private static readonly FrozenDictionary<int, (string Explanation, string Recommendation)> KnownById = new Dictionary<int, (string Explanation, string Recommendation)>

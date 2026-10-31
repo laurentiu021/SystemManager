@@ -1273,13 +1273,15 @@ public sealed class DashboardViewModelTests : IDisposable
     }
 
     [Fact]
-    public void ClassifyMemoryHealth_DiagnosticRan_IsYellow()
+    public void ClassifyMemoryHealth_ATestThatFoundErrors_IsRed()
     {
+        // Memory test results that found errors read "Memory diagnostic ran 2 times — check results" in yellow, and the
+        // count was of tests that found none (#2715).
         var (title, severity) = DashboardViewModel.ClassifyMemoryHealth(
             new MemoryTestService.MemoryErrorSummary(0, 2, null));
 
-        Assert.Contains("2", title);
-        Assert.Equal(AlertSeverity.Yellow, severity);
+        Assert.Equal("The memory test found errors — your RAM may be faulty", title);
+        Assert.Equal(AlertSeverity.Red, severity);
     }
 
     [Fact]

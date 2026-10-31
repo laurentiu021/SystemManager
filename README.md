@@ -564,8 +564,10 @@ Edit Windows environment variables without the cramped built-in dialog:
 - Colour-coded verdict per drive
 - The mouse wheel scrolls the page over the memory and disk tables too: they are as tall as their
   rows, so they have nothing of their own to scroll
-- Memory diagnostic that scans the last 30 days of WHEA events for RAM errors. If the event log
-  cannot be read, it says the check could not be done rather than reporting no errors
+- Memory check that scans the last 30 days of the System log for the hardware errors Windows files
+  under memory, not PCI Express or processor ones, and for memory test results: a test that found
+  errors is reported as bad, and one that found none as good. If the event log cannot be read, it
+  says the check could not be done rather than reporting no errors
 - **Run MemTest (reboot)** opens the Windows Memory Diagnostic, where you choose to restart now
   or test at the next boot
 - Read-only chkdsk with auto-discovered NTFS/ReFS drives and multi-select. C: is ticked

@@ -31,4 +31,61 @@ public class MemoryTestServiceTests
 
         await Assert.ThrowsAnyAsync<EventLogException>(() => svc.CheckErrorLogsAsync());
     }
+
+    // ---------- what is counted (#2715) ----------
+    // WHEA 17 to 20 were counted as memory errors, which are PCI Express and processor errors, and of Windows Memory
+    // Diagnostic's results only 1201, a test that found no errors. The records are given newest first, as the log
+    // reader reads them.
+
+    private const string Whea = "Microsoft-Windows-WHEA-Logger";
+    private const string Diagnostic = "Microsoft-Windows-MemoryDiagnostics-Results";
+    private static readonly DateTime Now = new(2026, 10, 31, 12, 0, 0);
+    private static readonly DateTime Since = Now.AddDays(-30);
+
+    [Fact]
+    public void Summarize_CountsMemoryErrors_NotPciExpressOrProcessorOnes()
+    {
+        var summary = MemoryTestService.Summarize(
+        [
+            (Whea, 17, Now),
+            (Whea, 18, Now),
+            (Whea, 19, Now),
+            (Whea, 20, Now),
+            (Whea, 47, Now.AddHours(-1)),
+        ], Since);
+
+        Assert.Equal(1, summary.WheaMemoryErrors);
+        Assert.Equal(Now.AddHours(-1), summary.LastError);
+    }
+
+    [Fact]
+    public void Summarize_ATestThatFoundNoErrors_IsNoError()
+    {
+        var summary = MemoryTestService.Summarize([(Diagnostic, 1201, Now), (Diagnostic, 1101, Now)], Since);
+
+        Assert.Equal(new MemoryTestService.MemoryErrorSummary(0, 0, null), summary);
+    }
+
+    [Fact]
+    public void Summarize_ATestThatFoundErrors_IsCounted()
+    {
+        var summary = MemoryTestService.Summarize([(Diagnostic, 1202, Now)], Since);
+
+        Assert.Equal(1, summary.MemoryDiagnosticErrors);
+        Assert.Equal(Now, summary.LastError);
+    }
+
+    [Fact]
+    public void Summarize_StopsAtTheFirstRecordOlderThanThirtyDays()
+    {
+        var summary = MemoryTestService.Summarize(
+        [
+            (Whea, 47, Now),
+            (Whea, 47, Now.AddDays(-31)),
+            // Never reached: the reader stops at the first record older than the 30 days.
+            (Whea, 47, Now.AddDays(-1)),
+        ], Since);
+
+        Assert.Equal(1, summary.WheaMemoryErrors);
+    }
 }

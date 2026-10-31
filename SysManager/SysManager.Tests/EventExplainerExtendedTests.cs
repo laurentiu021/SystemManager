@@ -148,6 +148,33 @@ public class EventExplainerExtendedTests
         Assert.Contains("unexpected", e.Explanation, StringComparison.OrdinalIgnoreCase);
     }
 
+    // ---------- Memory test results (#2715) ----------
+    // 1201 was explained as "detected memory errors" under a message saying the test detected none, and the results
+    // that found errors had no explanation. By the provider manifest, 1101 and 1201 "detected no errors", and 1102 and
+    // 1202 "detected hardware errors".
+
+    [Theory]
+    [InlineData(1101)]
+    [InlineData(1201)]
+    public void AMemoryTestThatFoundNoErrors_IsExplainedAsPassed(int id)
+    {
+        var e = Make("Microsoft-Windows-MemoryDiagnostics-Results", id, EventSeverity.Info);
+        EventExplainer.Enrich(e);
+        Assert.Equal("Windows Memory Diagnostic tested your RAM and found no errors.", e.Explanation);
+        Assert.DoesNotContain("faulty", e.Recommendation, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Theory]
+    [InlineData(1102)]
+    [InlineData(1202)]
+    public void AMemoryTestThatFoundErrors_SaysTheRamIsLikelyFaulty(int id)
+    {
+        var e = Make("Microsoft-Windows-MemoryDiagnostics-Results", id);
+        EventExplainer.Enrich(e);
+        Assert.Equal("Windows Memory Diagnostic tested your RAM and found hardware errors.", e.Explanation);
+        Assert.Contains("likely faulty", e.Recommendation, StringComparison.Ordinal);
+    }
+
     // ---------- Idempotency ----------
 
     [Fact]

@@ -10,6 +10,27 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.136.33] - 2026-10-31
+
+**The memory check counts memory errors only, and a memory test that passed no longer reads as a
+warning.**
+
+### Fixed
+- The Dashboard and System Health counted PCI Express, processor and AMD northbridge errors as RAM
+  errors, and not the errors Windows files under memory. Laptops often log PCI Express errors from
+  power-saving ports, and such a laptop was told "test your RAM", by a test that could not find the
+  cause. The check now counts the errors that Windows' own event definitions give to memory. This
+  was there from the first version.
+- A Windows Memory Diagnostic run that found no errors read "Memory diagnostic ran 1 time — check
+  results" in yellow, and one that found errors left the tile green with "No memory errors (30
+  days)". A test that found errors now reads "The memory test found errors — your RAM may be
+  faulty" in red, and one that passed reads as no errors. This was there since 1.20.40, and before
+  that every result counted.
+- System Logs explained a memory test that passed as "Windows Memory Diagnostic detected memory
+  errors" with "Your RAM is likely faulty", under a message saying the test detected none. It now
+  says the test found no errors, and the results that found errors, which had no explanation, say
+  the RAM is likely faulty. The memory check and System Logs read the same list of results now.
+
 ## [1.136.32] - 2026-10-31
 
 **Ping's Gateway card follows the network you are on, so a laptop that wakes up on another Wi-Fi

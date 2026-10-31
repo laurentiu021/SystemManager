@@ -326,6 +326,9 @@ to scroll.
   Speed Test and Network Repair view-models. `ApplyRoute` lists and charts a traced host that is not a Ping target
   beside the targets, one such host at a time, and routes compare hosts in any letter case (#2870).
   `WindowOptions` are `ChartWindowOption`s, which the chart's window picker reads in minutes (#2884).
+  `RefreshGateway` looks the router up again on every Start, and `OnNetworkAddressChanged` on every
+  `NetworkChange.NetworkAddressChanged`, applying only the newest lookup's answer: the Gateway card is
+  replaced, added or removed, and the lookup is a constructor seam (#2712).
 - `ServicesViewModel` — Windows services management with gaming recommendations.
 - `DriversViewModel` — driver inventory via Win32_PnPSignedDriver. `ReadScan` reads the exit code together with the output: a failed scan keeps the last list and says so (`ListFailed`), and an error part-way keeps what was listed, marked incomplete.
 - `LogsViewModel` — friendly Event Log viewer. Adds events in batches of 50 through `UiThread.Post`, which
@@ -2124,7 +2127,8 @@ Key utility classes that don't fit neatly into Services or ViewModels (not an ex
   `SfcMessageTableTests` reads this Windows' own table.
 - `FormatHelper` — byte-size and transfer-rate formatting, and `JoinForSentence` for an
   "a, b and c" list. Durations are `EtaCalculator.FormatTimeSpan`'s.
-- `GatewayHelper` — default gateway IP lookup for network tabs.
+- `GatewayHelper` — default gateway IP lookup for network tabs. `NetworkSharedState` calls it at launch,
+  on every Start and when the PC's addresses change.
 - `EtaCalculator` — estimates time remaining for long-running operations. `_gate` is a `Lock`, not a
   plain `object` — the last one in the app; `ArchitectureTests.NoLockTargetIsAPlainObjectField` keeps
   it that way (#2855).

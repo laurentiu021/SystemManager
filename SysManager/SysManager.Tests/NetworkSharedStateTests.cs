@@ -2,6 +2,7 @@
 // Author: laurentiu021 · https://github.com/laurentiu021/SystemManager
 // License: MIT
 
+using System.Net.NetworkInformation;
 using LiveChartsCore.Defaults;
 using LiveChartsCore.SkiaSharpView;
 using LiveChartsCore.SkiaSharpView.Painting;
@@ -446,5 +447,186 @@ public class NetworkSharedStateTests
         // What a screen reader says for an entry.
         Assert.Equal("5 min", state.WindowOptions[1].ToString());
         Assert.Contains(state.WindowOptions, o => o.Seconds == state.WindowSeconds);
+    }
+
+    // ---------- the gateway follows the network (#2712) ----------
+    // The router found at launch was pinged for as long as SysManager ran, so after the PC woke up on another network
+    // every ping went to a router that was not there, and the verdict blamed the local network. The lookup is given
+    // here, so the network can change between two looks. The addresses are documentation ranges, and nothing is
+    // pinged: the monitor is started only with every target off.
+
+    private static NetworkSharedState NewState(Func<string?> detectGateway) => new(new Services.PingMonitorService(),
+        new Services.TracerouteService(), new Services.TracerouteMonitorService(), new Services.SpeedTestService(),
+        new Services.NetworkRepairService(new Services.PowerShellRunner()), detectGateway);
+
+    private static PingTarget GatewayCard(NetworkSharedState state) =>
+        Assert.Single(state.Targets, t => t.Role == TargetRole.Gateway);
+
+    [Fact]
+    public void Start_LooksTheGatewayUpAgain_AndPingsTheRouterThePcIsOnNow()
+    {
+        var router = "192.0.2.1";
+        using var state = NewState(() => router);
+        foreach (var target in state.Targets) target.IsEnabled = false;
+
+        state.StartMonitoring();
+        state.StopMonitoring();
+        router = "198.51.100.1";
+        state.StartMonitoring();
+        state.StopMonitoring();
+
+        var card = GatewayCard(state);
+        Assert.Equal("198.51.100.1", card.Host);
+        Assert.Same(card, state.Targets[0]);
+        Assert.DoesNotContain(state.Targets, t => t.Host == "192.0.2.1");
+        Assert.False(state.Pinger.Targets.ContainsKey("192.0.2.1"));
+        Assert.True(state.Pinger.Targets.ContainsKey("198.51.100.1"));
+        Assert.False(state.TraceMonitor.Targets.ContainsKey("192.0.2.1"));
+        // Turned off with the others before the first Start, and off still for the next router.
+        Assert.False(card.IsEnabled);
+    }
+
+    [Fact]
+    public void ANetworkChange_ReplacesTheCardOfARouterThatIsGone()
+    {
+        var router = "192.0.2.1";
+        using var state = NewState(() => router);
+        var lines = state.LatencySeries.Count;
+
+        router = "198.51.100.1";
+        state.OnNetworkAddressChanged(null, EventArgs.Empty);
+
+        var card = GatewayCard(state);
+        Assert.Equal("198.51.100.1", card.Host);
+        Assert.Same(card, state.Targets[0]);
+        Assert.True(card.IsEnabled);
+        Assert.Equal(lines, state.LatencySeries.Count);
+        Assert.DoesNotContain(state.LatencySeries, s => s.Name?.Contains("(192.0.2.1)") == true);
+        Assert.Equal(0, LinesFor(state, "192.0.2.1"));
+        Assert.False(state.Buffers.ContainsKey("192.0.2.1"));
+        Assert.False(state.Pinger.Targets.ContainsKey("192.0.2.1"));
+        Assert.False(state.TraceMonitor.Targets.ContainsKey("192.0.2.1"));
+    }
+
+    [Fact]
+    public void AGatewayFoundAfterLaunch_GetsACard_FirstInTheList()
+    {
+        // SysManager started before Wi-Fi connected.
+        string? router = null;
+        using var state = NewState(() => router);
+        Assert.DoesNotContain(state.Targets, t => t.Role == TargetRole.Gateway);
+
+        router = "192.0.2.1";
+        state.OnNetworkAddressChanged(null, EventArgs.Empty);
+
+        var card = GatewayCard(state);
+        Assert.Equal("192.0.2.1", card.Host);
+        Assert.Same(card, state.Targets[0]);
+    }
+
+    [Fact]
+    public void APcWithNoGatewayNow_LosesTheCard_AndTheVerdictItsNumbers()
+    {
+        string? router = "192.0.2.1";
+        using var state = NewState(() => router);
+        // Every ping to the old router timed out, and the verdict blamed the local network.
+        state.Pending.Enqueue(new PingSample(DateTime.UtcNow, "192.0.2.1", null, "TimedOut"));
+        state.FlushPending();
+        Assert.Equal(HealthVerdict.LocalNetwork, state.Health.Verdict);
+
+        router = null;
+        state.OnNetworkAddressChanged(null, EventArgs.Empty);
+
+        Assert.DoesNotContain(state.Targets, t => t.Role == TargetRole.Gateway);
+        Assert.Equal(HealthVerdict.Unknown, state.Health.Verdict);
+    }
+
+    [Fact]
+    public void TheSameRouter_KeepsItsCardAndItsHistory()
+    {
+        var router = "192.0.2.1";
+        using var state = NewState(() => router);
+        var card = GatewayCard(state);
+        state.Pending.Enqueue(new PingSample(DateTime.UtcNow, router, 3.0, "OK"));
+        state.FlushPending();
+
+        // A reconnecting adapter raises a burst of changes on the same network.
+        state.OnNetworkAddressChanged(null, EventArgs.Empty);
+        state.OnNetworkAddressChanged(null, EventArgs.Empty);
+
+        Assert.Same(card, GatewayCard(state));
+        Assert.Single(state.Buffers[router]);
+    }
+
+    [Fact]
+    public void AnAnswerANewerLookupOvertook_IsNotApplied()
+    {
+        var router = "192.0.2.1";
+        Action? whileLookingUp = null;
+        using var state = NewState(() =>
+        {
+            var seen = router;
+            var newer = whileLookingUp;
+            whileLookingUp = null;
+            newer?.Invoke();
+            return seen;
+        });
+
+        // The first lookup sees a network the PC is leaving, and returns after the lookup a second change started.
+        router = "198.51.100.1";
+        whileLookingUp = () =>
+        {
+            router = "203.0.113.1";
+            state.OnNetworkAddressChanged(null, EventArgs.Empty);
+        };
+        state.OnNetworkAddressChanged(null, EventArgs.Empty);
+
+        Assert.Equal("203.0.113.1", GatewayCard(state).Host);
+        Assert.DoesNotContain(state.Targets, t => t.Host == "198.51.100.1");
+    }
+
+    [Fact]
+    public void ALookupWindowsRefuses_LeavesTheCardAsItIs()
+    {
+        var refuse = false;
+        using var state = NewState(() => refuse ? throw new NetworkInformationException(1) : "192.0.2.1");
+        var card = GatewayCard(state);
+
+        // On the thread pool, the exception would have ended SysManager.
+        refuse = true;
+        state.OnNetworkAddressChanged(null, EventArgs.Empty);
+        state.RefreshGateway();
+
+        Assert.Same(card, GatewayCard(state));
+    }
+
+    [Fact]
+    public void ALookupRefusedAtLaunch_StartsWithoutAGatewayCard()
+    {
+        using var state = NewState(() => throw new NetworkInformationException(1));
+
+        Assert.DoesNotContain(state.Targets, t => t.Role == TargetRole.Gateway);
+        Assert.NotEmpty(state.Targets);
+    }
+
+    [Fact]
+    public void ARouterAtTheAddressOfTheUsersOwnTarget_LeavesThatTargetTheirs()
+    {
+        var router = "192.0.2.1";
+        using var state = NewState(() => router);
+        state.AddTarget("198.51.100.1", "198.51.100.1", isCustom: true);
+
+        router = "198.51.100.1";
+        state.OnNetworkAddressChanged(null, EventArgs.Empty);
+
+        Assert.True(Assert.Single(state.Targets, t => t.Host == "198.51.100.1").IsCustom);
+        Assert.DoesNotContain(state.Targets, t => t.Host == "192.0.2.1");
+
+        // Back on the first network, the gateway gets its card again, and the user's target stays.
+        router = "192.0.2.1";
+        state.OnNetworkAddressChanged(null, EventArgs.Empty);
+
+        Assert.Equal("192.0.2.1", GatewayCard(state).Host);
+        Assert.True(Assert.Single(state.Targets, t => t.Host == "198.51.100.1").IsCustom);
     }
 }

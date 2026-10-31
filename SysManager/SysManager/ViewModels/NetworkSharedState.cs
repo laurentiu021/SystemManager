@@ -6,6 +6,7 @@ using System.Collections.Concurrent;
 using System.Collections.ObjectModel;
 using System.ComponentModel;
 using System.Globalization;
+using System.Net.NetworkInformation;
 using System.Windows;
 using System.Windows.Threading;
 using CommunityToolkit.Mvvm.ComponentModel;
@@ -13,6 +14,7 @@ using LiveChartsCore;
 using LiveChartsCore.Defaults;
 using LiveChartsCore.SkiaSharpView;
 using LiveChartsCore.SkiaSharpView.Painting;
+using Serilog;
 using SkiaSharp;
 using SysManager.Helpers;
 using SysManager.Models;
@@ -119,13 +121,26 @@ public sealed partial class NetworkSharedState : ObservableObject, IDisposable
     // host auto-traced once was traced every round until SysManager closed, whichever tab started the monitor (#2870).
     private string? _autoTraceHost;
 
+    // Asks Windows for the router the PC reaches the internet through now: GatewayHelper's lookup, or a test's.
+    private readonly Func<string?> _detectGateway;
+
+    // Counts the gateway lookups started, so an answer that a newer lookup overtook is not applied after it (#2712).
+    private int _gatewayLookup;
+
     public NetworkSharedState(PingMonitorService pinger, TracerouteService tracer, TracerouteMonitorService traceMonitor, SpeedTestService speed, NetworkRepairService repair)
+        : this(pinger, tracer, traceMonitor, speed, repair, GatewayHelper.DetectDefaultGateway) { }
+
+    /// <summary>The shared state, with the gateway lookup given by a test.</summary>
+    /// <param name="detectGateway">Returns the default gateway's address, or null when the PC has none.</param>
+    internal NetworkSharedState(PingMonitorService pinger, TracerouteService tracer, TracerouteMonitorService traceMonitor,
+        SpeedTestService speed, NetworkRepairService repair, Func<string?> detectGateway)
     {
         Pinger = pinger;
         Tracer = tracer;
         TraceMonitor = traceMonitor;
         Speed = speed;
         Repair = repair;
+        _detectGateway = detectGateway;
 
         Dispatcher = Application.Current?.Dispatcher;
         if (Dispatcher is not null)
@@ -151,12 +166,89 @@ public sealed partial class NetworkSharedState : ObservableObject, IDisposable
         Pinger.SampleReceived += OnSample;
         TraceMonitor.RouteCompleted += OnRouteCompleted;
 
-        var gw = GatewayHelper.DetectDefaultGateway();
-        if (!string.IsNullOrEmpty(gw))
-            AddTarget("Gateway", gw, TargetRole.Gateway);
+        RefreshGateway();
+
+        // The router was the one found at launch for as long as SysManager ran, and SysManager stays in the
+        // notification area for days: after the PC woke up on another network, every ping went to a router that was
+        // not there, and the verdict blamed the local network. A reconnecting adapter changes the PC's addresses, so
+        // the gateway is looked up again then, with a UI thread to show the answer on. Unsubscribed in Dispose.
+        if (Dispatcher is not null) NetworkChange.NetworkAddressChanged += OnNetworkAddressChanged;
 
         ApplyPreset(TargetPresets.Global);
     }
+
+    // ── Gateway ──
+
+    /// <summary>Looks the gateway up now, and makes the Gateway card that router.</summary>
+    internal void RefreshGateway()
+    {
+        // Counted like a change's lookup, so an older change's answer still on its way is not applied after this one.
+        Interlocked.Increment(ref _gatewayLookup);
+        if (TryLookUpGateway(out var found)) ApplyGateway(found);
+    }
+
+    /// <summary>
+    /// Looks the gateway up again when the PC's addresses change. Raised on a thread-pool thread, so the lookup runs
+    /// there, and its answer is applied on the UI thread unless a newer lookup has started since: a reconnecting
+    /// adapter raises a burst of changes.
+    /// </summary>
+    internal void OnNetworkAddressChanged(object? sender, EventArgs e)
+    {
+        var lookup = Interlocked.Increment(ref _gatewayLookup);
+        if (!TryLookUpGateway(out var found)) return;
+        InvokeOnUi(() =>
+        {
+            if (lookup == Volatile.Read(ref _gatewayLookup)) ApplyGateway(found);
+        });
+    }
+
+    /// <summary>The gateway's address, or null when the PC has none; false when Windows could not be asked.</summary>
+    private bool TryLookUpGateway(out string? gateway)
+    {
+        try
+        {
+            gateway = _detectGateway();
+            return true;
+        }
+        // Windows refusing the adapter list is not a PC without a gateway, so the card is left as it is. On the thread
+        // pool, where a network change runs the lookup, the exception would end SysManager.
+        catch (NetworkInformationException ex)
+        {
+            Log.Warning(ex, "Could not look up the default gateway");
+            gateway = null;
+            return false;
+        }
+    }
+
+    /// <summary>
+    /// Makes the Gateway card the router at <paramref name="found"/>: a card for another router is replaced, one is
+    /// added when there was none, and the card goes when the PC has no gateway now. The same router keeps its card and
+    /// its history.
+    /// </summary>
+    private void ApplyGateway(string? found)
+    {
+        if (_disposed) return;
+        var card = GatewayCard();
+        if (card is not null && string.Equals(card.Host, found, StringComparison.OrdinalIgnoreCase)) return;
+
+        // A card the user turned off stays off for the next router.
+        var enabled = card?.IsEnabled ?? true;
+        if (card is not null) RemoveTargetInternal(card);
+
+        if (!string.IsNullOrEmpty(found))
+        {
+            AddTarget("Gateway", found, TargetRole.Gateway, isEnabled: enabled);
+            // First, as it was when the router was found at launch. None is added when the router's address is a
+            // target of the user's already.
+            var index = GatewayCard() is { } added ? Targets.IndexOf(added) : -1;
+            if (index > 0) Targets.Move(index, 0);
+        }
+
+        // The old router's numbers leave the verdict now, not at the next sample, which never comes while stopped.
+        if (card is not null) UpdateHealth();
+    }
+
+    private PingTarget? GatewayCard() => Targets.FirstOrDefault(t => t.Role == TargetRole.Gateway && !t.IsCustom);
 
     // ── Presets ──
 
@@ -188,7 +280,8 @@ public sealed partial class NetworkSharedState : ObservableObject, IDisposable
 
     // ── Target management ──
 
-    public void AddTarget(string name, string host, TargetRole role = TargetRole.Generic, bool isCustom = false)
+    public void AddTarget(string name, string host, TargetRole role = TargetRole.Generic, bool isCustom = false,
+        bool isEnabled = true)
     {
         if (IsTarget(host)) return;
 
@@ -202,7 +295,8 @@ public sealed partial class NetworkSharedState : ObservableObject, IDisposable
         // state is built, before the first target exists, so the lines added after it kept the designed colour on a
         // light theme until the theme next changed: #80FFDB at 1.03:1 on Clean Indigo (#2818).
         var shown = ShownOnTheCard(skColor);
-        var target = new PingTarget(name, host, color, isCustom, role) { ShownColorHex = Hex(shown) };
+        // Off from the start when it is added off, so the running pinger never sees it on.
+        var target = new PingTarget(name, host, color, isCustom, role) { ShownColorHex = Hex(shown), IsEnabled = isEnabled };
         Targets.Add(target);
 
         var buffer = new BulkObservableCollection<DateTimePoint>();
@@ -460,6 +554,8 @@ public sealed partial class NetworkSharedState : ObservableObject, IDisposable
 
     public void StartMonitoring()
     {
+        // The router is looked up again on every Start, so the first ping goes to the router the PC is on now.
+        RefreshGateway();
         Pinger.Interval = TimeSpan.FromSeconds(Math.Max(1, IntervalSeconds));
         TraceMonitor.Interval = TimeSpan.FromSeconds(Math.Max(10, TraceIntervalSeconds));
         Pinger.Start();
@@ -756,6 +852,7 @@ public sealed partial class NetworkSharedState : ObservableObject, IDisposable
         _disposed = true;
 
         ThemeService.Instance.ThemeChanged -= ApplyChartTheme;
+        NetworkChange.NetworkAddressChanged -= OnNetworkAddressChanged;
         Pinger.SampleReceived -= OnSample;
         TraceMonitor.RouteCompleted -= OnRouteCompleted;
         // Stop, do not Dispose: Pinger / TraceMonitor are DI singletons the container

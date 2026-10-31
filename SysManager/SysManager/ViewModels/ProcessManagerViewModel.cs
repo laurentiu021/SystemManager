@@ -67,9 +67,13 @@ public sealed partial class ProcessManagerViewModel : ElevatedViewModelBase
         try { await RefreshAsync(); }
         catch (InvalidOperationException ex) { Log.Warning("Process list auto-refresh failed: {Error}", ex.Message); }
         catch (System.ComponentModel.Win32Exception ex) { Log.Warning("Process list auto-refresh failed: {Error}", ex.Message); }
-
-        _autoRefreshCts = new CancellationTokenSource();
-        _ = AutoRefreshLoopAsync(_autoRefreshCts.Token);
+        finally
+        {
+            // Started whatever the first refresh did: one that threw what this does not catch skipped it, and the list
+            // stayed empty for the session (#2718). The loop keeps trying.
+            _autoRefreshCts = new CancellationTokenSource();
+            _ = AutoRefreshLoopAsync(_autoRefreshCts.Token);
+        }
     }
 
     private async Task AutoRefreshLoopAsync(CancellationToken ct)
@@ -167,6 +171,11 @@ public sealed partial class ProcessManagerViewModel : ElevatedViewModelBase
             StatusMessage = $"Failed: {ex.Message}";
         }
         catch (System.ComponentModel.Win32Exception ex) when (announce)
+        {
+            StatusMessage = $"Failed: {ex.Message}";
+        }
+        // A program file the list could not read, which reached the error dialog through Refresh and F5 (#2718).
+        catch (IOException ex) when (announce)
         {
             StatusMessage = $"Failed: {ex.Message}";
         }

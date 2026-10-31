@@ -21,6 +21,28 @@ namespace SysManager.Tests;
 [Collection("ProcessWideStatics")]
 public class ProcessManagerViewModelTests
 {
+    /// <summary>
+    /// The once-a-second refresh starts even when the first one fails with what the tab does not catch (#2718).
+    /// </summary>
+    /// <remarks>
+    /// It was started after the first refresh, so one that threw left the list empty for the session. The description
+    /// read throws here, before the list is built; nothing is ended or changed.
+    /// </remarks>
+    [Fact]
+    public async Task TheRefreshLoop_StartsEvenWhenTheFirstRefreshFails()
+    {
+        var service = new ProcessManagerService(() => new Dictionary<int, IntPtr>(), _ => false,
+            readDescription: _ => throw new ArgumentException("a read that fails"));
+        using var vm = new ProcessManagerViewModel(service);
+
+        await vm.InitializationComplete;
+
+        Assert.IsType<ArgumentException>(vm.InitializationFault);
+        var loop = typeof(ProcessManagerViewModel).GetField("_autoRefreshCts",
+            System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!;
+        Assert.NotNull(loop.GetValue(vm));
+    }
+
     [Fact]
     public void Constructor_Commands_Exist()
     {

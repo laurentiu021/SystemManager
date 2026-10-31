@@ -6,6 +6,7 @@ using System.ComponentModel;
 using System.Diagnostics;
 using System.Runtime.InteropServices;
 using Serilog;
+using SysManager.Helpers;
 using SysManager.Models;
 
 namespace SysManager.Services;
@@ -917,15 +918,16 @@ public sealed class AudioMixerService : IAudioMixerService, IDisposable
             string path = string.Empty;
             try
             {
-                var module = p.MainModule;
-                path = module?.FileName ?? string.Empty;
-                var description = module?.FileVersionInfo.FileDescription;
-                if (!string.IsNullOrWhiteSpace(description)) name = description!;
+                path = p.MainModule?.FileName ?? string.Empty;
             }
             // MainModule throws for protected / cross-bitness processes when not elevated —
             // fall back to the process name and no path (icon degrades to the fallback).
             catch (Win32Exception) { /* protected, or the other bitness */ }
             catch (InvalidOperationException) { /* it exited meanwhile */ }
+            // A program whose file was renamed while it plays keeps its process name, rather than stopping every
+            // refresh of the mixer (#2718).
+            var description = FileDescription.Of(path);
+            if (!string.IsNullOrWhiteSpace(description)) name = description;
             return (name, path);
         }
         catch (ArgumentException) { return ($"PID {pid}", string.Empty); }   // exited mid-enumeration

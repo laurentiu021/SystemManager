@@ -10,6 +10,16 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.136.60] - 2026-10-31
+
+**Startup Manager no longer shows an item that runs once at the next start-up as switched off.**
+
+### Fixed
+- An item set to run once at the next start-up showed as "Disabled" on Startup Manager when a
+  start-up item of the same name had been switched off, although it still ran: Windows never reads
+  the on and off switches for run-once items, which is why Startup Manager already refused to
+  switch one. It now shows as on. This was there since the tab was added, in 0.6.0.
+
 ## [1.136.59] - 2026-10-31
 
 **SysManager checks the drive it hands the disk check, and the power plan it switches to, more strictly.**

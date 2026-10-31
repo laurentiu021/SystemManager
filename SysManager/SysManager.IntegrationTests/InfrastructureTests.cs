@@ -47,15 +47,31 @@ public class LogServiceTests
     [Fact]
     public void Init_CreatesDirectory_AndLogsInit()
     {
-        LogService.Init();
+        // In a folder of its own, and read back. With none it fell back to the profile's log folder, which only the
+        // suite's redirect keeps off the real one, the log SUPPORT.md asks users to attach; and it checked only that
+        // the folder Init had just created existed (#2742).
+        var dir = Path.Combine(Path.GetTempPath(), "SysManagerLogInit_" + Guid.NewGuid().ToString("N"), "logs");
         try
         {
-            Assert.True(Directory.Exists(LogService.LogDir));
-            Assert.NotNull(LogService.Logger);
+            LogService.Init(dir);
+            try
+            {
+                Assert.Equal(dir, LogService.LogDir);
+                Assert.NotNull(LogService.Logger);
+            }
+            finally
+            {
+                LogService.Shutdown();
+            }
+
+            // The line it is named for, read back from the file once Shutdown has flushed it.
+            var log = File.ReadAllText(Assert.Single(Directory.GetFiles(dir, "sysmanager-*.log")));
+            Assert.Contains($"SysManager {UpdateService.CurrentVersion.ToString(3)} started", log, StringComparison.Ordinal);
         }
         finally
         {
-            LogService.Shutdown();
+            try { Directory.Delete(Path.GetDirectoryName(dir)!, recursive: true); }
+            catch (IOException) { /* a leftover temp folder must never fail a test */ }
         }
     }
 

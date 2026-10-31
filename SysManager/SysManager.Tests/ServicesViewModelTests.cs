@@ -35,30 +35,29 @@ public class ServicesViewModelTests
         new() { Name = "BITS", DisplayName = "Background Intelligent Transfer", Description = "Transfers files in background", Status = "Stopped", StartType = "Manual", Recommendation = "keep-enabled", SafetyLevel = Models.SafetyLevel.Critical },
     };
 
+    /// <summary>
+    /// The view model through its seams: a runner that runs nothing unless a test gives one, a startup ledger in a
+    /// folder of its own, and <paramref name="services"/> instead of the machine's service list.
+    /// </summary>
+    /// <remarks>
+    /// Built with the real runner and nothing else, as these tests were, each read this PC's service list and the
+    /// real startup ledger Undo Changes acts on, and a confirmation that went through would have run sc.exe on a
+    /// real service such as Spooler (#2742).
+    /// </remarks>
+    private static ServicesViewModel NewVm(IPowerShellRunner? ps = null, ServiceStartupLedgerService? ledger = null,
+        List<ServiceEntry>? services = null) =>
+        new(ps ?? Substitute.For<IPowerShellRunner>(), ledger ?? new ServiceStartupLedgerService(UnwrittenLedgerDir()),
+            readServices: () => [.. services ?? TestServices]);
+
+    /// <summary>A folder of the test's own that nothing creates unless a change is remembered in it.</summary>
+    private static string UnwrittenLedgerDir() =>
+        Path.Combine(Path.GetTempPath(), "SysManagerServicesVmTests", Guid.NewGuid().ToString("N"));
+
+    /// <summary>The view model over <paramref name="services"/>, loaded, so the list a test reads is its own.</summary>
     private static async Task<ServicesViewModel> CreateWithDataAsync(List<ServiceEntry>? services = null)
     {
-        var vm = new ServicesViewModel(new Services.PowerShellRunner());
-
-        // Wait for initialization BEFORE seeding. The constructor starts InitAsync, whose
-        // RefreshAsync does `_allServices = await Task.Run(ServiceManagerService.GetAllServices)`
-        // — it assigns the same field this helper seeds, after an await, so a value written
-        // during that window is replaced by the real service list. Measured against the live
-        // view model: seeding first, the seed was overwritten 25 out of 25 times, with three
-        // fixtures replaced by the machine's 320 actual services.
-        //
-        // The tests pass today only because they read `Services` synchronously, right after
-        // ApplyFilter and before the load lands. Any test that awaits before asserting would
-        // read the runner's real services instead of the fixtures, and the failure would look
-        // like a filtering bug rather than an ordering one. Awaiting first makes the data the
-        // test controls, deterministically and without a sleep.
+        var vm = NewVm(services: services);
         await vm.InitializationComplete;
-
-        var field = typeof(ServicesViewModel).GetField("_allServices", BindingFlags.NonPublic | BindingFlags.Instance)!;
-        field.SetValue(vm, services ?? TestServices);
-
-        // Trigger ApplyFilter so the Services collection reflects the injected data.
-        var applyFilter = typeof(ServicesViewModel).GetMethod("ApplyFilter", BindingFlags.NonPublic | BindingFlags.Instance)!;
-        applyFilter.Invoke(vm, null);
         return vm;
     }
 
@@ -67,14 +66,14 @@ public class ServicesViewModelTests
     [Fact]
     public void Constructor_Collections_NotNull()
     {
-        var vm = new ServicesViewModel(new Services.PowerShellRunner());
+        var vm = NewVm();
         Assert.NotNull(vm.Services);
     }
 
     [Fact]
     public void Constructor_FilterOptions_ContainsExpected()
     {
-        var vm = new ServicesViewModel(new Services.PowerShellRunner());
+        var vm = NewVm();
         Assert.Contains("All", vm.FilterOptions);
         Assert.Contains("Running", vm.FilterOptions);
         Assert.Contains("Stopped", vm.FilterOptions);
@@ -86,21 +85,21 @@ public class ServicesViewModelTests
     [Fact]
     public void Constructor_DefaultFilter_Empty()
     {
-        var vm = new ServicesViewModel(new Services.PowerShellRunner());
+        var vm = NewVm();
         Assert.Equal("", vm.FilterText);
     }
 
     [Fact]
     public void Constructor_DefaultSelectedFilter_All()
     {
-        var vm = new ServicesViewModel(new Services.PowerShellRunner());
+        var vm = NewVm();
         Assert.Equal("All", vm.SelectedFilter);
     }
 
     [Fact]
     public void Constructor_Commands_Exist()
     {
-        var vm = new ServicesViewModel(new Services.PowerShellRunner());
+        var vm = NewVm();
         Assert.NotNull(vm.RefreshCommand);
         Assert.NotNull(vm.StartServiceCommand);
         Assert.NotNull(vm.StopServiceCommand);
@@ -213,7 +212,7 @@ public class ServicesViewModelTests
 
         Assert.NotEmpty(chipValues);   // else this would pass by finding nothing
 
-        var vm = new ServicesViewModel(new Services.PowerShellRunner());
+        var vm = NewVm();
         var missing = vm.FilterOptions.Except(chipValues, StringComparer.Ordinal).ToList();
 
         Assert.True(missing.Count == 0,
@@ -299,7 +298,7 @@ public class ServicesViewModelTests
 
         Assert.Equal(["advanced", "keep-enabled", "safe-to-disable"], produced);
 
-        var vm = new ServicesViewModel(new Services.PowerShellRunner());
+        var vm = NewVm();
         Assert.Contains("Safe to disable", vm.FilterOptions);
         Assert.Contains("Keep enabled", vm.FilterOptions);
         Assert.Contains("Advanced", vm.FilterOptions);
@@ -562,22 +561,15 @@ public class ServicesViewModelTests
     // ── Startup-type ledger rehydration (regression) ──
 
     /// <summary>
-    /// Runs the private <c>RehydratePreviousStartTypes</c> against a seeded <c>_allServices</c>,
-    /// which is what <c>RefreshAsync</c> does after every scan.
+    /// The view model over <paramref name="services"/> and <paramref name="ledger"/>, loaded: its own load copies
+    /// each disabled service's previous startup type from the ledger, as every Refresh does.
     /// </summary>
-    /// <param name="ps">A substitute for a test that lets a command reach sc.exe; the real runner otherwise.</param>
+    /// <param name="ps">A substitute for a test that lets a command reach sc.exe; one that runs nothing otherwise.</param>
     private static async Task<ServicesViewModel> CreateWithLedgerAsync(
         List<ServiceEntry> services, ServiceStartupLedgerService ledger, IPowerShellRunner? ps = null)
     {
-        var vm = new ServicesViewModel(ps ?? new Services.PowerShellRunner(), ledger);
+        var vm = NewVm(ps, ledger, services);
         await vm.InitializationComplete;
-
-        typeof(ServicesViewModel)
-            .GetField("_allServices", BindingFlags.NonPublic | BindingFlags.Instance)!
-            .SetValue(vm, services);
-        typeof(ServicesViewModel)
-            .GetMethod("RehydratePreviousStartTypes", BindingFlags.NonPublic | BindingFlags.Instance)!
-            .Invoke(vm, null);
         return vm;
     }
 
@@ -674,9 +666,9 @@ public class ServicesViewModelTests
     // command on this tab that did not, and its button renders on every row with no Visibility or
     // CanExecute guard — one click to a persistent, machine-scope service change.
     //
-    // The declined-confirm test below holds whether or not the run is elevated: EnableServiceAsync
-    // returns at the elevation gate when not elevated and at the declined confirm when it is, and
-    // neither path may reach sc.exe, which is what "did the startup type change?" measures.
+    // The declined-confirm test below FORCES elevation too. It held whether or not the run was elevated, because
+    // EnableServiceAsync returns at the elevation gate before it asks, so on a standard account it never reached
+    // the confirmation it is named for (#2742). It now checks that it was asked.
     //
     // The two prompt-wording tests FORCE elevation, for the same reason as the #1512 block further
     // down — the gate returns before any prompt, so on a non-elevated runner they would assert
@@ -687,23 +679,27 @@ public class ServicesViewModelTests
     [Fact]
     public async Task EnableService_WhenConfirmDeclined_ChangesNothing()
     {
+        using var elevated = AdminHelper.ForceElevation(true);
         using var temp = new TempLedgerDir();
         var ledger = temp.NewLedger();
-        ledger.Remember("Spooler", "Automatic", DateTimeOffset.UnixEpoch);
+        ledger.Remember(FakeServiceName, "Automatic", DateTimeOffset.UnixEpoch);
 
         var scanned = new List<ServiceEntry>
         {
-            new() { Name = "Spooler", DisplayName = "Print Spooler", Status = "Stopped", StartType = "Disabled" },
+            new() { Name = FakeServiceName, DisplayName = "Declined Test", Status = "Stopped", StartType = "Disabled" },
         };
-        using var vm = await CreateWithLedgerAsync(scanned, ledger);
+        var runner = RunnerReturning(0);
+        using var vm = await CreateWithLedgerAsync(scanned, ledger, runner);
         using var dialog = new DialogAnswer(confirm: false);
 
         await vm.EnableServiceCommand.ExecuteAsync(scanned[0]);
 
-        // Nothing applied: the entry still reads Disabled and the ledger still remembers the type,
-        // so a later accepted Enable can still restore it rather than falling back to Manual.
+        // Asked, declined, and nothing applied: sc.exe never ran, the entry still reads Disabled and the ledger still
+        // remembers the type, so a later accepted Enable can still restore it rather than falling back to Manual.
+        Assert.Equal(1, dialog.Calls);
+        Assert.DoesNotContain(runner.ReceivedCalls(), c => c.GetMethodInfo().Name == nameof(IPowerShellRunner.RunProcessAsync));
         Assert.Equal("Disabled", scanned[0].StartType);
-        Assert.Equal("Automatic", ledger.PreviousStartTypeFor("Spooler"));
+        Assert.Equal("Automatic", ledger.PreviousStartTypeFor(FakeServiceName));
     }
 
     [Fact]

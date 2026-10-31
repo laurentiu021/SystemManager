@@ -7,6 +7,9 @@ using SysManager.Services;
 
 namespace SysManager.Tests;
 
+// Serialized: the activity-log tests replace ActivityLogService.Instance through ActivityLogScope, which is
+// process-wide, and assert what it holds (#2742).
+[Collection("ProcessWideStatics")]
 public class CliRunnerTests
 {
     // ── Parse ─────────────────────────────────────────────────────────────

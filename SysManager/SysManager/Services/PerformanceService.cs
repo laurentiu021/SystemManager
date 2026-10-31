@@ -478,7 +478,7 @@ public sealed partial class PerformanceService : IDisposable
         void OnLine(PowerShellLine l) => lines.Enqueue(l.Text);
         _ps.LineReceived += OnLine;
         try { await _ps.RunProcessAsync("powercfg.exe", "/getactivescheme", ct, PowerShellRunner.OemEncoding).ConfigureAwait(false); }
-        finally { _ps.LineReceived -= OnLine; _psGate.Release(); }
+        finally { _ps.LineReceived -= OnLine; ReleaseGate(); }
 
         return ParseActivePlan([.. lines]);
     }
@@ -547,7 +547,7 @@ public sealed partial class PerformanceService : IDisposable
             if (exitCode != 0)
                 throw new InvalidOperationException($"powercfg failed to activate the power plan (exit code {exitCode}).");
         }
-        finally { _psGate.Release(); }
+        finally { ReleaseGate(); }
     }
 
     /// <summary>
@@ -577,7 +577,7 @@ public sealed partial class PerformanceService : IDisposable
         await _psGate.WaitAsync(ct).ConfigureAwait(false);
         _ps.LineReceived += OnLine;
         try { await _ps.RunProcessAsync("powercfg.exe", $"-duplicatescheme {UltimatePerfScheme}", ct, PowerShellRunner.OemEncoding).ConfigureAwait(false); }
-        finally { _ps.LineReceived -= OnLine; _psGate.Release(); }
+        finally { _ps.LineReceived -= OnLine; ReleaseGate(); }
 
         // "Power Scheme GUID: <new guid>  (Ultimate Performance)" in English; the label and the name are translated
         // elsewhere, the GUID never is.
@@ -735,7 +735,7 @@ public sealed partial class PerformanceService : IDisposable
         void OnLine(PowerShellLine l) => lines.Enqueue(l.Text);
         _ps.LineReceived += OnLine;
         try { await _ps.RunProcessAsync("powercfg.exe", "/list", ct, PowerShellRunner.OemEncoding).ConfigureAwait(false); }
-        finally { _ps.LineReceived -= OnLine; _psGate.Release(); }
+        finally { _ps.LineReceived -= OnLine; ReleaseGate(); }
 
         return [.. lines];
     }
@@ -1210,7 +1210,7 @@ public sealed partial class PerformanceService : IDisposable
             await _ps.RunProcessAsync("powercfg.exe",
                 "/query SCHEME_CURRENT SUB_PROCESSOR PROCTHROTTLEMIN", ct, PowerShellRunner.OemEncoding).ConfigureAwait(false);
         }
-        finally { _ps.LineReceived -= OnLine; _psGate.Release(); }
+        finally { _ps.LineReceived -= OnLine; ReleaseGate(); }
 
         return ParseProcessorMinPercents([.. lines]);
     }
@@ -1302,7 +1302,7 @@ public sealed partial class PerformanceService : IDisposable
             if (applyExitCode != 0)
                 throw new InvalidOperationException($"powercfg failed to apply the processor minimum (exit code {applyExitCode}).");
         }
-        finally { _psGate.Release(); }
+        finally { ReleaseGate(); }
     }
 
     // ═══════════════════════════════════════════════════════════════
@@ -1406,7 +1406,7 @@ public sealed partial class PerformanceService : IDisposable
                 throw new InvalidOperationException(
                     $"powercfg could not turn hibernation {(enabled ? "on" : "off")} (exit code {exitCode}).");
         }
-        finally { _psGate.Release(); }
+        finally { ReleaseGate(); }
     }
 
     // ═══════════════════════════════════════════════════════════════
@@ -1560,6 +1560,19 @@ public sealed partial class PerformanceService : IDisposable
     {
         await RestoreFromSnapshotAsync(snapshot, card, plan, ct).ConfigureAwait(false);
         return DeleteSnapshot();
+    }
+
+    /// <summary>
+    /// Releases the gate unless <see cref="Dispose"/> has already claimed it. Releasing a disposed
+    /// <see cref="SemaphoreSlim"/> throws, and every call site is a <c>finally</c> block, where that
+    /// would replace a clean shutdown — or a real error — with an unhandled exception. A powercfg call still
+    /// running when SysManager closed ended that way, as <c>DnsService</c>'s already did not (#2742).
+    /// </summary>
+    private void ReleaseGate()
+    {
+        if (_disposed) return;
+        try { _psGate.Release(); }
+        catch (ObjectDisposedException) { /* disposed mid-request at shutdown */ }
     }
 
     /// <inheritdoc />

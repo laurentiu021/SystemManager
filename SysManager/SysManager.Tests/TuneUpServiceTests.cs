@@ -669,7 +669,7 @@ public class TuneUpServiceTests
     {
         using var temp = new AgedTemp();
 
-        var (_, deleted, errors) = TuneUpService.CleanTempFiles([temp.Root], Now, CancellationToken.None);
+        var (_, deleted, errors, _) = TuneUpService.CleanTempFiles([temp.Root], Now, CancellationToken.None);
 
         Assert.Equal((1, 0), (deleted, errors));
         Assert.False(File.Exists(temp.Leftover));
@@ -686,5 +686,155 @@ public class TuneUpServiceTests
         var counted = TuneUpService.TempFilesToClean(temp.Root, Now - CleanupAge.TempFilesKeptFor, CancellationToken.None);
 
         Assert.Equal([temp.Leftover], counted);
+    }
+
+    // ---------- a cancelled sweep, and a cancelled Tune-Up (#2736) ----------
+    // A cancel threw out of the sweep, and the count of what it had already deleted went with the exception, so Quick
+    // Cleanup, the Dashboard and the Quick Tune-Up said only that they were cancelled and recorded nothing. What was
+    // deleted is gone for good either way.
+
+    /// <summary>Two temp roots that cancel the sweep once it asks for the second, so the cancel lands between them.</summary>
+    private sealed class CancelsAfterTheFirst(string first, string second, CancellationTokenSource cts) : IReadOnlyList<string>
+    {
+        public int Count => 2;
+        public string this[int index] => index == 0 ? first : second;
+
+        public IEnumerator<string> GetEnumerator()
+        {
+            yield return first;
+            cts.Cancel();
+            yield return second;
+        }
+
+        System.Collections.IEnumerator System.Collections.IEnumerable.GetEnumerator() => GetEnumerator();
+    }
+
+    [Fact]
+    public void TheTempSweep_CancelledPartWay_ReturnsWhatItHadDeleted_InsteadOfThrowing()
+    {
+        using var first = new AgedTemp();
+        using var second = new AgedTemp();
+        using var cts = new CancellationTokenSource();
+
+        var result = TuneUpService.CleanTempFiles(new CancelsAfterTheFirst(first.Root, second.Root, cts), Now, cts.Token);
+
+        Assert.Equal(new TempCleanResult(1, 1, 0, Cancelled: true), result);
+        Assert.False(File.Exists(first.Leftover));
+        Assert.True(File.Exists(second.Leftover), "the sweep went on after the cancel");
+    }
+
+    [Fact]
+    public void TheTempSweep_ThatFinished_IsNotMarkedCancelled()
+    {
+        using var temp = new AgedTemp();
+
+        var result = TuneUpService.CleanTempFiles([temp.Root], Now, CancellationToken.None);
+
+        Assert.Equal(new TempCleanResult(1, 1, 0, Cancelled: false), result);
+    }
+
+    /// <summary>A step the Tune-Up must not reach: the exception is one no step catches, so reaching it fails the test.</summary>
+    private static Func<Task<T>> NotReached<T>() => () => throw new NotSupportedException("a step after the cancel ran");
+
+    private static readonly RecycleBinContents TwoItems = new(2048, 2);
+
+    [Fact]
+    public async Task ATuneUpCancelledDuringTheTempSweep_ReturnsWhatItFreed_AndLeavesTheBin()
+    {
+        using var cts = new CancellationTokenSource();
+        var binAsked = false;
+
+        var result = await TuneUpService.RunStepsAsync(
+            () => { cts.Cancel(); return Task.FromResult(new TempCleanResult(4096, 3, 1, Cancelled: true)); },
+            () => { binAsked = true; return new RecycleBinEmptyResult(true, TwoItems); },
+            NotReached<ShortcutScanReport>(), NotReached<IReadOnlyList<DiskHealthReport>>(), NotReached<SystemSnapshot>(),
+            emptyRecycleBin: true, progress: null, cts.Token);
+
+        Assert.True(result.Cancelled);
+        Assert.Equal((4096L, 3, 1), (result.TempBytesFreed, result.TempFilesDeleted, result.TempErrors));
+        Assert.False(binAsked);
+        Assert.False(result.RecycleBinEmptied);
+        Assert.True(result.RemovedAnything);
+    }
+
+    [Fact]
+    public async Task ATuneUpCancelledWhileTheBinWasEmptied_ReturnsTheBinToo()
+    {
+        // The shell empties the bin to the end once asked, so a cancel then is seen after it.
+        using var cts = new CancellationTokenSource();
+
+        var result = await TuneUpService.RunStepsAsync(
+            () => Task.FromResult(new TempCleanResult(4096, 3, 0, Cancelled: false)),
+            () => { cts.Cancel(); return new RecycleBinEmptyResult(true, TwoItems); },
+            NotReached<ShortcutScanReport>(), NotReached<IReadOnlyList<DiskHealthReport>>(), NotReached<SystemSnapshot>(),
+            emptyRecycleBin: true, progress: null, cts.Token);
+
+        Assert.True(result.Cancelled);
+        Assert.True(result.RecycleBinEmptied);
+        Assert.Equal(TwoItems, result.RecycleBinBefore);
+        Assert.Equal("Freed 4.0 KB of temporary files and permanently emptied the Recycle Bin (2 items, 2.0 KB)",
+            result.ActivityDetail);
+    }
+
+    [Fact]
+    public async Task ATuneUpCancelledDuringACheck_StillReturnsWhatItRemoved()
+    {
+        using var cts = new CancellationTokenSource();
+
+        var result = await TuneUpService.RunStepsAsync(
+            () => Task.FromResult(new TempCleanResult(4096, 3, 0, Cancelled: false)),
+            () => new RecycleBinEmptyResult(true, TwoItems),
+            () => { cts.Cancel(); return Task.FromCanceled<ShortcutScanReport>(cts.Token); },
+            NotReached<IReadOnlyList<DiskHealthReport>>(), NotReached<SystemSnapshot>(),
+            emptyRecycleBin: true, progress: null, cts.Token);
+
+        Assert.True(result.Cancelled);
+        Assert.Equal(3, result.TempFilesDeleted);
+        Assert.Equal(TwoItems, result.RecycleBinBefore);
+    }
+
+    [Fact]
+    public async Task ATuneUpThatFinished_IsNotMarkedCancelled()
+    {
+        var result = await TuneUpService.RunStepsAsync(
+            () => Task.FromResult(new TempCleanResult(4096, 3, 0, Cancelled: false)),
+            () => new RecycleBinEmptyResult(true, TwoItems),
+            () => throw new IOException("no shortcuts here"),
+            () => throw new InvalidOperationException("no disks here"),
+            () => throw new InvalidOperationException("no WMI here"),
+            emptyRecycleBin: true, progress: null, CancellationToken.None);
+
+        Assert.False(result.Cancelled);
+        Assert.Equal(["shortcuts", "the disks", "memory", "uptime"], result.NotChecked);
+    }
+
+    [Fact]
+    public async Task ACancelTheTuneUpDidNotAskFor_StillEndsItWithAnException()
+    {
+        // Only the Tune-Up's own cancel returns a result: a step that gave up by itself is not a cancel by the user.
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => TuneUpService.RunStepsAsync(
+            () => Task.FromResult(new TempCleanResult(4096, 3, 0, Cancelled: false)),
+            () => new RecycleBinEmptyResult(true, TwoItems),
+            () => Task.FromCanceled<ShortcutScanReport>(new CancellationToken(canceled: true)),
+            NotReached<IReadOnlyList<DiskHealthReport>>(), NotReached<SystemSnapshot>(),
+            emptyRecycleBin: true, progress: null, CancellationToken.None));
+    }
+
+    [Theory]
+    [InlineData(0, false, null, false)]   // nothing deleted, and the bin left
+    [InlineData(3, false, null, true)]    // temp files deleted
+    [InlineData(0, true, 2L, true)]       // the bin emptied of what it held
+    [InlineData(0, true, 0L, false)]      // the bin was already empty
+    [InlineData(0, true, null, true)]     // emptied, and the shell could not say of what
+    public void RemovedAnything_SaysWhetherTheTuneUpDeletedSomething(int files, bool binEmptied, long? binItems, bool removed)
+    {
+        var result = new TuneUpResult
+        {
+            TempFilesDeleted = files,
+            RecycleBinEmptied = binEmptied,
+            RecycleBinBefore = binItems is { } items ? new RecycleBinContents(items * 1024, items) : null,
+        };
+
+        Assert.Equal(removed, result.RemovedAnything);
     }
 }

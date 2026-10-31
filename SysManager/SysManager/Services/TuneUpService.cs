@@ -45,42 +45,83 @@ public sealed class TuneUpService : ITuneUpService
     /// <param name="emptyRecycleBin">True if the user confirmed Recycle Bin emptying.</param>
     /// <param name="progress">Reports (stepIndex 0-5, stepName).</param>
     /// <param name="ct">Cancellation token.</param>
-    public async Task<TuneUpResult> RunAsync(
+    public Task<TuneUpResult> RunAsync(
         bool emptyRecycleBin,
         IProgress<(int Step, string Message)>? progress = null,
         CancellationToken ct = default)
+        => RunStepsAsync(
+            () => CleanTempFilesAsync(ct), _recycleBin.Empty, () => _shortcuts.ScanAsync(ct: ct),
+            () => _diskHealth.CollectAsync(ct), () => _sysInfo.CaptureAsync(ct), emptyRecycleBin, progress, ct);
+
+    /// <summary>
+    /// The sequence <see cref="RunAsync"/> runs, handed each step to make, so a test can run it and cancel it at any
+    /// step without cleaning the temp folders or the Recycle Bin of the PC running it.
+    /// </summary>
+    internal static async Task<TuneUpResult> RunStepsAsync(
+        Func<Task<TempCleanResult>> cleanTemp,
+        Func<RecycleBinEmptyResult> emptyBin,
+        Func<Task<ShortcutScanReport>> scanShortcuts,
+        Func<Task<IReadOnlyList<DiskHealthReport>>> collectDisks,
+        Func<Task<SystemSnapshot>> captureVitals,
+        bool emptyRecycleBin,
+        IProgress<(int Step, string Message)>? progress,
+        CancellationToken ct)
     {
         // Step 1: Temp cleanup
         progress?.Report((0, "Cleaning temporary files…"));
-        var (tempFreed, tempDeleted, tempErrors) = await CleanTempFilesAsync(ct).ConfigureAwait(false);
-        ct.ThrowIfCancellationRequested();
+        var temp = await cleanTemp().ConfigureAwait(false);
 
-        // Step 2: Recycle Bin
-        progress?.Report((1, "Emptying Recycle Bin…"));
-        var bin = await EmptyRecycleBinAsync(emptyRecycleBin, _recycleBin.Empty, ct).ConfigureAwait(false);
-        ct.ThrowIfCancellationRequested();
+        // From here a cancel returns what the Tune-Up has already removed, marked cancelled, rather than an exception
+        // that cannot carry it: the temp files and the bin's contents are gone for good, and the Dashboard records
+        // them (#2736). The checks after the bin only read.
+        RecycleBinEmptyResult? bin = null;
+        int? brokenCount;
+        List<DiskHealthSummary>? diskSummaries;
+        SystemSnapshot? snapshot;
+        try
+        {
+            ct.ThrowIfCancellationRequested();
 
-        // Step 3: Broken shortcuts scan
-        progress?.Report((2, "Scanning shortcuts…"));
-        var brokenCount = await CountBrokenShortcutsAsync(() => _shortcuts.ScanAsync(ct: ct)).ConfigureAwait(false);
-        ct.ThrowIfCancellationRequested();
+            // Step 2: Recycle Bin
+            progress?.Report((1, "Emptying Recycle Bin…"));
+            bin = await EmptyRecycleBinAsync(emptyRecycleBin, emptyBin, ct).ConfigureAwait(false);
+            ct.ThrowIfCancellationRequested();
 
-        // Step 4: Disk SMART
-        progress?.Report((3, "Checking disk health…"));
-        var diskSummaries = await ReadDisksAsync(() => _diskHealth.CollectAsync(ct)).ConfigureAwait(false);
-        ct.ThrowIfCancellationRequested();
+            // Step 3: Broken shortcuts scan
+            progress?.Report((2, "Scanning shortcuts…"));
+            brokenCount = await CountBrokenShortcutsAsync(scanShortcuts).ConfigureAwait(false);
+            ct.ThrowIfCancellationRequested();
 
-        // Step 5: Uptime + RAM
-        progress?.Report((4, "Checking system vitals…"));
-        var snapshot = await CaptureVitalsAsync(() => _sysInfo.CaptureAsync(ct)).ConfigureAwait(false);
+            // Step 4: Disk SMART
+            progress?.Report((3, "Checking disk health…"));
+            diskSummaries = await ReadDisksAsync(collectDisks).ConfigureAwait(false);
+            ct.ThrowIfCancellationRequested();
+
+            // Step 5: Uptime + RAM
+            progress?.Report((4, "Checking system vitals…"));
+            snapshot = await CaptureVitalsAsync(captureVitals).ConfigureAwait(false);
+        }
+        catch (OperationCanceledException) when (ct.IsCancellationRequested)
+        {
+            return new TuneUpResult
+            {
+                TempBytesFreed = temp.BytesFreed,
+                TempFilesDeleted = temp.FilesDeleted,
+                TempErrors = temp.Errors,
+                RecycleBinEmptied = bin?.Emptied ?? false,
+                RecycleBinSkipped = bin is null,
+                RecycleBinBefore = bin?.Before,
+                Cancelled = true,
+            };
+        }
 
         progress?.Report((5, "Done"));
 
         return new TuneUpResult
         {
-            TempBytesFreed = tempFreed,
-            TempFilesDeleted = tempDeleted,
-            TempErrors = tempErrors,
+            TempBytesFreed = temp.BytesFreed,
+            TempFilesDeleted = temp.FilesDeleted,
+            TempErrors = temp.Errors,
             RecycleBinEmptied = bin?.Emptied ?? false,
             RecycleBinSkipped = !emptyRecycleBin,
             RecycleBinBefore = bin?.Before,
@@ -195,25 +236,25 @@ public sealed class TuneUpService : ITuneUpService
     /// <summary>
     /// Cleans user + Windows TEMP, never descending into reparse points (junctions /
     /// symbolic links) so a link inside TEMP can't redirect deletion to unrelated data.
-    /// Returns the bytes freed, files deleted, and per-file error count. Shared by the
-    /// full Tune-Up sequence and the Dashboard's Quick Cleanup shortcut so both use this
-    /// one safe implementation.
+    /// Returns the bytes freed, files deleted, and per-file error count, and whether a cancel
+    /// stopped it part-way. Shared by the full Tune-Up sequence and the Dashboard's Quick
+    /// Cleanup shortcut so both use this one safe implementation.
     /// </summary>
-    public static Task<(long BytesFreed, int FilesDeleted, int Errors)> CleanTempFilesAsync(CancellationToken ct = default)
+    public static Task<TempCleanResult> CleanTempFilesAsync(CancellationToken ct = default)
         => Task.Run(() => CleanTempFiles(ct), ct);
 
     /// <summary>The same sweep, reached through the seam, so that Quick Cleanup can be tested without running it.</summary>
-    Task<(long BytesFreed, int FilesDeleted, int Errors)> ITuneUpService.CleanTempFilesAsync(CancellationToken ct)
+    Task<TempCleanResult> ITuneUpService.CleanTempFilesAsync(CancellationToken ct)
         => CleanTempFilesAsync(ct);
 
-    private static (long BytesFreed, int FilesDeleted, int Errors) CleanTempFiles(CancellationToken ct)
+    private static TempCleanResult CleanTempFiles(CancellationToken ct)
         => CleanTempFiles(TempRoots(), DateTime.UtcNow, ct);
 
     /// <summary>
     /// The sweep over <paramref name="roots"/>, as at <paramref name="nowUtc"/>, so a test runs it on a folder of its
     /// own.
     /// </summary>
-    internal static (long BytesFreed, int FilesDeleted, int Errors) CleanTempFiles(
+    internal static TempCleanResult CleanTempFiles(
         IReadOnlyList<string> roots, DateTime nowUtc, CancellationToken ct)
     {
         long freed = 0;
@@ -221,14 +262,16 @@ public sealed class TuneUpService : ITuneUpService
         int errors = 0;
         var cutoff = nowUtc - CleanupAge.TempFilesKeptFor;
 
+        // A cancel stops the sweep rather than throwing out of it: the files already deleted are gone for good, and the
+        // count of them comes back with the result (#2736).
         foreach (var dir in roots.Where(p => !string.IsNullOrEmpty(p) && Directory.Exists(p)))
         {
-            ct.ThrowIfCancellationRequested();
+            if (ct.IsCancellationRequested) break;
             try
             {
                 foreach (var file in TempFilesToClean(dir, cutoff, ct))
                 {
-                    ct.ThrowIfCancellationRequested();
+                    if (ct.IsCancellationRequested) break;
                     try
                     {
                         var info = new FileInfo(file);
@@ -245,7 +288,7 @@ public sealed class TuneUpService : ITuneUpService
                 // so there is no re-sort here to get wrong.
                 foreach (var sub in SafeFileWalk.DirectoriesDeepestFirst(dir, ct, TempWalk))
                 {
-                    ct.ThrowIfCancellationRequested();
+                    if (ct.IsCancellationRequested) break;
                     try
                     {
                         // An empty folder made a moment ago is one an installer is about to fill.
@@ -267,7 +310,7 @@ public sealed class TuneUpService : ITuneUpService
             }
         }
 
-        return (freed, deleted, errors);
+        return new TempCleanResult(freed, deleted, errors, ct.IsCancellationRequested);
     }
 
     /// <summary>

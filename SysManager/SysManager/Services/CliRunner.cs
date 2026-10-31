@@ -170,7 +170,7 @@ public sealed class CliRunner
     {
         try
         {
-            var (bytes, files, errors) = await TuneUpService.CleanTempFilesAsync(ct).ConfigureAwait(false);
+            var (bytes, files, errors, _) = await TuneUpService.CleanTempFilesAsync(ct).ConfigureAwait(false);
             double mb = bytes / 1024.0 / 1024.0;
             RecordHeadlessRun("Quick Cleanup", string.Create(CultureInfo.InvariantCulture,
                 $"Freed {mb:F0} MB across {files} file(s)"));

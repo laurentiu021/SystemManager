@@ -10,6 +10,21 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.136.55] - 2026-10-31
+
+**Quick Cleanup and the Quick Tune-Up say what they had already removed when you cancel them.**
+
+### Fixed
+- Cancelling the temp clean on Quick Cleanup, the Dashboard's Quick Cleanup or the Quick
+  Tune-Up part-way said only that it was cancelled, although the temporary files deleted by
+  then, and for the Tune-Up the Recycle Bin it had emptied, were gone for good. Recent activity
+  recorded nothing, and the sizes shown stayed as they were. Each now says how much it had freed
+  before it stopped, records it in Recent activity, and measures the space again. A Tune-Up
+  cancelled part-way shows no result card, because its checks did not all run. This was there
+  since each could be cancelled while it recorded what it cleared: the Quick Tune-Up since it
+  began recording in Recent activity, in 1.17.0, Quick Cleanup's temp clean since it did, in
+  1.45.3, and the Dashboard's Quick Cleanup since it got a Cancel button, in 1.132.0.
+
 ## [1.136.54] - 2026-10-31
 
 **A Deep Cleanup you cancel part-way says what it had already removed, and records it.**

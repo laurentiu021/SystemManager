@@ -20,6 +20,9 @@ public interface ITuneUpService
     Task<TuneUpResult> RunAsync(
         bool emptyRecycleBin, IProgress<(int Step, string Message)>? progress = null, CancellationToken ct = default);
 
-    /// <summary>Cleans the user and Windows TEMP folders, and returns what was freed.</summary>
-    Task<(long BytesFreed, int FilesDeleted, int Errors)> CleanTempFilesAsync(CancellationToken ct = default);
+    /// <summary>
+    /// Cleans the user and Windows TEMP folders, and returns what was freed, with the result marked cancelled when a
+    /// cancel stopped it part-way.
+    /// </summary>
+    Task<TempCleanResult> CleanTempFilesAsync(CancellationToken ct = default);
 }

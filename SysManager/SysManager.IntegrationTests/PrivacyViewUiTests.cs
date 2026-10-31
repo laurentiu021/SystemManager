@@ -92,6 +92,26 @@ public sealed class PrivacyViewUiTests : IDisposable
     }
 
     [Fact]
+    public async Task TheSwitches_WaitWhileTheTabIsBusy()
+    {
+        // One moved while Apply waited for its restore point was overwritten by the write that followed (#2733).
+        var vm = await VmAsync();
+
+        StaHelper.Run(() =>
+        {
+            var view = Laid(vm);
+            var aSwitch = Descendants<ToggleButton>(ItemsNamed(view, "Privacy switches")).First(t => t is not RadioButton);
+            Assert.True(aSwitch.IsEnabled);
+
+            vm.IsBusy = true;
+            Assert.False(aSwitch.IsEnabled);
+
+            vm.IsBusy = false;
+            Assert.True(aSwitch.IsEnabled);
+        });
+    }
+
+    [Fact]
     public async Task ThePills_ShowAndSetTheGrouping()
     {
         var vm = await VmAsync();

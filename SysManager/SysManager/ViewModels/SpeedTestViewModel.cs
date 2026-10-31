@@ -4,6 +4,7 @@
 
 using System.Collections.ObjectModel;
 using System.Collections.Specialized;
+using System.IO;
 using System.Text.RegularExpressions;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
@@ -160,6 +161,9 @@ public sealed partial class SpeedTestViewModel : ViewModelBase
         }
     }
 
+    /// <summary>The status line under the HTTP card when the test server stopped answering.</summary>
+    internal const string HttpTimedOut = "Error: the test server stopped answering, so the test timed out.";
+
     /// <summary>The status line under each card when the saved results could not be read.</summary>
     internal const string HistoryUnreadable =
         "Your saved results could not be read, so none are shown. New results are not saved until they can be.";
@@ -209,9 +213,16 @@ public sealed partial class SpeedTestViewModel : ViewModelBase
             HttpStatus = DescribeFinished("HTTP", HttpResult, saved: await _history.SaveAsync(HttpResult));
             AddToHistory(HttpResult);
         }
-        catch (OperationCanceledException) { HttpStatus = "Cancelled"; }
+        catch (OperationCanceledException) when (_speedCts?.IsCancellationRequested == true) { HttpStatus = "Cancelled"; }
+        // Not the Cancel button: the client's own time limit, on a server that stopped answering. It read as
+        // "Cancelled" although nothing was (#2721).
+        catch (OperationCanceledException) { HttpStatus = HttpTimedOut; }
         catch (System.Net.Http.HttpRequestException ex)
         { HttpStatus = "Error: " + ex.Message; }
+        // The connection dropped once the download had started: a reset, a Wi-Fi drop, or the server closing early.
+        // It went to the app's error dialog, and the card stayed on "Measuring download…" (#2721).
+        catch (IOException ex)
+        { HttpStatus = "Error: the connection dropped during the test. " + ex.Message; }
         catch (InvalidOperationException ex)
         { HttpStatus = "Error: " + ex.Message; }
         // EstimatedTime must be cleared here, not just on the next run. Its TextBlock's Visibility binds

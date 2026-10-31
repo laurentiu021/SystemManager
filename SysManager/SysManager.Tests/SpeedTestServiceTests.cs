@@ -421,4 +421,100 @@ public class SpeedTestServiceTests
         Assert.NotNull(mbps);
         Assert.Equal(104.8576, mbps.Value, precision: 6);
     }
+
+    // ── The upload's window (#2721) ──
+    // The upload waited for the whole body through a client that gives up at two minutes, so on a slow connection
+    // it was cancelled, and the whole test with it: the ping and download already measured were lost.
+
+    /// <summary>The upload's clock: its first reading is the start, and every later one ten seconds on.</summary>
+    private sealed class TenSecondUpload : TimeProvider
+    {
+        private int _readings;
+
+        public override long TimestampFrequency => TimeSpan.TicksPerSecond;
+
+        public override long GetTimestamp() => _readings++ == 0 ? 0 : TimeSpan.FromSeconds(10).Ticks;
+    }
+
+    /// <summary>A server that takes <paramref name="taking"/> bytes of the upload, then answers as
+    /// <paramref name="then"/> does.</summary>
+    private sealed class UploadServer(long taking, Func<CancellationToken, Task<HttpResponseMessage>> then)
+        : HttpMessageHandler
+    {
+        protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken ct)
+        {
+            var body = await request.Content!.ReadAsStreamAsync(ct);
+            var buffer = new byte[64 * 1024];
+            long taken = 0;
+            while (taken < taking)
+            {
+                var read = await body.ReadAsync(buffer.AsMemory(0, (int)Math.Min(buffer.Length, taking - taken)), ct);
+                if (read == 0) break;
+                taken += read;
+            }
+            return await then(ct);
+        }
+    }
+
+    /// <summary>What the server does once it has taken its part: the window ends while the upload is still going.</summary>
+    private static Func<CancellationToken, Task<HttpResponseMessage>> EndingTheWindow(CancellationTokenSource window) =>
+        async ct =>
+        {
+            await window.CancelAsync();
+            await new TaskCompletionSource().Task.WaitAsync(ct);   // until the upload is cancelled
+            return new HttpResponseMessage(HttpStatusCode.OK);
+        };
+
+    [Fact]
+    public async Task Upload_ThatTheWindowEnds_IsMeasuredOnWhatItHadSent()
+    {
+        using var window = new CancellationTokenSource();
+        using var http = new HttpClient(new UploadServer(1024 * 1024, EndingTheWindow(window)));
+
+        var mbps = await SpeedTestService.MeasureUploadAsync(http, window.Token, new TenSecondUpload(), null,
+                                                             CancellationToken.None);
+
+        // 1 MiB in 10 s: 1,048,576 bytes × 8 / 1,000,000 / 10.
+        Assert.NotNull(mbps);
+        Assert.Equal(0.8388608, mbps.Value, precision: 6);
+    }
+
+    [Fact]
+    public async Task Upload_ThatTheWindowEndsBeforeAnythingWasSent_IsNotMeasured()
+    {
+        using var window = new CancellationTokenSource();
+        using var http = new HttpClient(new UploadServer(0, EndingTheWindow(window)));
+
+        Assert.Null(await SpeedTestService.MeasureUploadAsync(http, window.Token, new TenSecondUpload(), null,
+                                                              CancellationToken.None));
+    }
+
+    [Fact]
+    public async Task Upload_TheUserCancelling_StillCancelsTheTest()
+    {
+        using var user = new CancellationTokenSource();
+        using var http = new HttpClient(new UploadServer(64 * 1024, async ct =>
+        {
+            await user.CancelAsync();
+            await new TaskCompletionSource().Task.WaitAsync(ct);   // until the upload is cancelled
+            return new HttpResponseMessage(HttpStatusCode.OK);
+        }));
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => SpeedTestService.MeasureUploadAsync(
+            http, CancellationToken.None, new TenSecondUpload(), null, user.Token));
+    }
+
+    [Fact]
+    public async Task Upload_ThatFinishesInTheWindow_IsMeasuredOnTheWholeBody()
+    {
+        using var http = new HttpClient(new UploadServer(long.MaxValue,
+            _ => Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK))));
+
+        var mbps = await SpeedTestService.MeasureUploadAsync(http, CancellationToken.None, new TenSecondUpload(), null,
+                                                             CancellationToken.None);
+
+        // The whole 50 MiB in 10 s.
+        Assert.NotNull(mbps);
+        Assert.Equal(41.94304, mbps.Value, precision: 6);
+    }
 }

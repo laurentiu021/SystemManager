@@ -56,6 +56,16 @@ public sealed class SpeedTestService : ISpeedTestService
 
     // 50 MB with 8 parallel streams saturates high-speed links (1 Gbps+).
     private const long PayloadBytes = 50L * 1024 * 1024;
+
+    /// <summary>The longest the upload is measured for.</summary>
+    /// <remarks>
+    /// The upload waited for the whole 50 MB body through the shared client, whose timeout is two minutes, so an
+    /// upload slower than about 3.5 Mbps, which ADSL and weak mobile connections often are, was cancelled at two
+    /// minutes. That cancellation ended the whole test: the ping and download already measured were lost, nothing was
+    /// saved, and the tab said "Cancelled" (#2721). An upload still running when this window ends is measured on what
+    /// it had sent by then.
+    /// </remarks>
+    internal static readonly TimeSpan UploadWindow = TimeSpan.FromSeconds(30);
     private const int DownloadConnections = 8; // parallel streams for accurate throughput
 
     public async Task<SpeedTestResult> RunHttpAsync(
@@ -149,6 +159,22 @@ public sealed class SpeedTestService : ISpeedTestService
     private static async Task<double?> MeasureUploadAsync(
         IProgress<(int, string)>? progress, CancellationToken ct)
     {
+        using var window = new CancellationTokenSource(UploadWindow);
+        return await MeasureUploadAsync(_http, window.Token, TimeProvider.System, progress, ct).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// The upload through <paramref name="http"/>, measured until it ends or <paramref name="windowEnd"/> does, or
+    /// null when it could not be measured.
+    /// </summary>
+    /// <param name="http">The client the upload goes through.</param>
+    /// <param name="windowEnd">Ends the upload's window, <see cref="UploadWindow"/> after it starts.</param>
+    /// <param name="time">Times the upload.</param>
+    /// <param name="progress">Told how the upload went.</param>
+    /// <param name="ct">The user's cancellation, which still cancels the test.</param>
+    internal static async Task<double?> MeasureUploadAsync(HttpClient http, CancellationToken windowEnd, TimeProvider time,
+        IProgress<(int, string)>? progress, CancellationToken ct)
+    {
         // Stream random data in chunks instead of allocating a single 50 MB
         // array on the Large Object Heap. Each chunk is small enough to stay
         // in Gen0 and be collected quickly.
@@ -157,17 +183,45 @@ public sealed class SpeedTestService : ISpeedTestService
         var stream = new RandomChunkStream(PayloadBytes, ChunkSize);
         using var content = new StreamContent(stream, ChunkSize);
         content.Headers.ContentLength = PayloadBytes;
+        using var upload = CancellationTokenSource.CreateLinkedTokenSource(ct, windowEnd);
 
-        var sw = Stopwatch.StartNew();
-        using var resp = await _http.PostAsync(CfUploadUrl, content, ct).ConfigureAwait(false);
-        sw.Stop();
+        var started = time.GetTimestamp();
+        try
+        {
+            using var resp = await http.PostAsync(CfUploadUrl, content, upload.Token).ConfigureAwait(false);
+            var elapsed = time.GetElapsedTime(started);
 
-        var sentBytes = stream.Position;
-        var mbps = UploadMbps(resp.IsSuccessStatusCode, sentBytes, sw.Elapsed);
-        progress?.Report((95, mbps is null
-            ? $"Upload measurement failed (HTTP {(int)resp.StatusCode})"
-            : $"Upload complete: {sentBytes / 1024 / 1024} MB"));
-        return mbps;
+            var sentBytes = stream.Position;
+            var mbps = UploadMbps(resp.IsSuccessStatusCode, sentBytes, elapsed);
+            progress?.Report((95, mbps is null
+                ? $"Upload measurement failed (HTTP {(int)resp.StatusCode})"
+                : $"Upload complete: {sentBytes / 1024 / 1024} MB"));
+            return mbps;
+        }
+        // The window ended it, not the user: measured on what had been sent by then.
+        catch (OperationCanceledException) when (windowEnd.IsCancellationRequested && !ct.IsCancellationRequested)
+        {
+            var sentBytes = stream.Position;
+            var mbps = WindowedUploadMbps(sentBytes, time.GetElapsedTime(started));
+            progress?.Report((95, mbps is null
+                ? "Upload measurement failed: nothing was sent in time"
+                : $"Upload: {sentBytes / 1024 / 1024} MB before the time limit"));
+            return mbps;
+        }
+    }
+
+    /// <summary>
+    /// The upload rate in Mbps of an upload its window ended, or null when nothing had been sent.
+    /// </summary>
+    /// <remarks>
+    /// On the bytes the HTTP stack had taken from the body, which run ahead of the wire by what the connection's send
+    /// buffer holds: a few percent over the window, on a connection slow enough to reach its end.
+    /// </remarks>
+    internal static double? WindowedUploadMbps(long sentBytes, TimeSpan elapsed)
+    {
+        if (sentBytes <= 0) return null;
+        var seconds = Math.Max(elapsed.TotalSeconds, 0.001);
+        return sentBytes * 8.0 / 1_000_000.0 / seconds;
     }
 
     /// <summary>

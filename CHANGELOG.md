@@ -10,6 +10,22 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.136.43] - 2026-10-31
+
+**The HTTP speed test measures a slow upload instead of ending as "Cancelled", and a connection
+that drops during it shows as an error on its card.**
+
+### Fixed
+- On an upload slower than about 3.5 Mbps, which ADSL and weak mobile connections often are, the
+  HTTP speed test always ended as "Cancelled" after two minutes, although nothing had been
+  cancelled. The ping and download it had already measured were thrown away, and nothing was
+  saved. The upload is now measured for at most 30 seconds, on what it sent in that time, so the
+  test finishes with all three readings. This was there from the first version.
+- A connection that dropped once the download had started, a Wi-Fi drop or a VPN reconnecting,
+  brought up the app's error dialog, and the HTTP card stayed on "Measuring download…" for
+  good. It now shows as an error on the card, and the test can be run again. A test the server
+  stopped answering says it timed out, rather than that it was cancelled.
+
 ## [1.136.42] - 2026-10-31
 
 **Deep Cleanup removes Windows.old completely, through Windows' own cleanup for it, instead of

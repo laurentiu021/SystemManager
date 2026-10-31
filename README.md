@@ -1549,6 +1549,10 @@ Answers "what is actually using my space?" by listing the biggest files in one p
 - **A reading it could not take says so.** When no ping gets an answer, which is common on
   networks that block ping, or the server refuses the upload, the card shows "—" and the line
   under it says why. The history records it as not measured, never as a perfect 0 ms ping
+- **A slow upload is still measured.** The HTTP upload is measured for at most 30 seconds, on
+  what it sent in that time, so a slow line finishes with all three readings rather than
+  timing out and losing them. A connection that drops during a test shows as an error on its
+  card, and a server that stops answering as a timeout, not as "Cancelled"
 - Progress bar with a time-remaining estimate and a Cancel button, on the card of the test
   that is running and not on the other; the Ookla CLI is downloaded on first run
 - **The Ookla CLI is checked before every run** against the SHA-256 of Ookla's 1.2.0 release,

@@ -15,7 +15,7 @@ namespace SysManager.Tests;
 /// <summary>
 /// Tests for <see cref="DisplayProfileViewModel"/> — pins that the display-mode
 /// commands are asynchronous, so their blocking P/Invoke work (EnumDisplaySettings /
-/// ChangeDisplaySettingsEx) runs off the UI thread and the auto-revert DispatcherTimer
+/// ChangeDisplaySettingsEx) runs off the UI thread and the auto-revert countdown
 /// keeps ticking during a mode switch.
 /// </summary>
 [Collection("ProcessWideStatics")]
@@ -23,7 +23,7 @@ public class DisplayProfileViewModelTests
 {
     private static DisplayProfileViewModel NewVm()
     {
-        var vm = new DisplayProfileViewModel(new DisplayProfileService());
+        var vm = new DisplayProfileViewModel(new DisplayProfileService(), new HeldTimers());
         vm.InitializationComplete.GetAwaiter().GetResult();
         return vm;
     }
@@ -50,19 +50,6 @@ public class DisplayProfileViewModelTests
         var vm = NewVm();
         Assert.NotNull(vm.Displays);
         Assert.NotNull(vm.Modes);
-    }
-
-    [Fact]
-    public void Revert_CapturesTheAppliedDevice_NotJustTheMode()
-    {
-        // Regression pin for the cross-display revert bug: the auto-revert must target
-        // the display the change was APPLIED to (captured at Apply time), not whatever
-        // is selected when the 15 s timer fires. That requires the VM to remember the
-        // device alongside the previous mode — assert the capture field exists.
-        var device = typeof(DisplayProfileViewModel).GetField(
-            "_previousDevice", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
-        Assert.NotNull(device);
-        Assert.Equal("SysManager.Models.DisplayDevice", device!.FieldType.FullName);
     }
 
     // ── Progress feedback (regression) ──
@@ -167,9 +154,10 @@ public class DisplayProfileViewModelTests
         await vm.InitializationComplete;
     }
 
-    private static async Task<DisplayProfileViewModel> Loaded(IDisplayProfileService service)
+    /// <summary>The view model over <paramref name="service"/>, its countdown on a clock that ticks only when told.</summary>
+    private static async Task<DisplayProfileViewModel> Loaded(IDisplayProfileService service, HeldTimers? clock = null)
     {
-        var vm = new DisplayProfileViewModel(service);
+        var vm = new DisplayProfileViewModel(service, clock ?? new HeldTimers());
         await Settled(vm);
         return vm;
     }
@@ -324,8 +312,8 @@ public class DisplayProfileViewModelTests
     }
 
     // ---------- applying, keeping and reverting (#2761) ----------
-    // A unit test has no Application, so no dispatcher for the countdown to tick on, and a change waits for Keep or
-    // Revert now: the state between two ticks.
+    // The countdown's clock ticks only when a test says so, so a change waits for Keep or Revert now: the state
+    // between two ticks.
 
     private static readonly DisplayMode At165 = new(2560, 1440, 165, 32);
 
@@ -344,9 +332,10 @@ public class DisplayProfileViewModelTests
     }
 
     /// <summary>Applies 144 Hz to the laptop, which leaves the change waiting to be kept.</summary>
-    private static async Task<DisplayProfileViewModel> WaitingToBeKept(IDisplayProfileService service)
+    private static async Task<DisplayProfileViewModel> WaitingToBeKept(IDisplayProfileService service,
+        HeldTimers? clock = null)
     {
-        var vm = await Loaded(service);
+        var vm = await Loaded(service, clock);
         vm.SelectedMode = At144;
         await vm.ApplyCommand.ExecuteAsync(null);
         Assert.True(vm.IsAwaitingConfirm);   // the premise
@@ -391,6 +380,102 @@ public class DisplayProfileViewModelTests
         {
             release.Set();
         }
+    }
+
+    // ---------- the 15-second countdown (#2741) ----------
+    // A dispatcher timer counted it down, which ticks only in the running app, so no test reached the revert it ends
+    // in. Each FireAll here is one second.
+
+    private static void Seconds(HeldTimers clock, int count)
+    {
+        for (var i = 0; i < count; i++) clock.FireAll();
+    }
+
+    [Fact]
+    public async Task EachSecond_TheLineCountsDown()
+    {
+        var clock = new HeldTimers();
+        using var vm = await WaitingToBeKept(Applying(Laptop), clock);
+        Assert.Equal(TimeSpan.FromSeconds(1), clock.OnlyDue);
+
+        Seconds(clock, 1);
+
+        Assert.Equal(14, vm.RevertCountdown);
+        Assert.Equal("Keep these settings? Reverting in 14s…", vm.StatusMessage);
+    }
+
+    [Fact]
+    public async Task WhenTheCountdownRunsOut_ThePreviousModeGoesBackOnTheDisplayThatWasChanged()
+    {
+        // Another display picked meanwhile: the mode goes back on the one changed, never the one picked.
+        var clock = new HeldTimers();
+        var service = Applying(Laptop, Monitor);
+        service.GetCurrentMode(Monitor.DeviceName).Returns(At165);
+        using var vm = await WaitingToBeKept(service, clock);
+        vm.SelectedDisplay = Monitor;
+        await vm.InitializationComplete;
+
+        Seconds(clock, 15);
+        await vm.InitializationComplete;   // the revert the last second starts
+
+        service.Received(1).TryApplyMode(Laptop.DeviceName, 1920, 1080, 60, out Arg.Any<string>());
+        service.DidNotReceive().TryApplyMode(Monitor.DeviceName, Arg.Any<int>(), Arg.Any<int>(), Arg.Any<int>(),
+            out Arg.Any<string>());
+        Assert.False(vm.IsAwaitingConfirm);
+        Assert.Equal("No confirmation — reverted to the previous display mode.", vm.StatusMessage);
+    }
+
+    [Fact]
+    public async Task WhenTheCountdownRunsOut_ARevertThatFails_SaysHowToRecover()
+    {
+        var clock = new HeldTimers();
+        var changes = 0;
+        var service = Applying(Laptop);
+        service.TryApplyMode(Arg.Any<string>(), Arg.Any<int>(), Arg.Any<int>(), Arg.Any<int>(), out Arg.Any<string>())
+               .Returns(call =>
+               {
+                   var revert = Interlocked.Increment(ref changes) == 2;
+                   call[4] = revert ? "The display driver rejected the mode." : "";
+                   return !revert;
+               });
+        using var vm = await WaitingToBeKept(service, clock);
+
+        Seconds(clock, 15);
+        await vm.InitializationComplete;
+
+        Assert.StartsWith("Couldn't restore the previous display mode.", vm.StatusMessage, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task AfterKeep_ASecondStillOnItsWay_PutsNothingBack()
+    {
+        var clock = new HeldTimers();
+        var service = Applying(Laptop);
+        using var vm = await WaitingToBeKept(service, clock);
+
+        vm.KeepSettingsCommand.Execute(null);
+        Seconds(clock, 15);   // ticks that were already on their way to the UI thread when Keep stopped the clock
+        await vm.InitializationComplete;
+
+        // The apply alone.
+        service.Received(1).TryApplyMode(Arg.Any<string>(), Arg.Any<int>(), Arg.Any<int>(), Arg.Any<int>(),
+                                         out Arg.Any<string>());
+        Assert.Equal("Display set to 1920 × 1080 @ 144 Hz.", vm.StatusMessage);
+    }
+
+    [Fact]
+    public async Task AfterASecondApply_TheFirstOnesSecondsDoNotCount()
+    {
+        var clock = new HeldTimers();
+        using var vm = await WaitingToBeKept(Applying(Laptop), clock);
+        vm.KeepSettingsCommand.Execute(null);
+        vm.SelectedMode = At60;
+        await vm.ApplyCommand.ExecuteAsync(null);
+        Assert.True(vm.IsAwaitingConfirm);   // the premise: a second countdown
+
+        clock.FireAll();   // a second from each: the first Apply's stopped timer and the second's
+
+        Assert.Equal(14, vm.RevertCountdown);
     }
 
     [Fact]

@@ -27,6 +27,17 @@ namespace SysManager.Services;
 /// </summary>
 public sealed class LegacyPanelService
 {
+    private readonly Action<ProcessStartInfo> _start;
+
+    /// <summary>The app's service, which starts each applet through the shell.</summary>
+    public LegacyPanelService() : this(psi => Process.Start(psi)?.Dispose()) { }
+
+    /// <summary>
+    /// Starts each applet through <paramref name="start"/>, so a test sees what would be started without opening
+    /// it. No test reached the tab before (#2741).
+    /// </summary>
+    internal LegacyPanelService(Action<ProcessStartInfo> start) => _start = start;
+
     /// <summary>The fixed catalog of classic applets, grouped logically by order.</summary>
     public static IReadOnlyList<LegacyPanel> Panels { get; } =
     [
@@ -67,7 +78,7 @@ public sealed class LegacyPanelService
                 Arguments = panel.Arguments,
                 UseShellExecute = true
             };
-            Process.Start(psi)?.Dispose();
+            _start(psi);
             Log.Information("LegacyPanel: opened {Name}", panel.Name);
             return true;
         }

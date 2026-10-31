@@ -2,6 +2,7 @@
 // Author: laurentiu021 · https://github.com/laurentiu021/SystemManager
 // License: MIT
 
+using Microsoft.Win32;
 using NSubstitute;
 using SysManager.Helpers;
 using SysManager.Models;
@@ -29,7 +30,7 @@ public class WingetQueryFailureTests
     private const int NothingMatched = unchecked((int)0x8A150014);         // NO_APPLICATIONS_FOUND, measured
 
     /// <summary>A runner that prints <paramref name="lines"/> as winget output, then exits with the code.</summary>
-    private static IPowerShellRunner WingetThatPrints(int exitCode, params string[] lines)
+    internal static IPowerShellRunner WingetThatPrints(int exitCode, params string[] lines)
     {
         var runner = Substitute.For<IPowerShellRunner>();
         runner.RunProcessAsync("winget", Arg.Any<string>(), Arg.Any<CancellationToken>(), Arg.Any<System.Text.Encoding?>())
@@ -115,9 +116,17 @@ public class WingetQueryFailureTests
     [Fact]
     public async Task InstalledList_WhenTheQueryWorks_StillParsesTheTable()
     {
-        var service = new UninstallerService(WingetThatPrints(0, ListTable), () => false);
+        // Over an empty throwaway uninstall list: the machine's own was read here for the app's details (#2741).
+        var name = @"Software\SysManagerTests\WingetList_" + Guid.NewGuid().ToString("N");
+        using var empty = Registry.CurrentUser.CreateSubKey(name, writable: true);
+        try
+        {
+            var service = new UninstallerService(WingetThatPrints(0, ListTable), () => false,
+                machineRoot: empty, userRoot: empty);
 
-        Assert.Equal("Git.Git", Assert.Single(await service.ListInstalledAsync()).Id);
+            Assert.Equal("Git.Git", Assert.Single(await service.ListInstalledAsync()).Id);
+        }
+        finally { Registry.CurrentUser.DeleteSubKeyTree(name, throwOnMissingSubKey: false); }
     }
 
     // ---------- Bulk Installer: winget search and winget list ----------

@@ -127,6 +127,37 @@ public class PerformanceServiceExtendedTests
             Delegate<Func<Process, bool>>(service, "_trimWorkingSet").Method);
     }
 
+    [Theory]
+    [InlineData("_writeGpu", typeof(PerformanceService), "WriteGpuToRegistry")]
+    [InlineData("_restoreGpu", typeof(PerformanceService), "SetGpuMaxPerformance")]
+    [InlineData("_readGpu", typeof(PerformanceService), "ReadGpuSetting")]
+    [InlineData("_setUiEffects", typeof(PerformanceService), nameof(PerformanceService.SetUiEffects))]
+    [InlineData("_setGameMode", typeof(PerformanceService), nameof(PerformanceService.SetGameMode))]
+    [InlineData("_setXboxGameBar", typeof(PerformanceService), nameof(PerformanceService.SetXboxGameBar))]
+    [InlineData("_presentAdapters", typeof(PerformanceService), "PresentAdapterKeys")]
+    [InlineData("_plansOnThePc", typeof(PerformanceService), "PlansOnThePc")]
+    [InlineData("_isElevated", typeof(Helpers.AdminHelper), nameof(Helpers.AdminHelper.IsElevated))]
+    public void AsTheAppBuildsTheService_EachChangeAndItsUndoGoesToTheRealCall(string field, Type declaring, string method)
+    {
+        // The test constructor makes each of these do nothing, fail or not know unless a test gives its own, so a
+        // public constructor that dropped one would turn that change, or its undo, into a silent no-op with every
+        // test green (#2741). Checked as the test above checks the trim: by the method the delegate points at,
+        // matched on its parameters so an overload cannot stand in for it, and never by calling it.
+        var services = new ServiceCollection();
+        services.ConfigureServices();
+        using var provider = services.BuildServiceProvider();
+        var value = Assert.IsAssignableFrom<Delegate>(typeof(PerformanceService)
+            .GetField(field, BindingFlags.NonPublic | BindingFlags.Instance)!
+            .GetValue(provider.GetRequiredService<PerformanceService>()));
+        var parameters = value.GetType().GetMethod("Invoke")!.GetParameters().Select(p => p.ParameterType).ToArray();
+
+        var expected = declaring.GetMethod(method, BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Static,
+            parameters);
+
+        Assert.NotNull(expected);
+        Assert.Equal(expected, value.Method);
+    }
+
     private static T Delegate<T>(PerformanceService service, string field) where T : Delegate =>
         Assert.IsType<T>(typeof(PerformanceService)
             .GetField(field, BindingFlags.NonPublic | BindingFlags.Instance)!

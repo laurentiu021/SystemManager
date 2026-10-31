@@ -120,6 +120,37 @@ public sealed class AboutUpdateExitTests : IDisposable
     }
 
     [Fact]
+    public async Task Install_StartsTheFileWhileItHoldsItAgainstWrites()
+    {
+        // The file is hashed and started on one handle that lets others read it but not write it, so nothing can
+        // change its bytes between the check and the start, and the start can still read it (#1395). The tests
+        // that stood for this opened handles of their own and never ran Install (#2741).
+        bool? readable = null, writable = null;
+        var vm = await ReadyToInstallAsync(launch: start =>
+        {
+            readable = Opens(start.FileName, FileAccess.Read);
+            writable = Opens(start.FileName, FileAccess.Write);
+        });
+        using var dialog = new DialogAnswer(confirm: true);
+
+        await vm.InstallUpdateCommand.ExecuteAsync(null);
+
+        Assert.True(readable);
+        Assert.False(writable);
+    }
+
+    /// <summary>Whether <paramref name="path"/> opens for <paramref name="access"/>, sharing everything.</summary>
+    private static bool Opens(string path, FileAccess access)
+    {
+        try
+        {
+            using var _ = new FileStream(path, FileMode.Open, access, FileShare.ReadWrite | FileShare.Delete);
+            return true;
+        }
+        catch (IOException) { return false; }
+    }
+
+    [Fact]
     public async Task Install_WhileSomethingRuns_NamesItInTheQuestion()
     {
         var vm = await ReadyToInstallAsync();

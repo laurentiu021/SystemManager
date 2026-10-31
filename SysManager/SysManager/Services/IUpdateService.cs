@@ -54,13 +54,9 @@ public interface IUpdateService
         IProgress<(long bytesRead, long? total)>? progress = null,
         CancellationToken ct = default);
 
-    /// <summary>Verifies a downloaded file at <paramref name="filePath"/> against the release's published hash.</summary>
-    Task<(bool Verified, string? ExpectedHash, string? ActualHash)> VerifyHashAsync(
-        UpdateService.ReleaseInfo rel, string filePath, CancellationToken ct = default);
-
     /// <summary>
-    /// Verifies against an already-opened stream, so the caller can hold the handle across
-    /// <c>Process.Start</c> and close the TOCTOU window the path-based overload leaves open.
+    /// Verifies a downloaded file against the release's published hash, on a stream the caller opened, so the
+    /// caller can hold the handle across <c>Process.Start</c> and nothing can change the file in between.
     /// </summary>
     Task<(bool Verified, string? ExpectedHash, string? ActualHash)> VerifyHashAsync(
         UpdateService.ReleaseInfo rel, Stream fileStream, CancellationToken ct = default);

@@ -97,6 +97,107 @@ public sealed class WindowsUpdatePolicyServiceTests : IDisposable
         Assert.False(p.DeferFeatureUpdates);
         Assert.False(p.PauseActive);
         Assert.Equal(0, p.FeatureDeferDays);
+        using var settings = _root.OpenSubKey(WindowsUpdatePolicyService.SettingsPath)!;
+        Assert.Empty(settings.GetValueNames());
+    }
+
+    // ── The pause Windows applies (#2726) ──
+    //
+    // The pause went into the policy key as start and end times. The policy has only a start date, and a pause there
+    // lasts 35 days from it, so the pause the tab showed was not the one Windows applied.
+
+    private const string PolicyKey = @"SOFTWARE\Policies\Microsoft\Windows\WindowsUpdate";
+
+    [Fact]
+    public void PauseUpdates_WritesTheSettingsAppsPause_InTheFormItWritesIt()
+    {
+        Assert.True(_svc.PauseUpdates(7, Now));
+
+        var start = Now.ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:ssZ", System.Globalization.CultureInfo.InvariantCulture);
+        var end = Now.ToUniversalTime().AddDays(7).ToString("yyyy-MM-ddTHH:mm:ssZ", System.Globalization.CultureInfo.InvariantCulture);
+        using var settings = _root.OpenSubKey(WindowsUpdatePolicyService.SettingsPath)!;
+        Assert.Equal(
+            new Dictionary<string, string?>
+            {
+                ["PauseUpdatesStartTime"] = start,
+                ["PauseFeatureUpdatesStartTime"] = start,
+                ["PauseQualityUpdatesStartTime"] = start,
+                ["PauseUpdatesExpiryTime"] = end,
+                ["PauseFeatureUpdatesEndTime"] = end,
+                ["PauseQualityUpdatesEndTime"] = end,
+            },
+            settings.GetValueNames().ToDictionary(name => name, name => settings.GetValue(name) as string));
+        Assert.Equal(RegistryValueKind.String, settings.GetValueKind("PauseUpdatesExpiryTime"));
+
+        // Nothing in the policy key, where a start date would pause updates for 35 days whatever was chosen.
+        using var policy = _root.OpenSubKey(PolicyKey);
+        Assert.True(policy is null || policy.GetValueNames().Length == 0,
+            "the pause wrote into the policy key: " + string.Join(", ", policy?.GetValueNames() ?? []));
+    }
+
+    [Fact]
+    public void PauseUpdates_ClearsThePauseAnEarlierVersionLeftInThePolicy_AndEndsWhenChosen()
+    {
+        using (var policy = _root.CreateSubKey(PolicyKey, writable: true)!)
+        {
+            policy.SetValue("DeferFeatureUpdates", 1, RegistryValueKind.DWord);
+            foreach (var name in WindowsUpdatePolicyService.PolicyPauseValues)
+                policy.SetValue(name, Now.AddDays(-1).ToString("o", System.Globalization.CultureInfo.InvariantCulture));
+        }
+
+        Assert.True(_svc.PauseUpdates(3, Now));
+
+        using (var policy = _root.OpenSubKey(PolicyKey)!)
+            Assert.Equal(["DeferFeatureUpdates"], policy.GetValueNames());
+        Assert.Equal(Now.AddDays(3), _svc.Read(Now)?.PauseUntil);
+    }
+
+    [Fact]
+    public void Read_AStartDateInThePolicy_PausesForThirtyFiveDaysFromIt()
+    {
+        // How Group Policy writes it: a yyyy-mm-dd date, and the pause lasts 35 days from it.
+        using (var policy = _root.CreateSubKey(PolicyKey, writable: true)!)
+            policy.SetValue("PauseQualityUpdatesStartTime", "2026-06-20");
+
+        Assert.Equal(new DateTime(2026, 7, 25), _svc.Read(Now)?.PauseUntil);
+        Assert.False(_svc.Read(new DateTime(2026, 7, 25, 0, 0, 1, DateTimeKind.Local))?.PauseActive);
+    }
+
+    [Fact]
+    public void Read_TheStartTimeAnEarlierVersionWrote_IsReadByItsDate()
+    {
+        // A 7-day pause from an earlier version: its start and end times in the policy key. Windows reads no end
+        // there, so the tab now says what the start date allows, not the end that is no policy.
+        using (var policy = _root.CreateSubKey(PolicyKey, writable: true)!)
+        {
+            policy.SetValue("PauseFeatureUpdatesStartTime", "2026-06-24T12:00:00.0000000+03:00");
+            policy.SetValue("PauseFeatureUpdatesEndTime", "2026-07-01T12:00:00.0000000+03:00");
+        }
+
+        Assert.Equal(new DateTime(2026, 7, 29), _svc.Read(Now)?.PauseUntil);
+    }
+
+    [Theory]
+    [InlineData("2026-07-01T09:00:00Z")]
+    [InlineData("2026-07-01T12:00:00.0000000+03:00")]
+    public void Read_ASettingsPause_IsReadInAnyIsoForm(string expiry)
+    {
+        // Another tool, or another Windows, may write the same value another way.
+        using (var settings = _root.CreateSubKey(WindowsUpdatePolicyService.SettingsPath, writable: true)!)
+            settings.SetValue("PauseUpdatesExpiryTime", expiry);
+
+        Assert.Equal(new DateTime(2026, 7, 1, 9, 0, 0, DateTimeKind.Utc).ToLocalTime(), _svc.Read(Now)?.PauseUntil);
+    }
+
+    [Fact]
+    public void Read_ASettingsPauseThatIsNoTime_IsNoPause()
+    {
+        using (var settings = _root.CreateSubKey(WindowsUpdatePolicyService.SettingsPath, writable: true)!)
+            settings.SetValue("PauseUpdatesExpiryTime", "not a time");
+
+        var p = _svc.Read(Now);
+        Assert.NotNull(p);
+        Assert.False(p.PauseActive);
     }
 
     // ── A policy that could not be read (#2504) ──

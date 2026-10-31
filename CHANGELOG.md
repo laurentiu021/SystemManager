@@ -10,6 +10,21 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.136.48] - 2026-10-31
+
+**Pausing Windows updates for a number of days now pauses them for that long, the way Windows
+Settings does.**
+
+### Fixed
+- Windows Update's Pause wrote its pause into the Windows Update policy, in a form the policy
+  does not define. The policy has only a start date, and a pause there lasts 35 days from it
+  whatever length you chose, so either nothing was paused, or updates stayed paused for up to 35
+  days while the tab said they had resumed. The pause now uses the same values as Pause updates
+  in Windows Settings: it ends when you chose, and Windows Settings shows it and can resume it
+  early. Restore default, and the next pause, also clear a pause an earlier version left in the
+  policy, and the tab shows one set there as lasting 35 days from its start. This was there since
+  the pause was added in 1.30.0.
+
 ## [1.136.47] - 2026-10-31
 
 **Windows Update no longer lists, ticks and installs an update you hid.**

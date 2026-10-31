@@ -612,7 +612,9 @@ Key services:
   (scan, select, install) with progress reporting, behind `IWindowsUpdateService`; backs
   `WindowsUpdateViewModel`, and the Dashboard's Check Windows Updates action, which only scans.
 - `WindowsUpdatePolicyService` — reads/writes the documented Windows Update
-  deferral policy keys (defer feature updates, bounded pause, restore default).
+  deferral policy (defer feature updates, restore default), and a bounded pause through the Settings app's own
+  pause values under `SOFTWARE\Microsoft\WindowsUpdate\UX\Settings`: the policy's pause is a start date that
+  lasts 35 days whatever length was chosen (#2726). `Read` shows a start date in the policy as 35 days from it.
   Injectable registry root for tests; deliberately offers no permanent
   disable-updates option, only a bounded pause. `Read` returns null for a read Windows refused,
   which the tab reports as not known (`WindowsUpdateViewModel.DescribePolicy`); no policy key at all

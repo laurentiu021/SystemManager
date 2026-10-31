@@ -471,6 +471,12 @@ public sealed partial class PerformanceViewModel : ElevatedViewModelBase
         // Taken once, before the question: while it is open, Undo Changes can put Performance Mode back and this tab
         // reads its settings again, which sets the toggles to what is on the PC (#1525). What was asked for stands.
         var plan = SelectedPlan;
+        // Another plan is active, and none of the three is chosen yet.
+        if (plan == OtherPlan)
+        {
+            StatusMessage = "Choose Balanced, High Performance or Ultimate Performance first.";
+            return;
+        }
         if (plan == GetCurrentPlanKey())
         {
             StatusMessage = "Power plan is already set to the selected option.";
@@ -1094,12 +1100,17 @@ public sealed partial class PerformanceViewModel : ElevatedViewModelBase
         pluggedIn == onBattery ? $"{pluggedIn}%" : $"{pluggedIn}% plugged in, {onBattery}% on battery";
 
     /// <summary>
-    /// Which of the three plan options is shown as selected. GUID first: the plan's display name is
-    /// user-editable and localized, so a custom plan named "Ultimate Battery Saver" (a copy of
-    /// Balanced) selected Ultimate, and the real Ultimate plan on non-English Windows fell through to
-    /// Balanced. The name check now only catches a duplicated Ultimate scheme — which keeps the name
-    /// but gets a fresh GUID — and only once every stock GUID has been ruled out.
+    /// Which of the three plan options is shown as selected, or <see cref="OtherPlan"/>, which selects none. GUID
+    /// first: the plan's display name is user-editable and localized, so a custom plan named "Ultimate Battery Saver"
+    /// (a copy of Balanced) selected Ultimate, and the real Ultimate plan on non-English Windows fell through to
+    /// Balanced. The name check now only catches a duplicated Ultimate scheme — which keeps the name but gets a fresh
+    /// GUID — and only once every stock GUID has been ruled out.
     /// </summary>
+    /// <remarks>
+    /// Any other plan read as Balanced: Power saver, an OEM plan, one the user made, and one that could not be read.
+    /// Balanced was ticked under the real plan's name, and Apply on Balanced answered that it was set already, so such a
+    /// PC could not get to Balanced from this tab (#2717).
+    /// </remarks>
     private string GetCurrentPlanKey()
     {
         if (MatchesPlan(PowerPlans.UltimatePerformance)) return "ultimate";
@@ -1107,8 +1118,11 @@ public sealed partial class PerformanceViewModel : ElevatedViewModelBase
         if (MatchesPlan(PowerPlans.Balanced)) return "balanced";
         return Profile.ActivePlanName.Contains("Ultimate", StringComparison.OrdinalIgnoreCase)
             ? "ultimate"
-            : "balanced";
+            : OtherPlan;
     }
+
+    /// <summary>The plan key of a plan that is none of the three options: none of them is selected.</summary>
+    internal const string OtherPlan = "other";
 
     private bool MatchesPlan(string planGuid) =>
         Profile.ActivePlanGuid.Contains(planGuid, StringComparison.OrdinalIgnoreCase);

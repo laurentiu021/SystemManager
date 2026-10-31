@@ -2047,7 +2047,9 @@ offers, "rate us" prompts:
 - **Per-tweak Apply buttons** — each setting is independent. Applying one leaves the switches you
   changed in the others as you set them, ready for their own Apply
 - **Power Plan**: Balanced / High Performance / Ultimate Performance — Ultimate is switched on in any
-  Windows display language, and reported as failed rather than set when Windows does not provide it
+  Windows display language, and reported as failed rather than set when Windows does not provide it.
+  Another active plan, Power saver or one from your PC's maker, ticks none of the three, and any of
+  them can be applied from it
 - **Visual Effects**: reduce animations via P/Invoke, instantly and kept past a sign-out or restart
 - **Game Mode**: enable/disable via registry, read from the value the Settings switch writes, so the
   tab and Windows Settings agree

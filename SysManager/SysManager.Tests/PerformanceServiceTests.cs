@@ -306,6 +306,7 @@ public class PerformanceServiceTests : IDisposable
     [InlineData("{}")]                                                             // no GUID
     [InlineData("{\"PlanGuid\":null}")]
     [InlineData("{\"PlanGuid\":\"3ff9831b-6f80-4830-8178-736cd4229e7b /delete\"}")]    // more than a GUID
+    [InlineData("{\"PlanGuid\":\"3ff9831b-6f80-4830-8178-736cd4229e7b\\n\"}")]     // white space around it (#2741)
     [InlineData("{\"PlanGuid\":\"3ff9831b-6f80-4830-8178-736cd4229e7b\",\"PlanGuid\":\"5c1f9e2a-7b3d-4e8f-9a6c-1d2e3f4a5b6c\"}")]
     public async Task EnsureUltimatePerformancePlan_WithARecordThatCannotBeUsed_MakesACopy_AndKeepsThatOne(string record)
     {
@@ -529,6 +530,8 @@ public class PerformanceServiceTests : IDisposable
 
     [Theory]
     [InlineData("not-a-guid", "Balanced", 5, null)]
+    [InlineData("381b4222-f694-41f0-9685-ff5bb260df2e\n", "Balanced", 5, null)]   // white space around it (#2741)
+    [InlineData(" 381b4222-f694-41f0-9685-ff5bb260df2e", "Balanced", 5, null)]
     [InlineData("381b4222-f694-41f0-9685-ff5bb260df2e", "", 5, null)]
     [InlineData("381b4222-f694-41f0-9685-ff5bb260df2e", "Balanced\nSpoofed", 5, null)]
     [InlineData("381b4222-f694-41f0-9685-ff5bb260df2e", "Balanced\u202ESpoofed", 5, null)]
@@ -586,6 +589,44 @@ public class PerformanceServiceTests : IDisposable
 
         await Assert.ThrowsAsync<InvalidOperationException>(
             () => service.SetActivePlanAsync(PerformanceService.BalancedGuid));
+    }
+
+    // ── The plan powercfg is handed (#2741) ──
+    // Game mode's crash recovery reads this GUID back from a file in the user's profile, and the check here is the only
+    // one on it before it reaches powercfg's command line.
+
+    [Theory]
+    [InlineData("381b4222-f694-41f0-9685-ff5bb260df2e & calc")]
+    [InlineData("381b4222-f694-41f0-9685-ff5bb260df2e\n")]
+    [InlineData("{381b4222-f694-41f0-9685-ff5bb260df2e}")]
+    [InlineData("381b4222f69441f09685ff5bb260df2e")]
+    [InlineData("SCHEME_BALANCED")]
+    [InlineData("")]
+    [InlineData(" 381b4222-f694-41f0-9685-ff5bb260df2e")]
+    public async Task SetActivePlan_RefusesAnythingButACanonicalGuid_BeforeRunningPowercfg(string guid)
+    {
+        var runner = Substitute.For<IPowerShellRunner>();
+        using var service = NewService(runner);
+
+        await Assert.ThrowsAsync<ArgumentException>(() => service.SetActivePlanAsync(guid));
+
+        Assert.Empty(runner.ReceivedCalls());
+    }
+
+    [Fact]
+    public async Task SetActivePlan_WithACanonicalGuid_HandsItToPowercfg()
+    {
+        var runner = Substitute.For<IPowerShellRunner>();
+        runner.RunProcessAsync(Arg.Any<string>(), Arg.Any<string>(), Arg.Any<CancellationToken>(),
+                Arg.Any<System.Text.Encoding?>())
+            .Returns(0);
+        using var service = NewService(runner);
+
+        await service.SetActivePlanAsync(PerformanceService.BalancedGuid.ToUpperInvariant());
+
+        // As powercfg prints a plan, whatever case it was recorded in.
+        await runner.Received(1).RunProcessAsync("powercfg.exe", $"/setactive {PerformanceService.BalancedGuid}",
+            Arg.Any<CancellationToken>(), Arg.Any<System.Text.Encoding?>());
     }
 
     [Fact]

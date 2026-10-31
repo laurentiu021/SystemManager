@@ -1292,6 +1292,39 @@ public class GamingProfileServiceTests
         finally { DeleteStore(path); }
     }
 
+    // ── The plan recovery reads back from the record (#2741) ──────────────────────────────────────
+    // The record is a file in the user's profile, and the plan in it goes to powercfg's command line. One that is not
+    // a canonical GUID is named as not put back, and powercfg never runs.
+
+    [Theory]
+    [InlineData("381b4222-f694-41f0-9685-ff5bb260df2e & calc")]
+    [InlineData("381b4222-f694-41f0-9685-ff5bb260df2e\n")]
+    [InlineData("{381b4222-f694-41f0-9685-ff5bb260df2e}")]
+    [InlineData("SCHEME_BALANCED")]
+    public async Task RecoverPendingAsync_WithAPlanInTheRecordThatIsNotACanonicalGuid_RunsNoPowercfg(string recorded)
+    {
+        var path = NewStorePath();
+        try
+        {
+            File.WriteAllText(path, SerializePendingStore(new GamingProfileStore
+            {
+                LastConfig = GamingProfile.Default,
+                ActiveSession = new GamingSessionRecord(
+                    new GamingProfile { UltimatePerformancePlan = true },
+                    new GamingSnapshot { OriginalPowerPlanGuid = recorded }),
+            }));
+            var runner = Substitute.For<IPowerShellRunner>();
+            var svc = StoreOnlyService(path, runner: runner);
+
+            var result = await svc.RecoverPendingAsync();
+
+            Assert.Equal(["Ultimate Performance power plan"], result.NotRestored);
+            Assert.DoesNotContain(runner.ReceivedCalls(),
+                c => c.GetMethodInfo().Name == nameof(IPowerShellRunner.RunProcessAsync));
+        }
+        finally { DeleteStore(path); }
+    }
+
     // ── The record of what game mode changed: written first, never written over (#2711) ──────────
     // A session a crash left on was written over by the next Start, which read its changes as the starting point, and
     // the record of a new session was written only once every step had run, so closing while they ran left nothing to

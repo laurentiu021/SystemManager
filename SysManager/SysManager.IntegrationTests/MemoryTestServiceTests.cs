@@ -16,7 +16,7 @@ public class MemoryTestServiceTests
         var summary = await svc.CheckErrorLogsAsync();
         Assert.NotNull(summary);
         Assert.True(summary.WheaMemoryErrors >= 0);
-        Assert.True(summary.MemoryDiagnosticResults >= 0);
+        Assert.True(summary.MemoryDiagnosticErrors >= 0);
     }
 
     [Fact]

@@ -30,7 +30,7 @@ public class SystemHealthViewModelExtendedTests
         var vm = new SystemHealthViewModel(new SystemInfoService(), new DiskHealthService(), new MemoryTestService(), new FixedDriveService(), new PowerShellRunner(), new BiosService());
         Assert.Empty(vm.DiskHealth);
         Assert.Equal(0, vm.WheaMemoryErrors);
-        Assert.Equal(0, vm.MemoryDiagnosticResults);
+        Assert.Equal(0, vm.MemoryDiagnosticErrors);
         Assert.False(string.IsNullOrWhiteSpace(vm.MemoryHealthVerdict));
         Assert.Contains(vm.MemoryHealthColorHex, StatusColors.AllBrushKeys);
     }

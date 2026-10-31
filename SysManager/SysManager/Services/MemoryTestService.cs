@@ -15,10 +15,17 @@ namespace SysManager.Services;
 /// </summary>
 public sealed class MemoryTestService
 {
+    /// <summary>What the last 30 days of the System log say about the RAM.</summary>
+    /// <param name="WheaMemoryErrors">WHEA errors that the manifest gives to memory.</param>
+    /// <param name="MemoryDiagnosticErrors">Windows Memory Diagnostic results that found errors.</param>
+    /// <param name="LastError">When the newest of them was logged.</param>
     public sealed record MemoryErrorSummary(
         int WheaMemoryErrors,
-        int MemoryDiagnosticResults,
+        int MemoryDiagnosticErrors,
         DateTime? LastError);
+
+    private const string Query =
+        $"*[System[Provider[@Name='{MemoryEvents.WheaProvider}' or @Name='{MemoryEvents.DiagnosticProvider}']]]";
 
     // "System" everywhere but a test, which names a log that does not exist. That is the one way to make the
     // real reader fail on demand, and the failure path is the one that was wrong (#2479).
@@ -42,57 +49,52 @@ public sealed class MemoryTestService
     /// </remarks>
     public async Task<MemoryErrorSummary> CheckErrorLogsAsync(CancellationToken ct = default)
     {
-        return await Task.Run(() =>
+        return await Task.Run(() => Summarize(ReadNewestFirst(ct), DateTime.Now.AddDays(-30)), ct).ConfigureAwait(false);
+    }
+
+    /// <summary>The two providers' records, newest first, each disposed as the next one is read.</summary>
+    private IEnumerable<(string? Provider, int Id, DateTime? Created)> ReadNewestFirst(CancellationToken ct)
+    {
+        using var reader = new System.Diagnostics.Eventing.Reader.EventLogReader(
+            new System.Diagnostics.Eventing.Reader.EventLogQuery(_logName,
+                System.Diagnostics.Eventing.Reader.PathType.LogName, Query)
+            { ReverseDirection = true });
+
+        // Check cancellation BEFORE reading so a record read at the moment of cancellation isn't left to the GC; the
+        // read result is always wrapped in using(rec) below.
+        while (!ct.IsCancellationRequested && reader.ReadEvent() is { } rec)
         {
-            int wheaCount = 0, diagCount = 0;
-            DateTime? lastError = null;
+            using (rec)
+                yield return (rec.ProviderName, rec.Id, rec.TimeCreated);
+        }
+    }
 
-            using var reader = new System.Diagnostics.Eventing.Reader.EventLogReader(
-                new System.Diagnostics.Eventing.Reader.EventLogQuery(_logName,
-                    System.Diagnostics.Eventing.Reader.PathType.LogName,
-                    "*[System[Provider[@Name='Microsoft-Windows-WHEA-Logger' or @Name='Microsoft-Windows-MemoryDiagnostics-Results']]]")
-                { ReverseDirection = true });
+    /// <summary>
+    /// Counts the memory errors among <paramref name="newestFirst"/> that were logged since <paramref name="since"/>,
+    /// by <see cref="MemoryEvents"/>' IDs.
+    /// </summary>
+    /// <remarks>
+    /// The WHEA IDs counted were 17 to 20, which are PCI Express and processor errors, and the one Windows Memory
+    /// Diagnostic result counted was 1201, a test that found no errors, while one that found errors was not (#2715).
+    /// </remarks>
+    internal static MemoryErrorSummary Summarize(
+        IEnumerable<(string? Provider, int Id, DateTime? Created)> newestFirst, DateTime since)
+    {
+        int whea = 0, diagnostic = 0;
+        DateTime? lastError = null;
+        foreach (var (provider, id, created) in newestFirst)
+        {
+            if (created < since) break;
 
-            var cutoff = DateTime.Now.AddDays(-30);
-            // Check cancellation BEFORE reading so a record read at the moment of
-            // cancellation isn't left to the GC; the read result is always wrapped
-            // in using(rec) below.
-            while (!ct.IsCancellationRequested && reader.ReadEvent() is { } rec)
-            {
-                using (rec)
-                {
-                    if (rec.TimeCreated.HasValue && rec.TimeCreated.Value < cutoff) break;
+            if (MemoryEvents.IsWheaMemoryError(provider, id)) whea++;
+            else if (MemoryEvents.IsDiagnosticError(provider, id)) diagnostic++;
+            else continue;
 
-                    var provider = rec.ProviderName ?? "";
-                    bool counted = false;
-                    if (provider.Contains("WHEA"))
-                    {
-                        // Memory-related WHEA events are ID 17 / 18 / 19 / 20 typically
-                        if (rec.Id == 17 || rec.Id == 18 || rec.Id == 19 || rec.Id == 20)
-                        {
-                            wheaCount++;
-                            counted = true;
-                        }
-                    }
-                    else if (provider.Contains("MemoryDiagnostics"))
-                    {
-                        // 1201 = errors detected. 1101 = test passed (no errors), which
-                        // must NOT count as a memory error (previously any ID counted,
-                        // turning a clean test into a false warning).
-                        if (rec.Id == 1201)
-                        {
-                            diagCount++;
-                            counted = true;
-                        }
-                    }
-                    // Only advance lastError for records that actually count as errors.
-                    if (counted && rec.TimeCreated.HasValue && (lastError is null || rec.TimeCreated.Value > lastError))
-                        lastError = rec.TimeCreated.Value;
-                }
-            }
+            // Only advance lastError for records that actually count as errors.
+            if (created.HasValue && (lastError is null || created > lastError)) lastError = created;
+        }
 
-            return new MemoryErrorSummary(wheaCount, diagCount, lastError);
-        }, ct).ConfigureAwait(false);
+        return new MemoryErrorSummary(whea, diagnostic, lastError);
     }
 
     /// <summary>

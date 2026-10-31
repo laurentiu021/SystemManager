@@ -613,6 +613,11 @@ Key services:
   alike (#2866). `HealthPercent` stays the life-left gauge on System Health's card.
 - `MemoryTestService` — scans WHEA / MemoryDiagnostics events. A log it cannot read is thrown,
   never returned as zero errors, so the Dashboard and System Health can say the check did not run.
+  `Summarize` counts the records by `MemoryEvents`' IDs, and stops at the first one older than 30 days.
+- `MemoryEvents` — the RAM's event IDs by the providers' own manifests: the WHEA errors the manifest gives to
+  memory, 22, 23 and 46 to 49, and the memory test's results, 1102 and 1202 found errors, 1101 and 1201 none.
+  `MemoryTestService` counts with them and `EventExplainer` explains the results with them, so the memory check
+  and System Logs cannot disagree (#2715).
 - `EventLogService` + `EventExplainer` — read Windows Event Log and attach
   human-readable explanations. Exposes `LastOutcome` (`Ok` / `AccessDenied` /
   `LogNotFound` / `Unavailable`) alongside the streamed entries, because a refused

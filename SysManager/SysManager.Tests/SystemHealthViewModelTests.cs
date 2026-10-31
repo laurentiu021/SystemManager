@@ -91,10 +91,10 @@ public class SystemHealthViewModelTests
     }
 
     [Fact]
-    public void Constructor_MemoryDiagnosticResults_Zero()
+    public void Constructor_MemoryDiagnosticErrors_Zero()
     {
         var vm = NewVm();
-        Assert.Equal(0, vm.MemoryDiagnosticResults);
+        Assert.Equal(0, vm.MemoryDiagnosticErrors);
     }
 
     [Fact]
@@ -452,5 +452,36 @@ public class SystemHealthViewModelTests
 
         await runner.DidNotReceive().RunProcessAsync("chkdsk.exe", Arg.Any<string>(), Arg.Any<CancellationToken>(),
                                                      Arg.Any<Encoding?>());
+    }
+
+    // ---------- the memory verdict (#2715) ----------
+    // A memory test result that found errors read "Memory diagnostic has run N time(s) recently. Check results." in the
+    // warning colour, and it was counting tests that found none.
+
+    [Fact]
+    public void TheMemoryVerdict_ForATestThatFoundErrors_SaysSo_InTheBadColour()
+    {
+        var (verdict, colour) = SystemHealthViewModel.DescribeMemoryHealth(new MemoryTestService.MemoryErrorSummary(0, 1, null));
+
+        Assert.Equal("The memory test found errors in the last 30 days. Your RAM may be faulty.", verdict);
+        Assert.Equal(StatusColors.Bad, colour);
+    }
+
+    [Fact]
+    public void TheMemoryVerdict_ForMemoryHardwareErrors_SaysToTestTheRam()
+    {
+        var (verdict, colour) = SystemHealthViewModel.DescribeMemoryHealth(new MemoryTestService.MemoryErrorSummary(2, 0, null));
+
+        Assert.Equal("2 memory hardware error event(s) in the last 30 days. Test your RAM.", verdict);
+        Assert.Equal(StatusColors.Bad, colour);
+    }
+
+    [Fact]
+    public void TheMemoryVerdict_WithNoErrors_IsGood()
+    {
+        var (verdict, colour) = SystemHealthViewModel.DescribeMemoryHealth(new MemoryTestService.MemoryErrorSummary(0, 0, null));
+
+        Assert.Equal("No memory errors reported in the last 30 days.", verdict);
+        Assert.Equal(StatusColors.Good, colour);
     }
 }

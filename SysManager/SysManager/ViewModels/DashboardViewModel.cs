@@ -990,9 +990,10 @@ public sealed partial class DashboardViewModel : ElevatedViewModelBase
             return ($"{summary.WheaMemoryErrors} memory hardware error{(summary.WheaMemoryErrors == 1 ? "" : "s")} in 30 days — test your RAM",
                 AlertSeverity.Red);
 
-        if (summary.MemoryDiagnosticResults > 0)
-            return ($"Memory diagnostic ran {summary.MemoryDiagnosticResults} time{(summary.MemoryDiagnosticResults == 1 ? "" : "s")} — check results",
-                AlertSeverity.Yellow);
+        // A result that found errors. This read "Memory diagnostic ran N times — check results" in yellow, counting a
+        // test that found none, while one that found errors left the tile green (#2715).
+        if (summary.MemoryDiagnosticErrors > 0)
+            return ("The memory test found errors — your RAM may be faulty", AlertSeverity.Red);
 
         return ("No memory errors (30 days)", AlertSeverity.Green);
     }

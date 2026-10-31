@@ -56,7 +56,7 @@ public sealed partial class SystemHealthViewModel : ElevatedViewModelBase
 
     // Memory diagnostic summary
     [ObservableProperty] private int _wheaMemoryErrors;
-    [ObservableProperty] private int _memoryDiagnosticResults;
+    [ObservableProperty] private int _memoryDiagnosticErrors;
     [ObservableProperty] private string _memoryHealthVerdict = "Click 'Check memory errors' to inspect.";
     [ObservableProperty] private string _memoryHealthColorHex = StatusColors.Neutral;
 
@@ -233,23 +233,8 @@ public sealed partial class SystemHealthViewModel : ElevatedViewModelBase
         {
             var summary = await _memTest.CheckErrorLogsAsync();
             WheaMemoryErrors = summary.WheaMemoryErrors;
-            MemoryDiagnosticResults = summary.MemoryDiagnosticResults;
-
-            if (summary.WheaMemoryErrors > 0)
-            {
-                MemoryHealthVerdict = $"{summary.WheaMemoryErrors} hardware-error event(s) in the last 30 days. Test your RAM.";
-                MemoryHealthColorHex = StatusColors.Bad;
-            }
-            else if (summary.MemoryDiagnosticResults > 0)
-            {
-                MemoryHealthVerdict = $"Memory diagnostic has run {summary.MemoryDiagnosticResults} time(s) recently. Check results.";
-                MemoryHealthColorHex = StatusColors.Warning;
-            }
-            else
-            {
-                MemoryHealthVerdict = "No memory errors reported in the last 30 days.";
-                MemoryHealthColorHex = StatusColors.Good;
-            }
+            MemoryDiagnosticErrors = summary.MemoryDiagnosticErrors;
+            (MemoryHealthVerdict, MemoryHealthColorHex) = DescribeMemoryHealth(summary);
             StatusMessage = "Memory scan done.";
         }
         // The verdict says the check could not run, in the warning colour. It used to be left as it was, and the
@@ -261,6 +246,22 @@ public sealed partial class SystemHealthViewModel : ElevatedViewModelBase
             StatusMessage = $"CheckMemoryErrors failed: {ex.Message}";
         }
         finally { EndRead(); }
+    }
+
+    /// <summary>The memory check's verdict and its colour for <paramref name="summary"/>.</summary>
+    /// <remarks>
+    /// Worded like <c>DashboardViewModel.ClassifyMemoryHealth</c>. A memory test result that found errors read "Memory
+    /// diagnostic has run N time(s) recently. Check results." in the warning colour, and it was counting a test that
+    /// found none, while one that found errors read "No memory errors" (#2715).
+    /// </remarks>
+    internal static (string Verdict, string ColorHex) DescribeMemoryHealth(MemoryTestService.MemoryErrorSummary summary)
+    {
+        if (summary.WheaMemoryErrors > 0)
+            return ($"{summary.WheaMemoryErrors} memory hardware error event(s) in the last 30 days. Test your RAM.",
+                StatusColors.Bad);
+        if (summary.MemoryDiagnosticErrors > 0)
+            return ("The memory test found errors in the last 30 days. Your RAM may be faulty.", StatusColors.Bad);
+        return ("No memory errors reported in the last 30 days.", StatusColors.Good);
     }
 
     [RelayCommand]

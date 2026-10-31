@@ -246,15 +246,15 @@ public sealed class StartupToggleTests : IDisposable
     /// <summary>An item as the scan builds it, before the lists are read: on, and saying so.</summary>
     private static StartupEntry Scanned(StartupSource source, string valueName = "Probe",
         string registryKey = @"SOFTWARE\Microsoft\Windows\CurrentVersion\Run") => new()
-    {
-        Name = valueName,
-        Command = "probe.exe",
-        Source = source,
-        RegistryKey = registryKey,
-        ValueName = valueName,
-        IsEnabled = true,
-        StatusText = "Enabled"
-    };
+        {
+            Name = valueName,
+            Command = "probe.exe",
+            Source = source,
+            RegistryKey = registryKey,
+            ValueName = valueName,
+            IsEnabled = true,
+            StatusText = "Enabled"
+        };
 
     /// <summary>Writes a 12-byte blob whose first byte is <paramref name="state"/>, as Task Manager does.</summary>
     private void Approve(string hive, string list, string valueName, byte state)

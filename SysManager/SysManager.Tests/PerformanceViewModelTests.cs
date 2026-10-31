@@ -934,7 +934,10 @@ public class PerformanceViewModelTests
         await vm.InitializationComplete;
         vm.Profile = new PerformanceProfile
         {
-            VisualEffectsReduced = false, GameModeEnabled = true, XboxGameBarOn = true, XboxGameDvrOn = true,
+            VisualEffectsReduced = false,
+            GameModeEnabled = true,
+            XboxGameBarOn = true,
+            XboxGameDvrOn = true,
         };
         vm.WantVisualEffectsReduced = true;
         vm.WantGameModeOff = true;

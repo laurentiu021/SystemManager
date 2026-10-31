@@ -22,6 +22,11 @@ public sealed partial class PerformanceProfile : ObservableObject
     [NotifyPropertyChangedFor(nameof(ProfileSummary))]
     private string _activePlanGuid = "";
 
+    /// <summary>The active plan is the copy of the Ultimate Performance scheme SysManager made, whatever its name.</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(ProfileSummary))]
+    private bool _isUltimateCopy;
+
     // ── Visual effects ──
     [ObservableProperty] private bool _visualEffectsReduced;
 
@@ -63,7 +68,8 @@ public sealed partial class PerformanceProfile : ObservableObject
     /// non-English Windows the real Ultimate plan ("Ultimative Leistung", "Rendimiento máximo") was
     /// never recognised at all. The name check now only catches a DUPLICATE of the Ultimate scheme,
     /// which gets a fresh random GUID but keeps the name, and it runs after every GUID has been ruled
-    /// out.
+    /// out. The copy SysManager made is known by the GUID it kept, so it is Ultimate Performance under
+    /// a translated name too (#2717).
     /// </remarks>
     public string ProfileSummary => PlanLabel() ?? ActivePlanName;
 
@@ -72,6 +78,7 @@ public sealed partial class PerformanceProfile : ObservableObject
         if (MatchesPlan(PowerPlans.UltimatePerformance)) return "Ultimate Performance";
         if (MatchesPlan(PowerPlans.HighPerformance)) return "High Performance";
         if (MatchesPlan(PowerPlans.Balanced)) return "Balanced";
+        if (IsUltimateCopy) return "Ultimate Performance";
         // Only reached when the GUID is none of the stock three: a duplicated Ultimate scheme.
         return ActivePlanName.Contains("Ultimate", StringComparison.OrdinalIgnoreCase)
             ? "Ultimate Performance"

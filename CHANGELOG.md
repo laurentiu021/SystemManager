@@ -10,6 +10,21 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.136.40] - 2026-10-31
+
+**Performance Mode no longer adds another copy of the Ultimate Performance plan at every Apply, on
+Windows in a language other than English.**
+
+### Fixed
+- Windows Home and Pro hide the Ultimate Performance plan, so SysManager switches to a copy of it,
+  and Windows names that copy in its display language. Outside English the copy was never found
+  again, so every Apply of Ultimate Performance, and every game mode start with its Ultimate
+  Performance step on, added another identical plan to Power Options, and the tab did not tick
+  Ultimate Performance while the copy was the active plan. SysManager now remembers the copy it
+  made and uses it again for as long as Windows lists it. Copies made by earlier versions stay in
+  Power Options, where they can be deleted. This was there since Performance Mode was added in
+  0.12.0.
+
 ## [1.136.39] - 2026-10-31
 
 **Process Manager no longer stays empty when a running program's file was renamed or moved.**

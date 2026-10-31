@@ -1109,13 +1109,15 @@ public sealed partial class PerformanceViewModel : ElevatedViewModelBase
     /// <remarks>
     /// Any other plan read as Balanced: Power saver, an OEM plan, one the user made, and one that could not be read.
     /// Balanced was ticked under the real plan's name, and Apply on Balanced answered that it was set already, so such a
-    /// PC could not get to Balanced from this tab (#2717).
+    /// PC could not get to Balanced from this tab (#2717). The copy of the Ultimate scheme SysManager made is ticked by
+    /// the GUID it kept, whatever language its name is in, so Apply on Ultimate finds it set rather than making another.
     /// </remarks>
     private string GetCurrentPlanKey()
     {
         if (MatchesPlan(PowerPlans.UltimatePerformance)) return "ultimate";
         if (MatchesPlan(PowerPlans.HighPerformance)) return "high";
         if (MatchesPlan(PowerPlans.Balanced)) return "balanced";
+        if (Profile.IsUltimateCopy) return "ultimate";
         return Profile.ActivePlanName.Contains("Ultimate", StringComparison.OrdinalIgnoreCase)
             ? "ultimate"
             : OtherPlan;

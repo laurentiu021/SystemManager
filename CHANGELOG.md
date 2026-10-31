@@ -10,6 +10,17 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.136.61] - 2026-10-31
+
+**The Uninstaller runs an app's own uninstaller when Windows lists the app twice.**
+
+### Fixed
+- When Windows' list of installed programs held two entries with an app's name, and the first
+  had only a quiet uninstall command, a leftover of an older version say, the Uninstaller kept that
+  quiet command beside the second entry's uninstall command, and the quiet one is the one it runs.
+  It now takes both commands from the entry that has an uninstall command, the one Windows itself
+  lists. This was there since the Uninstaller removed apps through their own uninstallers, in 0.44.0.
+
 ## [1.136.60] - 2026-10-31
 
 **Startup Manager no longer shows an item that runs once at the next start-up as switched off.**

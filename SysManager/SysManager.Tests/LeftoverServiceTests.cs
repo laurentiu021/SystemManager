@@ -3,7 +3,10 @@
 // License: MIT
 
 using System.IO;
+using System.Reflection;
+using Microsoft.Extensions.DependencyInjection;
 using NSubstitute;
+using SysManager.Helpers;
 using SysManager.Models;
 using SysManager.Services;
 
@@ -482,5 +485,41 @@ public sealed class LeftoverServiceTests : IDisposable
         _env.RegisteredComplete = true;
         var pending = Assert.Single(service.LoadPending());
         Assert.Equal("Acme Notes", pending.AppName);
+    }
+
+    // ── As the app builds the service (#2741) ──
+    // The test constructor refuses each removal unless a test gives its own call, so a public constructor that
+    // dropped one would make Remove leftovers remove nothing, with every test green. Checked by the method each
+    // delegate points at, never by calling it.
+
+    [Theory]
+    [InlineData("_recycle", typeof(RecycleBinHelper), nameof(RecycleBinHelper.SendToRecycleBin))]
+    [InlineData("_deleteKey", typeof(LeftoverService), "DeleteCurrentUserKey")]
+    public void AsTheAppBuildsTheService_EachRemovalGoesToTheRealCall(string field, Type declaring, string method)
+    {
+        var services = new ServiceCollection();
+        services.ConfigureServices();
+        using var provider = services.BuildServiceProvider();
+        var service = Assert.IsType<LeftoverService>(provider.GetRequiredService<ILeftoverService>());
+        var value = Assert.IsType<Func<string, bool>>(typeof(LeftoverService)
+            .GetField(field, BindingFlags.NonPublic | BindingFlags.Instance)!.GetValue(service));
+
+        var expected = declaring.GetMethod(method, BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Static,
+            [typeof(string)]);
+
+        Assert.NotNull(expected);
+        Assert.Equal(expected, value.Method);
+    }
+
+    [Fact]
+    public void AsTheAppBuildsTheService_ItWorksOnThisPC()
+    {
+        var services = new ServiceCollection();
+        services.ConfigureServices();
+        using var provider = services.BuildServiceProvider();
+        var service = Assert.IsType<LeftoverService>(provider.GetRequiredService<ILeftoverService>());
+
+        Assert.IsType<SystemLeftoverEnvironment>(typeof(LeftoverService)
+            .GetField("_env", BindingFlags.NonPublic | BindingFlags.Instance)!.GetValue(service));
     }
 }

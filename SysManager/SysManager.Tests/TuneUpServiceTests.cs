@@ -678,6 +678,52 @@ public class TuneUpServiceTests
         Assert.True(Directory.Exists(temp.NewEmptyFolder));      // empty, but made just now
     }
 
+    // ---------- what the sweep cannot delete, and where it must not go (#2741) ----------
+
+    [Fact]
+    public void TheTempSweep_CountsAFileItCannotDelete_AndStillCleansTheRest()
+    {
+        // Open elsewhere with no sharing, Windows refuses the delete as a sharing violation; read-only, as access
+        // denied. Each is an error, and neither stops the sweep.
+        using var temp = new AgedTemp();
+        var open = Aged(Path.Combine(temp.Root, "in-use.tmp"), MonthAgo, MonthAgo);
+        var readOnly = Aged(Path.Combine(temp.Root, "read-only.tmp"), MonthAgo, MonthAgo);
+        File.SetAttributes(readOnly, FileAttributes.ReadOnly);
+        try
+        {
+            TempCleanResult result;
+            using (new FileStream(open, FileMode.Open, FileAccess.Read, FileShare.None))
+                result = TuneUpService.CleanTempFiles([temp.Root], Now, CancellationToken.None);
+
+            Assert.Equal((1, 2), (result.FilesDeleted, result.Errors));
+            Assert.False(File.Exists(temp.Leftover));
+            Assert.True(File.Exists(open));
+            Assert.True(File.Exists(readOnly));
+        }
+        finally { File.SetAttributes(readOnly, FileAttributes.Normal); }
+    }
+
+    [Fact]
+    public void TheTempSweep_DoesNotFollowAJunctionOutOfTheTempFolder()
+    {
+        // A junction needs no rights at all, so anything running as the user can plant one in its own temp folder,
+        // pointing at files the sweep would then delete.
+        var baseDir = Path.Combine(Path.GetTempPath(), "SysManagerTempLink_" + Guid.NewGuid().ToString("N"));
+        var precious = Aged(Path.Combine(baseDir, "outside", "precious.dat"), MonthAgo, MonthAgo);
+        var temp = Path.Combine(baseDir, "temp");
+        Directory.CreateDirectory(temp);
+        var link = Path.Combine(temp, "link");
+        try
+        {
+            Symlinks.RequireJunction(link, Path.GetDirectoryName(precious)!);
+
+            TuneUpService.CleanTempFiles([temp], Now, CancellationToken.None);
+
+            Assert.True(File.Exists(precious), "the sweep followed a junction out of the temp folder");
+        }
+        finally { Symlinks.RemoveLinkThenTree(link, baseDir); }
+    }
+
     [Fact]
     public void TheFilesQuickCleanupMeasures_AreTheFilesTheSweepCleans()
     {

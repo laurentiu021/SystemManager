@@ -85,7 +85,9 @@ public sealed partial class UninstallerService
         // A failed query prints no table, and parsing nothing used to read as "Found 0 installed
         // applications" (#2461).
         WingetFailure.ThrowIfQueryFailed(exitCode);
-        return ParseListTable(captured.ToList());
+        var apps = ParseListTable(captured.ToList());
+        EnrichFromRegistry(apps);
+        return apps;
     }
 
     /// <summary>
@@ -136,15 +138,30 @@ public sealed partial class UninstallerService
             });
         }
 
-        EnrichFromRegistry(apps);
         return apps;
     }
+
+    /// <summary>
+    /// The uninstall lists Windows keeps, in the order an app is looked up in them: the 64-bit list, the 32-bit
+    /// one, then the user's own (per-user installs like Discord, VS Code, etc.).
+    /// </summary>
+    private (Microsoft.Win32.RegistryKey Root, string Path)[] UninstallLists =>
+    [
+        (_machineRoot, UninstallKey),
+        (_machineRoot, UninstallKeyWow64),
+        (_userRoot, UninstallKey),
+    ];
 
     /// <summary>
     /// Reads EstimatedSize and Publisher from the Uninstall registry keys
     /// and enriches the app list. EstimatedSize is in KB.
     /// </summary>
-    internal static void EnrichFromRegistry(List<InstalledApp> apps)
+    /// <remarks>
+    /// Over the service's own roots, as <see cref="IsStillRegistered"/> reads them. It read the machine's hives
+    /// directly, so its tests could only check that it did not throw, and every parse test read the uninstall
+    /// list of the machine running it (#2741).
+    /// </remarks>
+    internal void EnrichFromRegistry(List<InstalledApp> apps)
     {
         if (apps.Count == 0) return;
 
@@ -154,13 +171,11 @@ public sealed partial class UninstallerService
             lookup.TryAdd(app.Name, app);
         }
 
-        var regPaths = new[] { UninstallKey, UninstallKeyWow64 };
-
-        foreach (var regPath in regPaths)
+        foreach (var (root, path) in UninstallLists)
         {
             try
             {
-                using var key = Microsoft.Win32.Registry.LocalMachine.OpenSubKey(regPath);
+                using var key = root.OpenSubKey(path);
                 if (key is null) continue;
 
                 EnrichFromRegistryKey(key, lookup);
@@ -168,16 +183,6 @@ public sealed partial class UninstallerService
             catch (System.Security.SecurityException) { /* skip protected registry key */ }
             catch (UnauthorizedAccessException) { /* skip protected registry key */ }
         }
-
-        // Also scan HKCU (per-user installs like Discord, VS Code, etc.)
-        try
-        {
-            using var hkcuKey = Microsoft.Win32.Registry.CurrentUser.OpenSubKey(UninstallKey);
-            if (hkcuKey is not null)
-                EnrichFromRegistryKey(hkcuKey, lookup);
-        }
-        catch (System.Security.SecurityException) { /* skip protected HKCU key */ }
-        catch (UnauthorizedAccessException) { /* skip protected HKCU key */ }
     }
 
     private static void EnrichFromRegistryKey(
@@ -210,15 +215,22 @@ public sealed partial class UninstallerService
                         app.Publisher = pub;
                 }
 
-                if (string.IsNullOrWhiteSpace(app.UninstallString))
+                // Both commands from the first entry with an uninstall command, which is the entry Windows lists.
+                // They were taken one at a time, so an entry with only a quiet command, a leftover of an older
+                // version say, kept its command beside the uninstall command of the next entry of the same name,
+                // and the quiet one is the one launched (#2741). An entry with only a quiet command is used until
+                // one with an uninstall command turns up.
+                var uninst = sub.GetValue("UninstallString") as string;
+                var quietUninst = sub.GetValue("QuietUninstallString") as string;
+                if (string.IsNullOrWhiteSpace(app.UninstallString) && !string.IsNullOrWhiteSpace(uninst))
                 {
-                    var quietUninst = sub.GetValue("QuietUninstallString") as string;
-                    if (!string.IsNullOrWhiteSpace(quietUninst))
-                        app.QuietUninstallString = quietUninst;
-
-                    var uninst = sub.GetValue("UninstallString") as string;
-                    if (!string.IsNullOrWhiteSpace(uninst))
-                        app.UninstallString = uninst;
+                    app.UninstallString = uninst;
+                    app.QuietUninstallString = string.IsNullOrWhiteSpace(quietUninst) ? "" : quietUninst;
+                }
+                else if (string.IsNullOrWhiteSpace(app.UninstallString) && string.IsNullOrWhiteSpace(app.QuietUninstallString)
+                    && !string.IsNullOrWhiteSpace(quietUninst))
+                {
+                    app.QuietUninstallString = quietUninst;
                 }
 
                 var installLoc = sub.GetValue("InstallLocation") as string;
@@ -353,13 +365,7 @@ public sealed partial class UninstallerService
     /// </remarks>
     public bool IsStillRegistered(InstalledApp app)
     {
-        (Microsoft.Win32.RegistryKey Root, string Path)[] uninstallKeys =
-        [
-            (_machineRoot, UninstallKey),
-            (_machineRoot, UninstallKeyWow64),
-            (_userRoot, UninstallKey),
-        ];
-        foreach (var (root, path) in uninstallKeys)
+        foreach (var (root, path) in UninstallLists)
         {
             try
             {

@@ -608,26 +608,6 @@ public class UninstallerServiceTests
         Assert.Equal(0, app.SizeBytes);
     }
 
-    // ── EnrichFromRegistry ──
-
-    [Fact]
-    public void EnrichFromRegistry_EmptyList_DoesNotThrow()
-    {
-        var ex = Record.Exception(() => UninstallerService.EnrichFromRegistry(new List<InstalledApp>()));
-        Assert.Null(ex);
-    }
-
-    [Fact]
-    public void EnrichFromRegistry_WithApps_DoesNotThrow()
-    {
-        var apps = new List<InstalledApp>
-        {
-            new() { Name = "NonExistentApp12345", Id = "test.id" }
-        };
-        var ex = Record.Exception(() => UninstallerService.EnrichFromRegistry(apps));
-        Assert.Null(ex);
-    }
-
     // ── ParseUninstallCommand ──
 
     [Fact]

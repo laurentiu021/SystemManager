@@ -2,7 +2,6 @@
 // Author: laurentiu021 · https://github.com/laurentiu021/SystemManager
 // License: MIT
 
-using System.Windows;
 using System.Windows.Threading;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
@@ -33,7 +32,8 @@ public sealed partial class DisplayProfileViewModel : ViewModelBase
     protected internal override IRelayCommand? EscapeCancel => IsAwaitingConfirm ? RevertNowCommand : null;
 
     private readonly IDisplayProfileService _service;
-    private DispatcherTimer? _revertTimer;
+    private readonly TimeProvider _clock;
+    private ITimer? _revertTimer;
     private DisplayMode? _previousMode;
     // The display the pending revert belongs to, captured at Apply time. The user can
     // switch SelectedDisplay during the 15 s countdown, so revert must target THIS
@@ -57,6 +57,7 @@ public sealed partial class DisplayProfileViewModel : ViewModelBase
     // first (see OperationCategory.Display).
     private OperationLockService.OperationHandle? _modeChangeLock;
     private const int RevertSeconds = 15;
+    private static readonly TimeSpan CountdownTick = TimeSpan.FromSeconds(1);
 
     public BulkObservableCollection<DisplayDevice> Displays { get; } = new();
     public BulkObservableCollection<DisplayMode> Modes { get; } = new();
@@ -72,9 +73,17 @@ public sealed partial class DisplayProfileViewModel : ViewModelBase
     private bool _isAwaitingConfirm;
     [ObservableProperty] private int _revertCountdown;
 
-    public DisplayProfileViewModel(IDisplayProfileService service)
+    public DisplayProfileViewModel(IDisplayProfileService service) : this(service, TimeProvider.System) { }
+
+    /// <summary>
+    /// The view model with the countdown's clock handed in, so a test lets the 15 seconds run out without waiting
+    /// for them. A dispatcher timer counted them down, which ticks only in the running app, so no test reached the
+    /// revert the countdown ends in (#2741).
+    /// </summary>
+    internal DisplayProfileViewModel(IDisplayProfileService service, TimeProvider clock)
     {
         _service = service;
+        _clock = clock;
         StatusMessage = "Reading displays…";
         _service.DisplaysChanged += OnDisplaysChanged;
         InitializeAsync(() => LoadDisplaysAsync(announce: true));
@@ -232,7 +241,7 @@ public sealed partial class DisplayProfileViewModel : ViewModelBase
 
         // ChangeDisplaySettingsEx can block while the driver re-trains the panel, and
         // GetCurrentMode is a P/Invoke read — run them off the UI thread so the window
-        // (and the auto-revert DispatcherTimer) stays responsive during the switch.
+        // (and the auto-revert countdown) stays responsive during the switch.
         // Capture the device alongside its previous mode so a revert targets THIS
         // display even if the user changes the selection during the countdown.
         // This is the slowest thing the tab does — a panel re-train can take seconds — so it is
@@ -319,16 +328,21 @@ public sealed partial class DisplayProfileViewModel : ViewModelBase
 
         StopRevertTimer();
 
-        // On the application's dispatcher, which is the UI thread this runs on. With none, in headless tests and the
-        // designer, nothing could tick, and the change waits for Keep or Revert now as it does between ticks.
-        if (Application.Current?.Dispatcher is not { } dispatcher) return;
-        _revertTimer = new DispatcherTimer(DispatcherPriority.Background, dispatcher) { Interval = TimeSpan.FromSeconds(1) };
-        _revertTimer.Tick += OnRevertTick;
-        _revertTimer.Start();
+        // Each second on the UI thread, at the priority the dispatcher timer that did this had. A tick names the timer
+        // that sent it, so one already on its way when that timer was stopped, or replaced by the next Apply's, is
+        // dropped, as a stopped dispatcher timer dropped its own. With no Application, in unit tests, a tick runs
+        // where the injected clock fires it.
+        ITimer? timer = null;
+        timer = _clock.CreateTimer(
+            _ => UiThread.Post(() => OnRevertTick(timer), DispatcherPriority.Background), null, CountdownTick, CountdownTick);
+        _revertTimer = timer;
     }
 
-    private void OnRevertTick(object? sender, EventArgs e)
+    private void OnRevertTick(ITimer? from)
     {
+        // From a timer Keep, Revert now or closing stopped, or the next Apply replaced.
+        if (from is null || !ReferenceEquals(from, _revertTimer)) return;
+
         RevertCountdown--;
         if (RevertCountdown > 0)
         {
@@ -416,9 +430,7 @@ public sealed partial class DisplayProfileViewModel : ViewModelBase
 
     private void StopRevertTimer()
     {
-        if (_revertTimer is null) return;
-        _revertTimer.Stop();
-        _revertTimer.Tick -= OnRevertTick;
+        _revertTimer?.Dispose();
         _revertTimer = null;
     }
 

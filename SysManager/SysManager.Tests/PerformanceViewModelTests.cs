@@ -458,6 +458,82 @@ public class PerformanceViewModelTests
         public void Dispose() => undo();
     }
 
+    // ── a plan that is none of the three options (#2717) ──
+    // Every other plan read as Balanced: Balanced was ticked under the real plan's name, and Apply on Balanced said it
+    // was set already, so a PC on Power saver or an OEM plan could not get to Balanced from this tab.
+
+    /// <summary>A runner configuration under which powercfg reports <paramref name="line"/> as the active plan.</summary>
+    private static Action<IPowerShellRunner> ActivePlanIs(string? line) => ps =>
+        ps.RunProcessAsync("powercfg.exe", "/getactivescheme", Arg.Any<CancellationToken>(), Arg.Any<System.Text.Encoding?>())
+          .Returns(_ =>
+          {
+              if (line is not null)
+                  ps.LineReceived += Raise.Event<Action<PowerShellLine>>(PowerShellLine.Output(line));
+              return 0;
+          });
+
+    [Theory]
+    [InlineData("Power Scheme GUID: a1841308-3541-4fab-bc81-f71556f20b4a  (Power saver)")]
+    [InlineData("Power Scheme GUID: 9897998c-92de-4669-853f-b7cd3ecb2790  (AMD Ryzen Balanced)")]
+    [InlineData("Power Scheme GUID: 0d2e9b4f-1a0c-4c6b-8d7e-2f3a4b5c6d7e  (My plan)")]
+    [InlineData(null)]   // the active plan could not be read
+    public async Task APlanThatIsNoneOfTheThree_SelectsNone(string? activePlan)
+    {
+        var vm = NewVm(completeInitialization: true, ActivePlanIs(activePlan));
+        await vm.InitializationComplete;
+
+        Assert.Equal(PerformanceViewModel.OtherPlan, vm.SelectedPlan);
+        Assert.False(vm.IsProcessorStateLocked);
+    }
+
+    [Fact]
+    public async Task AnUltimateCopyNamedInEnglish_StillSelectsUltimate()
+    {
+        var vm = NewVm(completeInitialization: true,
+            ActivePlanIs("Power Scheme GUID: 3ff9831b-6f80-4830-8178-736cd4229e7b  (Ultimate Performance)"));
+        await vm.InitializationComplete;
+
+        Assert.Equal("ultimate", vm.SelectedPlan);
+    }
+
+    [Fact]
+    public async Task Balanced_IsAppliedFromPowerSaver()
+    {
+        IPowerShellRunner? runner = null;
+        var vm = NewVm(completeInitialization: true, ps =>
+        {
+            runner = ps;
+            ActivePlanIs("Power Scheme GUID: a1841308-3541-4fab-bc81-f71556f20b4a  (Power saver)")(ps);
+        });
+        await vm.InitializationComplete;
+        vm.SelectedPlan = "balanced";
+
+        using (AnswerYesWhile(() => { }))
+            await vm.ApplyPowerPlanCommand.ExecuteAsync(null);
+
+        await runner!.Received(1).RunProcessAsync("powercfg.exe", $"/setactive {PerformanceService.BalancedGuid}",
+            Arg.Any<CancellationToken>(), Arg.Any<System.Text.Encoding?>());
+        Assert.Equal("Power plan set to Balanced.", vm.StatusMessage);
+    }
+
+    [Fact]
+    public async Task Apply_WithNoneOfTheThreeChosen_AsksToChooseOne_AndChangesNothing()
+    {
+        IPowerShellRunner? runner = null;
+        var vm = NewVm(completeInitialization: true, ps =>
+        {
+            runner = ps;
+            ActivePlanIs("Power Scheme GUID: a1841308-3541-4fab-bc81-f71556f20b4a  (Power saver)")(ps);
+        });
+        await vm.InitializationComplete;
+
+        await vm.ApplyPowerPlanCommand.ExecuteAsync(null);
+
+        Assert.Equal("Choose Balanced, High Performance or Ultimate Performance first.", vm.StatusMessage);
+        await runner!.DidNotReceive().RunProcessAsync("powercfg.exe", Arg.Is<string>(a => a.StartsWith("/setactive", StringComparison.Ordinal)),
+            Arg.Any<CancellationToken>(), Arg.Any<System.Text.Encoding?>());
+    }
+
     [Fact]
     public async Task ApplyPowerPlan_SwitchesToThePlanItsQuestionAskedAbout()
     {

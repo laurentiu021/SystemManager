@@ -10,6 +10,19 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.136.38] - 2026-10-31
+
+**Performance Mode shows when another power plan is active, and switches to Balanced from it.**
+
+### Fixed
+- Performance Mode showed every power plan other than its three as Balanced: Power saver, a plan
+  from the PC's maker such as "AMD Ryzen Balanced", one you made, and one it could not read.
+  Balanced was ticked under the real plan's name, and pressing Apply on Balanced answered "Power
+  plan is already set to the selected option." and changed nothing, so from such a plan you could
+  not get to Balanced without going through High Performance first. None of the three is ticked
+  for another plan now, and each of them can be applied from it. This was there from the first
+  version.
+
 ## [1.136.37] - 2026-10-31
 
 **Performance Mode puts the processor minimum on battery back too, instead of giving it the

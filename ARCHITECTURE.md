@@ -305,7 +305,9 @@ to scroll.
   `ReadGameModeHoldAsync` tells game mode on in this run, left on by an earlier one, or not known, the rule
   Undo Changes holds Performance Mode back by: the capture of a first baseline refuses for any of them, and
   Restore All and the power plan, visual effects and processor state Apply refuse before their question and
-  again once the system-modification lock is held, which game mode takes to start (#2711).
+  again once the system-modification lock is held, which game mode takes to start (#2711). A plan that is none
+  of the three options is `OtherPlan`, which ticks none of them, so Apply on any of them is not taken as set
+  already (#2717).
 - `PingViewModel` — live ping monitoring with latency chart and health verdict.
 - `TracerouteViewModel` — auto-traceroute + manual trace. Its Start/Stop drive the auto-trace monitor in
   `NetworkSharedState`, which traces the Ping tab's targets plus the host typed here: `TrackAutoTraceHost` gives the

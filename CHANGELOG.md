@@ -39,7 +39,8 @@ that drops during it shows as an error on its card.**
   brought up the app's error dialog, and the HTTP card stayed on "Measuring download…" for
   good. It now shows as an error on the card, and the test can be run again. A test the server
   stopped answering says it timed out, rather than that it was cancelled, on the tab and on the
-  Dashboard's quick speed test.
+  Dashboard's quick speed test. The dropped connection was there since the Speed Test tab got
+  its own page in 0.19.0.
 
 ## [1.136.42] - 2026-10-31
 

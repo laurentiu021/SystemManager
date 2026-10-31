@@ -10,6 +10,19 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.136.51] - 2026-10-31
+
+**A disk that turns unhealthy while SysManager runs is now noticed, by the tray alert and on System
+Health.**
+
+### Fixed
+- SysManager read the disks, and with them each disk's health, once when it started. The tray's
+  check for a failing disk, every minute, and System Health's Windows Health column both used that
+  first reading, so a disk Windows started reporting as Warning or Unhealthy during a long session,
+  which is when the alert is there to help, raised nothing until SysManager was restarted. The
+  disks are now read again every five minutes. This was there since 0.48.26, when the disk list
+  started being kept for the session to spare a WMI query on every poll.
+
 ## [1.136.50] - 2026-10-31
 
 **Disk Analyzer and Duplicate Finder scan a folder you type or paste, and Disk Analyzer copes with

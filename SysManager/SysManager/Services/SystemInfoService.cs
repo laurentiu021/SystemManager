@@ -32,12 +32,27 @@ namespace SysManager.Services;
 /// </remarks>
 public sealed partial class SystemInfoService
 {
-    // Cached static data — queried once, never changes during app lifetime.
+    // Cached static data — queried once, never changes during app lifetime. The disks are the exception: their
+    // list carries each disk's health, which is read again every DiskRefreshInterval.
     private OsInfo? _cachedOs;
     private CpuInfo? _cachedCpuStatic;
     private List<DiskInfo>? _cachedDisks;
     private IReadOnlyList<MemoryModule>? _cachedModules;
     private readonly Lock _cacheLock = new();
+
+    /// <summary>How often the disks, and with them each disk's health, are read again.</summary>
+    /// <remarks>
+    /// They were read once per session, so a disk that turned unhealthy while SysManager ran was never noticed: the
+    /// tray's check every minute and System Health's Windows Health column both read its health from the start
+    /// (#2732). A few minutes keeps the query, a WMI round trip, off the vitals poll.
+    /// </remarks>
+    internal static readonly TimeSpan DiskRefreshInterval = TimeSpan.FromMinutes(5);
+
+    private readonly TimeProvider _time;
+
+    // When the cached disks were read, from _time, and whether a caller is reading them again. Guarded by _cacheLock.
+    private long _disksReadAt;
+    private bool _diskRefreshInFlight;
 
     // Claimed by whichever caller finds the cache still empty, so the four WMI round trips below run on
     // that ONE caller's thread and nobody else's — a concurrent caller sees this already true and skips
@@ -70,6 +85,7 @@ public sealed partial class SystemInfoService
     /// <param name="queryCpuStatic">Replaces the real <c>Win32_Processor</c> read.</param>
     /// <param name="queryDisks">Replaces the real disk enumeration.</param>
     /// <param name="queryMemoryModules">Replaces the real <c>Win32_PhysicalMemory</c> read.</param>
+    /// <param name="time">Times the disks' refresh; the real clock when null.</param>
     /// <remarks>
     /// The CPU baseline is seeded HERE rather than on the first capture, so the first number the user sees is
     /// a real measurement over the interval between construction and that capture. Seeding lazily would have
@@ -80,8 +96,10 @@ public sealed partial class SystemInfoService
                               Func<OsInfo?>? queryOsStatic = null,
                               Func<CpuInfo?>? queryCpuStatic = null,
                               Func<List<DiskInfo>?>? queryDisks = null,
-                              Func<IReadOnlyList<MemoryModule>?>? queryMemoryModules = null)
+                              Func<IReadOnlyList<MemoryModule>?>? queryMemoryModules = null,
+                              TimeProvider? time = null)
     {
+        _time = time ?? TimeProvider.System;
         _systemTimes = systemTimes;
         _physicalMemory = physicalMemory;
         _millisecondsSinceBoot = millisecondsSinceBoot;
@@ -112,6 +130,7 @@ public sealed partial class SystemInfoService
         List<DiskInfo>? disks;
         IReadOnlyList<MemoryModule>? modules;
         bool iAmFilling;
+        bool iAmRefreshingDisks;
 
         lock (_cacheLock)
         {
@@ -127,6 +146,11 @@ public sealed partial class SystemInfoService
             iAmFilling = (osStatic is null || cpuStatic is null || disks is null || modules is null)
                          && !_fillInFlight;
             if (iAmFilling) _fillInFlight = true;
+
+            // The same single claim for reading the disks again, so their health is the one Windows reports now.
+            iAmRefreshingDisks = disks is not null && !_diskRefreshInFlight
+                                 && _time.GetElapsedTime(_disksReadAt) >= DiskRefreshInterval;
+            if (iAmRefreshingDisks) _diskRefreshInFlight = true;
         }
 
         if (iAmFilling)
@@ -145,9 +169,23 @@ public sealed partial class SystemInfoService
             {
                 _cachedOs ??= osStatic;
                 _cachedCpuStatic ??= cpuStatic;
+                if (_cachedDisks is null && disks is not null) _disksReadAt = _time.GetTimestamp();
                 _cachedDisks ??= disks;
                 _cachedModules ??= modules;
                 _fillInFlight = false;
+            }
+        }
+
+        if (iAmRefreshingDisks)
+        {
+            // A fault keeps the disks as last read, and waits the interval like a read that worked, rather than
+            // asking WMI again on every capture.
+            var fresh = _queryDisks();
+            lock (_cacheLock)
+            {
+                if (fresh is not null) _cachedDisks = disks = fresh;
+                _disksReadAt = _time.GetTimestamp();
+                _diskRefreshInFlight = false;
             }
         }
 

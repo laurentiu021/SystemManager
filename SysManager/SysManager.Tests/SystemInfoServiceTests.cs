@@ -273,6 +273,69 @@ public class SystemInfoServiceTests
         Assert.Equal(1, diskQueryCount);
     }
 
+    // ---- the disks' health while SysManager runs (#2732) ----
+
+    /// <summary>A clock that stands still until the test moves it.</summary>
+    private sealed class ManualClock : TimeProvider
+    {
+        private long _ticks;
+
+        public override long TimestampFrequency => TimeSpan.TicksPerSecond;
+
+        public override long GetTimestamp() => Interlocked.Read(ref _ticks);
+
+        public void Advance(TimeSpan by) => Interlocked.Add(ref _ticks, by.Ticks);
+    }
+
+    private static DiskInfo Disk(string health) => new("Disk 0", "SSD", "NVMe", 512, health, "OK", null, null);
+
+    private static SystemInfoService ServiceOverDisks(Func<List<DiskInfo>?> queryDisks, TimeProvider time) => new(
+        Times(At(0, 0, 0)),
+        () => new SystemInfoService.PhysicalMemory(8UL * 1024 * 1024 * 1024, 2UL * 1024 * 1024 * 1024),
+        () => 1234,
+        queryOsStatic: () => new OsInfo("Windows 11", "10.0", "22631", TimeSpan.Zero, "64-bit"),
+        queryCpuStatic: () => new CpuInfo("Test CPU", 8, 16, 3600, 0),
+        queryDisks: queryDisks,
+        queryMemoryModules: () => [],
+        time: time);
+
+    [Fact]
+    public async Task ADiskThatTurnsUnhealthy_IsSeen_OnceTheRefreshIntervalHasPassed()
+    {
+        // The list was read once per session, so the tray's disk alert and System Health never saw the change.
+        var health = "Healthy";
+        var queries = 0;
+        var clock = new ManualClock();
+        var service = ServiceOverDisks(() => { queries++; return [Disk(health)]; }, clock);
+        Assert.Equal("Healthy", Assert.Single((await service.CaptureAsync()).Disks).HealthStatus);
+
+        health = "Unhealthy";
+        clock.Advance(SystemInfoService.DiskRefreshInterval - TimeSpan.FromSeconds(1));
+        Assert.Equal("Healthy", Assert.Single((await service.CaptureAsync()).Disks).HealthStatus);
+        Assert.Equal(1, queries);   // not on every capture: the vitals poll runs several times a second
+
+        clock.Advance(TimeSpan.FromSeconds(1));
+        Assert.Equal("Unhealthy", Assert.Single((await service.CaptureAsync()).Disks).HealthStatus);
+        Assert.Equal(2, queries);
+    }
+
+    [Fact]
+    public async Task ARefreshThatFaults_KeepsTheDisksAsLastRead_AndWaitsTheIntervalAgain()
+    {
+        var fault = false;
+        var queries = 0;
+        var clock = new ManualClock();
+        var service = ServiceOverDisks(() => { queries++; return fault ? null : [Disk("Healthy")]; }, clock);
+        await service.CaptureAsync();
+
+        fault = true;
+        clock.Advance(SystemInfoService.DiskRefreshInterval);
+        Assert.Equal("Healthy", Assert.Single((await service.CaptureAsync()).Disks).HealthStatus);
+        await service.CaptureAsync();
+
+        Assert.Equal(2, queries);   // the fault is not retried on the very next capture
+    }
+
     /// <summary>A query that faults once is retried on the next call, rather than caching "Unknown" forever.</summary>
     [Fact]
     public async Task Capture_WhenAQueryFaultsOnce_RetriesOnTheNextCall()

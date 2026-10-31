@@ -101,14 +101,16 @@ public class SecurityPromiseTests
     /// Promise: "Registry cleaning: searching the registry for entries to delete."
     /// </summary>
     /// <remarks>
-    /// The app deletes registry keys and values in fifteen places. Fourteen are a feature undoing its own
+    /// The app deletes registry keys and values in sixteen places. Fifteen are a feature undoing its own
     /// change — the app blocker releasing an IFEO key, a context-menu entry being re-enabled, an
-    /// environment variable removed, a notification toggle restored. The fifteenth is the one exception the
+    /// environment variable removed, a notification toggle restored, and the Disk Cleanup run selection Deep
+    /// Cleanup sets for Windows' removal of a previous installation (#2720), taken off after the run. The
+    /// sixteenth is the one exception the
     /// promise names: the Uninstaller's Left behind list removing an uninstalled app's own key under
     /// <c>HKEY_CURRENT_USER\Software</c>, one exact key the user ticked, deleted only once its <c>.reg</c>
     /// export exists (#1527). None of that is cleanup, and the distinction is the promise: a cleaner that
     /// edits the registry is the class of tool this project deliberately is not.
-    /// <para>The floor is the fifteen legitimate sites. If it drops, either the detection broke or a
+    /// <para>The floor is below the sixteen legitimate sites. If it drops, either the detection broke or a
     /// feature lost its undo — both worth failing on. The exception is pinned to the user's own hive, so it
     /// cannot grow into deleting machine-wide keys without this failing.</para>
     /// </remarks>
@@ -124,6 +126,8 @@ public class SecurityPromiseTests
             var deletes = Regex.Matches(code, @"\.Delete(?:SubKey|Value)(?:Tree)?\s*\(").Count;
             deleteSites += deletes;
 
+            // Named for Windows' cleanup it runs, and it deletes only the run selection it set: pinned below.
+            if (name == "PreviousInstallationCleanup.cs") continue;
             if (deletes > 0 && (name.Contains("Cleanup", StringComparison.Ordinal)
                                 || name.Contains("Cleaner", StringComparison.Ordinal)))
             {
@@ -132,7 +136,7 @@ public class SecurityPromiseTests
         }
 
         Assert.True(deleteSites >= 13,
-            $"only {deleteSites} registry-delete sites found, out of 15 measured — the pattern has stopped "
+            $"only {deleteSites} registry-delete sites found, out of 16 measured — the pattern has stopped "
             + "matching, so this guard is no longer looking at anything.");
         Assert.True(offenders.Count == 0,
             $"{Forbidden} says the app never cleans the registry:\n  "
@@ -144,6 +148,13 @@ public class SecurityPromiseTests
         Assert.Single(Regex.Matches(leftovers, @"\.Delete(?:SubKey|Value)(?:Tree)?\s*\("));
         Assert.Contains("Registry.CurrentUser.DeleteSubKeyTree(", leftovers, StringComparison.Ordinal);
         Assert.DoesNotContain("LocalMachine", leftovers, StringComparison.Ordinal);
+
+        // The run selection for Windows' removal of a previous installation: one delete, of the value it sets, in the
+        // finally after the run it was set for. A delete of anything else there is registry cleaning by another name.
+        var previousInstallation = CodeOf("Services", "PreviousInstallationCleanup.cs");
+        Assert.Single(Regex.Matches(previousInstallation, @"\.Delete(?:SubKey|Value)(?:Tree)?\s*\("));
+        Assert.Contains("handler.SetValue(flag, Selected, RegistryValueKind.DWord);", previousInstallation, StringComparison.Ordinal);
+        Assert.Contains("handler.DeleteValue(flag, throwOnMissingValue: false);", previousInstallation, StringComparison.Ordinal);
     }
 
     // ── 4. Never a game's own files ──

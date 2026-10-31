@@ -70,7 +70,7 @@ What the app can and cannot do by design:
   Defender Tweaks, Edge/OneDrive Remover, Restore Points, Scheduled Maintenance, Task
   Scheduler, Drivers, System Fixes, Windows Features, and the Windows Update history).
 - Launch Windows' own tools — `sc.exe`, `powercfg`, `netsh`, `ipconfig`, `DISM`, `sfc`,
-  `chkdsk`, `schtasks`, `reg`, `powershell.exe` — always from their System32 path, plus
+  `chkdsk`, `schtasks`, `reg`, `cleanmgr`, `powershell.exe` — always from their System32 path, plus
   `winget` (as administrator only from the App Installer's own folder, which only an
   administrator can change, and otherwise from your account's own winget shortcut), the
   Ookla `speedtest` CLI, OneDrive's own setup and a program's own uninstaller. Ping and traceroute are sent by SysManager itself, not through `ping.exe`
@@ -112,7 +112,10 @@ What the app can and cannot do by design:
   Tune-Up). Each category is a fixed list of folders; junctions and symlinks are never
   followed, the folders single-file .NET apps unpack into under TEMP are left alone, and
   files are deleted outright, not sent to the Recycle Bin. The Delivery Optimization cache
-  is emptied through Windows' own `Delete-DeliveryOptimizationCache` instead.
+  is emptied through Windows' own `Delete-DeliveryOptimizationCache` instead, and Windows.old
+  is removed by Windows' own Disk Cleanup (`cleanmgr /sagerun`): SysManager selects that one
+  cleanup for the run with a value of its own under Disk Cleanup's key, and removes the value
+  again after the run.
 - Empty the Recycle Bin.
 - Clear per-browser cache, history, cookies, and sessions (Browser Cleaner tab)
   — only for the categories ticked when you press Clean. Cache and history start

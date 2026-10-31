@@ -446,7 +446,7 @@ to scroll.
 
 Thin wrappers around the underlying platform. Each service is designed to be
 unit-testable. Services that a view-model needs to substitute in tests sit behind
-an interface seam. Forty-one are registered against their implementation in `ServiceRegistration.cs` and
+an interface seam. Forty-two are registered against their implementation in `ServiceRegistration.cs` and
 constructor-injected: `IDialogService`, `IOperationLock`, `IToastService` and `IActivityLog` (all four
 via a factory resolving to the same process-wide `.Instance` singleton everything else still calls
 directly, not a second disconnected one), `IPowerShellRunner` (PowerShellRunner), `IWingetService` (WingetService),
@@ -455,7 +455,8 @@ directly, not a second disconnected one), `IPowerShellRunner` (PowerShellRunner)
 `IAppBlockerService` (AppBlockerService), `IBatteryReportService` (BatteryReportService, Battery Health's capacity
 history), `IBrowserExtensionService` (BrowserExtensionService, Browser Cleaner's Extensions view),
 `ICleanupPreScanService`, `IRecycleBin` (ShellRecycleBin, the Recycle Bin that Quick Cleanup, Deep Cleanup and
-the Quick Tune-Up measure and empty), `IContextMenuService`, `ILeftoverService`,
+the Quick Tune-Up measure and empty), `IPreviousInstallationCleanup` (PreviousInstallationCleanup, Windows' own
+removal of Windows.old for Deep Cleanup), `IContextMenuService`, `ILeftoverService`,
 `ICpuAffinityService`, `IDisplayProfileService` (DisplayProfileService, which also passes on Windows' display-change
 notification),
 `IFeatureParentsService` (FeatureParentsService, the DISM API's list of what a feature needs, for Windows
@@ -726,7 +727,12 @@ Key services:
   are skipped, not forced. The Delivery Optimization bucket (`IsDeliveryOptimizationCache`) is the one
   cleaned through the runner, with `Delete-DeliveryOptimizationCache -Force`, and its freed total is measured
   on its folders before and after; without a runner, or when Windows refuses, it reports that and deletes
-  nothing itself (#2602).
+  nothing itself (#2602). Windows.old (`IsPreviousWindowsInstallation`) is removed the same way, through
+  `IPreviousInstallationCleanup`, since most of it is owned by TrustedInstaller and a delete file by file left
+  a rollback that no longer works (#2720). `PreviousInstallationCleanup` sets the handler's `StateFlagsNNNN`
+  for a run number no handler has a value for, runs `cleanmgr.exe /sagerun:NNNN` through
+  `IPowerShellRunner.RunProcessAsync`, and takes the value off again whatever the run did. The run is not
+  cancelled once started, since stopping it part-way would leave the half-removed installation it avoids.
 - `CleanupPreScanService` (`ICleanupPreScanService`) — sizes the temp folders and the current user's
   Recycle Bin for the two labels Quick Cleanup shows before the user asks for anything. The bin's figure is
   the shell's own count, through `IRecycleBin`, not a walk of its folders. Behind an
@@ -2422,7 +2428,8 @@ tab cannot ship a refresh or cancel button the keyboard cannot reach.
   30 days, and the Recycle Bin is sized and emptied by the shell through `IRecycleBin`, not by walking or
   deleting its folders. The
   Delivery Optimization cache is emptied through Windows' `Delete-DeliveryOptimizationCache` for the same
-  reason: the files belong to the service that keeps them.
+  reason: the files belong to the service that keeps them. Windows.old is removed through Windows' own
+  "Previous Installations" cleanup, never file by file: most of it is owned by TrustedInstaller.
 - Windows.old is tagged **Irreversible** and never selected by default, as are the
   blue-screen memory dumps: they are the only record of why a machine crashed.
 - A bucket may restrict itself to files matching a wildcard (`FilePatterns`), and the

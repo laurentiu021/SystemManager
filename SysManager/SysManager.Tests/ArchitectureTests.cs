@@ -20960,7 +20960,8 @@ public partial class ArchitectureTests
                             "twenty-three", "twenty-four", "twenty-five", "twenty-six", "twenty-seven",
                             "twenty-eight", "twenty-nine", "thirty", "thirty-one", "thirty-two", "thirty-three",
                             "thirty-four", "thirty-five", "thirty-six", "thirty-seven", "thirty-eight", "thirty-nine",
-                            "forty", "forty-one"];
+                            "forty", "forty-one", "forty-two", "forty-three", "forty-four", "forty-five",
+                            "forty-six", "forty-seven", "forty-eight", "forty-nine", "fifty"];
         Assert.True(seams.Length < spelled.Length, $"{seams.Length} seams is past the spelled-out numbers here.");
 
         // Sliced to the one paragraph that makes the claim, so a name mentioned under a neighbouring heading

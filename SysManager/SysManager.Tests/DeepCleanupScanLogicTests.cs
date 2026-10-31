@@ -286,7 +286,8 @@ public sealed class DeepCleanupScanLogicTests
     [Fact]
     public void Constructor_WithoutARunner_Throws()
         => Assert.Throws<ArgumentNullException>(
-            () => new DeepCleanupService((IPowerShellRunner)null!, Substitute.For<IRecycleBin>()));
+            () => new DeepCleanupService((IPowerShellRunner)null!, Substitute.For<IRecycleBin>(),
+                                         Substitute.For<IPreviousInstallationCleanup>()));
 
     /// <summary>
     /// Nor a missing Recycle Bin, which would leave production's bin category neither measured nor emptied.
@@ -294,7 +295,17 @@ public sealed class DeepCleanupScanLogicTests
     [Fact]
     public void Constructor_WithoutARecycleBin_Throws()
         => Assert.Throws<ArgumentNullException>(
-            () => new DeepCleanupService(Substitute.For<IPowerShellRunner>(), null!));
+            () => new DeepCleanupService(Substitute.For<IPowerShellRunner>(), null!,
+                                         Substitute.For<IPreviousInstallationCleanup>()));
+
+    /// <summary>
+    /// Nor a missing cleanup of a previous installation, which would leave production's Windows.old bucket never
+    /// removed (#2720).
+    /// </summary>
+    [Fact]
+    public void Constructor_WithoutThePreviousInstallationCleanup_Throws()
+        => Assert.Throws<ArgumentNullException>(
+            () => new DeepCleanupService(Substitute.For<IPowerShellRunner>(), Substitute.For<IRecycleBin>(), null!));
 
     /// <summary>
     /// The default roots are the values the scan read inline before the seam existed, so production

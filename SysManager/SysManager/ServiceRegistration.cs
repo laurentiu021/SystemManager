@@ -75,6 +75,8 @@ public static class ServiceRegistration
         services.AddSingleton<IAppBlockerService, AppBlockerService>();
         // One Recycle Bin for Quick Cleanup, Deep Cleanup and the Tune-Up, behind a seam so that no test empties the real one.
         services.AddSingleton<IRecycleBin, ShellRecycleBin>();
+        // Windows' own cleanup of a previous installation, behind a seam so that no test removes the real one (#2720).
+        services.AddSingleton<IPreviousInstallationCleanup, PreviousInstallationCleanup>();
         services.AddSingleton<DeepCleanupService>();
         services.AddSingleton<ICleanupPreScanService, CleanupPreScanService>();
         services.AddSingleton<DiskAnalyzerService>();

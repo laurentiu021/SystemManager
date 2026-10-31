@@ -1167,14 +1167,19 @@ public sealed partial class DashboardViewModel : ElevatedViewModelBase
             // tree, so it can't be redirected into unrelated user data. This replaces an
             // earlier inline cleaner that only scanned the user TEMP top level and swallowed
             // every error.
-            var (freed, _, _) = await _tuneUp.CleanTempFilesAsync(_quickActionCts!.Token);
+            var (freed, deleted, _, cancelled) = await _tuneUp.CleanTempFilesAsync(_quickActionCts!.Token);
 
             QuickActionProgress = 100;
             var freedMB = freed / 1024.0 / 1024.0;
             QuickActionDetail = freedMB >= 1024
                 ? string.Create(CultureInfo.InvariantCulture, $"Freed {freedMB / 1024:F1} GB")
                 : $"Freed {freedMB:F0} MB";
-            ActivityLogService.Instance.Log("Quick Cleanup", QuickActionDetail);
+            // A cancelled sweep has still deleted what it reached, for good, so the card says what it freed and it is
+            // recorded, and only then does the action end as cancelled (#2736).
+            if (cancelled) QuickActionDetail += " before it was cancelled";
+            if (!cancelled || deleted > 0)
+                ActivityLogService.Instance.Log("Quick Cleanup", QuickActionDetail);
+            _quickActionCts.Token.ThrowIfCancellationRequested();
         }, readsStorageAfter: true);
     }
 
@@ -1441,6 +1446,7 @@ public sealed partial class DashboardViewModel : ElevatedViewModelBase
         QuickSpeedTestCommand.NotifyCanExecuteChanged();
 
         var done = false;
+        var cancelled = false;
         try
         {
             await action();
@@ -1453,6 +1459,10 @@ public sealed partial class DashboardViewModel : ElevatedViewModelBase
         {
             QuickActionStatus = "Cancelled";
             IsQuickActionDone = true;
+            // What a cancelled action had already done is recorded by it, and shown here: Quick Cleanup's temp
+            // files are gone for good once deleted (#2736).
+            LoadActivity();
+            cancelled = true;
         }
         // Not the Cancel button: a time limit of the action's own, the speed test's server not answering within the
         // client's two minutes. It read as "Cancelled" although nothing was (#2721).
@@ -1482,8 +1492,9 @@ public sealed partial class DashboardViewModel : ElevatedViewModelBase
             QuickSpeedTestCommand.NotifyCanExecuteChanged();
         }
 
-        // After the card says it is done, so the action reads as finished while the score is computed.
-        if (done && readsStorageAfter) await RefreshStorageAsync();
+        // After the card says it is done, so the action reads as finished while the score is computed. A cancelled
+        // Quick Cleanup has freed what it deleted before the cancel, so the drives are read again then too (#2736).
+        if ((done || cancelled) && readsStorageAfter) await RefreshStorageAsync();
     }
 
     // ══════════════════════════════════════════════════════════════════════
@@ -1557,15 +1568,34 @@ public sealed partial class DashboardViewModel : ElevatedViewModelBase
 
         try
         {
-            TuneUpResult = await _tuneUp.RunAsync(true, progress, _tuneUpCts.Token);
-            HasTuneUpResult = true;
-            // Everything it freed, the Recycle Bin included. These reported the temp files alone, so a Tune-Up that
-            // permanently emptied gigabytes from the bin left nothing in Recent activity to say so.
-            StatusMessage = $"Tune-Up complete — {TuneUpResult.TotalFreedDisplay} freed";
-            ToastService.Instance.Show("Tune-Up complete", $"{TuneUpResult.TotalFreedDisplay} freed");
-            ActivityLogService.Instance.Log("Quick Tune-Up", TuneUpResult.ActivityDetail);
-            LoadActivity();
-            tunedUp = true;
+            var result = await _tuneUp.RunAsync(true, progress, _tuneUpCts.Token);
+            if (result.Cancelled)
+            {
+                // Cancelled part-way: no result card, as its checks did not all run. What it had already removed is
+                // gone for good, though, and it used to say only "Tune-Up cancelled." and record nothing, so it is
+                // said, recorded and shown on the storage card like a finished one (#2736).
+                StatusMessage = result.RemovedAnything
+                    ? $"Tune-Up cancelled — {result.TotalFreedDisplay} freed before it stopped"
+                    : "Tune-Up cancelled.";
+                if (result.RemovedAnything)
+                {
+                    ActivityLogService.Instance.Log("Quick Tune-Up", $"{result.ActivityDetail}, then it was cancelled");
+                    LoadActivity();
+                }
+                tunedUp = result.RemovedAnything;
+            }
+            else
+            {
+                TuneUpResult = result;
+                HasTuneUpResult = true;
+                // Everything it freed, the Recycle Bin included. These reported the temp files alone, so a Tune-Up
+                // that permanently emptied gigabytes from the bin left nothing in Recent activity to say so.
+                StatusMessage = $"Tune-Up complete — {result.TotalFreedDisplay} freed";
+                ToastService.Instance.Show("Tune-Up complete", $"{result.TotalFreedDisplay} freed");
+                ActivityLogService.Instance.Log("Quick Tune-Up", result.ActivityDetail);
+                LoadActivity();
+                tunedUp = true;
+            }
         }
         catch (OperationCanceledException) { StatusMessage = "Tune-Up cancelled."; }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
@@ -1580,7 +1610,8 @@ public sealed partial class DashboardViewModel : ElevatedViewModelBase
             RunTuneUpCommand.NotifyCanExecuteChanged();
         }
 
-        // Once the Tune-Up reads as finished: what it freed shows on the storage card and in the score (#2802).
+        // Once the Tune-Up reads as finished, or as cancelled after it removed something: what it freed shows on the
+        // storage card and in the score (#2802, #2736).
         if (tunedUp) await RefreshStorageAsync();
     }
 

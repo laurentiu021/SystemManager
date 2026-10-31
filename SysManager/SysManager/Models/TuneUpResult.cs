@@ -49,6 +49,18 @@ public sealed record TuneUpResult
     public double RamTotalGB { get; init; }
     public bool RamWarning => HealthLimits.AdvisesClosingApps(RamUsedPercent);
 
+    // ── Cancelled part-way ─────────────────────────────────────────────
+
+    /// <summary>
+    /// True when the Tune-Up was cancelled part-way. What it removed before it stopped is in the temp and Recycle Bin
+    /// fields, and the checks after it did not run: a cancel used to throw, and the Dashboard said only that the
+    /// Tune-Up was cancelled and recorded nothing, after the temp files were deleted and the bin emptied (#2736).
+    /// </summary>
+    public bool Cancelled { get; init; }
+
+    /// <summary>Whether the Tune-Up deleted anything: a temporary file, or a Recycle Bin that was not already empty.</summary>
+    public bool RemovedAnything => TempFilesDeleted > 0 || (RecycleBinEmptied && RecycleBinBefore is not { Items: 0 });
+
     // ── Summary helpers ────────────────────────────────────────────────
 
     /// <summary>What the temp clean freed, for the card's line about the temp files.</summary>

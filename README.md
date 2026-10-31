@@ -866,7 +866,8 @@ System → System Fixes, where the tab name matches what they do.
   quick clean and Quick Tune-Up, Scheduled Maintenance and `--cleanup` keep them too. Your own
   temp folder is always `AppData\Local\Temp` in your profile: when TEMP or TMP has been moved to
   another folder, that folder is left alone, because nothing tells its temporary files apart from
-  whatever else it holds
+  whatever else it holds. Cancelled part-way, it says how much it had freed by then, Recent
+  activity records it, and the size shown is measured again
 - Empty the Recycle Bin. Its size is the one Windows reports, as Explorer shows it, so an
   empty bin reads "Empty" and is left as it is; each time it is emptied, Recent activity
   records it with what it held
@@ -2271,7 +2272,9 @@ offers, "rate us" prompts:
   the disks") rather than counted as fine, so "All good" means every check
   ran and found nothing. The confirmation says that the Recycle Bin's contents
   cannot be recovered; the temporary files it cleans are deleted outright too, not sent to the
-  Recycle Bin. No admin required.
+  Recycle Bin. No admin required. Cancelled part-way, it shows no card, because its checks did
+  not all run, but the status line says how much it had freed by then, and Recent activity and
+  the storage card include it.
 - **Why is it slow?** — the button beside Scan system looks at the five things that most often
   slow a PC down, all at once, and lists what it found, worst first. It ticks each one off as it
   finishes, which takes a few seconds, most of them spent listing what is running:
@@ -2301,7 +2304,8 @@ offers, "rate us" prompts:
   bar for as long as the action is still running and stops it, same as Escape; Update All Apps
   stops between apps rather than mid-download. An action ends as "Cancelled" only when you
   cancelled it: a speed test whose server stopped answering ends as "Failed" and says it timed
-  out. Check Windows Updates asks
+  out. A Quick Cleanup cancelled part-way says how much it had freed before it stopped, and
+  Recent activity records it. Check Windows Updates asks
   Windows Update what is waiting and says how many updates it found, or that Windows is up to
   date. It installs nothing: the link under the result opens the Windows Update tab, where you
   choose what to install. Run Speed Test records its result in the Speed Test tab's history, and

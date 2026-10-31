@@ -679,7 +679,10 @@ Key services:
   Recycle Bin, both behind the Dashboard's confirmation. The bin goes through `IRecycleBin`, and what it held
   is in `TuneUpResult`, so the status line, the card and Recent activity say what went. Behind `ITuneUpService` for
   the Dashboard, whose tests run both quick actions against a substitute. The temp sweep itself is also a
-  static method, shared with the Cleanup tab and the CLI. The shortcut, disk and vitals checks are internal
+  static method, shared with the Cleanup tab and the CLI. It returns a `TempCleanResult`, and a cancel stops it
+  rather than throwing, so what it deleted comes back marked cancelled. The sequence runs in `RunStepsAsync`,
+  handed each step to make, and a cancel of its own token after the sweep returns what was removed in a
+  `TuneUpResult` marked `Cancelled` (#2736). The shortcut, disk and vitals checks are internal
   static methods handed the call to make. Each returns null when it could not run, which the result lists in
   `TuneUpResult.NotChecked`, so a failed check is never counted as a passed one.
   The sweep takes only the files `TempFilesToClean` lists, those neither created nor written in the last week, and

@@ -546,4 +546,58 @@ public class CleanupViewModelTests
 
         Assert.Same(vm.CancelCommand, vm.EscapeCancel);
     }
+
+    // ---------- a cancelled Clean TEMP (#2736) ----------
+    // A cancelled sweep said only "Temp cleanup cancelled.", recorded nothing and left the size as it was, although
+    // what it deleted before the cancel is gone for good. Over a substitute sweep, so no temp folder is touched.
+
+    private static CleanupViewModel SweepingVm(TempCleanResult swept, ICleanupPreScanService preScan) =>
+        new(new PowerShellRunner(), preScan, Substitute.For<IRecycleBin>(), _ => Task.FromResult(swept));
+
+    [Fact]
+    public async Task CleanTemp_CancelledPartWay_SaysAndRecordsWhatItFreed_AndMeasuresAgain()
+    {
+        using var activity = new ActivityLogScope();
+        using var confirm = new DialogAnswer(confirm: true);
+        var preScan = StubPreScan();
+        var vm = SweepingVm(new TempCleanResult(3L << 20, 12, 0, Cancelled: true), preScan);
+        await vm.InitializationComplete;
+
+        await vm.CleanTempCommand.ExecuteAsync(null);
+
+        Assert.Equal("Temp cleanup cancelled after it freed 3.0 MB.", vm.StatusMessage);
+        var entry = Assert.Single(ActivityLogService.Instance.GetRecent(10));
+        Assert.Equal(("Quick Cleanup", "Cleared some temporary files before it was cancelled"), (entry.Action, entry.Detail));
+        await preScan.Received(2).MeasureAsync();   // as the tab opened, and again after the sweep
+        Assert.False(vm.IsTempRunning);
+    }
+
+    [Fact]
+    public async Task CleanTemp_CancelledBeforeItDeletedAnything_RecordsNothing()
+    {
+        using var activity = new ActivityLogScope();
+        using var confirm = new DialogAnswer(confirm: true);
+        var vm = SweepingVm(new TempCleanResult(0, 0, 0, Cancelled: true), StubPreScan());
+        await vm.InitializationComplete;
+
+        await vm.CleanTempCommand.ExecuteAsync(null);
+
+        Assert.Equal("Temp cleanup cancelled after it freed 0 B.", vm.StatusMessage);
+        Assert.Empty(ActivityLogService.Instance.GetRecent(10));
+    }
+
+    [Fact]
+    public async Task CleanTemp_ThatFinished_SaysDone_AndRecordsIt()
+    {
+        using var activity = new ActivityLogScope();
+        using var confirm = new DialogAnswer(confirm: true);
+        var vm = SweepingVm(new TempCleanResult(3L << 20, 12, 0, Cancelled: false), StubPreScan());
+        await vm.InitializationComplete;
+
+        await vm.CleanTempCommand.ExecuteAsync(null);
+
+        Assert.Equal("Temp cleanup done", vm.StatusMessage);
+        var entry = Assert.Single(ActivityLogService.Instance.GetRecent(10));
+        Assert.Equal(("Quick Cleanup", "Cleared temporary files"), (entry.Action, entry.Detail));
+    }
 }

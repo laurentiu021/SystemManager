@@ -39,6 +39,10 @@ public sealed partial class CleanupViewModel : ElevatedViewModelBase
     // could not be tested without emptying the bin of the PC running the tests.
     private readonly IRecycleBin _recycleBin;
 
+    // The temp sweep Clean TEMP runs, behind a seam, so what a cancelled sweep reports and records can be tested
+    // without cleaning the temp folders of the PC running the tests (#2736).
+    private readonly Func<CancellationToken, Task<TempCleanResult>> _cleanTemp;
+
     private readonly EtaCalculator _storeEta = new();
 
     private CancellationTokenSource? _tempCts;
@@ -94,10 +98,23 @@ public sealed partial class CleanupViewModel : ElevatedViewModelBase
     public bool IsAnyRunning => IsTempRunning || IsBinRunning || IsStoreRunning;
 
     public CleanupViewModel(IPowerShellRunner runner, ICleanupPreScanService preScan, IRecycleBin recycleBin)
+        : this(runner, preScan, recycleBin, TuneUpService.CleanTempFilesAsync) { }
+
+    /// <summary>Test seam: the same view model with the temp sweep supplied.</summary>
+    /// <param name="runner">Runs the component store commands.</param>
+    /// <param name="preScan">Measures what the temp folders and the Recycle Bin hold.</param>
+    /// <param name="recycleBin">Empties the Recycle Bin.</param>
+    /// <param name="cleanTemp">
+    /// The temp sweep. Injected so a test decides what it deleted and whether it was cancelled, with no temp folder
+    /// involved.
+    /// </param>
+    internal CleanupViewModel(IPowerShellRunner runner, ICleanupPreScanService preScan, IRecycleBin recycleBin,
+                              Func<CancellationToken, Task<TempCleanResult>> cleanTemp)
     {
         _runner = runner;
         _preScan = preScan;
         _recycleBin = recycleBin;
+        _cleanTemp = cleanTemp ?? throw new ArgumentNullException(nameof(cleanTemp));
         _runner.LineReceived += OnRunnerLineReceived;
         _runner.ProgressChanged += OnRunnerProgressChanged;
 
@@ -257,7 +274,7 @@ public sealed partial class CleanupViewModel : ElevatedViewModelBase
             // counted as freed — while the confirmation dialog above says "Files in use may be skipped".
             // CleanTempFiles captures the size, deletes, and only then adds, counting failures separately.
             Console.Append(PowerShellLine.Output("Cleaning user and Windows Temp folders..."));
-            var (bytesFreed, filesDeleted, errors) = await TuneUpService.CleanTempFilesAsync(_tempCts.Token);
+            var (bytesFreed, filesDeleted, errors, cancelled) = await _cleanTemp(_tempCts.Token);
             Console.Append(PowerShellLine.Output(string.Create(CultureInfo.InvariantCulture,
                 $"Freed {bytesFreed / 1024.0 / 1024.0:F1} MB across {filesDeleted} file(s).")));
             if (errors > 0)
@@ -266,9 +283,17 @@ public sealed partial class CleanupViewModel : ElevatedViewModelBase
                     $"{errors} file(s) were in use or protected and were skipped.")));
             }
 
-            StatusMessage = "Temp cleanup done";
-            Log.Information("Temp cleanup completed");
-            ActivityLogService.Instance.Log("Quick Cleanup", "Cleared temporary files");
+            // A cancelled sweep has still deleted what it reached, for good. It used to say only "Temp cleanup
+            // cancelled.", record nothing and leave the size as it was, so it is said, recorded and measured again like
+            // a finished one (#2736).
+            StatusMessage = cancelled
+                ? $"Temp cleanup cancelled after it freed {FormatHelper.FormatSize(bytesFreed)}."
+                : "Temp cleanup done";
+            Log.Information(cancelled ? "Temp cleanup cancelled part-way" : "Temp cleanup completed");
+            if (!cancelled)
+                ActivityLogService.Instance.Log("Quick Cleanup", "Cleared temporary files");
+            else if (filesDeleted > 0)
+                ActivityLogService.Instance.Log("Quick Cleanup", "Cleared some temporary files before it was cancelled");
             // The operation's own flag still holds the bar (it clears in finally), so this
             // refresh must not take it over.
             await PreScanAsync(reportProgress: false);

@@ -345,7 +345,7 @@ public sealed class DashboardViewModelTests : IDisposable
         using var confirm = new DialogAnswer(confirm: true);
         var tuneUp = Substitute.For<ITuneUpService>();
         tuneUp.CleanTempFilesAsync(Arg.Any<CancellationToken>())
-            .Returns(Task.FromResult((BytesFreed: 3L << 30, FilesDeleted: 12, Errors: 0)));
+            .Returns(Task.FromResult(new TempCleanResult(3L << 30, 12, 0, Cancelled: false)));
         var vm = NewVm(QuietWinget(), tuneUp: tuneUp);
         await vm.InitializationComplete;
         var reads = new StorageReads(vm);
@@ -394,6 +394,107 @@ public sealed class DashboardViewModelTests : IDisposable
         Assert.Equal("Tune-Up cancelled.", vm.StatusMessage);
         Assert.Equal(0, reads.Drives);
         Assert.Equal(0, reads.Scores);
+    }
+
+    // ---------- cancelled after it had already removed something (#2736) ----------
+    // A cancel used to throw out of the sweep and the Tune-Up, and the count of what was already gone went with the
+    // exception: the card and the status said only that it was cancelled, and Recent activity had nothing.
+
+    [Fact]
+    public async Task AQuickTuneUpCancelledPartWay_SaysAndRecordsWhatItRemoved_WithNoResultCard()
+    {
+        using var activity = new ActivityLogScope();
+        using var confirm = new DialogAnswer(confirm: true);
+        var tuneUp = Substitute.For<ITuneUpService>();
+        tuneUp.RunAsync(Arg.Any<bool>(), Arg.Any<IProgress<(int, string)>>(), Arg.Any<CancellationToken>())
+            .Returns(Task.FromResult(new TuneUpResult
+            {
+                TempBytesFreed = 120L * 1024 * 1024,
+                TempFilesDeleted = 40,
+                RecycleBinEmptied = true,
+                RecycleBinBefore = new RecycleBinContents(30L * 1024 * 1024, 3),
+                Cancelled = true,
+            }));
+        var vm = NewVm(QuietWinget(), tuneUp: tuneUp);
+        await vm.InitializationComplete;
+        var reads = new StorageReads(vm);
+
+        await vm.RunTuneUpCommand.ExecuteAsync(null);
+
+        Assert.Equal("Tune-Up cancelled — 150.0 MB freed before it stopped", vm.StatusMessage);
+        Assert.False(vm.HasTuneUpResult);   // its checks did not all run
+        Assert.Null(vm.TuneUpResult);
+        var entry = Assert.Single(ActivityLogService.Instance.GetRecent(10));
+        Assert.Equal(("Quick Tune-Up", "Freed 120.0 MB of temporary files and permanently emptied the Recycle Bin "
+            + "(3 items, 30.0 MB), then it was cancelled"), (entry.Action, entry.Detail));
+        Assert.Equal(1, reads.Drives);
+        Assert.Equal(1, reads.Scores);
+    }
+
+    [Fact]
+    public async Task AQuickTuneUpCancelledBeforeItRemovedAnything_RecordsNothing_AndReadsNothingAgain()
+    {
+        using var activity = new ActivityLogScope();
+        using var confirm = new DialogAnswer(confirm: true);
+        var tuneUp = Substitute.For<ITuneUpService>();
+        tuneUp.RunAsync(Arg.Any<bool>(), Arg.Any<IProgress<(int, string)>>(), Arg.Any<CancellationToken>())
+            .Returns(Task.FromResult(new TuneUpResult { RecycleBinSkipped = true, Cancelled = true }));
+        var vm = NewVm(QuietWinget(), tuneUp: tuneUp);
+        await vm.InitializationComplete;
+        var reads = new StorageReads(vm);
+
+        await vm.RunTuneUpCommand.ExecuteAsync(null);
+
+        Assert.Equal("Tune-Up cancelled.", vm.StatusMessage);
+        Assert.False(vm.HasTuneUpResult);
+        Assert.Empty(ActivityLogService.Instance.GetRecent(10));
+        Assert.Equal(0, reads.Drives);
+    }
+
+    [Fact]
+    public async Task AQuickCleanupCancelledPartWay_SaysAndRecordsWhatItFreed_AndReadsTheDrivesAgain()
+    {
+        using var activity = new ActivityLogScope();
+        using var confirm = new DialogAnswer(confirm: true);
+        DashboardViewModel? vm = null;
+        var tuneUp = Substitute.For<ITuneUpService>();
+        tuneUp.CleanTempFilesAsync(Arg.Any<CancellationToken>()).Returns(_ =>
+        {
+            vm!.CancelQuickActionCommand.Execute(null);   // the cancel lands after 12 files are gone
+            return Task.FromResult(new TempCleanResult(300L * 1024 * 1024, 12, 0, Cancelled: true));
+        });
+        vm = NewVm(QuietWinget(), tuneUp: tuneUp);
+        await vm.InitializationComplete;
+        var reads = new StorageReads(vm);
+
+        await vm.QuickCleanupCommand.ExecuteAsync(null);
+
+        Assert.Equal("Cancelled", vm.QuickActionStatus);
+        Assert.Equal("Freed 300 MB before it was cancelled", vm.QuickActionDetail);
+        var entry = Assert.Single(ActivityLogService.Instance.GetRecent(10));
+        Assert.Equal(("Quick Cleanup", "Freed 300 MB before it was cancelled"), (entry.Action, entry.Detail));
+        Assert.Contains(vm.RecentActivity, e => e.Action == "Quick Cleanup");   // shown on the card's list too
+        Assert.Equal(1, reads.Drives);
+    }
+
+    [Fact]
+    public async Task AQuickCleanupCancelledBeforeItDeletedAnything_RecordsNothing()
+    {
+        using var activity = new ActivityLogScope();
+        using var confirm = new DialogAnswer(confirm: true);
+        DashboardViewModel? vm = null;
+        var tuneUp = Substitute.For<ITuneUpService>();
+        tuneUp.CleanTempFilesAsync(Arg.Any<CancellationToken>()).Returns(_ =>
+        {
+            vm!.CancelQuickActionCommand.Execute(null);
+            return Task.FromResult(new TempCleanResult(0, 0, 0, Cancelled: true));
+        });
+        vm = NewVm(QuietWinget(), tuneUp: tuneUp);
+
+        await vm.QuickCleanupCommand.ExecuteAsync(null);
+
+        Assert.Equal("Cancelled", vm.QuickActionStatus);
+        Assert.Empty(ActivityLogService.Instance.GetRecent(10));
     }
 
     /// <summary>
@@ -673,7 +774,7 @@ public sealed class DashboardViewModelTests : IDisposable
         tuneUp.CleanTempFilesAsync(Arg.Any<CancellationToken>()).Returns(_ =>
         {
             heldBy = OperationLockService.Instance.GetActiveOperationName(OperationCategory.Disk);
-            return Task.FromResult((BytesFreed: 300L * 1024 * 1024, FilesDeleted: 12, Errors: 0));
+            return Task.FromResult(new TempCleanResult(300L * 1024 * 1024, 12, 0, Cancelled: false));
         });
         var vm = NewVm(QuietWinget(), tuneUp: tuneUp);
 
@@ -692,7 +793,7 @@ public sealed class DashboardViewModelTests : IDisposable
         using var confirm = new DialogAnswer(confirm: true);
         var tuneUp = Substitute.For<ITuneUpService>();
         tuneUp.CleanTempFilesAsync(Arg.Any<CancellationToken>())
-            .Returns(Task.FromException<(long, int, int)>(new IOException("the temp folder went away")));
+            .Returns(Task.FromException<TempCleanResult>(new IOException("the temp folder went away")));
         var vm = NewVm(QuietWinget(), tuneUp: tuneUp);
 
         await vm.QuickCleanupCommand.ExecuteAsync(null);
@@ -744,7 +845,7 @@ public sealed class DashboardViewModelTests : IDisposable
         tuneUp.CleanTempFilesAsync(Arg.Any<CancellationToken>()).Returns(ci =>
         {
             var ct = ci.Arg<CancellationToken>();
-            var tcs = new TaskCompletionSource<(long, int, int)>();
+            var tcs = new TaskCompletionSource<TempCleanResult>();
             ct.Register(() => tcs.TrySetCanceled(ct));
             tokenCaptured.TrySetResult(ct);
             return tcs.Task;

@@ -77,7 +77,7 @@ What the app can and cannot do by design:
   or `tracert.exe`.
 - Change Windows settings through the registry on the tabs built for it — Privacy &
   Telemetry, Right-Click Menu, Startup Manager, Notification Blocker, Performance Mode, Gaming
-  Profile, Environment Variables, and Windows Update's deferral and pause policy. App
+  Profile, Environment Variables, and Windows Update's deferral policy and pause. App
   Blocker keeps programs from starting through Image File Execution Options, and refuses
   the executables Windows needs to boot or to elevate.
 - Change a service's startup type with `sc.exe` (Services), recording the type it had so

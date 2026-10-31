@@ -193,8 +193,9 @@ public sealed partial class WindowsUpdateViewModel : ViewModelBase
         var clamped = WindowsUpdatePolicyService.ClampPauseDays(PauseDays);
         if (!DialogService.Instance.Confirm(
                 $"Pause all Windows updates for {clamped} days?\n\n" +
-                "Windows will automatically resume updates when the pause ends. This is a bounded pause — " +
-                "SysManager never disables updates permanently.",
+                "Windows will automatically resume updates when the pause ends, and you can resume them sooner from " +
+                "Windows Settings ▸ Windows Update. This is a bounded pause — SysManager never disables updates " +
+                "permanently.",
                 "Pause updates"))
             return;
         PolicySummary = _policy.PauseUpdates(PauseDays, DateTime.Now)

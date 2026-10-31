@@ -810,11 +810,12 @@ Across the tab:
   don't have to run Update History to find out
 - **Update timing & deferral** — defer feature updates by N days while security
   patches keep flowing, pause all updates for a bounded window (max 35 days, then
-  Windows auto-resumes), or restore defaults. Uses the documented Windows Update
-  policy keys and is fully reversible. No "disable updates forever" option by
-  design — the strongest action is a bounded pause, so the machine is never left
-  permanently unpatched. If Windows will not let it read the current settings, the
-  tab says so rather than showing the defaults.
+  Windows auto-resumes), or restore defaults. The deferral uses the documented Windows
+  Update policy, and the pause the same values as Pause updates in Windows Settings,
+  which shows it and can resume it early. Both are fully reversible. No "disable
+  updates forever" option by design — the strongest action is a bounded pause, so
+  the machine is never left permanently unpatched. If Windows will not let it read
+  the current settings, the tab says so rather than showing the defaults.
 
 ### App Updates (winget)
 - Scan for upgradable packages

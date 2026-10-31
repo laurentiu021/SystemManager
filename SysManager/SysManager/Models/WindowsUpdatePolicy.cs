@@ -7,9 +7,8 @@ using System.Globalization;
 namespace SysManager.Models;
 
 /// <summary>
-/// A snapshot of the Windows Update deferral policy currently in effect, read from the
-/// documented WindowsUpdate policy registry keys. All fields are reversible — clearing
-/// them returns Windows to its out-of-box update behavior.
+/// A snapshot of when Windows installs updates, read from the documented Windows Update policy and the Settings
+/// app's own pause. All fields are reversible — clearing them returns Windows to its out-of-box update behavior.
 /// </summary>
 public sealed record WindowsUpdatePolicy(
     bool DeferFeatureUpdates,

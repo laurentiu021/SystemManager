@@ -265,6 +265,26 @@ public class AppUpdatesViewModelTests
     }
 
     [Fact]
+    public void WhileACheckRuns_TheEmptyStateSaysSo_RatherThanAVerdict()
+    {
+        // The first check, or one after a check that found nothing, showed "Not scanned yet" or "No updates
+        // available" for as long as winget took (#2729).
+        var vm = NewVm();
+        var raised = vm.RecordPropertyChanges();
+
+        vm.IsBusy = true;
+
+        Assert.Equal("Checking for updates…", vm.EmptyTitle);
+        Assert.DoesNotContain("up to date", vm.EmptyMessage, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains(nameof(vm.EmptyTitle), raised);
+        Assert.Contains(nameof(vm.EmptyMessage), raised);
+
+        vm.IsBusy = false;
+
+        Assert.Equal("Not scanned yet", vm.EmptyTitle);
+    }
+
+    [Fact]
     public async Task Scan_WhenWingetMissing_TheEmptyStateSaysWhy()
     {
         // Not "Not scanned yet" straight after the user pressed Scan: the check could not run, and the reason

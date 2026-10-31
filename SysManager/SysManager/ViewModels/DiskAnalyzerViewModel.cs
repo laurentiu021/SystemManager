@@ -104,11 +104,15 @@ public sealed partial class DiskAnalyzerViewModel : ViewModelBase
     [NotifyPropertyChangedFor(nameof(CanRelaunchAsAdminForFailure))]
     private DiskAnalyzerService.AnalysisFailure _lastFailure;
 
-    public string EmptyTitle => LastFailure != DiskAnalyzerService.AnalysisFailure.None
+    // While an analysis runs it says so: the verdicts below describe a finished one, and the first analysis, or one
+    // after an analysis that found nothing, showed one of them for as long as it took (#2729).
+    public string EmptyTitle => IsBusy ? "Analyzing…"
+        : LastFailure != DiskAnalyzerService.AnalysisFailure.None
         ? "This folder could not be measured"
         : HasScanned ? "Nothing to show" : "No results yet";
 
-    public string EmptyMessage => LastFailure != DiskAnalyzerService.AnalysisFailure.None
+    public string EmptyMessage => IsBusy ? "Measuring how much space each folder in the selected location uses."
+        : LastFailure != DiskAnalyzerService.AnalysisFailure.None
         ? DescribeFailure(LastFailure)
         : HasScanned
             ? "This folder has no subfolders using measurable space."
@@ -169,6 +173,12 @@ public sealed partial class DiskAnalyzerViewModel : ViewModelBase
         _history = history;
         _preferences = preferences ?? new DiskAnalyzerPreferenceService();
         _dialog = dialog ?? DialogService.Instance;
+        PropertyChanged += (_, e) =>
+        {
+            if (e.PropertyName != nameof(IsBusy)) return;
+            OnPropertyChanged(nameof(EmptyTitle));
+            OnPropertyChanged(nameof(EmptyMessage));
+        };
 
         _loadingPreferences = true;
         ShowMap = _preferences.Load().ShowMap;
@@ -230,13 +240,9 @@ public sealed partial class DiskAnalyzerViewModel : ViewModelBase
         IsBusy = true;
         IsProgressIndeterminate = true;
         StatusMessage = "Analyzing…";
-        TrendSummary = "";
         LastFailure = DiskAnalyzerService.AnalysisFailure.None;
-        Entries.Clear();
-        Map.Update([]);
-        TotalSize = 0;
-        TotalFiles = 0;
-        EntryCount = 0;
+        // The folders, the map, their totals and the trend stay until the analysis answers. They were cleared here,
+        // so an analysis cancelled or failed left an empty list under "Nothing to show" (#2729).
 
         UpdateDriveInfo();
 
@@ -252,7 +258,9 @@ public sealed partial class DiskAnalyzerViewModel : ViewModelBase
 
             if (analysis.Failure != DiskAnalyzerService.AnalysisFailure.None)
             {
-                // Not a scan: nothing is recorded as this folder's latest, and nothing says "complete" (#2504).
+                // Not a scan: nothing is recorded as this folder's latest, and nothing says "complete" (#2504). What an
+                // earlier analysis listed goes, since it is not about the folder that could not be measured.
+                ClearResults();
                 LastFailure = analysis.Failure;
                 ScanSummary = "This folder could not be measured.";
                 StatusMessage = $"This folder could not be measured. {DescribeFailure(analysis.Failure)}";
@@ -261,6 +269,7 @@ public sealed partial class DiskAnalyzerViewModel : ViewModelBase
 
             Entries.ReplaceWith(analysis.Entries);
             Map.Update(analysis.Entries);
+            TrendSummary = "";   // worked out again below for these folders, and left empty if that is cancelled
 
             EntryCount = Entries.Count;
             TotalSize = Entries.Sum(e => e.SizeBytes);
@@ -388,6 +397,16 @@ public sealed partial class DiskAnalyzerViewModel : ViewModelBase
 
         var direction = delta > 0 ? "larger" : "smaller";
         return $"{FormatSize(magnitude)} {direction} than your last scan on {on}.";
+    }
+
+    private void ClearResults()
+    {
+        TrendSummary = "";
+        Entries.Clear();
+        Map.Update([]);
+        TotalSize = 0;
+        TotalFiles = 0;
+        EntryCount = 0;
     }
 
     [RelayCommand]

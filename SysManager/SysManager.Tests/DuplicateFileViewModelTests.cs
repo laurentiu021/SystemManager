@@ -393,6 +393,89 @@ public class DuplicateFileViewModelTests
     // about five times a second for the whole scan: a screen reader began a new sentence before finishing
     // the last. The phase now goes to the announced line and the fast half to a silent one beside it.
 
+    // ---------- a scan that does not finish leaves the one before it (#2729) ----------
+    //
+    // The groups were cleared before the scan, so a cancelled one left an empty list under "No duplicates found".
+
+    /// <summary>A folder with two copies of one file, and a service that ends its next scan early once told to.</summary>
+    private sealed class TwoCopies : IDisposable
+    {
+        public string Folder { get; } = Path.Combine(Path.GetTempPath(), "SysManagerTests", Guid.NewGuid().ToString("N"));
+        public bool EndEarly { get; set; }
+        public Services.DuplicateFileService Service { get; }
+
+        public TwoCopies()
+        {
+            Directory.CreateDirectory(Folder);
+            var content = new byte[4096];
+            content[0] = 7;
+            File.WriteAllBytes(Path.Combine(Folder, "a.bin"), content);
+            File.WriteAllBytes(Path.Combine(Folder, "b.bin"), content);
+            Service = new Services.DuplicateFileService(
+                folder => EndEarly ? throw new OperationCanceledException() : new DirectoryInfo(folder).GetFiles(),
+                folder => EndEarly ? throw new OperationCanceledException() : Directory.GetDirectories(folder));
+        }
+
+        public void Dispose() => Directory.Delete(Folder, recursive: true);
+    }
+
+    [Fact]
+    public async Task AScanThatIsCancelled_LeavesTheGroupsAndTheirCountsAsTheyWere()
+    {
+        using var copies = new TwoCopies();
+        var vm = new DuplicateFileViewModel(copies.Service, Substitute.For<IDialogService>());
+        await vm.InitializationComplete;
+        vm.SelectedFolder = copies.Folder;
+        await vm.ScanCommand.ExecuteAsync(null);
+        var groups = vm.Groups.ToList();
+        Assert.Single(groups);   // the premise: a result to keep
+        var counts = (vm.GroupCount, vm.DuplicateFileCount, vm.TotalWasted, vm.ScanSummary);
+
+        copies.EndEarly = true;
+        await vm.ScanCommand.ExecuteAsync(null);
+
+        Assert.Equal("Scan cancelled.", vm.StatusMessage);
+        Assert.Equal(groups, vm.Groups);
+        Assert.Equal(counts, (vm.GroupCount, vm.DuplicateFileCount, vm.TotalWasted, vm.ScanSummary));
+    }
+
+    [Fact]
+    public async Task AFolderThatCannotBeScanned_AfterAScan_SaysWhy_InPlaceOfTheGroupsBefore()
+    {
+        // Not a scan that ended early: an answer about the folder asked for, which the earlier groups are not.
+        using var copies = new TwoCopies();
+        var vm = new DuplicateFileViewModel(copies.Service, Substitute.For<IDialogService>());
+        await vm.InitializationComplete;
+        vm.SelectedFolder = copies.Folder;
+        await vm.ScanCommand.ExecuteAsync(null);
+        Assert.Single(vm.Groups);
+
+        vm.SelectedFolder = Path.Combine(copies.Folder, "no such folder");
+        await vm.ScanCommand.ExecuteAsync(null);
+
+        Assert.Empty(vm.Groups);
+        Assert.Equal((0, 0, 0L), (vm.GroupCount, vm.DuplicateFileCount, vm.TotalWasted));
+        Assert.Equal(DuplicateFileViewModel.CouldNotScanTitle, vm.EmptyTitle);
+    }
+
+    [Fact]
+    public void WhileAScanRuns_TheEmptyStateSaysSo_RatherThanAVerdict()
+    {
+        var vm = NewVm();
+        var raised = vm.RecordPropertyChanges();
+
+        vm.IsBusy = true;
+
+        Assert.Equal("Scanning…", vm.EmptyTitle);
+        Assert.DoesNotContain("Pick a folder", vm.EmptyMessage, StringComparison.Ordinal);
+        Assert.Contains(nameof(vm.EmptyTitle), raised);
+        Assert.Contains(nameof(vm.EmptyMessage), raised);
+
+        vm.IsBusy = false;
+
+        Assert.Equal("No scan yet", vm.EmptyTitle);
+    }
+
     private static Services.DuplicateFileService.ScanProgress Tick(
         long discovered, long hashed, string file, string phase) =>
         new(discovered, hashed, BytesProcessed: hashed * 1024, CurrentFile: file, Phase: phase);

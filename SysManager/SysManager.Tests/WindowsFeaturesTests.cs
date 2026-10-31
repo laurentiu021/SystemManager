@@ -214,6 +214,35 @@ public class WindowsFeaturesTests
     }
 
     [Fact]
+    public async Task AScanThatIsCancelled_LeavesTheListAndTheCountsAsTheyWere()
+    {
+        // The grid was cleared before the query, so a scan cancelled left it empty while the counts still described
+        // the features before it (#2729).
+        var runner = Substitute.For<IPowerShellRunner>();
+        var call = 0;
+        runner.RunProcessAsync(Arg.Any<string>(), Arg.Any<string>(), Arg.Any<CancellationToken>(),
+                               Arg.Any<System.Text.Encoding?>())
+              .Returns(_ =>
+              {
+                  if (call++ > 0) return Task.FromCanceled<int>(new CancellationToken(canceled: true));
+                  runner.LineReceived += Raise.Event<Action<PowerShellLine>>(PowerShellLine.Output("TelnetClient|Enabled"));
+                  runner.LineReceived += Raise.Event<Action<PowerShellLine>>(PowerShellLine.Output("TFTP|Disabled"));
+                  return Task.FromResult(0);
+              });
+        var vm = ElevatedVm(runner, NoRestorePoint());
+        await vm.ScanCommand.ExecuteAsync(null);
+        var rows = vm.FilteredFeatures.ToList();
+        Assert.Equal(2, rows.Count);   // the premise: a list to keep
+        var counts = (vm.FeatureCount, vm.EnabledCount, vm.Summary);
+
+        await vm.ScanCommand.ExecuteAsync(null);
+
+        Assert.Equal("Scan cancelled.", vm.StatusMessage);
+        Assert.Equal(rows, vm.FilteredFeatures);
+        Assert.Equal(counts, (vm.FeatureCount, vm.EnabledCount, vm.Summary));
+    }
+
+    [Fact]
     public async Task ToggleFeature_MovesTheBar_WhileItRuns()
     {
         // It set IsBusy alone, so the footer's bar sat empty and still through a DISM run of minutes (#2812).

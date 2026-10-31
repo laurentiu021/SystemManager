@@ -126,6 +126,38 @@ public class SelectionSurvivesRescanPart2Tests
         Assert.True(vm.Packages.First(p => p.Id == "Vendor.New").IsSelected);
     }
 
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task AppUpdates_ACheckThatDoesNotFinish_LeavesTheList_AndTheUnticksSurviveTheNextCheck(bool cancelled)
+    {
+        // #2729: the list was cleared before the query, so a check cancelled or failed left nothing, and the next
+        // check carried the ticks from that nothing, as on a first check: the unticked package came back ticked.
+        var winget = Substitute.For<IWingetService>();
+        var call = 0;
+        winget.ListUpgradableAsync(Arg.Any<CancellationToken>()).Returns(_ => call++ switch
+        {
+            1 when cancelled => Task.FromCanceled<List<AppPackage>>(new CancellationToken(canceled: true)),
+            1 => Task.FromException<List<AppPackage>>(new InvalidOperationException("the reason winget gave")),
+            _ => Task.FromResult<List<AppPackage>>([Pkg("Vendor.A"), Pkg("Vendor.B")]),
+        });
+        var vm = new AppUpdatesViewModel(winget);
+        await vm.ScanCommand.ExecuteAsync(null);
+        vm.Packages.First(p => p.Id == "Vendor.A").IsSelected = false;
+        var rows = vm.Packages.ToList();
+
+        await vm.ScanCommand.ExecuteAsync(null);   // ends early
+
+        Assert.Equal(rows, vm.Packages);
+        Assert.False(vm.Packages.First(p => p.Id == "Vendor.A").IsSelected);
+
+        await vm.ScanCommand.ExecuteAsync(null);   // and the next one finishes
+
+        Assert.Equal(3, call);
+        Assert.False(vm.Packages.First(p => p.Id == "Vendor.A").IsSelected);
+        Assert.True(vm.Packages.First(p => p.Id == "Vendor.B").IsSelected);
+    }
+
     // ── Profile Export/Import ──────────────────────────────────────────────
 
     private static SelectableSection Section(string key, bool selected = true) =>

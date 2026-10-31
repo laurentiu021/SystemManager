@@ -10,6 +10,24 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.136.49] - 2026-10-31
+
+**A scan you cancel, or one that fails, leaves the list as it was, and App Updates no longer
+ticks again an app you unticked.**
+
+### Fixed
+- App Updates, Duplicate Finder, Disk Analyzer, Uninstaller, Windows Features and Windows Update
+  emptied their list when a scan started and filled it only when the scan finished. While a scan
+  ran, which for winget or a duplicate scan can take minutes, the tab already said "No updates
+  available", "No duplicates found" or "Nothing to show", and a scan you cancelled, or one that
+  failed, left that next to "Scan cancelled." while the counts still described the list before.
+  On App Updates the next scan then ticked again every app you had unticked to stay on an older
+  version, ready for Upgrade selected. A scan now keeps the list until the new one arrives, one
+  that does not finish leaves it as it was, and while a scan runs the empty list says it is
+  scanning. A folder that cannot be scanned at all still says why, in place of what an earlier
+  scan listed. The empty list was there since each tab got its list, and the unticks coming back
+  since App Updates started keeping them in 1.101.5.
+
 ## [1.136.48] - 2026-10-31
 
 **Pausing Windows updates for a number of days now pauses them for that long, the way Windows

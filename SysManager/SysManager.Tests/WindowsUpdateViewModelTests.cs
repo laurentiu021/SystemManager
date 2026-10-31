@@ -615,6 +615,65 @@ public sealed class WindowsUpdateViewModelTests : IDisposable
         Assert.True(vm.AllSelected);
     }
 
+    // ---------- a list that does not finish leaves the one before it (#2729) ----------
+    //
+    // The rows were cleared before the scan, so a cancelled or failed one left an empty grid while the count, the
+    // summary and Select all still described the list before it.
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task AListThatDoesNotFinish_LeavesTheRowsTheCountAndTheTicksAsTheyWere(bool cancelled)
+    {
+        var wu = Substitute.For<IWindowsUpdateService>();
+        var call = 0;
+        wu.ScanAsync(Arg.Any<CancellationToken>()).Returns(_ => call++ switch
+        {
+            0 => Task.FromResult<IReadOnlyList<UpdateEntry>>(
+                [new UpdateEntry { Title = "Update a", UpdateId = "a" }, new UpdateEntry { Title = "Update b", UpdateId = "b" }]),
+            _ when cancelled => Task.FromCanceled<IReadOnlyList<UpdateEntry>>(new CancellationToken(canceled: true)),
+            _ => Task.FromException<IReadOnlyList<UpdateEntry>>(new System.Runtime.InteropServices.COMException("failed", unchecked((int)0x8024402C))),
+        });
+        var vm = new WindowsUpdateViewModel(Substitute.For<IPowerShellRunner>(), wu, Policy(), () => false);
+        await vm.ListUpdatesCommand.ExecuteAsync(null);
+        Assert.Single(vm.Updates, u => u.UpdateId == "a").IsSelected = false;
+        var rows = vm.Updates.ToList();
+        var header = vm.AllSelected;
+
+        await vm.ListUpdatesCommand.ExecuteAsync(null);
+
+        Assert.Equal(cancelled ? "Cancelled." : "Windows Update Agent error: 0x8024402C", vm.StatusMessage);
+        Assert.Equal(rows, vm.Updates);
+        Assert.False(Ticked(vm, "a"));
+        Assert.Equal((2, "2 updates found.", header), (vm.UpdateCount, vm.TableSummary, vm.AllSelected));
+    }
+
+    [Fact]
+    public async Task AListAfterALookAtTheHistory_DoesNotShowTheHistoryAsTheList_WhileItRuns()
+    {
+        // The history's rows are not updates to install, so they go when a list starts, as they did before.
+        var scan = new TaskCompletionSource<IReadOnlyList<UpdateEntry>>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var wu = Substitute.For<IWindowsUpdateService>();
+        wu.ScanAsync(Arg.Any<CancellationToken>()).Returns(scan.Task);
+        var vm = new WindowsUpdateViewModel(Substitute.For<IPowerShellRunner>(), wu, Policy(), () => false);
+        vm.IsShowingHistory = true;
+        vm.Updates.Add(new UpdateEntry { Title = "Installed last week", Category = "History" });
+        vm.UpdateCount = 1;
+        vm.TableSummary = "1 history entries.";
+
+        var list = vm.ListUpdatesCommand.ExecuteAsync(null);
+        try
+        {
+            Assert.Empty(vm.Updates);
+            Assert.Equal((0, ""), (vm.UpdateCount, vm.TableSummary));
+        }
+        finally
+        {
+            scan.SetResult([]);
+            await list;
+        }
+    }
+
     // ---------- select-all header checkbox (audit #66) ----------
 
     private WindowsUpdateViewModel VmWithUpdates(int count)

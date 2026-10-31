@@ -90,7 +90,14 @@ public sealed class DiskAnalyzerService
         string rootPath,
         IProgress<AnalysisProgress>? progress = null,
         CancellationToken ct = default)
-        => Task.Run(() => Analyze(rootPath, progress, ct, Directory.GetDirectories), ct);
+        => Task.Run(() => Analyze(rootPath, progress, ct, _listDirectories), ct);
+
+    private readonly Func<string, string[]> _listDirectories;
+
+    public DiskAnalyzerService() : this(Directory.GetDirectories) { }
+
+    /// <summary>Analyzes through the top-level listing given, so a test decides what it finds, or how it ends.</summary>
+    internal DiskAnalyzerService(Func<string, string[]> listDirectories) => _listDirectories = listDirectories;
 
     /// <summary><see cref="AnalyzeAsync"/>'s body, handed the top-level listing so each way it fails is testable.</summary>
     /// <remarks>

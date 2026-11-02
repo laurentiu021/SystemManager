@@ -337,6 +337,38 @@ public class RestorePointServiceTests
         Assert.Equal(expected, rp.TypeDisplay);
     }
 
+    /// <summary>
+    /// Windows reports the type as a number. The names a console shows come from PowerShell's table view, which the
+    /// list's <c>Select-Object</c> bypasses, so the column read "12" and "0" (#2754).
+    /// </summary>
+    [Theory]
+    [InlineData("0", "App install")]
+    [InlineData("1", "App uninstall")]
+    [InlineData("6", "Before a restore")]
+    [InlineData("7", "Automatic")]
+    [InlineData("10", "Driver install")]
+    [InlineData("12", "Manual / settings")]
+    [InlineData("13", "Cancelled operation")]
+    [InlineData("99", "Other (99)")]
+    public void TypeDisplay_NamesTheNumberWindowsReports(string raw, string expected)
+    {
+        var rp = new RestorePoint(1, "d", new DateTime(2026, 1, 1), raw, "e");
+        Assert.Equal(expected, rp.TypeDisplay);
+    }
+
+    /// <summary>A row as the list reads it, with the type a number, is shown by name.</summary>
+    [Fact]
+    public void ARowWhoseTypeIsANumber_IsShownByName()
+    {
+        var row = MakeRow(7, "Before update", "2026-01-02T13:14:15.0000000+00:00", null, null);
+        row.Properties.Remove("RestorePointType");
+        row.Properties.Add(new PSNoteProperty("RestorePointType", 12u));
+
+        var point = Assert.Single(RestorePointService.ParseRestorePoints([row]));
+
+        Assert.Equal("Manual / settings", point.TypeDisplay);
+    }
+
     [Fact]
     public void CreatedDisplay_FormatsTimestamp()
     {

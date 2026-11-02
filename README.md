@@ -651,7 +651,7 @@ Edit Windows environment variables without the cramped built-in dialog:
 
 ### Restore Points
 - List every Windows System Restore point — sequence number, date, description,
-  and type — newest first
+  and type in words (App install, Automatic, Manual / settings, …) — newest first
 - **Create** a restore point with an optional custom description (enables System
   Restore on the system drive first if it's off). Windows makes at most one a day;
   when it declines, this tab says so rather than reporting a point that was
@@ -673,7 +673,8 @@ Edit Windows environment variables without the cramped built-in dialog:
   after ten minutes, so a System Restore that stops answering cannot hold up every
   other change
 - **Restore** the PC to a selected point, with a clear confirmation that warns
-  Windows will restart and that programs/drivers added since that point are removed
+  Windows will restart and that programs/drivers added since that point are removed,
+  and names anything SysManager is still doing that the restart would cut off
 - Admin elevation banner. Listing, creating and restoring all need administrator
   rights, because Windows answers a standard user's request for the list with
   "Access denied". The tab says so, rather than reporting that there are no

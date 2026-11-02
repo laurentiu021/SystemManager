@@ -265,7 +265,11 @@ public sealed partial class RestorePointsViewModel : ElevatedViewModelBase
                 $"Restore this PC to:\n\n#{point.SequenceNumber} — {point.Description}\n{point.CreatedDisplay}\n\n" +
                 "Windows will RESTART to apply the restore. Open files should be saved and " +
                 "other apps closed first. Your personal files are not affected, but programs and " +
-                "drivers installed after this point will be removed.\n\nContinue?",
+                "drivers installed after this point will be removed." +
+                // The restart ends SysManager as closing it does, so the question names what is still running, as
+                // every other way out does. The restore takes the system-change lock alone, so a clean-up or an
+                // install is not stopped by it (#2754).
+                QuitGuard.ActiveWorkWarning() + "\n\nContinue?",
                 "Restore System — this will restart Windows"))
         {
             StatusMessage = "Restore cancelled.";

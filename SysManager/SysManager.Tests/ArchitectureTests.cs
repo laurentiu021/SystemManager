@@ -10989,6 +10989,54 @@ public partial class ArchitectureTests
     }
 
     /// <summary>
+    /// Every font family that names Segoe Fluent Icons falls back to Segoe MDL2 Assets.
+    /// </summary>
+    /// <remarks>
+    /// Segoe Fluent Icons comes with Windows 11 and not with Windows 10, where a glyph that names it alone draws an empty
+    /// box. Seven Dashboard glyphs did, beside others in the same view that named both (#2756). Read from every
+    /// <c>FontFamily</c> attribute and every <c>FontFamily</c> setter in the app's XAML.
+    /// </remarks>
+    [Fact]
+    public void EveryFontFamilyNamingSegoeFluentIcons_FallsBackToSegoeMdl2Assets()
+    {
+        Assert.False(FallsBackToMdl2("Segoe Fluent Icons"));
+        Assert.False(FallsBackToMdl2("Segoe MDL2 Assets,Segoe Fluent Icons"));
+        Assert.True(FallsBackToMdl2("Segoe Fluent Icons,Segoe MDL2 Assets"));
+
+        var offenders = new List<string>();
+        var named = 0;
+        foreach (var file in SourceFilesUnder(TestPaths.AppProject(), ".xaml"))
+        {
+            foreach (var element in XDocument.Parse(File.ReadAllText(file)).Descendants())
+            {
+                var family = (string?)element.Attribute("FontFamily")
+                             ?? (element.Name.LocalName == "Setter" && (string?)element.Attribute("Property") == "FontFamily"
+                                 ? (string?)element.Attribute("Value")
+                                 : null);
+                if (family is null || !family.Contains("Segoe Fluent Icons", StringComparison.Ordinal)) continue;
+
+                named++;
+                if (!FallsBackToMdl2(family))
+                    offenders.Add($"{Path.GetFileName(file)}: {element.Name.LocalName} FontFamily=\"{family}\"");
+            }
+        }
+
+        // Vacuity floor: 58 were read when this was written.
+        Assert.True(named >= 50,
+            $"Only {named} font families naming Segoe Fluent Icons were read — the guard is not reading them.");
+        Assert.True(offenders.Count == 0,
+            "These name Segoe Fluent Icons with no Segoe MDL2 Assets after it, so on Windows 10, which has no Segoe "
+            + "Fluent Icons, they draw empty boxes. Write FontFamily=\"Segoe Fluent Icons,Segoe MDL2 Assets\":\n  "
+            + string.Join("\n  ", offenders));
+
+        static bool FallsBackToMdl2(string family) =>
+            family.Split(',').Select(name => name.Trim())
+                .SkipWhile(name => name != "Segoe Fluent Icons")
+                .Skip(1)
+                .Contains("Segoe MDL2 Assets");
+    }
+
+    /// <summary>
     /// Every sidebar group carries a distinct glyph, and none of them is the glyph the elevation badge
     /// draws.
     /// </summary>

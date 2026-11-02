@@ -23,6 +23,12 @@ internal sealed class HeldTimers(DateTimeOffset? now = null) : TimeProvider
 
     public override DateTimeOffset GetUtcNow() => now ?? base.GetUtcNow();
 
+    /// <summary>How many timers were asked for.</summary>
+    public int Asked
+    {
+        get { lock (_gate) return _timers.Count; }
+    }
+
     /// <summary>The due time of the one timer asked for.</summary>
     public TimeSpan OnlyDue
     {

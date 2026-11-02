@@ -306,7 +306,10 @@ public sealed partial class DashboardViewModel : ElevatedViewModelBase
         _newestAtStorageRead = NewestActivity();
         await LoadDrivesAsync();
         LoadActivity();
-        StartPollingLoop();   // starts BOTH the vitals and temperature loops
+        // Only while the tab is shown: the user can leave it during the reads above, and that hide found nothing to
+        // cancel yet, so the loops started here ran hidden until the tab was shown and left again (#2756). Showing the
+        // tab starts them otherwise.
+        if (IsActive) StartPollingLoop();   // starts BOTH the vitals and temperature loops
         await LoadHealthScoreAsync();
         _ = StartAlertScans(atStartup: true);
         await LoadTemperaturesAsync();

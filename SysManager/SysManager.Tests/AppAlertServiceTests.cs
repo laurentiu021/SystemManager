@@ -57,6 +57,123 @@ public class AppAlertServiceTests
         Assert.Equal(0, service.CheckNow());
     }
 
+    // ---------- what Windows lists, and what an update is (#2769) ----------
+    // The alerts read the machine's uninstall entries themselves and kept every one with a name, and remembered them by
+    // that name. The hidden parts of .NET and Visual C++ and every update were announced as new programs, and an app
+    // with its version in its name was announced again at each update.
+
+    private const string MachineList = @"HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\";
+    private const string UserList = @"HKEY_CURRENT_USER\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\";
+
+    private static UninstallEntry Entry(string key, string name, string publisher = "Contoso", bool component = false,
+                                        bool update = false, string icon = "") =>
+        new(name, publisher, "", "", component, update, Key: key, DisplayIcon: icon);
+
+    private static AppInstallEntry Installed(string key, string name, string publisher) =>
+        new() { Name = name, Publisher = publisher, Source = "Registry", UninstallKey = key };
+
+    /// <summary>
+    /// Only what Windows' own Installed apps list shows becomes an alert: a hidden component, an update and an entry with
+    /// no name do not, and the current user's list is read beside the machine's (#2769).
+    /// </summary>
+    [Fact]
+    public void TheList_IsWhatWindowsShows_TheUsersIncluded()
+    {
+        var listed = AppAlertService.Listed(new UninstallList(
+        [
+            Entry(MachineList + "Contoso", "Contoso Player", icon: @"C:\Program Files\Contoso\player.exe,0"),
+            Entry(MachineList + "{AppHost}", "Microsoft .NET AppHost Pack - 10.0.13 (x64)", "Microsoft Corporation",
+                  component: true),
+            Entry(MachineList + "KB5001", "Update for Contoso Player", update: true),
+            Entry(MachineList + "Unnamed", ""),
+            Entry(UserList + "Notes", "Contoso Notes"),
+        ], Complete: true));
+
+        Assert.Equal(["Contoso Player", "Contoso Notes"], listed.Select(a => a.Name));
+        Assert.Equal([MachineList + "Contoso", UserList + "Notes"], listed.Select(a => a.UninstallKey));
+        Assert.Equal([@"C:\Program Files\Contoso"], listed[0].Locations);
+    }
+
+    /// <summary>
+    /// An update that renames its entry and keeps its key is not a new install, though the new name is more than a new
+    /// version number: the key is what an update keeps (#2769).
+    /// </summary>
+    [Fact]
+    public void AnUpdateThatRenamesItsEntry_IsNotAnnounced()
+    {
+        List<AppInstallEntry> installed = [Installed(MachineList + "Contoso", "Contoso Player 4.2", "Contoso")];
+        using var service = new AppAlertService(() => [.. installed]);
+        service.TakeBaseline();
+        service.Start();
+
+        installed[0] = Installed(MachineList + "Contoso", "Contoso Media Player 5.0", "Contoso");
+
+        Assert.Equal(0, service.CheckNow());
+    }
+
+    /// <summary>
+    /// An update that keeps its key and puts its version in its name, as 7-Zip's does, is not a new install either (#2769).
+    /// </summary>
+    [Fact]
+    public void AnUpdateThatChangesTheVersionInItsName_IsNotAnnounced()
+    {
+        List<AppInstallEntry> installed = [Installed(MachineList + "7-Zip", "7-Zip 24.08 (x64)", "Igor Pavlov")];
+        using var service = new AppAlertService(() => [.. installed]);
+        service.TakeBaseline();
+        service.Start();
+
+        installed[0] = Installed(MachineList + "7-Zip", "7-Zip 25.01 (x64)", "Igor Pavlov");
+
+        Assert.Equal(0, service.CheckNow());
+    }
+
+    /// <summary>
+    /// A version that comes with a new key of its own, as Python's installer writes, is not a new install either: the same
+    /// publisher, and the same name once the version is taken out (#2769).
+    /// </summary>
+    [Fact]
+    public void AVersionWithANewKeyOfItsOwn_IsNotAnnounced()
+    {
+        List<AppInstallEntry> installed =
+            [Installed(MachineList + "{Python-3.12.4}", "Python 3.12.4 (64-bit)", "Python Software Foundation")];
+        using var service = new AppAlertService(() => [.. installed]);
+        service.TakeBaseline();
+        service.Start();
+
+        installed.Add(Installed(MachineList + "{Python-3.13.0}", "Python 3.13.0 (64-bit)", "Python Software Foundation"));
+
+        Assert.Equal(0, service.CheckNow());
+    }
+
+    /// <summary>
+    /// A program not seen before is announced, though one of the same name from another publisher was there, and so is
+    /// one installed for the current user only (#2769).
+    /// </summary>
+    [Fact]
+    public void ANewProgram_IsAnnouncedOnce_FromEitherList()
+    {
+        List<AppInstallEntry> installed = [Installed(MachineList + "Notes", "Notes", "Contoso")];
+        using var service = new AppAlertService(() => [.. installed]);
+        service.TakeBaseline();
+        service.Start();
+
+        installed.Add(Installed(MachineList + "Fabrikam Notes", "Notes", "Fabrikam"));
+        installed.Add(Installed(UserList + "Sketch", "Sketch 2.1", "Fabrikam"));
+
+        Assert.Equal(2, service.CheckNow());
+        Assert.Equal(0, service.CheckNow());
+    }
+
+    [Theory]
+    [InlineData("7-Zip 24.08 (x64)", "7-Zip (x64)")]
+    [InlineData("Python 3.12.4 (64-bit)", "Python (64-bit)")]
+    [InlineData("Microsoft Visual C++ 2015-2022 Redistributable (x64) - 14.38.33135", "Microsoft Visual C++ 2015-2022 Redistributable (x64)")]
+    [InlineData("Contoso Player (v2.1)", "Contoso Player")]
+    [InlineData("Visual Studio 2022", "Visual Studio 2022")]
+    [InlineData("Notepad++ (64-bit x64)", "Notepad++ (64-bit x64)")]
+    public void WithoutVersion_TakesOutTheVersionAndNothingElse(string name, string expected)
+        => Assert.Equal(expected, AppAlertService.WithoutVersion(name));
+
     // ---------- one install seen by both detectors (#2878) ----------
     // An installer creates its folder first and writes its uninstall entry minutes later, and the two detectors were
     // never linked: VLC came up as "VideoLAN" and as "VLC media player", two installs.

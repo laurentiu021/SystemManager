@@ -34,4 +34,10 @@ public sealed partial class AppInstallEntry : ObservableObject
     /// with the entry to tell which new folder it belongs to, and not kept.
     /// </summary>
     internal IReadOnlyList<string> Locations { get; init; } = [];
+
+    /// <summary>
+    /// For an uninstall entry, its registry key, which an update usually keeps while the name changes. Read with the
+    /// entry to tell an update from an install, and not kept.
+    /// </summary>
+    internal string UninstallKey { get; init; } = "";
 }

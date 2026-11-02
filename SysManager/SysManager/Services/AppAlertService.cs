@@ -6,7 +6,7 @@ using System.Collections.Concurrent;
 using System.Globalization;
 using System.IO;
 using System.Text;
-using Microsoft.Win32;
+using System.Text.RegularExpressions;
 using Serilog;
 using SysManager.Helpers;
 using SysManager.Models;
@@ -17,12 +17,17 @@ namespace SysManager.Services;
 /// Monitors Program Files directories and registry uninstall keys for new
 /// application installations. Raises an event when a new app is detected.
 /// </summary>
-public sealed class AppAlertService : IDisposable
+public sealed partial class AppAlertService : IDisposable
 {
     private readonly List<FileSystemWatcher> _watchers = new();
     private readonly Lock _watcherLock = new();
     private readonly ConcurrentDictionary<string, bool> _knownFolders = new(StringComparer.OrdinalIgnoreCase);
-    private readonly ConcurrentDictionary<string, bool> _knownRegistryApps = new(StringComparer.OrdinalIgnoreCase);
+
+    // The uninstall entries seen, by key, and the programs, by publisher and name without its version. An update keeps
+    // its key while its name changes, as 7-Zip's does, or writes a new key under the same name and publisher, as
+    // Python's does; neither is a new install. Remembered by name alone, both were announced at every update (#2769).
+    private readonly ConcurrentDictionary<string, bool> _knownKeys = new(StringComparer.OrdinalIgnoreCase);
+    private readonly ConcurrentDictionary<string, bool> _knownPrograms = new(StringComparer.OrdinalIgnoreCase);
     private readonly SynchronizationContext? _syncContext;
     private readonly Func<IReadOnlyList<AppInstallEntry>> _readRegistryApps;
     private readonly TimeProvider _clock;
@@ -50,7 +55,7 @@ public sealed class AppAlertService : IDisposable
     /// Creates a new instance, capturing the current <see cref="SynchronizationContext"/>
     /// so that events are raised on the UI thread.
     /// </summary>
-    public AppAlertService() : this(GetRegistryApps) { }
+    public AppAlertService() : this(ReadListedApps) { }
 
     /// <summary>
     /// Reads the installed-programs list from <paramref name="readRegistryApps"/> instead of the registry, so a
@@ -81,7 +86,10 @@ public sealed class AppAlertService : IDisposable
         }
 
         foreach (var app in _readRegistryApps())
-            _knownRegistryApps[app.Name] = true;
+        {
+            _knownKeys[KeyOf(app)] = true;
+            _knownPrograms[ProgramOf(app)] = true;
+        }
     }
 
     /// <summary>
@@ -149,56 +157,59 @@ public sealed class AppAlertService : IDisposable
     }
 
     /// <summary>
-    /// Gets a snapshot of currently installed apps from registry uninstall keys.
+    /// The programs Windows' own Installed apps list shows, the machine's and the current user's, read through the
+    /// reader Recent Changes and the leftover search use.
     /// </summary>
-    public static IReadOnlyList<AppInstallEntry> GetRegistryApps()
-    {
-        List<AppInstallEntry> apps = [];
-        string[] paths =
-        [
-            @"SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall",
-            @"SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall"
-        ];
+    /// <remarks>
+    /// It read the machine's lists itself and kept every entry with a name, so the hidden parts of .NET and Visual C++,
+    /// and updates, were announced as programs, and a program installed for the current user only was not seen (#2769).
+    /// </remarks>
+    internal static IReadOnlyList<AppInstallEntry> ReadListedApps() => Listed(UninstallEntries.ReadAll());
 
-        foreach (var path in paths)
-        {
-            try
+    /// <summary>The entries of <paramref name="installed"/> that Windows lists, as an alert names them.</summary>
+    internal static IReadOnlyList<AppInstallEntry> Listed(UninstallList installed) =>
+    [
+        .. installed.Entries
+            .Where(e => e.IsListed)
+            .Select(e => new AppInstallEntry
             {
-                using var key = Registry.LocalMachine.OpenSubKey(path);
-                if (key is null) continue;
+                Name = e.Name,
+                Publisher = e.Publisher,
+                InstallPath = e.InstallLocation,
+                Source = "Registry",
+                Locations = FoldersOf(e.UninstallCommand, e.DisplayIcon),
+                UninstallKey = e.Key,
+            }),
+    ];
 
-                foreach (var subKeyName in key.GetSubKeyNames())
-                {
-                    try
-                    {
-                        using var sub = key.OpenSubKey(subKeyName);
-                        if (sub is null) continue;
+    /// <summary>What an entry is remembered by: its registry key, or its name where it has none.</summary>
+    private static string KeyOf(AppInstallEntry app) => app.UninstallKey.Length > 0 ? app.UninstallKey : app.Name;
 
-                        var name = sub.GetValue("DisplayName") as string;
-                        if (string.IsNullOrWhiteSpace(name)) continue;
+    /// <summary>The program an entry is of: its publisher and its name without the version in it.</summary>
+    private static string ProgramOf(AppInstallEntry app) => app.Publisher.Trim() + "\u001f" + WithoutVersion(app.Name);
 
-                        apps.Add(new AppInstallEntry
-                        {
-                            Name = name,
-                            Publisher = sub.GetValue("Publisher") as string ?? "",
-                            InstallPath = sub.GetValue("InstallLocation") as string ?? "",
-                            Source = "Registry",
-                            Locations = FoldersOf(sub.GetValue("UninstallString") as string,
-                                                  sub.GetValue("DisplayIcon") as string),
-                        });
-                    }
-                    catch (IOException) { /* skip inaccessible key */ }
-                    catch (UnauthorizedAccessException) { /* skip protected key */ }
-                    catch (System.Security.SecurityException) { /* skip protected key */ }
-                }
-            }
-            catch (IOException) { /* registry path not available */ }
-            catch (UnauthorizedAccessException) { /* registry path not available */ }
-            catch (System.Security.SecurityException) { /* registry path not available */ }
-        }
-
-        return apps;
+    /// <summary>
+    /// <paramref name="name"/> without the version numbers in it: "7-Zip 24.08 (x64)" reads "7-Zip (x64)", and
+    /// "Python 3.12.4 (64-bit)" reads "Python (64-bit)". A number with no dot, as in "Visual Studio 2022", stays.
+    /// </summary>
+    internal static string WithoutVersion(string name)
+    {
+        var stripped = VersionNumber().Replace(name, " ");
+        stripped = EmptyBrackets().Replace(stripped, " ");
+        return Spaces().Replace(stripped, " ").Trim(' ', '-');
     }
+
+    /// <summary>A version: digits with at least one dot, as "24.08" or "v3.12.4", standing as a word of its own.</summary>
+    [GeneratedRegex(@"(?<![\w.])v?\d+(?:\.\d+)+[a-z]?(?![\w.])", RegexOptions.IgnoreCase)]
+    private static partial Regex VersionNumber();
+
+    /// <summary>Brackets left empty once their version is gone.</summary>
+    [GeneratedRegex(@"\(\s*\)|\[\s*\]")]
+    private static partial Regex EmptyBrackets();
+
+    /// <summary>A run of white space.</summary>
+    [GeneratedRegex(@"\s+")]
+    private static partial Regex Spaces();
 
     /// <summary>
     /// The folders an uninstall entry's uninstaller and icon are in. Its command is read by the rule the Uninstaller
@@ -284,9 +295,11 @@ public sealed class AppAlertService : IDisposable
         try
         {
             var current = _readRegistryApps();
+            // Each new key is claimed once, so a pass that overlaps the timer's announces it once. A new key of a program
+            // already known is an update that wrote a new entry: it is learned, and not announced.
             foreach (var app in current
-                         .Where(a => !_knownRegistryApps.ContainsKey(a.Name))
-                         .Where(a => _knownRegistryApps.TryAdd(a.Name, true)))
+                         .Where(a => _knownKeys.TryAdd(KeyOf(a), true))
+                         .Where(a => _knownPrograms.TryAdd(ProgramOf(a), true)))
             {
                 app.DetectedAt = _clock.GetLocalNow().DateTime;
                 if (ClaimFolder(app) is { } folder)

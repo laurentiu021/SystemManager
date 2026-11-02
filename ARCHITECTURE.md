@@ -1175,7 +1175,11 @@ Key services:
   needs a handful rather than the whole list, and `IsDisabled` is the one test for
   the state Enable undoes.
 - `AppAlertService` — monitors for new application installations via
-  FileSystemWatcher and registry polling. A new uninstall entry that points into a folder announced within
+  FileSystemWatcher and registry polling. The poll reads `UninstallEntries`, the machine's lists and the user's,
+  and keeps the `IsListed` entries, so hidden components and updates are not announced (`Listed`). It remembers
+  each entry by its key, and each program by its publisher and its name without the version (`WithoutVersion`),
+  so an update that renames its entry or writes a new one is learned, not announced (#2769). A new uninstall entry
+  that points into a folder announced within
   `RecentChangesService.SameInstall` claims that folder's alert, once, and raises `AppIdentified` instead of
   `NewAppDetected`. `FoldersOf` reads the folders of the entry's uninstaller and icon, the uninstaller by
   `UninstallerService.ParseUninstallCommand`, and `BelongsTo` decides through `SystemPaths.IsInsideSubtree` (#2878).

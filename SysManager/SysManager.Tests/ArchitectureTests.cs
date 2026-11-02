@@ -14855,7 +14855,9 @@ public partial class ArchitectureTests
     /// an already-tolerated path fails, and so does fixing a pair without deleting its entry — a stale
     /// exemption is a lie about the codebase that the next reader will trust. Six of the original nine
     /// were PrivacyService and SettingsWatchdogService's shared policy paths, resolved by giving them one
-    /// owner, <see cref="Helpers.RegistryPaths"/>, rather than tolerating the duplication forever (#2860).</para>
+    /// owner, <see cref="Helpers.RegistryPaths"/>, rather than tolerating the duplication forever (#2860). Two more
+    /// were the Uninstall roots, copied in AppAlertService until New App Alerts read them through
+    /// <see cref="UninstallEntries"/>, which takes them from <see cref="UninstallerService"/> (#2769).</para>
     /// </summary>
     [Fact]
     public void NoRegistryPath_IsDeclaredInTwoPlaces()
@@ -14867,13 +14869,6 @@ public partial class ArchitectureTests
             // display-adapters class; neither owns it.
             [@"system\currentcontrolset\control\class\{4d36e968-e325-11ce-bfc1-08002be10318}"] =
                 "Helpers/GpuVramHelper.cs,Services/PerformanceService.cs",
-
-            // The two Uninstall roots. AppAlertService watches them for newly installed apps;
-            // UninstallerService enumerates them to list programs. Same roots, different jobs.
-            [@"software\microsoft\windows\currentversion\uninstall"] =
-                "Services/AppAlertService.cs,Services/UninstallerService.cs",
-            [@"software\wow6432node\microsoft\windows\currentversion\uninstall"] =
-                "Services/AppAlertService.cs,Services/UninstallerService.cs",
         };
 
         var appDir = TestPaths.AppProject();

@@ -21,7 +21,7 @@ public class BootAnalyzerViewModelTests
 {
     private static BootAnalyzerViewModel NewVm(bool elevated, Func<ScriptedBootReader> boots, Func<ScriptedBootReader> slow)
         => new(new BootAnalyzerService(xpath => xpath.Contains("EventID=100", StringComparison.Ordinal) ? boots() : slow()),
-               Substitute.For<INavigationService>(), () => elevated);
+               Substitute.For<INavigationService>(), isElevated: () => elevated);
 
     [Fact]
     public async Task AReadThatFailed_WhenElevated_SaysSo_NotThatThereAreNoBootsYet()

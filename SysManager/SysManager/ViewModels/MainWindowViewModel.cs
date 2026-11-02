@@ -213,8 +213,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable,
     private void InitNavigation()
     {
         IsElevated = AdminHelper.IsElevated();
-        ElevationBadge = IsElevated ? "Administrator" : "Standard user";
-        Title = IsElevated ? "SysManager — Administrator" : "SysManager";
+        (ElevationBadge, Title) = DescribeElevation(IsElevated);
         Log.Information("MainWindow initialized. Elevated: {IsElevated}", IsElevated);
 
         foreach (var g in BuildNavGroups())
@@ -496,6 +495,16 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable,
 
     /// <inheritdoc cref="TaskbarProgressState"/>
     public double TaskbarProgressValue => MapTaskbarProgress(SelectedNav).Value;
+
+    /// <summary>
+    /// The badge and the window title that say whether SysManager runs as administrator.
+    /// </summary>
+    /// <remarks>
+    /// A method of the answer, so a test decides it rather than reading the PC it runs on (#2742).
+    /// </remarks>
+    internal static (string Badge, string Title) DescribeElevation(bool isElevated) => isElevated
+        ? ("Administrator", "SysManager — Administrator")
+        : ("Standard user", "SysManager");
 
     /// <summary>
     /// Maps a tab's mirrored progress onto the taskbar's two-part API.

@@ -425,6 +425,12 @@ Edit Windows environment variables without the cramped built-in dialog:
   and Start too
 - **Schedule it** — set a dark time and a light time (e.g. 19:00 / 07:00) and the
   theme follows automatically; handles the overnight switch correctly
+- **A switch you make holds** — with the schedule on, Dark or Light stays until the
+  schedule's next change, as a switch made in Windows Settings does, and the status line
+  says when the schedule takes over. Changing the times applies the schedule at once
+- A time the schedule cannot read, such as `19h`, is refused: the box goes back to the
+  time the schedule runs on, and the status line says how to write one. A time it reads
+  is written the way it reads it, so `7:30` shows as `07:30`
 - Applies immediately with no sign-out, no admin needed, and is fully reversible. SysManager
   keeps responding while the other open programs catch up with the change
 - **Honest about its limits** — the schedule runs while SysManager (or its tray)

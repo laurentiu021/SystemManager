@@ -342,6 +342,171 @@ public class DarkModeViewModelTests
         public void Release() => _released.TrySetResult();
     }
 
+    // ── A switch made here holds until the schedule's next change (#2760) ─────────────
+
+    /// <summary>A clock that says what the test last set, in a time zone with no offset, so local time is that too.</summary>
+    private sealed class ManualClock : TimeProvider
+    {
+        public DateTime Now { get; set; } = new(2026, 11, 2, 21, 0, 0);
+
+        public override DateTimeOffset GetUtcNow() => new(Now, TimeSpan.Zero);
+
+        public override TimeZoneInfo LocalTimeZone => TimeZoneInfo.Utc;
+    }
+
+    /// <summary>A view model whose schedule is on, dark from 19:00 to 07:00, at <paramref name="clock"/>'s time.</summary>
+    private static DarkModeViewModel Scheduled(IWindowsThemeService service, ManualClock clock)
+    {
+        service.LoadSchedule().Returns(new DarkModeSchedule { Enabled = true, DarkStart = "19:00", LightStart = "07:00" });
+        var vm = new DarkModeViewModel(service, clock);
+        vm.InitializationComplete.GetAwaiter().GetResult();
+        return vm;
+    }
+
+    /// <summary>What the schedule's timer does once a minute, run to its end.</summary>
+    private static async Task Tick(DarkModeViewModel vm)
+    {
+        vm.OnScheduleTick();
+        await vm.InitializationComplete;
+    }
+
+    /// <summary>
+    /// Light pressed at 21:00, while the schedule wants dark, stays light at the next minute's check (#2760).
+    /// </summary>
+    /// <remarks>
+    /// The check compared the theme the schedule wants with the one SysManager last set, so the switch it had just
+    /// made was undone within a minute, while the same switch made in Windows Settings, which it does not see, held.
+    /// </remarks>
+    [Fact]
+    public async Task ASwitchMadeHere_IsNotUndoneAtTheNextMinute()
+    {
+        var service = FakeThemeService();
+        service.GetCurrentTheme().Returns(WindowsTheme.Dark);
+        var clock = new ManualClock();
+        var vm = Scheduled(service, clock);
+
+        await vm.SwitchToLightCommand.ExecuteAsync(null);
+        clock.Now = clock.Now.AddMinutes(1);
+        await Tick(vm);
+
+        service.DidNotReceive().SetTheme(Arg.Is(true), Arg.Any<bool>());
+        Assert.False(vm.IsDarkNow);
+        Assert.Equal("Switched to light. It stays so until the schedule turns dark at 19:00.", vm.StatusMessage);
+    }
+
+    /// <summary>
+    /// Dark pressed at 10:00 holds through the light window, and the schedule takes over again at its next change.
+    /// </summary>
+    [Fact]
+    public async Task ASwitchMadeHere_HoldsOnlyUntilTheSchedulesNextChange()
+    {
+        var service = FakeThemeService();
+        var clock = new ManualClock { Now = new DateTime(2026, 11, 2, 10, 0, 0) };
+        var vm = Scheduled(service, clock);
+
+        await vm.SwitchToDarkCommand.ExecuteAsync(null);
+        Assert.Equal("Switched to dark. It stays so until the schedule turns light at 07:00.", vm.StatusMessage);
+
+        clock.Now = new DateTime(2026, 11, 2, 18, 59, 0);
+        await Tick(vm);
+        service.DidNotReceive().SetTheme(Arg.Is(false), Arg.Any<bool>());
+
+        // 19:00 was the next change, and the schedule wants dark from then, so it is at 07:00 that it turns light.
+        clock.Now = new DateTime(2026, 11, 3, 7, 0, 0);
+        await Tick(vm);
+        service.Received(1).SetTheme(Arg.Is(false), Arg.Any<bool>());
+        Assert.False(vm.IsDarkNow);
+    }
+
+    [Theory]
+    [InlineData("2026-11-02 21:00", "19:00", "07:00", "2026-11-03 07:00")]
+    [InlineData("2026-11-02 10:00", "19:00", "07:00", "2026-11-02 19:00")]
+    [InlineData("2026-11-02 19:00", "19:00", "07:00", "2026-11-03 07:00")]   // a change that is happening now is not next
+    [InlineData("2026-11-02 06:59", "19:00", "07:00", "2026-11-02 07:00")]
+    [InlineData("2026-11-02 08:00", "09:00", "09:00", "2026-11-02 09:00")]   // the same two times
+    [InlineData("2026-11-02 09:00", "09:00", "09:00", "2026-11-03 09:00")]
+    public void TheSchedulesNextChange_IsTheFirstOfItsTwoTimesStillToCome(
+        string now, string darkStart, string lightStart, string expected)
+    {
+        static DateTime At(string value) =>
+            DateTime.ParseExact(value, "yyyy-MM-dd HH:mm", System.Globalization.CultureInfo.InvariantCulture);
+        static TimeOnly Time(string value) =>
+            TimeOnly.ParseExact(value, "HH:mm", System.Globalization.CultureInfo.InvariantCulture);
+
+        Assert.Equal(At(expected), DarkModeViewModel.NextChange(At(now), Time(darkStart), Time(lightStart)));
+    }
+
+    /// <summary>A change to the schedule is the newer word, so it ends a switch that was holding.</summary>
+    [Fact]
+    public async Task ChangingTheSchedule_EndsASwitchThatWasHolding()
+    {
+        var service = FakeThemeService();
+        service.GetCurrentTheme().Returns(WindowsTheme.Dark);
+        var clock = new ManualClock();
+        var vm = Scheduled(service, clock);
+
+        await vm.SwitchToLightCommand.ExecuteAsync(null);
+        vm.LightStart = "06:30";
+        await vm.InitializationComplete;
+
+        service.Received(1).SetTheme(Arg.Is(true), Arg.Any<bool>());
+        Assert.True(vm.IsDarkNow);
+    }
+
+    // ── A time the schedule cannot read is refused (#2760) ─────────────
+
+    /// <summary>
+    /// A time the schedule cannot read is refused: the box goes back to the time the schedule runs on, the status line
+    /// says why, and nothing is saved (#2760).
+    /// </summary>
+    /// <remarks>
+    /// The box saved whatever it was given, and the schedule read what it could not as 19:00 or 07:00 without a word,
+    /// while the box went on showing the text.
+    /// </remarks>
+    [Theory]
+    [InlineData("1900")]
+    [InlineData("19h")]
+    [InlineData("19;00")]
+    [InlineData("")]
+    public void ATimeTheScheduleCannotRead_IsRefused_AndTheBoxGoesBack(string typed)
+    {
+        var service = FakeThemeService(new DarkModeSchedule { Enabled = true, DarkStart = "21:00", LightStart = "07:00" });
+        var vm = NewVm(service);
+        service.ClearReceivedCalls();
+
+        vm.DarkStart = typed;
+
+        Assert.Equal("21:00", vm.DarkStart);
+        Assert.Contains("still turns dark at 21:00", vm.StatusMessage, StringComparison.Ordinal);
+        service.DidNotReceive().SaveSchedule(Arg.Any<DarkModeSchedule>());
+    }
+
+    /// <summary>A time it can read is written, and saved, the way it reads it.</summary>
+    [Fact]
+    public async Task ATimeTheScheduleReads_IsWrittenAndSavedAsItReadsIt()
+    {
+        var service = FakeThemeService(new DarkModeSchedule { Enabled = false });
+        var vm = NewVm(service);
+
+        vm.LightStart = "7:30";
+        await vm.InitializationComplete;
+
+        Assert.Equal("07:30", vm.LightStart);
+        service.Received().SaveSchedule(Arg.Is<DarkModeSchedule>(s => s.LightStart == "07:30"));
+        service.DidNotReceive().SaveSchedule(Arg.Is<DarkModeSchedule>(s => s.LightStart == "7:30"));
+    }
+
+    /// <summary>A saved time the schedule cannot read shows as the time it runs on, without a complaint at opening.</summary>
+    [Fact]
+    public void ASavedTimeTheScheduleCannotRead_ShowsAsTheTimeItRunsOn()
+    {
+        var vm = NewVm(FakeThemeService(new DarkModeSchedule { Enabled = true, DarkStart = "19h", LightStart = "7:00" }));
+
+        Assert.Equal("19:00", vm.DarkStart);
+        Assert.Equal("07:00", vm.LightStart);
+        Assert.Equal("Schedule is on — the theme follows your set times while SysManager is running.", vm.StatusMessage);
+    }
+
     private static void SetSuppressSave(DarkModeViewModel vm, bool value) =>
         typeof(DarkModeViewModel)
             .GetField("_suppressSave", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)!

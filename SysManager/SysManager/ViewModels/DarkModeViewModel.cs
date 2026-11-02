@@ -2,6 +2,7 @@
 // Author: laurentiu021 · https://github.com/laurentiu021/SystemManager
 // License: MIT
 
+using System.Globalization;
 using System.Windows.Threading;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
@@ -19,21 +20,39 @@ namespace SysManager.ViewModels;
 public sealed partial class DarkModeViewModel : ViewModelBase
 {
     private readonly IWindowsThemeService _service;
+    private readonly TimeProvider _clock;
     private readonly DispatcherTimer? _timer;
     private bool _suppressSave;
 
     /// <summary>Whether a theme switch is running, on a worker thread (see <see cref="SwitchAsync"/>).</summary>
     private bool _switching;
 
+    /// <summary>
+    /// Until when, on the wall clock, a switch made with Dark or Light holds against the schedule: the schedule's next
+    /// change after it. Null while none holds (#2760).
+    /// </summary>
+    private DateTime? _heldUntil;
+
+    // The times the schedule runs on: the last each box held that it can read.
+    private string _darkStartInEffect = DarkModeSchedule.DefaultDarkStart;
+    private string _lightStartInEffect = DarkModeSchedule.DefaultLightStart;
+
     [ObservableProperty] private bool _isDarkNow;
     [ObservableProperty] private bool _scheduleEnabled;
-    [ObservableProperty] private string _darkStart = "19:00";
-    [ObservableProperty] private string _lightStart = "07:00";
+    [ObservableProperty] private string _darkStart = DarkModeSchedule.DefaultDarkStart;
+    [ObservableProperty] private string _lightStart = DarkModeSchedule.DefaultLightStart;
     [ObservableProperty] private bool _applyToSystem = true;
 
-    public DarkModeViewModel(IWindowsThemeService service)
+    public DarkModeViewModel(IWindowsThemeService service) : this(service, TimeProvider.System) { }
+
+    /// <summary>
+    /// The view model with the clock the schedule reads handed in, so a test sets the time instead of waiting for it
+    /// (#2760).
+    /// </summary>
+    internal DarkModeViewModel(IWindowsThemeService service, TimeProvider clock)
     {
         _service = service;
+        _clock = clock;
         LoadFromSchedule();
         IsDarkNow = _service.GetCurrentTheme() == WindowsTheme.Dark;
         StatusMessage = ScheduleEnabled
@@ -47,11 +66,14 @@ public sealed partial class DarkModeViewModel : ViewModelBase
             {
                 Interval = TimeSpan.FromSeconds(60),
             };
-            _timer.Tick += (_, _) => InitializeAsync(EvaluateScheduleAsync);
+            _timer.Tick += (_, _) => OnScheduleTick();
             _timer.Start();
             InitializeAsync(EvaluateScheduleAsync); // apply immediately so the theme is correct on open
         }
     }
+
+    /// <summary>What the schedule's timer does each minute: looks at the schedule again.</summary>
+    internal void OnScheduleTick() => InitializeAsync(EvaluateScheduleAsync);
 
     [RelayCommand(CanExecute = nameof(CanSwitch))]
     private Task SwitchToDarkAsync() => ApplyThemeAsync(true, "Switched to dark.");
@@ -66,7 +88,7 @@ public sealed partial class DarkModeViewModel : ViewModelBase
         if (await SwitchAsync(dark))
         {
             IsDarkNow = dark;
-            StatusMessage = okMessage;
+            StatusMessage = ScheduleEnabled ? HoldAgainstTheSchedule(dark, okMessage) : okMessage;
         }
         else
         {
@@ -97,6 +119,41 @@ public sealed partial class DarkModeViewModel : ViewModelBase
         }
     }
 
+    /// <summary>
+    /// Holds the switch just made against the schedule until the schedule's next change, and says until when the theme
+    /// stays so (#2760).
+    /// </summary>
+    /// <remarks>
+    /// The schedule compares the theme it wants with the one SysManager last set, so a switch made here was undone at
+    /// the next minute's check, while the same switch made in Windows Settings, which SysManager does not see, held
+    /// until the schedule's next change. Now both hold until then.
+    /// </remarks>
+    private string HoldAgainstTheSchedule(bool dark, string okMessage)
+    {
+        var times = new DarkModeSchedule { DarkStart = DarkStart, LightStart = LightStart };
+        _heldUntil = NextChange(_clock.GetLocalNow().DateTime, times.DarkStartTime, times.LightStartTime);
+
+        // With the two times the same the schedule never wants dark, so light is simply where it stays.
+        if (!dark && times.DarkStartTime == times.LightStartTime) return okMessage;
+        return dark
+            ? $"{okMessage} It stays so until the schedule turns light at {LightStart}."
+            : $"{okMessage} It stays so until the schedule turns dark at {DarkStart}.";
+    }
+
+    /// <summary>The schedule's next change after <paramref name="now"/>: the first of its two times still to come.</summary>
+    internal static DateTime NextChange(DateTime now, TimeOnly darkStart, TimeOnly lightStart)
+    {
+        var dark = NextAt(now, darkStart);
+        var light = NextAt(now, lightStart);
+        return dark < light ? dark : light;
+    }
+
+    private static DateTime NextAt(DateTime now, TimeOnly time)
+    {
+        var today = now.Date + time.ToTimeSpan();
+        return today > now ? today : today.AddDays(1);
+    }
+
     private void SetSwitching(bool value)
     {
         _switching = value;
@@ -117,8 +174,16 @@ public sealed partial class DarkModeViewModel : ViewModelBase
         if (!ScheduleEnabled) return;
         // A switch is already running: it decides the theme for now, and the next minute's check starts from it.
         if (_switching) return;
-        var now = TimeOnly.FromDateTime(DateTime.Now);
-        bool wantDark = WindowsThemeService.ShouldBeDark(now, ParseTime(DarkStart, 19, 0), ParseTime(LightStart, 7, 0));
+        var now = _clock.GetLocalNow().DateTime;
+        // A switch made with Dark or Light holds until the schedule's next change (#2760).
+        if (_heldUntil is { } until)
+        {
+            if (now < until) return;
+            _heldUntil = null;
+        }
+
+        var times = new DarkModeSchedule { DarkStart = DarkStart, LightStart = LightStart };
+        bool wantDark = WindowsThemeService.ShouldBeDark(TimeOnly.FromDateTime(now), times.DarkStartTime, times.LightStartTime);
         if (wantDark == IsDarkNow) return;
 
         if (await SwitchAsync(wantDark))
@@ -132,12 +197,55 @@ public sealed partial class DarkModeViewModel : ViewModelBase
     // Saved after the schedule is evaluated, so a change that could not be saved is the last word on the status
     // line: switching the theme would otherwise replace it with "Schedule applied" (#2521).
     partial void OnScheduleEnabledChanged(bool value) => ApplyThenSaveSchedule();
-    partial void OnDarkStartChanged(string value) => ApplyThenSaveSchedule();
-    partial void OnLightStartChanged(string value) => ApplyThenSaveSchedule();
     partial void OnApplyToSystemChanged(bool value) => SaveSchedule();
 
+    partial void OnDarkStartChanged(string value)
+    {
+        var readable = Readable(value, _darkStartInEffect, dark: true);
+        // Written as the schedule reads it, or put back: the set comes back here with a time it can read.
+        if (readable != value) { DarkStart = readable; return; }
+        if (readable == _darkStartInEffect) return;
+        _darkStartInEffect = readable;
+        ApplyThenSaveSchedule();
+    }
+
+    partial void OnLightStartChanged(string value)
+    {
+        var readable = Readable(value, _lightStartInEffect, dark: false);
+        if (readable != value) { LightStart = readable; return; }
+        if (readable == _lightStartInEffect) return;
+        _lightStartInEffect = readable;
+        ApplyThenSaveSchedule();
+    }
+
+    /// <summary>
+    /// <paramref name="typed"/> written as the schedule reads it ("7:30" is "07:30"), or <paramref name="inEffect"/>
+    /// when the schedule cannot read it, with the status line saying why the box went back.
+    /// </summary>
+    /// <remarks>
+    /// A box took any text and saved it as typed, and the schedule then read what it could not as 19:00 or 07:00 without
+    /// a word, while the box went on showing "19h" (#2760). A saved time it cannot read shows as the one it runs on,
+    /// without a complaint as the tab opens.
+    /// </remarks>
+    private string Readable(string typed, string inEffect, bool dark)
+    {
+        if (DarkModeSchedule.TryReadTime(typed) is { } time)
+            return time.ToString(DarkModeSchedule.TimeFormat, CultureInfo.InvariantCulture);
+        if (!_suppressSave)
+        {
+            var why = string.IsNullOrWhiteSpace(typed)
+                ? "A time is needed, so the schedule"
+                : $"\"{typed.Trim()}\" is not a time the schedule can read, so it";
+            StatusMessage = $"{why} still turns {(dark ? "dark" : "light")} at {inEffect}. "
+                            + $"Type hours and minutes, as in {(dark ? "19:30" : "07:30")}.";
+        }
+        return inEffect;
+    }
+
+    // A change to the schedule is the newest word on the theme, so it ends a switch that was holding (#2760).
     private void ApplyThenSaveSchedule() => InitializeAsync(async () =>
     {
+        _heldUntil = null;
         await EvaluateScheduleAsync();
         SaveSchedule();
     });
@@ -165,9 +273,6 @@ public sealed partial class DarkModeViewModel : ViewModelBase
         });
         if (!saved) StatusMessage = ChangeNotSavedStatus;
     }
-
-    private static TimeOnly ParseTime(string value, int h, int m)
-        => TimeOnly.TryParse(value, System.Globalization.CultureInfo.InvariantCulture, out var t) ? t : new TimeOnly(h, m);
 
     protected override void Dispose(bool disposing)
     {

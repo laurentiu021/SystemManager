@@ -156,9 +156,9 @@ public sealed partial class ContextMenuViewModel : ElevatedViewModelBase
 
         var desiredState = entry.IsEnabled;
 
-        var success = await Task.Run(() => desiredState
-            ? _service.EnableEntry(entry)
-            : _service.DisableEntry(entry));
+        // Only the registry write leaves this thread: the row already shows the state asked for, and is put back on
+        // this thread below when Windows refuses it (#2765).
+        var success = await Task.Run(() => _service.WriteState(entry, desiredState));
 
         if (success)
         {
@@ -265,7 +265,8 @@ public sealed partial class ContextMenuViewModel : ElevatedViewModelBase
         {
             // Registry writes + the Explorer restart are synchronous and can take a moment
             // (Explorer restart especially) — run them off the UI thread so the window
-            // stays responsive. No UI state is touched inside the Task.Run body.
+            // stays responsive. No UI state is touched inside the Task.Run body: the rows written are collected, and
+            // their state is set below, on this thread (#2765).
             var (styleSet, disabled, enabled) = await Task.Run(() =>
             {
                 // The style first, and nothing else when Windows refuses it. Its result was dropped, so a refused
@@ -274,30 +275,23 @@ public sealed partial class ContextMenuViewModel : ElevatedViewModelBase
                 if (needsRestart
                     && !(preset.ForcesClassicMenu ? _service.EnableClassicMenu() : _service.DisableClassicMenu()))
                 {
-                    return (false, 0, 0);
+                    return (false, new List<ContextMenuEntry>(), new List<ContextMenuEntry>());
                 }
 
                 // Disable all third-party entries to restore clean default
-                var dis = 0;
-                foreach (var entry in _allEntries.Where(IsPresetTarget))
-                {
-                    if (_service.DisableEntry(entry))
-                        dis++;
-                }
+                var dis = _allEntries.Where(IsPresetTarget).Where(entry => _service.WriteState(entry, enabled: false)).ToList();
 
                 // Enable any default Windows entries that were previously disabled
-                var en = 0;
-                foreach (var entry in _allEntries.Where(IsPresetRestorable))
-                {
-                    if (_service.EnableEntry(entry))
-                        en++;
-                }
+                var en = _allEntries.Where(IsPresetRestorable).Where(entry => _service.WriteState(entry, enabled: true)).ToList();
 
                 if (needsRestart)
                     ExplorerShell.Restart();
 
                 return (true, dis, en);
             });
+
+            foreach (var entry in disabled) entry.IsEnabled = false;
+            foreach (var entry in enabled) entry.IsEnabled = true;
 
             if (!styleSet)
             {
@@ -311,12 +305,13 @@ public sealed partial class ContextMenuViewModel : ElevatedViewModelBase
             PresetDescription = preset.Description;
             ApplyFilter();
 
-            var changes = disabled + enabled;
+            var changes = disabled.Count + enabled.Count;
             StatusMessage = changes > 0
-                ? $"\"{preset.Name}\" applied — {disabled} disabled, {enabled} re-enabled."
+                ? $"\"{preset.Name}\" applied — {disabled.Count} disabled, {enabled.Count} re-enabled."
                 : $"\"{preset.Name}\" applied.";
             ToastService.Instance.Show("Preset Applied", $"\"{preset.Name}\" — clean default restored");
-            Log.Information("Context menu preset applied: {Preset}, {Disabled} disabled, {Enabled} enabled", preset.Name, disabled, enabled);
+            Log.Information("Context menu preset applied: {Preset}, {Disabled} disabled, {Enabled} enabled", preset.Name,
+                disabled.Count, enabled.Count);
         }
         catch (Exception ex) when (ex is SecurityException or UnauthorizedAccessException or IOException)
         {

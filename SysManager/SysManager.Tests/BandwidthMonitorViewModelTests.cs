@@ -63,7 +63,8 @@ public class BandwidthMonitorViewModelTests : IDisposable
         BandwidthHistoryService? history = null,
         Func<TimeSpan, CancellationToken, Task<IReadOnlyList<BandwidthSample>>>? loadHistory = null,
         TimeProvider? timeProvider = null,
-        Services.IDialogService? dialog = null)
+        Services.IDialogService? dialog = null,
+        Func<string, System.Windows.Media.ImageSource?>? processIcon = null)
     {
         var store = history ?? new BandwidthHistoryService(_dir);
         var vm = new BandwidthMonitorViewModel(
@@ -72,7 +73,8 @@ public class BandwidthMonitorViewModelTests : IDisposable
             etwFactory,
             loadHistory ?? store.LoadAsync,
             timeProvider,
-            dialog);
+            dialog,
+            processIcon);
         vm.InitializationComplete.GetAwaiter().GetResult();
         return vm;
     }
@@ -128,6 +130,40 @@ public class BandwidthMonitorViewModelTests : IDisposable
         var row = Assert.Single(vm.Processes);
         Assert.Equal("chrome", row.ProcessName);
         Assert.Equal(900, row.TotalDownBytes);
+    }
+
+    /// <summary>
+    /// Merging returns before a new row's icon is found: the lookup runs off the thread that merged, and the row shows the
+    /// generic icon until its own arrives (#2765).
+    /// </summary>
+    /// <remarks>
+    /// A name that resolves to nothing searched PATH and every folder under Program Files on the window's thread, at every
+    /// new process ID. The lookup here is held until merging has returned, bounded, so one made on that thread fails
+    /// the test instead of hanging it.
+    /// </remarks>
+    [Fact]
+    public async Task MergeInto_FindsANewRowsIcon_OffTheThreadThatMerged()
+    {
+        var released = new TaskCompletionSource();
+        var found = new System.Windows.Media.DrawingImage();
+        found.Freeze();
+        var lookups = 0;
+        using var vm = NewVm(processIcon: _ =>
+        {
+            Interlocked.Increment(ref lookups);
+            released.Task.Wait(TimeSpan.FromSeconds(10));
+            return found;
+        });
+
+        vm.MergeInto([new ProcessNetworkUsage { ProcessId = 1, ProcessName = "nothing-resolves-this" }]);
+        var row = Assert.Single(vm.Processes);
+        var shownFirst = row.Icon;
+        released.SetResult();
+        await vm.InitializationComplete;
+
+        Assert.False(ReferenceEquals(found, shownFirst), "the row was merged only once its icon had been found");
+        Assert.Same(found, row.Icon);
+        Assert.Equal(1, Volatile.Read(ref lookups));
     }
 
     [Fact]

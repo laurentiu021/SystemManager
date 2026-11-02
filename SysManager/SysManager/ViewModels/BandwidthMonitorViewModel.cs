@@ -5,6 +5,7 @@
 using System.Collections.ObjectModel;
 using System.Globalization;
 using System.IO;
+using System.Windows.Media;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using LiveChartsCore;
@@ -58,6 +59,7 @@ public sealed partial class BandwidthMonitorViewModel : ElevatedViewModelBase
     private readonly Func<IBandwidthMonitorService>? _etwSourceFactory;
     private readonly TimeProvider _time;
     private readonly IDialogService _dialog;
+    private readonly Func<string, ImageSource?> _processIcon;
 
     private IBandwidthMonitorService? _source;
     private CancellationTokenSource? _pollCts;
@@ -206,16 +208,22 @@ public sealed partial class BandwidthMonitorViewModel : ElevatedViewModelBase
     /// decides when a load finishes, before or after the tab closes.
     /// </summary>
     /// <param name="dialog">Defaults to <see cref="DialogService.Instance"/> (#2860).</param>
+    /// <param name="processIcon">
+    /// Finds a process's icon by its name: <see cref="IconExtractorService.GetProcessIcon"/> unless a test passes its own,
+    /// to hold the lookup (#2765).
+    /// </param>
     internal BandwidthMonitorViewModel(
         BandwidthHistoryService history,
         Func<IBandwidthMonitorService> connectionSourceFactory,
         Func<IBandwidthMonitorService>? etwSourceFactory,
         Func<TimeSpan, CancellationToken, Task<IReadOnlyList<BandwidthSample>>> loadHistory,
         TimeProvider? timeProvider = null,
-        IDialogService? dialog = null)
+        IDialogService? dialog = null,
+        Func<string, ImageSource?>? processIcon = null)
     {
         _history = history;
         _loadHistory = loadHistory;
+        _processIcon = processIcon ?? (name => IconExtractorService.GetProcessIcon(null, name));
         _connectionSourceFactory = connectionSourceFactory;
         _etwSourceFactory = etwSourceFactory;
         _time = timeProvider ?? TimeProvider.System;
@@ -405,18 +413,21 @@ public sealed partial class BandwidthMonitorViewModel : ElevatedViewModelBase
 
         var existing = Processes.ToDictionary(r => r.ProcessId);
         var seen = new HashSet<int>(capped.Count);
+        List<ProcessNetworkUsage> needIcons = [];
 
         foreach (var row in capped)
         {
             seen.Add(row.ProcessId);
             if (!existing.TryGetValue(row.ProcessId, out var current))
             {
-                row.Icon = IconExtractorService.GetProcessIcon(null, row.ProcessName);
+                row.Icon = IconExtractorService.FallbackIcon;
+                needIcons.Add(row);
                 Processes.Add(row);
             }
             else if (current.ProcessName != row.ProcessName)
             {
-                row.Icon = IconExtractorService.GetProcessIcon(null, row.ProcessName);
+                row.Icon = IconExtractorService.FallbackIcon;
+                needIcons.Add(row);
                 Processes[Processes.IndexOf(current)] = row;
             }
             else
@@ -435,6 +446,24 @@ public sealed partial class BandwidthMonitorViewModel : ElevatedViewModelBase
                 Processes.RemoveAt(i);
 
         SortInPlace();
+
+        if (needIcons.Count > 0) InitializeAsync(() => AttachIconsAsync(needIcons));
+    }
+
+    /// <summary>
+    /// Finds the icons of rows new to the list off the window's thread, and sets them back on it. Each row shows the
+    /// generic app icon until then.
+    /// </summary>
+    /// <remarks>
+    /// Found on the window's thread, a name that resolves to nothing searched PATH and every folder under Program Files
+    /// at every new process ID, on the poll whose sampling had been moved off that thread to stop a stutter (#2765). An
+    /// icon is frozen, so it crosses threads. A row the list has dropped meanwhile gets its icon all the same, unseen.
+    /// </remarks>
+    private async Task AttachIconsAsync(List<ProcessNetworkUsage> rows)
+    {
+        var icons = await Task.Run(() => rows.Select(r => _processIcon(r.ProcessName)).ToList()).ConfigureAwait(true);
+        for (var i = 0; i < rows.Count; i++)
+            rows[i].Icon = icons[i];
     }
 
     private void SortInPlace()

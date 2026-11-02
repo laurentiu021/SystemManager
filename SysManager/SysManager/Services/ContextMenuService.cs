@@ -493,9 +493,7 @@ public sealed partial class ContextMenuService : IContextMenuService
     {
         try
         {
-            if (!SetHandlerBlocked(entry, blocked)) return false;
-            entry.IsEnabled = !blocked;
-            return true;
+            return SetHandlerBlocked(entry, blocked);
         }
         catch (SecurityException ex)
         {
@@ -520,7 +518,20 @@ public sealed partial class ContextMenuService : IContextMenuService
     /// without deleting any data. Falls back to HKCU override if HKCR
     /// is not writable (system-owned entries protected by TrustedInstaller).
     /// </summary>
-    public bool DisableEntry(ContextMenuEntry entry)
+    public bool DisableEntry(ContextMenuEntry entry) => Applied(entry, WriteDisabled(entry), enabled: false);
+
+    /// <inheritdoc/>
+    public bool WriteState(ContextMenuEntry entry, bool enabled) => enabled ? WriteEnabled(entry) : WriteDisabled(entry);
+
+    // The row follows a write Windows accepted, and only then.
+    private static bool Applied(ContextMenuEntry entry, bool written, bool enabled)
+    {
+        if (written) entry.IsEnabled = enabled;
+        return written;
+    }
+
+    /// <summary>The registry half of <see cref="DisableEntry"/>: the entry itself is left alone.</summary>
+    private bool WriteDisabled(ContextMenuEntry entry)
     {
         if (entry.Kind == ContextMenuEntryKind.Handler)
             return TryBlock(entry, blocked: true);
@@ -533,7 +544,6 @@ public sealed partial class ContextMenuService : IContextMenuService
 
             if (TrySetLegacyDisable(relativePath, set: true))
             {
-                entry.IsEnabled = false;
                 Log.Information("Context menu entry disabled: {Name} at {Path}", entry.Name, entry.RegistryPath);
                 return true;
             }
@@ -563,7 +573,10 @@ public sealed partial class ContextMenuService : IContextMenuService
     /// value from the shell subkey and from any HKCU override over it, and
     /// removing that override once it holds nothing else.
     /// </summary>
-    public bool EnableEntry(ContextMenuEntry entry)
+    public bool EnableEntry(ContextMenuEntry entry) => Applied(entry, WriteEnabled(entry), enabled: true);
+
+    /// <summary>The registry half of <see cref="EnableEntry"/>: the entry itself is left alone.</summary>
+    private bool WriteEnabled(ContextMenuEntry entry)
     {
         if (entry.Kind == ContextMenuEntryKind.Handler)
             return TryBlock(entry, blocked: false);
@@ -576,7 +589,6 @@ public sealed partial class ContextMenuService : IContextMenuService
 
             if (TrySetLegacyDisable(relativePath, set: false))
             {
-                entry.IsEnabled = true;
                 Log.Information("Context menu entry enabled: {Name} at {Path}", entry.Name, entry.RegistryPath);
                 return true;
             }

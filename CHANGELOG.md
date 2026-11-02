@@ -10,6 +10,21 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.136.82] - 2026-11-02
+
+**Bandwidth Monitor finds app icons without holding up the window, and two tabs set their rows on the window's own thread.**
+
+### Fixed
+- Bandwidth Monitor looked up each new app's icon on the thread that draws the window, and a name that resolves to no
+  program, such as System, a Store app or a browser helper, repeated the whole search, every PATH folder and every
+  folder under Program Files, at each new process ID, on the poll whose sampling had been moved off that thread to
+  stop a stutter. The icon is found in the background now, with the generic one shown until it arrives, and a name
+  that was not found is not searched for again for five minutes. This was there since the tab was added in 1.54.0.
+- Process Manager's Signature column and Right-click Menu's presets set the rows on screen from a background thread,
+  against what their own comments said; both now do the slow part in the background and set the rows on the window's
+  thread, as the comments describe. Nothing changes on screen. This was there since 1.88.4 and 1.16.0. Windows
+  Update's log event is now documented as arriving on a worker thread, which is where it always arrived.
+
 ## [1.136.81] - 2026-11-02
 
 **Large Files and System Logs describe what they read, and Large Files no longer scans a drive that is gone as an empty one.**

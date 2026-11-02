@@ -15262,7 +15262,10 @@ public partial class ArchitectureTests
         // the unbound-surface defect one level up.
         var vm = File.ReadAllText(Path.Combine(appDir, "ViewModels", "ProcessManagerViewModel.cs"));
         Assert.Contains("StartSignatureFill();", vm, StringComparison.Ordinal);
-        Assert.Contains("ProcessManagerService.VerifySignatures(pending, cache)", vm, StringComparison.Ordinal);
+        // Read on a worker and written here, on the window's thread, which owns the rows: VerifySignatures in the
+        // Task.Run set the bound columns on the worker while the refresh changed the same rows here (#2765).
+        Assert.Contains("Task.Run(() => ProcessManagerService.ReadSignatures(pending, cache)", vm, StringComparison.Ordinal);
+        Assert.Contains("ProcessManagerService.ApplySignatures(verdicts);", vm, StringComparison.Ordinal);
 
         // ONE cache for the whole pass, declared before the batch loop. Moving the declaration inside it
         // compiles, produces identical verdicts, and re-verifies the same executable in every batch — so a

@@ -39,6 +39,16 @@ public interface IContextMenuService
     /// </summary>
     bool EnableEntry(ContextMenuEntry entry);
 
+    /// <summary>
+    /// Writes what <see cref="DisableEntry"/> or <see cref="EnableEntry"/> writes, and leaves the entry itself alone. True
+    /// when Windows accepted the change.
+    /// </summary>
+    /// <remarks>
+    /// For a caller on a worker thread: the entry is a row the window shows, so its state is set back on the window's
+    /// thread once the write has been made, rather than by the write (#2765).
+    /// </remarks>
+    bool WriteState(ContextMenuEntry entry, bool enabled);
+
     /// <summary>Whether the classic, Windows 10 style, full menu is forced; false when it cannot be read.</summary>
     bool IsClassicMenuEnabled();
 

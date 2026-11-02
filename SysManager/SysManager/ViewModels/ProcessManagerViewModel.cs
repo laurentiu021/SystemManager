@@ -244,8 +244,10 @@ public sealed partial class ProcessManagerViewModel : ElevatedViewModelBase
 
                 if (pending.Count == 0) return;
 
-                await Task.Run(() => ProcessManagerService.VerifySignatures(pending, cache), ct)
+                var verdicts = await Task.Run(() => ProcessManagerService.ReadSignatures(pending, cache), ct)
                     .ConfigureAwait(true);
+                // Here, on the window's thread, which owns the rows (#2765).
+                ProcessManagerService.ApplySignatures(verdicts);
             }
         }
         catch (OperationCanceledException) { /* left the tab — expected */ }

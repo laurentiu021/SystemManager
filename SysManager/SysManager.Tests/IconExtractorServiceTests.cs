@@ -14,6 +14,54 @@ namespace SysManager.Tests;
 [Collection("IconCache")]
 public class IconExtractorServiceTests
 {
+    // ── The search by process name (#2765) ──
+
+    private static readonly DateTime Noon = new(2026, 11, 2, 12, 0, 0, DateTimeKind.Utc);
+
+    /// <summary>
+    /// A name no search found is not searched for again until <see cref="IconExtractorService.MissRemembered"/> has
+    /// passed, and is once it has (#2765).
+    /// </summary>
+    [Fact]
+    public void AMiss_IsNotSearchedForAgain_UntilItHasBeenRememberedLongEnough()
+    {
+        var name = "sysmanager-missing-" + Guid.NewGuid().ToString("N");
+        var searches = 0;
+        string? Resolve(string exe)
+        {
+            searches++;
+            return null;
+        }
+
+        Assert.Null(IconExtractorService.FindExecutableByName(name, Noon, Resolve));
+        Assert.Null(IconExtractorService.FindExecutableByName(
+            name, Noon + IconExtractorService.MissRemembered - TimeSpan.FromSeconds(1), Resolve));
+        Assert.Equal(1, searches);
+
+        Assert.Null(IconExtractorService.FindExecutableByName(name, Noon + IconExtractorService.MissRemembered, Resolve));
+        Assert.Equal(2, searches);
+    }
+
+    /// <summary>A name found is kept for the run and not searched for again, as it was before misses were kept.</summary>
+    [Fact]
+    public void AFind_IsKeptForTheRun()
+    {
+        var name = "sysmanager-found-" + Guid.NewGuid().ToString("N");
+        var searches = 0;
+        string? Resolve(string exe)
+        {
+            searches++;
+            return @"C:\Program Files\Contoso\" + exe;
+        }
+
+        var first = IconExtractorService.FindExecutableByName(name, Noon, Resolve);
+        var later = IconExtractorService.FindExecutableByName(name, Noon + TimeSpan.FromDays(1), Resolve);
+
+        Assert.Equal(@"C:\Program Files\Contoso\" + name + ".exe", first);
+        Assert.Equal(first, later);
+        Assert.Equal(1, searches);
+    }
+
     // ── NormalizePath ──
 
     [Fact]

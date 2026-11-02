@@ -2,6 +2,7 @@
 // Author: laurentiu021 · https://github.com/laurentiu021/SystemManager
 // License: MIT
 
+using NSubstitute;
 using SysManager.Models;
 using SysManager.Services;
 
@@ -35,7 +36,7 @@ public class StartupServiceTests
             readable = false;
         }
 
-        var scan = await new StartupService().ScanAsync();
+        var scan = await new StartupService(Substitute.For<IPowerShellRunner>()).ScanAsync();
 
         Assert.Equal(readable, scan.ScheduledTasksListed);
     }
@@ -56,7 +57,7 @@ public class StartupServiceTests
     [Fact]
     public async Task ScanAsync_ReturnsNonNullList()
     {
-        var svc = new StartupService();
+        var svc = new StartupService(Substitute.For<IPowerShellRunner>());
         var result = (await svc.ScanAsync()).Entries;
         Assert.NotNull(result);
     }
@@ -64,7 +65,7 @@ public class StartupServiceTests
     [Fact]
     public async Task ScanAsync_EntriesHaveNonEmptyNames()
     {
-        var svc = new StartupService();
+        var svc = new StartupService(Substitute.For<IPowerShellRunner>());
         var result = (await svc.ScanAsync()).Entries;
         foreach (var entry in result)
         {
@@ -76,7 +77,7 @@ public class StartupServiceTests
     [Fact]
     public async Task ScanAsync_EntriesHaveNonEmptyCommand()
     {
-        var svc = new StartupService();
+        var svc = new StartupService(Substitute.For<IPowerShellRunner>());
         var result = (await svc.ScanAsync()).Entries;
         foreach (var entry in result)
         {
@@ -88,7 +89,7 @@ public class StartupServiceTests
     [Fact]
     public async Task ScanAsync_EntriesHaveValidSource()
     {
-        var svc = new StartupService();
+        var svc = new StartupService(Substitute.For<IPowerShellRunner>());
         var result = (await svc.ScanAsync()).Entries;
         foreach (var entry in result)
         {
@@ -100,7 +101,7 @@ public class StartupServiceTests
     [Fact]
     public async Task ScanAsync_EntriesHaveLocation()
     {
-        var svc = new StartupService();
+        var svc = new StartupService(Substitute.For<IPowerShellRunner>());
         var result = (await svc.ScanAsync()).Entries;
         foreach (var entry in result)
         {
@@ -112,7 +113,7 @@ public class StartupServiceTests
     [Fact]
     public async Task ScanAsync_NoDuplicateNamesWithinSameSource()
     {
-        var svc = new StartupService();
+        var svc = new StartupService(Substitute.For<IPowerShellRunner>());
         var result = (await svc.ScanAsync()).Entries;
         // Entries from different sources (registry vs folder vs scheduler)
         // may legitimately share a name. Within the same source, entries
@@ -129,7 +130,7 @@ public class StartupServiceTests
     [Fact]
     public async Task ScanAsync_StatusTextIsSet()
     {
-        var svc = new StartupService();
+        var svc = new StartupService(Substitute.For<IPowerShellRunner>());
         var result = (await svc.ScanAsync()).Entries;
         foreach (var entry in result)
         {

@@ -31,6 +31,9 @@ public sealed partial class StartupViewModel : ViewModelBase
     /// </summary>
     private readonly Func<Task<IReadOnlyList<BootDegradation>>> _readDegradations;
 
+    /// <summary>Turns an entry on or off, and says whether Windows took it.</summary>
+    private readonly Func<StartupEntry, bool, Task<bool>> _setEnabled;
+
     private readonly List<StartupEntry> _allEntries = [];
 
     public BulkObservableCollection<StartupEntry> Entries { get; } = new();
@@ -54,7 +57,8 @@ public sealed partial class StartupViewModel : ViewModelBase
 
     public StartupViewModel(StartupService service, BootAnalyzerService boot)
         : this(() => service.ScanAsync(), AdminHelper.IsElevated,
-               ReadDegradationsOrNone(boot ?? throw new ArgumentNullException(nameof(boot))))
+               ReadDegradationsOrNone(boot ?? throw new ArgumentNullException(nameof(boot))),
+               (entry, enabled) => service.SetEnabledAsync(entry, enabled))
     {
     }
 
@@ -77,12 +81,18 @@ public sealed partial class StartupViewModel : ViewModelBase
     /// that branch. Same seam and same two-constructor shape as <c>WindowsUpdateViewModel</c>.
     /// </param>
     /// <param name="readDegradations">Windows' boot-delay measurements. See <see cref="_readDegradations"/>.</param>
+    /// <param name="setEnabled">
+    /// The switch itself, so a test decides what Windows answers. It was a static call on the service, which ran
+    /// schtasks for a scheduled task whatever the test meant (#2766).
+    /// </param>
     internal StartupViewModel(Func<Task<StartupScan>> scan, Func<bool> isElevated,
-                              Func<Task<IReadOnlyList<BootDegradation>>> readDegradations)
+                              Func<Task<IReadOnlyList<BootDegradation>>> readDegradations,
+                              Func<StartupEntry, bool, Task<bool>> setEnabled)
     {
         _scan = scan ?? throw new ArgumentNullException(nameof(scan));
         _isElevatedProbe = isElevated ?? throw new ArgumentNullException(nameof(isElevated));
         _readDegradations = readDegradations ?? throw new ArgumentNullException(nameof(readDegradations));
+        _setEnabled = setEnabled ?? throw new ArgumentNullException(nameof(setEnabled));
         IsElevated = _isElevatedProbe();
         // Scan, EnableAll and ToggleEntry all read or write the same startup registry/task
         // state; running them concurrently could interleave registry writes and produce
@@ -207,7 +217,7 @@ public sealed partial class StartupViewModel : ViewModelBase
         // bound state (UpdateCounts enumerates the DataGrid-bound Entries, entry.IsEnabled,
         // StatusMessage). SetEnabledAsync keeps its own internal ConfigureAwait(false).
         // Matches the documented rule in ServicesViewModel.StartServiceAsync.
-        var success = await StartupService.SetEnabledAsync(entry, desiredState);
+        var success = await _setEnabled(entry, desiredState);
         if (success)
         {
             UpdateCounts();
@@ -258,7 +268,7 @@ public sealed partial class StartupViewModel : ViewModelBase
                 // state. Off-thread (as before) a concurrent ApplyFilter — e.g. the user flipping
                 // "Hide Windows entries" — mutates Entries mid-enumeration and throws
                 // "Collection was modified". SetEnabledAsync keeps its own ConfigureAwait(false).
-                if (await StartupService.SetEnabledAsync(entry, true))
+                if (await _setEnabled(entry, true))
                     enabled++;
                 else
                     failed++;

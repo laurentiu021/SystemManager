@@ -62,7 +62,7 @@ public sealed class AppFixture : IDisposable
         // crash on launch, or is it just slow?) so a CI failure is diagnosable from the log.
         MainWindow = App.GetMainWindow(Automation, TimeSpan.FromSeconds(45))
             ?? throw new InvalidOperationException(
-                "Main window did not appear in time. " +
+                $"Main window did not appear in time from {exe}. " +
                 (App.HasExited
                     ? $"The app process EXITED with code {SafeExitCode()} — it crashed on launch rather than rendering."
                     : "The app process is still running but produced no main window within the timeout."));
@@ -405,32 +405,29 @@ public sealed class AppFixture : IDisposable
         catch (Exception ex) { return $"(unreadable: {ex.Message})"; }
     }
 
+    /// <summary>
+    /// The SysManager.exe this run built: the app's output folder laid out as this assembly's own, in the same
+    /// configuration, because building the UI tests builds the app they reference.
+    /// </summary>
+    /// <remarks>
+    /// This looked in Release and then in Debug and took the first build it found, whatever the run had built. A Debug
+    /// run, which is what <c>dotnet test</c> without <c>-c</c> and Visual Studio's Test Explorer make, launched a Release
+    /// build an earlier <c>dotnet build -c Release</c> had left, so a fix could look broken or a regression pass (#2742).
+    /// </remarks>
     private static string FindExecutable()
     {
-        var repoRoot = Path.GetFullPath(Path.Combine(
-            AppContext.BaseDirectory, "..", "..", "..", ".."));
+        var tests = AppContext.BaseDirectory;
+        var project = new DirectoryInfo(tests);
+        while (project is not null && !File.Exists(Path.Combine(project.FullName, "SysManager.UITests.csproj")))
+            project = project.Parent;
+        if (project?.Parent is not { } solution)
+            throw new FileNotFoundException($"No SysManager.UITests.csproj above {tests}, so the app's build cannot be found.");
 
-        // Search whichever configuration the app was actually built in. CI builds Release;
-        // local dev often builds Debug — accept either rather than hardcoding one (the old
-        // Debug-only lookup made every UI test fail under a Release build). The target-
-        // framework folder is resolved dynamically so the path survives .NET version bumps.
-        var searched = new List<string>();
-        foreach (var config in new[] { "Release", "Debug" })
-        {
-            var binDir = Path.Combine(repoRoot, "SysManager", "bin", config);
-            searched.Add(binDir);
-            if (!Directory.Exists(binDir)) continue;
-
-            var candidate = Directory
-                .EnumerateDirectories(binDir, "net*-windows")
-                .Select(tfm => Path.Combine(tfm, "SysManager.exe"))
-                .FirstOrDefault(File.Exists);
-            if (candidate is not null) return candidate;
-        }
-
-        throw new FileNotFoundException(
-            $"Expected SysManager.exe under {string.Join(" or ", searched.Select(d => d + "\\net*-windows"))}. " +
-            "Build SysManager (Debug or Release) before running UI tests.");
+        var exe = Path.Combine(solution.FullName, "SysManager", Path.GetRelativePath(project.FullName, tests), "SysManager.exe");
+        return File.Exists(exe)
+            ? exe
+            : throw new FileNotFoundException($"Expected the SysManager.exe this run built at {exe}. Build the UI tests, which builds the app, "
+                + "in the configuration you run them in.", exe);
     }
 
     public void Dispose()

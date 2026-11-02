@@ -185,15 +185,21 @@ public class CleanupViewModelTests
         Assert.True(cts.IsCancellationRequested);
     }
 
+    // The question is what fails without the guard: the confirmation that comes next answers no when there is no WPF
+    // application, so the status stayed the same with the guard or without it (#2742). Declined here too, so even a
+    // guard that stopped returning cleans nothing.
+
     [Fact]
     public async Task CleanTemp_WhenAlreadyRunning_ReturnsImmediately()
     {
         var vm = NewVm();
         vm.IsTempRunning = true;
         vm.StatusMessage = "marker";
+        using var dialog = new DialogAnswer(confirm: false);
 
         await vm.CleanTempCommand.ExecuteAsync(null);
 
+        Assert.Equal(0, dialog.Calls);
         Assert.Equal("marker", vm.StatusMessage);
     }
 
@@ -203,9 +209,11 @@ public class CleanupViewModelTests
         var vm = NewVm();
         vm.IsBinRunning = true;
         vm.StatusMessage = "marker";
+        using var dialog = new DialogAnswer(confirm: false);
 
         await vm.EmptyRecycleBinCommand.ExecuteAsync(null);
 
+        Assert.Equal(0, dialog.Calls);
         Assert.Equal("marker", vm.StatusMessage);
     }
 

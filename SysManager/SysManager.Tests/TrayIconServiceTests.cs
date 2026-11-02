@@ -70,53 +70,80 @@ public class TrayIconServiceTests
 
     // ---------- notification threshold logic ----------
 
-    [Fact]
-    public void CheckAndNotify_LowRam_DoesNotThrow()
+    // These four asserted only that nothing threw. Without Initialize there is no tray icon, so a notification went
+    // nowhere and each passed whatever was raised, and nothing checked the memory or uptime limit (#2742). Each
+    // notification now reaches a sink the test hands in, on a clock past every cooldown.
+
+    private static (TrayIconService Service, List<string> Raised) Notifying()
     {
-        // RAM at 50% — should NOT trigger notification
-        var svc = new TrayIconService(new SystemInfoService());
-        var snapshot = MakeSnapshot(ramUsedPct: 50, uptimeDays: 1);
-        var ex = Record.Exception(() => svc.CheckAndNotify(snapshot));
-        Assert.Null(ex);
-        svc.Dispose();
+        var raised = new List<string>();
+        return (new TrayIconService(new SystemInfoService(), new TestClock(), (title, message) => raised.Add($"{title}: {message}")),
+                raised);
     }
 
-    [Fact]
-    public void CheckAndNotify_HighRam_DoesNotThrow()
-    {
-        // RAM at 95% — should trigger notification (but no tray icon = no crash)
-        var svc = new TrayIconService(new SystemInfoService());
-        var snapshot = MakeSnapshot(ramUsedPct: 95, uptimeDays: 1);
-        var ex = Record.Exception(() => svc.CheckAndNotify(snapshot));
-        Assert.Null(ex);
-        svc.Dispose();
-    }
-
-    [Fact]
-    public void CheckAndNotify_HighUptime_DoesNotThrow()
-    {
-        var svc = new TrayIconService(new SystemInfoService());
-        var snapshot = MakeSnapshot(ramUsedPct: 50, uptimeDays: 20);
-        var ex = Record.Exception(() => svc.CheckAndNotify(snapshot));
-        Assert.Null(ex);
-        svc.Dispose();
-    }
-
-    [Fact]
-    public void CheckAndNotify_UnhealthyDisk_DoesNotThrow()
-    {
-        var svc = new TrayIconService(new SystemInfoService());
-        var snapshot = new SystemSnapshot(
-            new OsInfo("Windows 11", "10.0", "22631", TimeSpan.FromDays(1), "64-bit"),
+    private static SystemSnapshot Snapshot(double ramUsedPct, TimeSpan uptime, string diskStatus = "Healthy") =>
+        new(new OsInfo("Windows 11", "10.0", "22631", uptime, "64-bit"),
             new CpuInfo("Test CPU", 8, 16, 3600, 10),
-            new MemoryInfo(16, 8, 8, 50, new List<MemoryModule>()),
-            new List<DiskInfo>
-            {
-                new("TestDisk", "SSD", "NVMe", 500, "Warning", "OK", 45, 10)
-            },
+            new MemoryInfo(16, 16 - 16 * ramUsedPct / 100, 16 * ramUsedPct / 100, ramUsedPct, new List<MemoryModule>()),
+            new List<DiskInfo> { new("TestDisk", "SSD", "NVMe", 500, diskStatus, "OK", 45, 10) },
             DateTime.Now);
-        var ex = Record.Exception(() => svc.CheckAndNotify(snapshot));
-        Assert.Null(ex);
+
+    [Fact]
+    public void CheckAndNotify_AtTheLimits_RaisesNothing()
+    {
+        // Each limit is one to pass, not one to reach: memory at exactly 90%, up exactly 14 days, a disk that is OK.
+        var (svc, raised) = Notifying();
+
+        svc.CheckAndNotify(Snapshot(ramUsedPct: HealthLimits.HighMemoryNotifiedAbovePercent,
+                                    TimeSpan.FromDays(HealthLimits.RestartNotifiedAfterDays), diskStatus: "OK"));
+
+        Assert.Empty(raised);
+        svc.Dispose();
+    }
+
+    [Fact]
+    public void CheckAndNotify_PastTheMemoryLimit_SaysHowFullItIs()
+    {
+        var (svc, raised) = Notifying();
+
+        svc.CheckAndNotify(Snapshot(ramUsedPct: 90.4, TimeSpan.FromDays(1)));
+
+        Assert.Equal(["High Memory Usage: RAM is at 90% — consider closing unused applications."], raised);
+        svc.Dispose();
+    }
+
+    [Fact]
+    public void CheckAndNotify_PastTheUptimeLimit_SaysHowLongItHasRun()
+    {
+        var (svc, raised) = Notifying();
+
+        svc.CheckAndNotify(Snapshot(ramUsedPct: 50, TimeSpan.FromDays(14) + TimeSpan.FromHours(1)));
+
+        Assert.Equal(["Restart Recommended: Your PC has been running for 14 days. A restart can improve performance."], raised);
+        svc.Dispose();
+    }
+
+    [Fact]
+    public void CheckAndNotify_ADiskWithAProblem_NamesItAndItsStatus()
+    {
+        var (svc, raised) = Notifying();
+
+        svc.CheckAndNotify(Snapshot(ramUsedPct: 50, TimeSpan.FromDays(1), diskStatus: "Warning"));
+
+        Assert.Equal(["Disk Health Warning: TestDisk reports status: Warning. Consider backing up important data."], raised);
+        svc.Dispose();
+    }
+
+    [Fact]
+    public void CheckAndNotify_EachLimitPassed_RaisesItsOwn_OncePerCooldown()
+    {
+        var (svc, raised) = Notifying();
+        var everything = Snapshot(ramUsedPct: 95, TimeSpan.FromDays(20), diskStatus: "Unhealthy");
+
+        svc.CheckAndNotify(everything);
+        svc.CheckAndNotify(everything);
+
+        Assert.Equal(["High Memory Usage", "Restart Recommended", "Disk Health Warning"], raised.Select(r => r[..r.IndexOf(':')]));
         svc.Dispose();
     }
 

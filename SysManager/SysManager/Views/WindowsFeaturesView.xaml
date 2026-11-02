@@ -243,8 +243,8 @@
 
             <!-- Empty state -->
             <v:EmptyState Glyph="&#xE946;"
-                          Title="No Windows features to show"
-                          Message="Nothing matches the current search. Clear it to see every optional feature."
+                          Title="{Binding EmptyTitle}"
+                          Message="{Binding EmptyMessage}"
                           Visibility="{Binding FilteredFeatures.Count, Converter={StaticResource FlexVis}, ConverterParameter=Inverse}"/>
             </Grid>
         </Border>

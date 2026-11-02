@@ -10,6 +10,16 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.136.75] - 2026-11-02
+
+**An empty Windows Features list now says why it is empty.**
+
+### Fixed
+- An empty Windows Features list said "Nothing matches the current search. Clear it to see every optional feature."
+  whatever the reason: before any scan, after a scan that found nothing, and after one Windows refused or that failed,
+  with no search typed. It now says which: not listed yet, administrator needed, could not be read, no optional
+  features, or nothing matches the search. This was there since 1.76.25.
+
 ## [1.136.74] - 2026-11-02
 
 **The Dashboard polls only while you are looking at it, from the start, and all of its icons draw on Windows 10.**

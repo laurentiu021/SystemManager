@@ -468,6 +468,81 @@ public class WindowsFeaturesTests
         Assert.Equal("Found 2 features (1 enabled).", vm.StatusMessage);
     }
 
+    // ── What the empty list says (#2755) ─────────────
+    // It said "Nothing matches the current search. Clear it to see every optional feature." in every case: before any
+    // scan, after a scan that found nothing, and after one that could not read the list, with no search typed.
+
+    [Fact]
+    public void TheEmptyList_BeforeAnyScan_SaysToPressScan()
+    {
+        var vm = new WindowsFeaturesViewModel(new WindowsFeaturesService(RunnerThatExits(0)), NoRestorePoint(), NoParents());
+
+        Assert.Equal(("Not listed yet", "Press Scan to list Windows' optional features."),
+            (vm.EmptyTitle, vm.EmptyMessage));
+    }
+
+    [Fact]
+    public async Task TheEmptyList_AfterAScanWindowsRefusedWithoutAdministrator_SaysWhy()
+    {
+        var vm = new WindowsFeaturesViewModel(
+            new WindowsFeaturesService(RunnerThatExits(1)), NoRestorePoint(), NoParents())
+        {
+            IsElevated = false,
+        };
+
+        await vm.ScanCommand.ExecuteAsync(null);
+
+        Assert.Equal(("Needs administrator", WindowsFeaturesViewModel.ListNeedsAdminMessage),
+            (vm.EmptyTitle, vm.EmptyMessage));
+    }
+
+    [Fact]
+    public async Task TheEmptyList_AfterAScanThatFailed_SaysTheListCouldNotBeRead()
+    {
+        var vm = ElevatedVm(RunnerThatExits(5), NoRestorePoint());
+
+        await vm.ScanCommand.ExecuteAsync(null);
+
+        Assert.Equal(("Could not be read", "Windows could not list its optional features. Press Scan to try again."),
+            (vm.EmptyTitle, vm.EmptyMessage));
+    }
+
+    [Fact]
+    public async Task TheEmptyList_AfterAScanThatFoundNone_SaysWindowsListedNone()
+    {
+        var vm = ElevatedVm(RunnerThatExits(0), NoRestorePoint());
+
+        await vm.ScanCommand.ExecuteAsync(null);
+
+        Assert.Empty(vm.FilteredFeatures);
+        Assert.Equal(("No optional features", "Windows listed no optional features on this PC."),
+            (vm.EmptyTitle, vm.EmptyMessage));
+    }
+
+    [Fact]
+    public async Task TheEmptyList_WhenTheSearchMatchesNothing_SaysToClearTheSearch_AndFollowsIt()
+    {
+        var runner = RunnerThatExits(0);
+        runner.RunProcessAsync(Arg.Any<string>(), Arg.Any<string>(), Arg.Any<CancellationToken>(),
+                               Arg.Any<System.Text.Encoding?>())
+              .Returns(_ =>
+              {
+                  runner.LineReceived += Raise.Event<Action<PowerShellLine>>(PowerShellLine.Output("TelnetClient|Disabled"));
+                  return Task.FromResult(0);
+              });
+        var vm = ElevatedVm(runner, NoRestorePoint());
+        await vm.ScanCommand.ExecuteAsync(null);
+        var changed = vm.RecordPropertyChanges();
+
+        vm.FilterText = "nothing like this";
+
+        Assert.Empty(vm.FilteredFeatures);
+        Assert.Equal(("Nothing matches", "Nothing matches the current search. Clear it to see every optional feature."),
+            (vm.EmptyTitle, vm.EmptyMessage));
+        Assert.Contains(nameof(vm.EmptyTitle), changed);
+        Assert.Contains(nameof(vm.EmptyMessage), changed);
+    }
+
     // ── What Windows answered, and what the row shows afterwards (#2834, #2739) ──
     //
     // The change scripts printed nothing when the cmdlet refused, so every failure said "Check permissions". The row

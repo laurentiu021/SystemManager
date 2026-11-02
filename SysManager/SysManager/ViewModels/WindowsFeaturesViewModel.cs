@@ -64,6 +64,12 @@ public sealed partial class WindowsFeaturesViewModel : ElevatedViewModelBase
 
     private void OnVmPropertyChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
     {
+        if (e.PropertyName == nameof(IsElevated))
+        {
+            OnPropertyChanged(nameof(EmptyTitle));
+            OnPropertyChanged(nameof(EmptyMessage));
+            return;
+        }
         if (e.PropertyName != nameof(IsBusy)) return;
         ScanCommand.NotifyCanExecuteChanged();
         ToggleFeatureCommand.NotifyCanExecuteChanged();
@@ -87,6 +93,7 @@ public sealed partial class WindowsFeaturesViewModel : ElevatedViewModelBase
         {
             var list = await _service.ListFeaturesAsync(_scanCts.Token);
             AllFeatures.ReplaceWith(list);
+            ListRead = true;
 
             ApplyFilter();
             EnabledCount = AllFeatures.Count(f => f.IsEnabled);
@@ -103,6 +110,7 @@ public sealed partial class WindowsFeaturesViewModel : ElevatedViewModelBase
             // Unelevated, the query always fails, and a normal launch is unelevated — so that case gets the
             // reason and the way out rather than an exit code (#2451).
             StatusMessage = IsElevated ? $"Error: {ex.Message}" : ListNeedsAdminMessage;
+            ListRead = false;
         }
         finally
         {
@@ -111,6 +119,42 @@ public sealed partial class WindowsFeaturesViewModel : ElevatedViewModelBase
             IsProgressIndeterminate = false;
         }
     }
+
+    /// <summary>
+    /// Whether the last scan read the list: true when it did, false when Windows refused it or the read failed, and
+    /// null before any scan has finished. A cancelled scan leaves it as it was, as it leaves the list.
+    /// </summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(EmptyTitle))]
+    [NotifyPropertyChangedFor(nameof(EmptyMessage))]
+    private bool? _listRead;
+
+    /// <summary>The empty list's title, which says why the list is empty.</summary>
+    /// <remarks>
+    /// It said "Nothing matches the current search" whatever the reason: before any scan, after one that found
+    /// nothing, and after one that could not read the list, with no search typed (#2755). A list that has features
+    /// in it is empty on screen only because the search matches none of them.
+    /// </remarks>
+    public string EmptyTitle => AllFeatures.Count > 0
+        ? "Nothing matches"
+        : ListRead switch
+        {
+            null => "Not listed yet",
+            false when !IsElevated => "Needs administrator",
+            false => "Could not be read",
+            true => "No optional features",
+        };
+
+    /// <summary>The line under <see cref="EmptyTitle"/>.</summary>
+    public string EmptyMessage => AllFeatures.Count > 0
+        ? "Nothing matches the current search. Clear it to see every optional feature."
+        : ListRead switch
+        {
+            null => "Press Scan to list Windows' optional features.",
+            false when !IsElevated => ListNeedsAdminMessage,
+            false => "Windows could not list its optional features. Press Scan to try again.",
+            true => "Windows listed no optional features on this PC.",
+        };
 
     /// <summary>What the tab says when an unelevated scan is refused.</summary>
     internal const string ListNeedsAdminMessage =
@@ -409,6 +453,9 @@ public sealed partial class WindowsFeaturesViewModel : ElevatedViewModelBase
 
         FilteredFeatures.ReplaceWith(source);
         FeatureCount = FilteredFeatures.Count;
+        // The empty list's words depend on whether there is a list to search.
+        OnPropertyChanged(nameof(EmptyTitle));
+        OnPropertyChanged(nameof(EmptyMessage));
         Summary = $"{FeatureCount} features{(AllFeatures.Count != FeatureCount ? $" (of {AllFeatures.Count} total)" : "")}";
     }
 }

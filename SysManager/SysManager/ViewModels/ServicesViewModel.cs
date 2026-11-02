@@ -31,6 +31,11 @@ public sealed partial class ServicesViewModel : ElevatedViewModelBase, IFilterab
     // Where the list comes from: Windows, or a stand-in in a test, which is the only way a test can see what this tab
     // says when the read fails.
     private readonly Func<List<ServiceEntry>> _readServices;
+    // What Start, Stop and the read of one service go to: Windows, or stand-ins in a test, which cannot start or stop
+    // a real service.
+    private readonly Func<string, Task> _startService;
+    private readonly Func<string, Task> _stopService;
+    private readonly Action<ServiceEntry> _refreshStatus;
     private int _loadGeneration;
     private List<ServiceEntry> _allServices = [];
 
@@ -93,13 +98,18 @@ public sealed partial class ServicesViewModel : ElevatedViewModelBase, IFilterab
           "Safe to disable", "Keep enabled", "Advanced" };
 
     public ServicesViewModel(IPowerShellRunner ps, ServiceStartupLedgerService? ledger = null, IPutBackSignal? putBack = null,
-        Action<string, string>? notify = null, Func<List<ServiceEntry>>? readServices = null)
+        Action<string, string>? notify = null, Func<List<ServiceEntry>>? readServices = null,
+        Func<string, Task>? startService = null, Func<string, Task>? stopService = null,
+        Action<ServiceEntry>? refreshStatus = null)
     {
         _ps = ps;
         _ledger = ledger ?? new ServiceStartupLedgerService();
         _putBack = putBack;
         _notify = notify ?? ((title, detail) => ToastService.Instance.Show(title, detail));
         _readServices = readServices ?? ServiceManagerService.GetAllServices;
+        _startService = startService ?? ServiceManagerService.StartServiceAsync;
+        _stopService = stopService ?? ServiceManagerService.StopServiceAsync;
+        _refreshStatus = refreshStatus ?? ServiceManagerService.RefreshStatus;
         if (_putBack is not null) _putBack.PutBack += OnPutBack;
         InitializeAsync(InitAsync);
     }
@@ -246,8 +256,9 @@ public sealed partial class ServicesViewModel : ElevatedViewModelBase, IFilterab
         {
             // Resume on the UI thread (no ConfigureAwait(false)): the continuation updates
             // bound state (RefreshStatus + StatusMessage), matching Enable/DisableServiceAsync.
-            await ServiceManagerService.StartServiceAsync(entry.Name);
-            ServiceManagerService.RefreshStatus(entry);
+            await _startService(entry.Name);
+            _refreshStatus(entry);
+            CountServices();
             StatusMessage = $"✓ {entry.DisplayName} started.";
             Log.Information("Service started: {ServiceName}", entry.Name);
         }
@@ -305,8 +316,9 @@ public sealed partial class ServicesViewModel : ElevatedViewModelBase, IFilterab
         try
         {
             // Resume on the UI thread — see StartServiceAsync.
-            await ServiceManagerService.StopServiceAsync(entry.Name);
-            ServiceManagerService.RefreshStatus(entry);
+            await _stopService(entry.Name);
+            _refreshStatus(entry);
+            CountServices();
             StatusMessage = $"✓ {entry.DisplayName} stopped.";
             Log.Information("Service stopped: {ServiceName}", entry.Name);
         }
@@ -392,7 +404,8 @@ public sealed partial class ServicesViewModel : ElevatedViewModelBase, IFilterab
             await ServiceManagerService.SetStartupTypeAsync(entry.Name, "disabled", _ps);
             // The ledger's rule for the in-memory copy too: only a type Enable can put back is worth keeping.
             entry.PreviousStartType = ServiceManagerService.IsRestorable(previous) ? previous : null;
-            ServiceManagerService.RefreshStatus(entry);
+            _refreshStatus(entry);
+            CountServices();
             StatusMessage = $"✓ {entry.DisplayName} set to Disabled.";
             Log.Information("Service disabled: {ServiceName} (was {Previous})", entry.Name, previous);
         }
@@ -497,7 +510,8 @@ public sealed partial class ServicesViewModel : ElevatedViewModelBase, IFilterab
         {
             await ServiceManagerService.PutBackStartupTypeAsync(entry.Name, previous, _ps, _ledger);
             entry.PreviousStartType = null;
-            ServiceManagerService.RefreshStatus(entry);
+            _refreshStatus(entry);
+            CountServices();
             var now = ServiceManagerService.StartTypeWithDelay(entry);
             StatusMessage = $"✓ {entry.DisplayName} set to {now}.";
             Log.Information("Service enabled: {ServiceName} -> {StartType}", entry.Name, now);
@@ -533,10 +547,20 @@ public sealed partial class ServicesViewModel : ElevatedViewModelBase, IFilterab
         };
 
         Services.ReplaceWith(filtered.OrderBy(s => s.DisplayName, StringComparer.OrdinalIgnoreCase));
+        CountServices();
+    }
 
-        // One pass for every count on the tab. Counted over _allServices rather than the filtered result,
-        // so each chip shows how many it WOULD match — a count that shrank to reflect the active filter
-        // would make the other chips look empty and unpressable.
+    /// <summary>
+    /// Every count on the tab, in one pass. Counted over _allServices rather than the filtered result,
+    /// so each chip shows how many it WOULD match — a count that shrank to reflect the active filter
+    /// would make the other chips look empty and unpressable.
+    /// </summary>
+    /// <remarks>
+    /// Also after Start, Stop, Disable and Enable, which change one row without filtering the list again: the
+    /// counts were worked out here alone, so the chips kept their old numbers (#2752).
+    /// </remarks>
+    private void CountServices()
+    {
         int running = 0, stopped = 0;
         int safe = 0, caution = 0, critical = 0, notRated = 0;
         int safeToDisable = 0, keepEnabled = 0, advanced = 0;

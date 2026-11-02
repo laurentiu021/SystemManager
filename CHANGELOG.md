@@ -10,6 +10,20 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.136.71] - 2026-11-02
+
+**Starting and stopping a service on Services no longer freezes SysManager, a service that stops at once says so straight away, and the filter counts keep up.**
+
+### Fixed
+- On Services, Stop and Start froze SysManager's window while Windows worked: stopping a service stops each running
+  dependent first and waits for it, and starting one waits until its program is up, and both waited on the thread that
+  draws the window. They run in the background now. This was there since 0.13.0.
+- A service that stopped as soon as it started kept the tab waiting the full 30 seconds, then was said to be maybe
+  still starting. It now reads "started and then stopped" at once, the way services.msc puts it. This too was there
+  since 0.13.0.
+- After Start, Stop, Disable or Enable, the Running and Stopped chips kept their old counts until the list was
+  filtered again. They follow every change now. This was there since 1.61.10, when those chips were added.
+
 ## [1.136.70] - 2026-11-02
 
 **Starting and stopping Gaming Profile, and Performance Mode's Restore All, no longer freeze SysManager while the visual effects change.**

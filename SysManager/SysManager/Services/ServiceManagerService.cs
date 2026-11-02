@@ -136,22 +136,41 @@ public sealed partial class ServiceManagerService
     }
 
     /// <summary>Start a service. Requires admin.</summary>
-    public static async Task StartServiceAsync(string serviceName)
+    /// <remarks>
+    /// All of it on a worker thread: Windows returns from Start only once the service's process has connected, and the
+    /// Services tab asked from the window's thread, which a slow service froze (#2752). The wait ends as soon as the
+    /// service runs or stops. It waited for Running alone, so a service that stopped as soon as it started ran out the
+    /// 30 seconds and was then said to be maybe still starting.
+    /// </remarks>
+    public static Task StartServiceAsync(string serviceName) =>
+        StartServiceAsync(serviceName, ControllerSwitch.Open, TimeProvider.System, Thread.Sleep);
+
+    /// <summary>
+    /// <see cref="StartServiceAsync(string)"/> over the service <paramref name="open"/> gives, read back with
+    /// <paramref name="clock"/> and <paramref name="pause"/> while it starts, so a test can stand in for Windows.
+    /// </summary>
+    internal static Task StartServiceAsync(
+        string serviceName, Func<string, IServiceSwitch> open, TimeProvider clock, Action<TimeSpan> pause) =>
+        Task.Run(() => StartService(serviceName, open, clock, pause));
+
+    /// <summary>How long a start is waited for.</summary>
+    private static readonly TimeSpan StartTimeout = TimeSpan.FromSeconds(30);
+
+    /// <summary>How often a starting service is read back, as often as Windows' own controller reads it.</summary>
+    private static readonly TimeSpan StartReadInterval = TimeSpan.FromMilliseconds(250);
+
+    private static void StartService(
+        string serviceName, Func<string, IServiceSwitch> open, TimeProvider clock, Action<TimeSpan> pause)
     {
-        using var sc = new ServiceController(serviceName);
-        if (sc.Status == ServiceControllerStatus.Running ||
-            sc.Status == ServiceControllerStatus.StartPending)
+        using var sc = open(serviceName);
+        if (sc.Status is ServiceControllerStatus.Running or ServiceControllerStatus.StartPending)
             return;
 
+        ServiceControllerStatus settled;
         try
         {
             sc.Start();
-            await Task.Run(() => sc.WaitForStatus(ServiceControllerStatus.Running, TimeSpan.FromSeconds(30))).ConfigureAwait(false);
-        }
-        catch (System.ServiceProcess.TimeoutException)
-        {
-            throw new InvalidOperationException(
-                $"Service '{serviceName}' did not start within 30 seconds. It may still be starting — check Services again in a moment.");
+            settled = WaitUntilRunningOrStopped(sc, clock, pause);
         }
         catch (System.ComponentModel.Win32Exception ex)
         {
@@ -160,6 +179,31 @@ public sealed partial class ServiceManagerService
             // ViewModel layer already handles.
             throw new InvalidOperationException(
                 $"Could not start service '{serviceName}': {ex.Message}", ex);
+        }
+
+        if (settled == ServiceControllerStatus.Stopped)
+            throw new InvalidOperationException(
+                $"Service '{serviceName}' started and then stopped. Some services stop on their own when nothing needs them.");
+        if (settled != ServiceControllerStatus.Running)
+            throw new InvalidOperationException(
+                $"Service '{serviceName}' did not start within 30 seconds. It may still be starting — check Services again in a moment.");
+    }
+
+    /// <summary>
+    /// Reads <paramref name="service"/> until it runs or stops, or <see cref="StartTimeout"/> passes, and returns the last
+    /// state read.
+    /// </summary>
+    private static ServiceControllerStatus WaitUntilRunningOrStopped(
+        IServiceSwitch service, TimeProvider clock, Action<TimeSpan> pause)
+    {
+        var started = clock.GetTimestamp();
+        while (true)
+        {
+            var status = service.Status;
+            if (status is ServiceControllerStatus.Running or ServiceControllerStatus.Stopped
+                || clock.GetElapsedTime(started) >= StartTimeout)
+                return status;
+            pause(StartReadInterval);
         }
     }
 
@@ -170,10 +214,21 @@ public sealed partial class ServiceManagerService
     /// in the same silent way, and the call returned as if it had stopped — so the Services tab said
     /// "✓ stopped" over a service still running (DNS Client, on Windows 11), and the Gaming Profile counted a
     /// Windows Search it had not stopped as paused.
+    /// <para>All of it on a worker thread: Windows' controller stops each running dependent inside Stop and waits up to 30
+    /// seconds for each, and the Services tab asked from the window's thread (#2752).</para>
     /// </remarks>
-    public static async Task StopServiceAsync(string serviceName)
+    public static Task StopServiceAsync(string serviceName) => StopServiceAsync(serviceName, ControllerSwitch.Open);
+
+    /// <summary>
+    /// <see cref="StopServiceAsync(string)"/> over the service <paramref name="open"/> gives, so a test can stand in for
+    /// Windows.
+    /// </summary>
+    internal static Task StopServiceAsync(string serviceName, Func<string, IServiceSwitch> open) =>
+        Task.Run(() => StopService(serviceName, open));
+
+    private static void StopService(string serviceName, Func<string, IServiceSwitch> open)
     {
-        using var sc = new ServiceController(serviceName);
+        using var sc = open(serviceName);
         if (sc.Status is ServiceControllerStatus.Stopped or ServiceControllerStatus.StopPending)
             return;
         if (!sc.CanStop)
@@ -183,7 +238,7 @@ public sealed partial class ServiceManagerService
         try
         {
             sc.Stop();
-            await Task.Run(() => sc.WaitForStatus(ServiceControllerStatus.Stopped, TimeSpan.FromSeconds(30))).ConfigureAwait(false);
+            sc.WaitForStatus(ServiceControllerStatus.Stopped, TimeSpan.FromSeconds(30));
         }
         catch (System.ServiceProcess.TimeoutException)
         {
@@ -197,6 +252,56 @@ public sealed partial class ServiceManagerService
             throw new InvalidOperationException(
                 $"Could not stop service '{serviceName}': {ex.Message}", ex);
         }
+    }
+
+    /// <summary>One service as Start and Stop drive it, so a test can stand in for Windows.</summary>
+    internal interface IServiceSwitch : IDisposable
+    {
+        /// <summary>The service's state, as Windows reports it now.</summary>
+        ServiceControllerStatus Status { get; }
+
+        /// <summary>Whether the service accepts a stop request.</summary>
+        bool CanStop { get; }
+
+        /// <summary>Asks Windows to start the service.</summary>
+        void Start();
+
+        /// <summary>Asks Windows to stop the service, and its running dependents first.</summary>
+        void Stop();
+
+        /// <summary>
+        /// Waits until the service is in <paramref name="status"/>, and throws
+        /// <see cref="System.ServiceProcess.TimeoutException"/> once <paramref name="timeout"/> has passed.
+        /// </summary>
+        void WaitForStatus(ServiceControllerStatus status, TimeSpan timeout);
+    }
+
+    /// <summary>The <see cref="IServiceSwitch"/> over Windows' own <see cref="ServiceController"/>.</summary>
+    private sealed class ControllerSwitch(string serviceName) : IServiceSwitch
+    {
+        private readonly ServiceController _controller = new(serviceName);
+
+        public static IServiceSwitch Open(string serviceName) => new ControllerSwitch(serviceName);
+
+        public ServiceControllerStatus Status
+        {
+            get
+            {
+                _controller.Refresh();
+                return _controller.Status;
+            }
+        }
+
+        public bool CanStop => _controller.CanStop;
+
+        public void Start() => _controller.Start();
+
+        public void Stop() => _controller.Stop();
+
+        public void WaitForStatus(ServiceControllerStatus status, TimeSpan timeout) =>
+            _controller.WaitForStatus(status, timeout);
+
+        public void Dispose() => _controller.Dispose();
     }
 
     /// <summary>

@@ -45,9 +45,11 @@ public class ServicesViewModelTests
     /// real service such as Spooler (#2742).
     /// </remarks>
     private static ServicesViewModel NewVm(IPowerShellRunner? ps = null, ServiceStartupLedgerService? ledger = null,
-        List<ServiceEntry>? services = null) =>
+        List<ServiceEntry>? services = null, Func<string, Task>? startService = null,
+        Func<string, Task>? stopService = null, Action<ServiceEntry>? refreshStatus = null) =>
         new(ps ?? Substitute.For<IPowerShellRunner>(), ledger ?? new ServiceStartupLedgerService(UnwrittenLedgerDir()),
-            readServices: () => [.. services ?? TestServices]);
+            readServices: () => [.. services ?? TestServices],
+            startService: startService, stopService: stopService, refreshStatus: refreshStatus);
 
     /// <summary>A folder of the test's own that nothing creates unless a change is remembered in it.</summary>
     private static string UnwrittenLedgerDir() =>
@@ -471,6 +473,52 @@ public class ServicesViewModelTests
         var vm = await CreateWithDataAsync();
         var ex = await Record.ExceptionAsync(() => vm.DisableServiceCommand.ExecuteAsync(null));
         Assert.Null(ex);
+    }
+
+    // ── The chips follow Start and Stop (#2752) ──
+
+    /// <summary>
+    /// Stopping a service moves it from the Running chip's count to the Stopped one's. Each command refreshed its own row
+    /// alone, and the counts were worked out only when the list was filtered, so the chips kept the old numbers.
+    /// </summary>
+    [Fact]
+    public async Task StoppingAService_MovesItFromTheRunningCountToTheStoppedCount()
+    {
+        using var elevated = AdminHelper.ForceElevation(true);
+        var services = new List<ServiceEntry>
+        {
+            new() { Name = "Spooler", DisplayName = "Print Spooler", Status = "Running", StartType = "Automatic", SafetyLevel = Models.SafetyLevel.Safe },
+            new() { Name = "Fax", DisplayName = "Fax", Status = "Running", StartType = "Manual", SafetyLevel = Models.SafetyLevel.Safe },
+        };
+        using var vm = NewVm(services: services, stopService: _ => Task.CompletedTask,
+            refreshStatus: entry => entry.Status = "Stopped");
+        await vm.InitializationComplete;
+        Assert.Equal((2, 0), (vm.RunningCount, vm.StoppedCount));
+        using var dialog = new DialogAnswer(confirm: true);
+
+        await vm.StopServiceCommand.ExecuteAsync(services[0]);
+
+        Assert.Equal((1, 1), (vm.RunningCount, vm.StoppedCount));
+    }
+
+    /// <summary>Starting one moves it back, the same way.</summary>
+    [Fact]
+    public async Task StartingAService_MovesItFromTheStoppedCountToTheRunningCount()
+    {
+        using var elevated = AdminHelper.ForceElevation(true);
+        var services = new List<ServiceEntry>
+        {
+            new() { Name = "Spooler", DisplayName = "Print Spooler", Status = "Stopped", StartType = "Manual", SafetyLevel = Models.SafetyLevel.Safe },
+        };
+        using var vm = NewVm(services: services, startService: _ => Task.CompletedTask,
+            refreshStatus: entry => entry.Status = "Running");
+        await vm.InitializationComplete;
+        Assert.Equal((0, 1), (vm.RunningCount, vm.StoppedCount));
+        using var dialog = new DialogAnswer(confirm: true);
+
+        await vm.StartServiceCommand.ExecuteAsync(services[0]);
+
+        Assert.Equal((1, 0), (vm.RunningCount, vm.StoppedCount));
     }
 
     // ── StopService: boot-critical guard (regression) ──

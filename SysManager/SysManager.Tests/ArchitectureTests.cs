@@ -19173,9 +19173,91 @@ public partial class ArchitectureTests
             $"{runnerReads} of the markers were found in PowerShellRunner.cs, so the scan no longer finds what the runner "
             + "does — fix the scan rather than trusting the pass");
         Assert.True(offenders.Count == 0,
-            "these start a program and read what it prints themselves. Run it through IPowerShellRunner.RunProcessAsync "
-            + "and read LineReceived, as StartupService does for schtasks:\n  " + string.Join("\n  ", offenders));
+            "these start a program and read what it prints themselves. Run it through IPowerShellRunner: "
+            + "RunProcessForOutputAsync returns the lines it printed, and RunProcessAsync raises them on LineReceived "
+            + "as they come:\n  " + string.Join("\n  ", offenders));
     }
+
+    /// <summary>
+    /// Every winget query reads the lines its own run printed, from <c>RunProcessForOutputAsync</c> (#2771).
+    /// </summary>
+    /// <remarks>
+    /// The queries collected what the runner raised on <c>LineReceived</c> while they ran, which is every run on that
+    /// runner: Bulk Installer's search during its installed list read both tables, and the Dashboard's alert check, Scan
+    /// system and Update All Apps read each other's upgrade lists. A query is a run whose arguments start with list,
+    /// search or show, or an upgrade without <c>--id</c>, which lists the upgrades rather than making one. An install,
+    /// an uninstall or the upgrade of one package prints for the user to watch, and nothing parses it. The arguments
+    /// are read where the call gives them, or from the string the variable it passes was set to, so both shapes count.
+    /// </remarks>
+    [Fact]
+    public void EveryWingetQuery_ReadsTheOutputOfItsOwnRun()
+    {
+        var sourceDir = Path.Combine(TestPaths.RepoRoot(), "SysManager", "SysManager");
+        var files = Directory.GetFiles(sourceDir, "*.cs", SearchOption.AllDirectories)
+            .Where(f => !f.Contains($"{Path.DirectorySeparatorChar}obj{Path.DirectorySeparatorChar}")
+                        && !f.Contains($"{Path.DirectorySeparatorChar}bin{Path.DirectorySeparatorChar}"))
+            .ToArray();
+        Assert.NotEmpty(files);
+
+        List<string> offenders = [];
+        var queries = 0;
+        var actions = 0;
+        foreach (var file in files)
+        {
+            var source = File.ReadAllText(file);
+            var code = SourceBraces.CodeOnly(source);
+            foreach (Match call in WingetRun().Matches(source))
+            {
+                // A call is code only where blanking literals and comments left its name standing.
+                var name = call.Groups["method"];
+                if (code.Substring(name.Index, name.Length) != name.Value) continue;
+
+                var arguments = call.Groups["literal"].Success
+                    ? call.Groups["literal"].Value
+                    : AssignedLiteral(source[..call.Index], call.Groups["variable"].Value);
+                Assert.True(arguments is not null,
+                    $"{Path.GetFileName(file)} passes winget's arguments in {call.Groups["variable"].Value}, and no "
+                    + "string it is set to was found before the call, so this cannot tell a query from an action");
+
+                var verb = arguments!.Split(' ', 2)[0];
+                var query = verb is "list" or "search" or "show"
+                            || (verb == "upgrade" && !arguments.Contains("--id", StringComparison.Ordinal));
+                if (!query)
+                {
+                    actions++;
+                    continue;
+                }
+
+                queries++;
+                if (name.Value != "RunProcessForOutputAsync")
+                    offenders.Add($"{Path.GetFileName(file)}: winget {verb} through {name.Value}");
+            }
+        }
+
+        // Today: Bulk Installer's list and search, Uninstaller's list and the upgrade list; and as actions, the install,
+        // the uninstall and the upgrade of one package, whose arguments are all given in a variable.
+        Assert.True(queries >= 4 && actions >= 3,
+            $"{queries} winget queries and {actions} other winget runs were found, so the scan no longer finds the "
+            + "calls — fix the pattern rather than trusting the pass");
+        Assert.True(offenders.Count == 0,
+            "these winget queries collect what the runner raises while they run, which holds the lines of any other "
+            + "run on it. Read RunProcessForOutputAsync's lines instead:\n  " + string.Join("\n  ", offenders));
+    }
+
+    /// <summary>The string literal <paramref name="variable"/> was last set to before the call, or null.</summary>
+    private static string? AssignedLiteral(string before, string variable)
+    {
+        var assignments = Regex.Matches(before, $@"\b{Regex.Escape(variable)}\s*=\s*\$?""(?<value>[^""]*)""");
+        return assignments.Count > 0 ? assignments[^1].Groups["value"].Value : null;
+    }
+
+    /// <summary>
+    /// A run of winget through the runner, with its arguments as a literal or a variable:
+    /// <c>RunProcessAsync("winget", "list …"</c> or <c>RunProcessAsync("winget", args</c>.
+    /// </summary>
+    [GeneratedRegex(@"\b(?<method>RunProcess(?:ForOutput)?Async)\(\s*""winget""\s*,\s*"
+                    + @"(?:\$?""(?<literal>[^""]*)""|(?<variable>\w+)\s*[,)])")]
+    private static partial Regex WingetRun();
 
     /// <summary>
     /// The code of each <c>new ProcessStartInfo(…) { … }</c> construction in <paramref name="source"/>, its literals

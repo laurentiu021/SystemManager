@@ -198,8 +198,11 @@ public class UninstallerViewModelGateTests
     public async Task AScanThatDoesNotFinish_LeavesTheListTheCountAndTheTicksAsTheyWere(bool cancelled)
     {
         var runner = Substitute.For<IPowerShellRunner>();
-        runner.RunProcessAsync("winget", Arg.Any<string>(), Arg.Any<CancellationToken>(), Arg.Any<System.Text.Encoding?>())
-              .Returns(cancelled ? Task.FromCanceled<int>(new CancellationToken(canceled: true)) : Task.FromResult(1));
+        runner.RunProcessForOutputAsync("winget", Arg.Any<string>(), Arg.Any<CancellationToken>(),
+                                        Arg.Any<System.Text.Encoding?>())
+              .Returns(cancelled
+                  ? Task.FromCanceled<ProcessOutput>(new CancellationToken(canceled: true))
+                  : Task.FromResult(new ProcessOutput(1, [])));
         var vm = NewVm(runner);
         Seed(vm, 3);
         vm.FilteredApps[1].IsSelected = true;

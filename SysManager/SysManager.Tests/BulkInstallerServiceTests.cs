@@ -3,6 +3,7 @@
 // License: MIT
 
 using NSubstitute;
+using SysManager.Models;
 using SysManager.Services;
 
 namespace SysManager.Tests;
@@ -162,9 +163,7 @@ public class BulkInstallerServiceTests
         // and no WorkingDirectory (binary-planting LPE) AND interpolated the raw query
         // (argument injection). SearchAsync routes through the runner (WorkingDirectory pinned)
         // and sanitizes the query before interpolation.
-        var runner = Substitute.For<IPowerShellRunner>();
-        runner.RunProcessAsync("winget", Arg.Any<string>(), Arg.Any<CancellationToken>(), Arg.Any<System.Text.Encoding?>())
-              .Returns(0);
+        var runner = WingetQueryFailureTests.WingetThatPrints(0);
         var svc = new BulkInstallerService(runner);
 
         await svc.SearchAsync("foo\" & calc \"");
@@ -173,7 +172,7 @@ public class BulkInstallerServiceTests
         // query stays inside its own quoted token and can't inject extra winget arguments. The
         // '&' is retained but harmless — it's inside a quoted arg and there is no shell
         // (UseShellExecute=false). So exactly ONE opening + ONE closing quote wrap the query.
-        await runner.Received(1).RunProcessAsync(
+        await runner.Received(1).RunProcessForOutputAsync(
             "winget",
             Arg.Is<string>(a => a != null && a.Contains("search \"foo & calc\"") && a.Split('"').Length == 3),
             Arg.Any<CancellationToken>(),
@@ -190,22 +189,112 @@ public class BulkInstallerServiceTests
 
         Assert.Empty(lines);
         await runner.DidNotReceiveWithAnyArgs().RunProcessAsync(default!, default!, default, default);
+        await runner.DidNotReceiveWithAnyArgs().RunProcessForOutputAsync(default!, default!, default, default);
     }
 
+    /// <summary>
+    /// The installed list accepts the source agreements, as every other winget call here does (#2771). winget cannot ask
+    /// with interactivity off, so on a profile that had not accepted them the list failed and nothing was ever marked as
+    /// installed.
+    /// </summary>
     [Fact]
-    public async Task ListInstalledAsync_RoutesThroughRunner()
+    public async Task ListInstalledAsync_RoutesThroughRunner_AcceptingTheSourceAgreements()
     {
-        var runner = Substitute.For<IPowerShellRunner>();
-        runner.RunProcessAsync("winget", Arg.Any<string>(), Arg.Any<CancellationToken>(), Arg.Any<System.Text.Encoding?>())
-              .Returns(0);
+        var runner = WingetQueryFailureTests.WingetThatPrints(0);
         var svc = new BulkInstallerService(runner);
 
         await svc.ListInstalledAsync();
 
-        await runner.Received(1).RunProcessAsync(
+        await runner.Received(1).RunProcessForOutputAsync(
             "winget",
-            Arg.Is<string>(a => a != null && a.Contains("list")),
+            "list --accept-source-agreements --disable-interactivity",
             Arg.Any<CancellationToken>(),
             Arg.Any<System.Text.Encoding?>());
+    }
+
+    // ---------- each query reads its own output (#2771) ----------
+
+    private static readonly string[] ListTable =
+    [
+        "Name                         Id                           Version    Source",
+        "-------------------------------------------------------------------------",
+        "Git                          Git.Git                      2.45.1     winget",
+    ];
+
+    private static readonly string[] SearchTable =
+    [
+        "Name                 Id                Version   Source",
+        "--------------------------------------------------------",
+        "VLC media player     VideoLAN.VLC      3.0.21    winget",
+    ];
+
+    /// <summary>
+    /// A search while the installed list is still running reads only its own table, and so does the list (#2771).
+    /// </summary>
+    /// <remarks>
+    /// Both used to collect what the service's one runner raised while their own run lasted, so a search during the list
+    /// read the list's rows as matches, and the list read the search's matches as installed programs. Here the search
+    /// prints while the list is held open, through the one event the two used to read, and the list prints after it.
+    /// </remarks>
+    [Fact]
+    public async Task AListAndASearchAtOnce_EachReadsOnlyItsOwnTable()
+    {
+        var runner = Substitute.For<IPowerShellRunner>();
+        var listExits = new TaskCompletionSource<ProcessOutput>(TaskCreationOptions.RunContinuationsAsynchronously);
+        runner.RunProcessForOutputAsync("winget", Arg.Is<string>(a => a.StartsWith("list ", StringComparison.Ordinal)),
+                                        Arg.Any<CancellationToken>(), Arg.Any<System.Text.Encoding?>())
+              .Returns(listExits.Task);
+        runner.RunProcessForOutputAsync("winget", Arg.Is<string>(a => a.StartsWith("search ", StringComparison.Ordinal)),
+                                        Arg.Any<CancellationToken>(), Arg.Any<System.Text.Encoding?>())
+              .Returns(_ =>
+              {
+                  Print(runner, SearchTable);
+                  return Task.FromResult(new ProcessOutput(0, SearchTable));
+              });
+        var svc = new BulkInstallerService(runner);
+
+        var list = svc.ListInstalledAsync();
+        var matches = await svc.SearchAsync("vlc");
+        Print(runner, ListTable);
+        listExits.SetResult(new ProcessOutput(0, ListTable));
+        var installed = await list;
+
+        Assert.Equal(SearchTable, matches);
+        Assert.Equal(ListTable, installed);
+    }
+
+    /// <summary>
+    /// A search during an install reads its own table, not the install's progress (#2771).
+    /// </summary>
+    [Fact]
+    public async Task ASearchDuringAnInstall_ReadsNoneOfTheInstallsLines()
+    {
+        var runner = Substitute.For<IPowerShellRunner>();
+        var installExits = new TaskCompletionSource<int>(TaskCreationOptions.RunContinuationsAsynchronously);
+        runner.RunProcessAsync("winget", Arg.Is<string>(a => a.StartsWith("install ", StringComparison.Ordinal)),
+                               Arg.Any<CancellationToken>(), Arg.Any<System.Text.Encoding?>())
+              .Returns(installExits.Task);
+        runner.RunProcessForOutputAsync("winget", Arg.Is<string>(a => a.StartsWith("search ", StringComparison.Ordinal)),
+                                        Arg.Any<CancellationToken>(), Arg.Any<System.Text.Encoding?>())
+              .Returns(_ =>
+              {
+                  Print(runner, ["Downloading https://example.invalid/setup.exe", "Successfully installed"]);
+                  Print(runner, SearchTable);
+                  return Task.FromResult(new ProcessOutput(0, SearchTable));
+              });
+        var svc = new BulkInstallerService(runner);
+
+        var install = svc.InstallAsync("Git.Git");
+        var matches = await svc.SearchAsync("vlc");
+        installExits.SetResult(0);
+
+        Assert.Equal(SearchTable, matches);
+        Assert.Equal(0, await install);
+    }
+
+    private static void Print(IPowerShellRunner runner, IEnumerable<string> lines)
+    {
+        foreach (var line in lines)
+            runner.LineReceived += Raise.Event<Action<PowerShellLine>>(PowerShellLine.Output(line));
     }
 }

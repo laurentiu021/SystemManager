@@ -64,6 +64,21 @@ public interface IPowerShellRunner
         Encoding? outputEncoding = null);
 
     /// <summary>
+    /// Run an external process as <see cref="RunProcessAsync"/> does, and return its exit code with the lines that
+    /// process wrote to standard output. Every line is still raised on <see cref="LineReceived"/> for live display.
+    /// </summary>
+    /// <remarks>
+    /// For a caller that reads what the program printed. <see cref="LineReceived"/> carries every run on this runner, so
+    /// a caller that collected from it while its own run was going also kept the lines of any run beside it: a search
+    /// during the installed list read both tables (#2771). The lines returned here come from this process only.
+    /// </remarks>
+    Task<ProcessOutput> RunProcessForOutputAsync(
+        string fileName,
+        string arguments,
+        CancellationToken cancellationToken = default,
+        Encoding? outputEncoding = null);
+
+    /// <summary>
     /// Run a validated executable through the Windows shell so its own manifest can
     /// request elevation. Use only after the caller has validated both the executable
     /// and arguments at its trust boundary.

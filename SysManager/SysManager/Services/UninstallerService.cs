@@ -64,28 +64,15 @@ public sealed partial class UninstallerService
     /// <exception cref="InvalidOperationException">The query failed, as opposed to finding nothing.</exception>
     public async Task<List<InstalledApp>> ListInstalledAsync(CancellationToken ct = default)
     {
-        // LineReceived fires from both the stdout and stderr reader threads
-        // concurrently, so the sink must be thread-safe — a plain List<T>.Add can
-        // corrupt the backing array or drop a line under the race.
-        var captured = new System.Collections.Concurrent.ConcurrentQueue<string>();
-        void Collect(PowerShellLine l)
-        {
-            if (l.Kind == OutputKind.Output) captured.Enqueue(l.Text);
-        }
-
-        int exitCode;
-        _runner.LineReceived += Collect;
-        try
-        {
-            exitCode = await _runner.RunProcessAsync("winget",
-                "list --accept-source-agreements --disable-interactivity", ct).ConfigureAwait(false);
-        }
-        finally { _runner.LineReceived -= Collect; }
+        // The table this run printed, as every winget query here reads it (#2771): one collected from LineReceived
+        // would also hold the lines of any other run on this runner.
+        var output = await _runner.RunProcessForOutputAsync("winget",
+            "list --accept-source-agreements --disable-interactivity", ct).ConfigureAwait(false);
 
         // A failed query prints no table, and parsing nothing used to read as "Found 0 installed
         // applications" (#2461).
-        WingetFailure.ThrowIfQueryFailed(exitCode);
-        var apps = ParseListTable(captured.ToList());
+        WingetFailure.ThrowIfQueryFailed(output.ExitCode);
+        var apps = ParseListTable([.. output.Lines]);
         EnrichFromRegistry(apps);
         return apps;
     }

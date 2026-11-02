@@ -52,6 +52,11 @@ public sealed class FormattedLabelViewUiTests
                                          CancellationToken cancellationToken = default,
                                          Encoding? outputEncoding = null) => Task.FromResult(0);
 
+        public Task<ProcessOutput> RunProcessForOutputAsync(string fileName, string arguments,
+                                                            CancellationToken cancellationToken = default,
+                                                            Encoding? outputEncoding = null) =>
+            Task.FromResult(new ProcessOutput(0, []));
+
         public Task<int> RunProcessWithShellAsync(string fileName, string arguments,
                                                   CancellationToken cancellationToken = default) => Task.FromResult(0);
     }

@@ -5,6 +5,7 @@
 using System.IO;
 using NSubstitute;
 using SysManager.Helpers;
+using SysManager.Models;
 using SysManager.Services;
 using SysManager.ViewModels;
 
@@ -154,13 +155,25 @@ public class BulkInstallerViewModelTests
     /// <remarks>
     /// <c>NewVm</c> builds a real <c>PowerShellRunner</c>, which for the search path means launching an
     /// actual <c>winget search</c> — a live process, a network round-trip, and an answer that depends on the
-    /// machine. The seam is one level down from the view-model: the service collects <c>LineReceived</c>
-    /// around <c>RunProcessAsync</c>, so a substituted runner that emits nothing is a search that matched
-    /// nothing.
+    /// machine. The seam is one level down from the view-model: the service reads the lines
+    /// <c>RunProcessForOutputAsync</c> returns, so a run that printed nothing is a search that matched nothing.
     /// </remarks>
     private static BulkInstallerViewModel VmWithSubstitutedRunner(IPowerShellRunner runner) =>
         new(new BulkInstallerService(runner),
             new AppIconService(null, Path.Combine(Path.GetTempPath(), "SysManagerTests", Guid.NewGuid().ToString("N"))));
+
+    /// <summary>
+    /// A substituted runner whose winget queries print nothing and succeed. A bare substitute returns no output at all
+    /// for them, which the service cannot read. What a test sets up afterwards takes precedence over this.
+    /// </summary>
+    private static IPowerShellRunner QuietRunner()
+    {
+        var runner = Substitute.For<IPowerShellRunner>();
+        runner.RunProcessForOutputAsync(Arg.Any<string>(), Arg.Any<string>(), Arg.Any<CancellationToken>(),
+                                        Arg.Any<System.Text.Encoding?>())
+              .Returns(Task.FromResult(new ProcessOutput(0, [])));
+        return runner;
+    }
 
     /// <summary>
     /// A search that matches nothing says so — and only once the search has actually run.
@@ -174,7 +187,7 @@ public class BulkInstallerViewModelTests
     [Fact]
     public async Task SearchWinget_WhenNothingMatches_SaysSo_ButNotBeforeTheSearch()
     {
-        var vm = VmWithSubstitutedRunner(Substitute.For<IPowerShellRunner>());
+        var vm = VmWithSubstitutedRunner(QuietRunner());
         Assert.False(vm.SearchFoundNothing);   // nothing searched yet
 
         vm.SearchQuery = "qwertyasdfzxcv";
@@ -194,7 +207,7 @@ public class BulkInstallerViewModelTests
     [Fact]
     public async Task SearchWinget_WithTooShortAQuery_DoesNotClaimNothingWasFound()
     {
-        var runner = Substitute.For<IPowerShellRunner>();
+        var runner = QuietRunner();
         var vm = VmWithSubstitutedRunner(runner);
 
         vm.SearchQuery = "q";
@@ -204,7 +217,7 @@ public class BulkInstallerViewModelTests
 
         // Not DidNotReceiveWithAnyArgs: the constructor legitimately runs `winget list` to learn which
         // apps are already installed, so the assertion has to name the SEARCH rather than any winget call.
-        await runner.DidNotReceive().RunProcessAsync(
+        await runner.DidNotReceive().RunProcessForOutputAsync(
             "winget",
             Arg.Is<string>(args => args.StartsWith("search", StringComparison.Ordinal)),
             Arg.Any<CancellationToken>(),
@@ -222,10 +235,10 @@ public class BulkInstallerViewModelTests
     [Fact]
     public async Task SearchWinget_WhenWingetIsMissing_DoesNotClaimNoPackagesWereFound()
     {
-        var runner = Substitute.For<IPowerShellRunner>();
-        runner.RunProcessAsync(Arg.Any<string>(), Arg.Any<string>(), Arg.Any<CancellationToken>(),
-                               Arg.Any<System.Text.Encoding?>())
-              .Returns<Task<int>>(_ => throw new System.ComponentModel.Win32Exception(2));
+        var runner = QuietRunner();
+        runner.RunProcessForOutputAsync(Arg.Any<string>(), Arg.Any<string>(), Arg.Any<CancellationToken>(),
+                                        Arg.Any<System.Text.Encoding?>())
+              .Returns<Task<ProcessOutput>>(_ => throw new System.ComponentModel.Win32Exception(2));
         var vm = VmWithSubstitutedRunner(runner);
 
         vm.SearchQuery = "firefox";
@@ -241,10 +254,11 @@ public class BulkInstallerViewModelTests
     [Fact]
     public async Task SearchWinget_WhenTheSearchFails_SaysWhy_NotThatNothingMatched()
     {
-        var runner = Substitute.For<IPowerShellRunner>();
-        runner.RunProcessAsync("winget", Arg.Is<string>(args => args.StartsWith("search", StringComparison.Ordinal)),
-                               Arg.Any<CancellationToken>(), Arg.Any<System.Text.Encoding?>())
-              .Returns(Task.FromResult(unchecked((int)0x8A15004B))); // FAILED_TO_OPEN_ALL_SOURCES
+        var runner = QuietRunner();
+        runner.RunProcessForOutputAsync("winget",
+                                        Arg.Is<string>(args => args.StartsWith("search", StringComparison.Ordinal)),
+                                        Arg.Any<CancellationToken>(), Arg.Any<System.Text.Encoding?>())
+              .Returns(Task.FromResult(new ProcessOutput(unchecked((int)0x8A15004B), []))); // FAILED_TO_OPEN_ALL_SOURCES
         var vm = VmWithSubstitutedRunner(runner);
 
         vm.SearchQuery = "firefox";
@@ -264,7 +278,7 @@ public class BulkInstallerViewModelTests
     [Fact]
     public async Task InstallSelected_WhenTheAppIsAlreadyInstalled_CountsItAsSuch_NotAsAFailure()
     {
-        var runner = Substitute.For<IPowerShellRunner>();
+        var runner = QuietRunner();
         runner.RunProcessAsync("winget", Arg.Is<string>(args => args.StartsWith("install", StringComparison.Ordinal)),
                                Arg.Any<CancellationToken>(), Arg.Any<System.Text.Encoding?>())
               .Returns(Task.FromResult(unchecked((int)0x8A15002B))); // UPDATE_NOT_APPLICABLE
@@ -287,7 +301,7 @@ public class BulkInstallerViewModelTests
     {
         // The sentence was shown for an instant: the next app's "Installing…" wrote over it, every app failed the same
         // way, and the run ended "Done. Installed: 0, Failed: N." with a "Bulk Install complete" toast.
-        var runner = Substitute.For<IPowerShellRunner>();
+        var runner = QuietRunner();
         runner.RunProcessAsync("winget", Arg.Is<string>(args => args.StartsWith("install", StringComparison.Ordinal)),
                                Arg.Any<CancellationToken>(), Arg.Any<System.Text.Encoding?>())
               .Returns<Task<int>>(_ => throw new System.ComponentModel.Win32Exception(2));
@@ -312,7 +326,7 @@ public class BulkInstallerViewModelTests
     [Fact]
     public async Task InstallSelected_WhenTheUserDeclines_InstallsNothing()
     {
-        var runner = Substitute.For<IPowerShellRunner>();
+        var runner = QuietRunner();
         var vm = VmWithSubstitutedRunner(runner);
         vm.DeselectAllCommand.Execute(null);
         vm.Apps[0].IsSelected = true;
@@ -334,7 +348,7 @@ public class BulkInstallerViewModelTests
     {
         // #2510. Windows Installer runs one installation at a time process-wide, so an MSI package
         // installed here while App Updates or Uninstaller is mid-run can fail with exit code 1618.
-        var runner = Substitute.For<IPowerShellRunner>();
+        var runner = QuietRunner();
         var vm = VmWithSubstitutedRunner(runner);
         vm.DeselectAllCommand.Execute(null);
         vm.Apps[0].IsSelected = true;
@@ -354,7 +368,7 @@ public class BulkInstallerViewModelTests
     [Fact]
     public async Task InstallSelected_WarnsThatAnInstalledAppIsUpgraded_InTheWordsAppUpdatesUses()
     {
-        var vm = VmWithSubstitutedRunner(Substitute.For<IPowerShellRunner>());
+        var vm = VmWithSubstitutedRunner(QuietRunner());
         vm.DeselectAllCommand.Execute(null);
         vm.Apps[0].IsSelected = true;
         using var dialog = new DialogAnswer(confirm: false);
@@ -414,7 +428,7 @@ public class BulkInstallerViewModelTests
     [Fact]
     public void InstallSelectedCommand_DisabledWhileAnInstallRuns()
     {
-        var vm = VmWithSubstitutedRunner(Substitute.For<IPowerShellRunner>());
+        var vm = VmWithSubstitutedRunner(QuietRunner());
         var told = 0;
         vm.InstallSelectedCommand.CanExecuteChanged += (_, _) => told++;
         Assert.True(vm.InstallSelectedCommand.CanExecute(null));   // idle → clickable
@@ -432,10 +446,10 @@ public class BulkInstallerViewModelTests
     {
         // The search set only IsSearching, so it showed on neither the sidebar nor the taskbar button (#2876). It is
         // not an install, so the install's Cancel and Escape stay out of it, and Install Selected stays on.
-        var search = new TaskCompletionSource<int>(TaskCreationOptions.RunContinuationsAsynchronously);
-        var runner = Substitute.For<IPowerShellRunner>();
-        runner.RunProcessAsync("winget", Arg.Is<string>(a => a.StartsWith("search ", StringComparison.Ordinal)),
-                               Arg.Any<CancellationToken>(), Arg.Any<System.Text.Encoding?>())
+        var search = new TaskCompletionSource<ProcessOutput>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var runner = QuietRunner();
+        runner.RunProcessForOutputAsync("winget", Arg.Is<string>(a => a.StartsWith("search ", StringComparison.Ordinal)),
+                                        Arg.Any<CancellationToken>(), Arg.Any<System.Text.Encoding?>())
               .Returns(search.Task);
         var vm = VmWithSubstitutedRunner(runner);
         await vm.InitializationComplete;
@@ -450,7 +464,7 @@ public class BulkInstallerViewModelTests
         Assert.Null(vm.EscapeCancel);
         Assert.True(vm.InstallSelectedCommand.CanExecute(null));
 
-        search.SetResult(0);
+        search.SetResult(new ProcessOutput(0, []));
         await running;
         Assert.False(vm.IsBusy);
         Assert.False(vm.IsProgressIndeterminate);
@@ -467,7 +481,7 @@ public class BulkInstallerViewModelTests
         var pending = new TaskCompletionSource<int>(TaskCreationOptions.RunContinuationsAsynchronously);
         CancellationToken runningToken = default;
         var installs = 0;
-        var runner = Substitute.For<IPowerShellRunner>();
+        var runner = QuietRunner();
         runner.RunProcessAsync("winget", Arg.Is<string>(args => args.StartsWith("install", StringComparison.Ordinal)),
                                Arg.Any<CancellationToken>(), Arg.Any<System.Text.Encoding?>())
               .Returns(callInfo =>
@@ -518,7 +532,7 @@ public class BulkInstallerViewModelTests
         var started = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
         var pending = new TaskCompletionSource<int>(TaskCreationOptions.RunContinuationsAsynchronously);
         CancellationToken runningToken = default;
-        var runner = Substitute.For<IPowerShellRunner>();
+        var runner = QuietRunner();
         runner.RunProcessAsync("winget", Arg.Is<string>(args => args.StartsWith("install", StringComparison.Ordinal)),
                                Arg.Any<CancellationToken>(), Arg.Any<System.Text.Encoding?>())
               .Returns(callInfo =>
@@ -559,7 +573,7 @@ public class BulkInstallerViewModelTests
     {
         // winget ends on INSTALL_REBOOT_REQUIRED_TO_FINISH when the installer asks for a restart, and the row read
         // "Failed — winget stopped with code 0x8A150109."
-        var runner = Substitute.For<IPowerShellRunner>();
+        var runner = QuietRunner();
         runner.RunProcessAsync("winget", Arg.Is<string>(args => args.StartsWith("install", StringComparison.Ordinal)),
                                Arg.Any<CancellationToken>(), Arg.Any<System.Text.Encoding?>())
               .Returns(Task.FromResult(unchecked((int)0x8A150109))); // INSTALL_REBOOT_REQUIRED_TO_FINISH

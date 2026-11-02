@@ -1047,6 +1047,8 @@ System → System Fixes, where the tab name matches what they do.
 - Requires administrator privileges — to list the features as well as to change them, because
   Windows shows the list only to an administrator. Without it, Scan says so rather than
   reporting an empty list
+- **An empty list says why** — not scanned yet, administrator needed, the list could not be read,
+  or nothing matches the search
 
 ### Duplicate Finder
 - Three-pass scan: group by size, partial-hash pre-filter, then full SHA-256

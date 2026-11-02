@@ -578,6 +578,11 @@ Key services:
   Management, Appx or Defender cmdlet failed and returned nothing. Scripts started as
   a separate `powershell.exe` (`RunScriptViaPwshAsync`) keep per-user modules when
   unelevated, which is where PSWindowsUpdate lives.
+  `LineReceived` carries every run on the runner, so a caller that parses what a program
+  printed reads `RunProcessForOutputAsync`, which returns that process's own standard-output
+  lines with its exit code; collected from the event, Bulk Installer's search read its
+  installed list's table too (#2771). `ArchitectureTests.EveryWingetQuery_ReadsTheOutputOfItsOwnRun`
+  holds every winget query to it.
   A runner REUSES its runspace across calls, because starting that child
   and completing a remoting handshake with it is the slow part and the services
   that use it call in bursts (`DnsService` six times, `EdgeOneDriveService` four).
@@ -1318,7 +1323,8 @@ Key services:
   and `Judge` leaves a shortcut with a missing target alone when it sits in a folder OneDrive shares with the
   user's other PCs (`SyncRoots`, from the `OneDrive*` variables), where it may still work.
 - `BulkInstallerService` — installs apps via winget in batch with
-  per-item progress and error reporting.
+  per-item progress and error reporting. Its installed list and its search read their own
+  runs' output, so a search during the list, or during an install, reads only its own table (#2771).
 - `FileShredderService` — secure multi-pass file overwrite (DoD 5220.22-M
   style) and deletion. Every `Log.*` call here and in `FileShredderViewModel` is checked by
   `ArchitectureTests.ShredderLogging_NeverNamesAPathOrAttachesTheCaughtException`: none may hold a
@@ -2326,7 +2332,9 @@ instance per app lifetime. The exceptions are `IPowerShellRunner` / `PowerShellR
 and `IWingetService` / `WingetService`, both registered **transient** so each
 consumer gets its own runner instance, avoiding `LineReceived` event cross-talk
 between tabs (e.g. Dashboard and App Updates running winget concurrently — see the
-transient registrations at the top of `ServiceRegistration.cs`).
+transient registrations at the top of `ServiceRegistration.cs`). Within one consumer two runs can
+still overlap on its runner, so a winget query reads `RunProcessForOutputAsync`'s lines rather
+than the event (#2771).
 
 For a few singletons the single instance is the contract, and `ServiceRegistration.cs` says why beside
 each. Undo Changes raises `IPutBackSignal` and the tab that made the change listens, so a second instance

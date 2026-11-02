@@ -206,18 +206,77 @@ public class WingetParserDeepTests
         string[]? table = null, int listExit = 0)
     {
         var ps = Substitute.For<IPowerShellRunner>();
+        // The list is a query, so it is read from its own run's output (#2771); each upgrade only runs.
+        ps.RunProcessForOutputAsync("winget", Arg.Any<string>(), Arg.Any<CancellationToken>(),
+                                    Arg.Any<System.Text.Encoding?>())
+          .Returns(call =>
+          {
+              commands.Add(call.ArgAt<string>(1));
+              return Task.FromResult(new ProcessOutput(listExit, table ?? TableWithSysManager));
+          });
         ps.RunProcessAsync("winget", Arg.Any<string>(), Arg.Any<CancellationToken>(), Arg.Any<System.Text.Encoding?>())
           .Returns(call =>
           {
               var args = call.ArgAt<string>(1);
               commands.Add(args);
-              if (!args.StartsWith("upgrade --include-unknown", StringComparison.Ordinal))
-                  return Task.FromResult(upgradeExit(args));
-              foreach (var line in table ?? TableWithSysManager)
-                  ps.LineReceived += Raise.Event<Action<PowerShellLine>>(PowerShellLine.Output(line));
-              return Task.FromResult(listExit);
+              return Task.FromResult(upgradeExit(args));
           });
         return ps;
+    }
+
+    /// <summary>
+    /// Two asks for the upgrade list at once on one runner each read their own table (#2771).
+    /// </summary>
+    /// <remarks>
+    /// The Dashboard's alert check, Scan system and Update All Apps each ask for the list on the Dashboard's one runner,
+    /// and none waits for the others. Collected from <c>LineReceived</c> while it ran, a list held both tables: an alert
+    /// with the wrong count, and an Update All Apps that skipped apps or upgraded one twice. Here the second prints
+    /// while the first is held open, through the one event the two used to read, and the first prints after it.
+    /// </remarks>
+    [Fact]
+    public async Task TwoUpgradeListsAtOnce_EachReadsOnlyItsOwnTable()
+    {
+        string[] first =
+        [
+            "Name                         Id                             Version   Available   Source",
+            "-----------------------------------------------------------------------------------------",
+            "Git                          Git.Git                        2.47.0    2.48.0      winget",
+            "1 upgrades available.",
+        ];
+        string[] second =
+        [
+            "Name                         Id                             Version   Available   Source",
+            "-----------------------------------------------------------------------------------------",
+            "Node.js                      OpenJS.NodeJS                  20.11.0   22.1.0      winget",
+            "1 upgrades available.",
+        ];
+        var runner = Substitute.For<IPowerShellRunner>();
+        var firstExits = new TaskCompletionSource<ProcessOutput>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var asked = 0;
+        runner.RunProcessForOutputAsync("winget", Arg.Is<string>(a => a.StartsWith("upgrade --include-unknown ",
+                                                                                      StringComparison.Ordinal)),
+                                        Arg.Any<CancellationToken>(), Arg.Any<System.Text.Encoding?>())
+              .Returns(_ =>
+              {
+                  if (Interlocked.Increment(ref asked) == 1) return firstExits.Task;
+                  Print(second);
+                  return Task.FromResult(new ProcessOutput(0, second));
+              });
+        var winget = new WingetService(runner);
+
+        var firstList = winget.ListUpgradableAsync();
+        var secondList = await winget.ListUpgradableAsync();
+        Print(first);
+        firstExits.SetResult(new ProcessOutput(0, first));
+
+        Assert.Equal(["OpenJS.NodeJS"], secondList.Select(p => p.Id));
+        Assert.Equal(["Git.Git"], (await firstList).Select(p => p.Id));
+
+        void Print(string[] lines)
+        {
+            foreach (var line in lines)
+                runner.LineReceived += Raise.Event<Action<PowerShellLine>>(PowerShellLine.Output(line));
+        }
     }
 
     [Fact]

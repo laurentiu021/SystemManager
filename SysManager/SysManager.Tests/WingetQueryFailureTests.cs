@@ -29,7 +29,11 @@ public class WingetQueryFailureTests
     private const int SourceNameDoesNotExist = unchecked((int)0x8A150012); // SOURCE_NAME_DOES_NOT_EXIST, measured
     private const int NothingMatched = unchecked((int)0x8A150014);         // NO_APPLICATIONS_FOUND, measured
 
-    /// <summary>A runner that prints <paramref name="lines"/> as winget output, then exits with the code.</summary>
+    /// <summary>
+    /// A runner that prints <paramref name="lines"/> as winget output, then exits with the code, whichever of its two
+    /// process calls the service makes: the live lines for one that reads <see cref="IPowerShellRunner.LineReceived"/>,
+    /// and the returned output for one that reads its own run's (#2771).
+    /// </summary>
     internal static IPowerShellRunner WingetThatPrints(int exitCode, params string[] lines)
     {
         var runner = Substitute.For<IPowerShellRunner>();
@@ -39,6 +43,14 @@ public class WingetQueryFailureTests
                   foreach (var line in lines)
                       runner.LineReceived += Raise.Event<Action<PowerShellLine>>(PowerShellLine.Output(line));
                   return Task.FromResult(exitCode);
+              });
+        runner.RunProcessForOutputAsync("winget", Arg.Any<string>(), Arg.Any<CancellationToken>(),
+                                        Arg.Any<System.Text.Encoding?>())
+              .Returns(_ =>
+              {
+                  foreach (var line in lines)
+                      runner.LineReceived += Raise.Event<Action<PowerShellLine>>(PowerShellLine.Output(line));
+                  return Task.FromResult(new ProcessOutput(exitCode, lines));
               });
         return runner;
     }

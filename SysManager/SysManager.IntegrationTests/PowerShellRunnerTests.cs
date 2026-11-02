@@ -1052,6 +1052,46 @@ public class PowerShellRunnerTests
         Assert.Equal(0, code);
     }
 
+    /// <summary>
+    /// What a run returns is its own process's output, even while another process on the same runner prints (#2771).
+    /// </summary>
+    /// <remarks>
+    /// The first run is held open by the exit seam until the second has printed and finished, so the second's lines are
+    /// raised on the runner's one <see cref="PowerShellRunner.LineReceived"/> while the first is still running. A caller
+    /// that collected from that event, as the Bulk Installer's queries did, kept them as its own. Both are real cmd.exe
+    /// runs, and every line still goes out live.
+    /// </remarks>
+    [Fact]
+    public async Task RunProcessForOutputAsync_ReturnsOnlyItsOwnLines_WhileAnotherRunPrints()
+    {
+        var secondDone = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var runner = new PowerShellRunner(
+            action => Task.Run(action),
+            waitForProcessExit: async (process, ct) =>
+            {
+                await process.WaitForExitAsync(ct);
+                if (process.StartInfo.Arguments.Contains("first", StringComparison.Ordinal))
+                    await secondDone.Task.WaitAsync(ct);
+            });
+        List<string> raised = [];
+        runner.LineReceived += line =>
+        {
+            lock (raised) raised.Add(line.Text);
+        };
+        using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(30));
+
+        var first = runner.RunProcessForOutputAsync("cmd.exe", "/c echo first-1&echo first-2", timeout.Token);
+        var second = await runner.RunProcessForOutputAsync("cmd.exe", "/c echo second-1&echo second-2", timeout.Token);
+        secondDone.SetResult();
+        var own = await first;
+
+        Assert.Equal(["second-1", "second-2"], second.Lines);
+        Assert.Equal(["first-1", "first-2"], own.Lines);
+        Assert.Equal((0, 0), (own.ExitCode, second.ExitCode));
+        lock (raised)
+            Assert.Equal(["first-1", "first-2", "second-1", "second-2"], raised.Order(StringComparer.Ordinal));
+    }
+
     [Fact]
     public async Task RunProcessWithShellAsync_CmdExitZero_ReturnsZero()
     {

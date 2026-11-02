@@ -449,11 +449,37 @@ public sealed partial class PowerShellRunner : IPowerShellRunner, IDisposable
     /// <summary>
     /// Convenience for running an external process (winget etc.) with live line streaming.
     /// </summary>
-    public async Task<int> RunProcessAsync(
+    public Task<int> RunProcessAsync(
         string fileName,
         string arguments,
         CancellationToken cancellationToken = default,
         System.Text.Encoding? outputEncoding = null)
+        => RunProcessCoreAsync(fileName, arguments, standardOutput: null, cancellationToken, outputEncoding);
+
+    /// <inheritdoc/>
+    public async Task<ProcessOutput> RunProcessForOutputAsync(
+        string fileName,
+        string arguments,
+        CancellationToken cancellationToken = default,
+        System.Text.Encoding? outputEncoding = null)
+    {
+        // Filled by this process's own output reader, so another run on this runner never adds to it (#2771).
+        var standardOutput = new System.Collections.Concurrent.ConcurrentQueue<string>();
+        var exitCode = await RunProcessCoreAsync(fileName, arguments, standardOutput, cancellationToken, outputEncoding)
+            .ConfigureAwait(false);
+        return new ProcessOutput(exitCode, [.. standardOutput]);
+    }
+
+    /// <summary>
+    /// Starts the process, raises each line it writes on <see cref="LineReceived"/>, adds each standard-output line to
+    /// <paramref name="standardOutput"/> when one is given, and returns the exit code once both streams are read.
+    /// </summary>
+    private async Task<int> RunProcessCoreAsync(
+        string fileName,
+        string arguments,
+        System.Collections.Concurrent.ConcurrentQueue<string>? standardOutput,
+        CancellationToken cancellationToken,
+        System.Text.Encoding? outputEncoding)
     {
         cancellationToken.ThrowIfCancellationRequested();
 
@@ -493,8 +519,9 @@ public sealed partial class PowerShellRunner : IPowerShellRunner, IDisposable
         using var proc = new System.Diagnostics.Process { StartInfo = psi, EnableRaisingEvents = true };
         proc.OutputDataReceived += (_, e) =>
         {
-            if (!string.IsNullOrWhiteSpace(e.Data) && !IsClixmlNoise(e.Data))
-                LineReceived?.Invoke(PowerShellLine.Output(e.Data));
+            if (string.IsNullOrWhiteSpace(e.Data) || IsClixmlNoise(e.Data)) return;
+            standardOutput?.Enqueue(e.Data);
+            LineReceived?.Invoke(PowerShellLine.Output(e.Data));
         };
         proc.ErrorDataReceived += (_, e) =>
         {

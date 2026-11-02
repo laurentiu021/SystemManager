@@ -61,6 +61,14 @@ internal sealed class RecordingRunner : IPowerShellRunner
         return Task.FromResult(0);
     }
 
+    public Task<ProcessOutput> RunProcessForOutputAsync(string fileName, string arguments,
+                                                        CancellationToken cancellationToken = default,
+                                                        Encoding? outputEncoding = null)
+    {
+        Calls++;
+        return Task.FromResult(new ProcessOutput(0, []));
+    }
+
     public Task<int> RunProcessWithShellAsync(string fileName, string arguments,
                                               CancellationToken cancellationToken = default)
     {

@@ -1716,7 +1716,8 @@ Answers "what is actually using my space?" by listing the biggest files in one p
 - **Cancel stops a batch between apps** — the install already running finishes first, because
   ending winget half-way ends the installer it started. `Escape` does the same
 - The catalog is grouped under category headings, and an app already on this PC carries an
-  **Installed** badge
+  **Installed** badge. A search made while that check is still running keeps to its own results,
+  and the check to its own list
 - Some apps install system-wide and need administrator rights; the banner at the top says so
 
 ### New App Alerts

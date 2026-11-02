@@ -29,28 +29,16 @@ public sealed partial class WingetService : IWingetService
     /// <exception cref="InvalidOperationException">The query failed, as opposed to finding nothing.</exception>
     public async Task<List<AppPackage>> ListUpgradableAsync(CancellationToken ct = default)
     {
-        // LineReceived fires from both the stdout and stderr reader threads
-        // concurrently, so the sink must be thread-safe — a plain List<T>.Add can
-        // corrupt the backing array or drop a line under the race.
-        var captured = new System.Collections.Concurrent.ConcurrentQueue<string>();
-
-        void Collect(PowerShellLine l)
-        {
-            if (l.Kind == OutputKind.Output) captured.Enqueue(l.Text);
-        }
-
-        int exitCode;
-        _runner.LineReceived += Collect;
-        try
-        {
-            exitCode = await _runner.RunProcessAsync("winget",
-                "upgrade --include-unknown --accept-source-agreements --disable-interactivity", ct).ConfigureAwait(false);
-        }
-        finally { _runner.LineReceived -= Collect; }
+        // The table this run printed, and no other. The Dashboard's alert check, Scan system and Update All Apps each
+        // ask for this list on the Dashboard's one runner, and none waits for the others, so a list collected from
+        // LineReceived while it ran read two tables at once: an alert with the wrong count, and an Update All Apps that
+        // skipped apps or upgraded one twice (#2771).
+        var output = await _runner.RunProcessForOutputAsync("winget",
+            "upgrade --include-unknown --accept-source-agreements --disable-interactivity", ct).ConfigureAwait(false);
 
         // A failed query prints no table, and parsing nothing used to read as "no upgrades" (#2461).
-        WingetFailure.ThrowIfQueryFailed(exitCode);
-        return ParseUpgradeTable(captured.ToList());
+        WingetFailure.ThrowIfQueryFailed(output.ExitCode);
+        return ParseUpgradeTable([.. output.Lines]);
     }
 
     private static List<AppPackage> ParseUpgradeTable(List<string> lines)

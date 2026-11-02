@@ -13,3 +13,9 @@ public sealed record PowerShellLine(OutputKind Kind, string Text, DateTime Times
     public static PowerShellLine Warn(string text) => new(OutputKind.Warning, text, DateTime.Now);
     public static PowerShellLine Err(string text) => new(OutputKind.Error, text, DateTime.Now);
 }
+
+/// <summary>
+/// What one external process wrote to its standard output, and how it exited: only that process's lines, whatever else
+/// runs on the same runner meanwhile (#2771).
+/// </summary>
+public sealed record ProcessOutput(int ExitCode, IReadOnlyList<string> Lines);

@@ -10,6 +10,23 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.136.92] - 2026-11-02
+
+**Bulk Installer's search and installed check, and the Dashboard's app update checks, each read only their own winget output.**
+
+### Fixed
+- Bulk Installer's installed check and its winget search kept every line winget printed while they ran, their own
+  and any other run's, and the tab starts the check as it opens. A search before the Installed badges appeared could
+  mark a searched app as installed, or list installed programs that did not match, and a search during an install
+  read the install's progress as results. Each now reads only what its own run printed. The installed check also
+  accepts winget's source agreements, as every other winget call here does: on a profile that had not accepted them
+  it failed, and no app was ever marked as installed. The mixing was there since the two moved onto one runner in
+  1.52.92, and the missing agreements since the installed check came in 1.11.0.
+- The Dashboard's app update alert, Scan system and Update All Apps read winget's upgrade list the same way, and
+  none waits for the others, so pressing one while another was still reading could give the alert the wrong count,
+  or make Update All Apps skip apps, or upgrade one twice and report a failure. Each reads its own list now. This
+  was there since the alert read the list through the shared service in 1.52.2.
+
 ## [1.136.91] - 2026-11-02
 
 **Boot Analyzer names what Windows says slowed boot, with the delay each part added rather than the time it took.**

@@ -25,6 +25,11 @@ public interface IGamingProfileService
     bool IsActive { get; }
 
     /// <summary>
+    /// Whether SysManager runs as administrator: without it, the steps that need administrator are skipped.
+    /// </summary>
+    bool IsElevated { get; }
+
+    /// <summary>
     /// The running process the current session is bound to (its exit auto-reverts), or null
     /// when no session is active or the session isn't bound to a specific game.
     /// </summary>

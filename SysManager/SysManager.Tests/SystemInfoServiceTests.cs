@@ -364,4 +364,36 @@ public class SystemInfoServiceTests
             $"{what} did not complete within the bound — it is blocked on something it should not be.");
         return await task;
     }
+
+    /// <summary>
+    /// A disk's operational status is named by the CIM value map MSFT_PhysicalDisk uses (#2753).
+    /// </summary>
+    /// <remarks>
+    /// Every value from 2 on was named one place too late, so 2, which a healthy disk reports, read "Unknown" and 3,
+    /// a degraded one, read "OK". Get-PhysicalDisk names 2 "OK" on the same PC.
+    /// </remarks>
+    [Theory]
+    [InlineData(0, "Unknown")]
+    [InlineData(1, "Other")]
+    [InlineData(2, "OK")]
+    [InlineData(3, "Degraded")]
+    [InlineData(4, "Stressed")]
+    [InlineData(5, "Predictive Failure")]
+    [InlineData(6, "Error")]
+    [InlineData(7, "Non-Recoverable Error")]
+    [InlineData(8, "Starting")]
+    [InlineData(9, "Stopping")]
+    [InlineData(10, "Stopped")]
+    [InlineData(11, "In Service")]
+    [InlineData(12, "No Contact")]
+    [InlineData(13, "Lost Communication")]
+    [InlineData(14, "Aborted")]
+    [InlineData(15, "Dormant")]
+    [InlineData(16, "Supporting Entity in Error")]
+    [InlineData(17, "Completed")]
+    [InlineData(18, "Power Mode")]
+    [InlineData(19, "Relocating")]
+    [InlineData(53264, "Code 53264")]
+    public void ADisksOperationalStatus_IsNamedByTheCimValueMap(int value, string name)
+        => Assert.Equal(name, SystemInfoService.OpStatusName((ushort)value));
 }

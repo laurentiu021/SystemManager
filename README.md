@@ -567,8 +567,11 @@ Edit Windows environment variables without the cramped built-in dialog:
 - OS / CPU / RAM / storage overview
 - SMART data per disk: temperature, life remaining, power-on hours, read/write errors —
   fullest when SysManager runs as administrator. A figure the drive does not report reads "—",
-  with an empty bar, rather than a value it never measured
-- Colour-coded verdict per drive
+  with an empty bar, rather than a value it never measured, and no errors reads 0
+- Colour-coded verdict per drive. A drive Windows gives no health for, with nothing read from it,
+  says so instead of being called Healthy, and a failing drive's health gauge is red like its verdict
+- A drive's temperature takes the same colours here and on the Dashboard: green to 50 °C, blue while
+  warm, and amber from 70 °C, where the verdict says it runs hot
 - The mouse wheel scrolls the page over the memory and disk tables too: they are as tall as their
   rows, so they have nothing of their own to scroll
 - Memory check that scans the last 30 days of the System log for the hardware errors Windows files

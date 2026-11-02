@@ -184,7 +184,12 @@ public sealed partial class DiskHealthReport : ObservableObject
     public int HealthGauge => HealthPercent ?? 0;
 
     /// <summary>Color hex for the health percentage gauge.</summary>
-    public string HealthPercentColorHex => HealthPercent switch
+    /// <remarks>
+    /// A drive Windows reports as failing is red whatever its score: the score is capped at
+    /// <see cref="FailingCeiling"/>, where the amber band starts, so the gauge read amber under a red
+    /// "Drive is failing" (#2753).
+    /// </remarks>
+    public string HealthPercentColorHex => Condition == DiskCondition.Failing ? StatusColors.Bad : HealthPercent switch
     {
         null => StatusColors.Neutral,
         >= 80 => StatusColors.Good,
@@ -194,13 +199,22 @@ public sealed partial class DiskHealthReport : ObservableObject
     };
 
     /// <summary>Color hex for the temperature reading.</summary>
-    public string TemperatureColorHex => TemperatureC switch
+    public string TemperatureColorHex => StorageTemperatureColorHex(TemperatureC);
+
+    /// <summary>
+    /// The colour of a storage drive's temperature, on the one scale System Health and the Dashboard use: green to
+    /// 50 °C, blue while warm, and amber from <see cref="HotAtCelsius"/>, where the verdict says the drive runs hot.
+    /// </summary>
+    /// <remarks>
+    /// System Health turned amber from 41 °C and red above 60 while its verdict warned only at 70, so a drive at
+    /// 62 °C read red beside a green "Healthy — 62 °C", and the Dashboard coloured the same reading blue (#2753).
+    /// </remarks>
+    internal static string StorageTemperatureColorHex(double? celsius) => celsius switch
     {
         null => StatusColors.Neutral,
-        <= 40 => StatusColors.Good,
-        <= 50 => StatusColors.Warning,
-        <= 60 => StatusColors.Elevated,
-        _ => StatusColors.Bad
+        <= 50 => StatusColors.Good,
+        < HotAtCelsius => StatusColors.Info,
+        _ => StatusColors.Warning
     };
 
     /// <summary>The temperature as the card shows it, or "—" when the drive does not report it.</summary>

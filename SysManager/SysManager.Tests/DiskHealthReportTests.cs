@@ -132,7 +132,7 @@ public class DiskHealthReportTests
     [Theory]
     [InlineData(0, StatusColors.Good)]   // 100% health (no wear) -> green
     [InlineData(40, StatusColors.Warning)]  // 60% health -> amber
-    [InlineData(75, StatusColors.Elevated)]  // 25% health (>=20) -> light red
+    [InlineData(75, StatusColors.Elevated)]  // 25% health (>=20) -> amber, the Elevated band
     [InlineData(85, StatusColors.Bad)]  // 15% health (<20) -> red
     public void HealthPercentColorHex_ReturnsCorrectColor(int wear, string expected)
     {
@@ -153,15 +153,63 @@ public class DiskHealthReportTests
 
     // ---------- Temperature color ----------
 
+    // One scale for a drive's temperature, with the verdict's line at 70 °C (#2753). It turned amber from 41 °C and
+    // red above 60, so a drive at 62 °C read red beside a green "Healthy — 62 °C", and the Dashboard showed the
+    // same reading in blue.
     [Theory]
     [InlineData(30, StatusColors.Good)]
-    [InlineData(45, StatusColors.Warning)]
-    [InlineData(55, StatusColors.Elevated)]
-    [InlineData(65, StatusColors.Bad)]
+    [InlineData(50, StatusColors.Good)]
+    [InlineData(51, StatusColors.Info)]
+    [InlineData(62, StatusColors.Info)]
+    [InlineData(69.9, StatusColors.Info)]
+    [InlineData(70, StatusColors.Warning)]
+    [InlineData(85, StatusColors.Warning)]
     public void TemperatureColorHex_ReturnsCorrectColor(double temp, string expected)
     {
         var r = new DiskHealthReport { TemperatureC = temp };
         Assert.Equal(expected, r.TemperatureColorHex);
+    }
+
+    [Fact]
+    public void ADriveThatRunsHot_IsAmber_WhereTheVerdictSaysSo()
+    {
+        var hot = new DiskHealthReport { HealthStatus = "Healthy", TemperatureC = DiskHealthReport.HotAtCelsius };
+        var warm = new DiskHealthReport { HealthStatus = "Healthy", TemperatureC = DiskHealthReport.HotAtCelsius - 1 };
+
+        Assert.Equal((DiskCondition.Watch, StatusColors.Warning), (hot.Condition, hot.TemperatureColorHex));
+        Assert.Equal(DiskCondition.Fine, warm.Condition);
+        Assert.NotEqual(StatusColors.Warning, warm.TemperatureColorHex);
+    }
+
+    [Fact]
+    public void TheDashboardsStorageTemperature_TakesTheSameColour_AsSystemHealths()
+    {
+        for (var celsius = 0; celsius <= 100; celsius++)
+        {
+            var reading = new TemperatureReading("Storage", "NVMe", celsius);
+            Assert.Equal(new DiskHealthReport { TemperatureC = celsius }.TemperatureColorHex, reading.ColorHex);
+        }
+    }
+
+    [Theory]
+    [InlineData(40, StatusColors.Good)]
+    [InlineData(60, StatusColors.Info)]
+    [InlineData(75, StatusColors.Warning)]
+    [InlineData(95, StatusColors.Bad)]
+    public void AProcessorsTemperature_KeepsItsOwnScale(double celsius, string expected)
+        => Assert.Equal(expected, new TemperatureReading("CPU", "Package", celsius).ColorHex);
+
+    [Theory]
+    [InlineData(null, null)]
+    [InlineData(0, 35.0)]
+    public void ADriveWindowsReportsAsFailing_HasARedHealthGauge(int? wear, double? celsius)
+    {
+        // Its score is capped at 20, which was also where the amber band began, so under the red "Drive is failing"
+        // the gauge read 20% in amber (#2753).
+        var r = new DiskHealthReport { HealthStatus = "Unhealthy", WearPercent = wear, TemperatureC = celsius };
+
+        Assert.Equal(DiskHealthReport.FailingCeiling, r.HealthPercent);
+        Assert.Equal(StatusColors.Bad, r.HealthPercentColorHex);
     }
 
     // ---------- Gauge properties ----------

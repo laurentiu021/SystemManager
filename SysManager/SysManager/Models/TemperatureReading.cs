@@ -36,14 +36,19 @@ public sealed record TemperatureReading(
         ? $"{TemperatureC.Value:F0}°C"
         : RequiresDriver ? "Requires driver" : RequiresAdmin ? "Requires admin" : "N/A";
 
-    public string ColorHex => TemperatureC switch
-    {
-        // No reading (no sensor, or admin required) — the muted tone the app uses everywhere for
-        // "nothing to report", rather than a literal that cannot follow the theme.
-        null => StatusColors.Neutral,
-        <= 45 => StatusColors.Good,
-        <= 65 => StatusColors.Info,
-        <= 80 => StatusColors.Warning,
-        _ => StatusColors.Bad
-    };
+    /// <summary>
+    /// The reading's colour. A drive's takes System Health's storage scale, so the two tabs colour one drive alike.
+    /// </summary>
+    public string ColorHex => Component == "Storage"
+        ? DiskHealthReport.StorageTemperatureColorHex(TemperatureC)
+        : TemperatureC switch
+        {
+            // No reading (no sensor, or admin required) — the muted tone the app uses everywhere for
+            // "nothing to report", rather than a literal that cannot follow the theme.
+            null => StatusColors.Neutral,
+            <= 45 => StatusColors.Good,
+            <= 65 => StatusColors.Info,
+            <= 80 => StatusColors.Warning,
+            _ => StatusColors.Bad
+        };
 }

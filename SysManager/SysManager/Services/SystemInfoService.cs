@@ -507,19 +507,32 @@ public sealed partial class SystemInfoService
         return faulted && list.Count == 0 ? null : list;
     }
 
-    private static string OpStatusName(ushort v) => v switch
+    /// <summary>A disk's operational status, named by the CIM value map MSFT_PhysicalDisk uses.</summary>
+    /// <remarks>
+    /// Every name from 2 on used to sit one value too late, so a healthy disk read "Unknown" (#2753).
+    /// </remarks>
+    internal static string OpStatusName(ushort v) => v switch
     {
+        0 => "Unknown",
         1 => "Other",
-        2 => "Unknown",
-        3 => "OK",
-        4 => "Degraded",
-        5 => "Stressed",
-        6 => "Predictive Failure",
-        7 => "Error",
-        8 => "Non-Recoverable Error",
-        9 => "Starting",
-        10 => "Stopping",
-        11 => "Stopped",
+        2 => "OK",
+        3 => "Degraded",
+        4 => "Stressed",
+        5 => "Predictive Failure",
+        6 => "Error",
+        7 => "Non-Recoverable Error",
+        8 => "Starting",
+        9 => "Stopping",
+        10 => "Stopped",
+        11 => "In Service",
+        12 => "No Contact",
+        13 => "Lost Communication",
+        14 => "Aborted",
+        15 => "Dormant",
+        16 => "Supporting Entity in Error",
+        17 => "Completed",
+        18 => "Power Mode",
+        19 => "Relocating",
         _ => $"Code {v}"
     };
 }

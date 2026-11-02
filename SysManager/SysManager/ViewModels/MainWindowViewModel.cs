@@ -746,10 +746,12 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable,
         // on ... and ..." from a look nobody took (#1507), the Dashboard takes and deletes the crash marker, and About's
         // startup check records when it ran, after which the real app skipped its own for a day (#2740).
         var lookRecords = System.IO.Path.Join(System.IO.Path.GetTempPath(), "SysManager-designer");
-        var runner = new PowerShellRunner();
+        // Shared as the container shares (#2766): what it builds once is built once here and handed on, and the runner
+        // and WingetService, which it builds afresh for each consumer so one tab's output cannot reach another's
+        // console, are built at each use. ArchitectureTests.TheDesignerGraph_SharesWhatTheContainerShares holds both.
         var sysInfo = new SystemInfoService();
-        var winget = new WingetService(runner);
         var diskHealth = new DiskHealthService();
+        var memoryTest = new MemoryTestService();
         var battery = new BatteryService();
         var shortcuts = new ShortcutCleanerService();
         var recycleBin = new ShellRecycleBin();
@@ -760,11 +762,11 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable,
         var tracer = new TracerouteService();
         var traceMonitor = new TracerouteMonitorService();
         var speedTest = new SpeedTestService(new PowerShellRunner());
-        var netRepair = new NetworkRepairService(runner);
+        var netRepair = new NetworkRepairService(new PowerShellRunner());
         // One shared instance, as in the container: the four network view models coordinate through
         // it (one tab's Start must disable the other's), so a second copy would silently split them.
         var networkShared = new NetworkSharedState(pinger, tracer, traceMonitor, speedTest, netRepair);
-        var restorePoints = new RestorePointService(runner);
+        var restorePoints = new RestorePointService(new PowerShellRunner());
         // ONE session restore point for the graph, as in DI: a second instance would let two
         // tabs each attempt a snapshot, and Windows refuses the second within 24h anyway.
         var sessionRestorePoint = new SessionRestorePoint(restorePoints.CreateAsync);
@@ -773,17 +775,19 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable,
         // event log twice for one answer.
         var bootAnalyzer = new BootAnalyzerService();
         var gamingCpu = new CpuAffinityService();
+        var timerResolution = new TimerResolutionService();
+        var standby = new StandbyMemoryService();
         // One Performance Mode service, as under DI: the Performance Mode tab, Gaming Profile and Undo Changes all read
         // and write its record, and an instance each would disagree about what is there (#1525).
-        var performance = new PerformanceService(runner, restorePoints, lookRecords);
+        var performance = new PerformanceService(new PowerShellRunner(), restorePoints, lookRecords);
         // ONE gaming service for the whole graph. Performance Mode asks it whether a profile is live
         // before it records a recovery baseline, so a second copy would answer "no" while the first
         // one had a session running — which is exactly the state that must never be snapshotted.
         // Under DI both resolve the same singleton; this keeps the designer/test path honest.
         var gamingProfiles = new GamingProfileService(
             performance,
-            new TimerResolutionService(), gamingCpu,
-            new StandbyMemoryService(), sessionRestorePoint,
+            timerResolution, gamingCpu,
+            standby, sessionRestorePoint,
             Helpers.AdminHelper.IsElevated());
 
         // A real navigation service, bound to this shell, so the designer/test path can navigate for
@@ -821,27 +825,32 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable,
         // load and VRAM come from the vendor-neutral counters beside it (#2857).
         var nvidia = new NvidiaGpuReader();
         var gpuTelemetry = new GpuTelemetryService();
+        var temperature = new TemperatureService(diskHealth, nvidia: nvidia);
+        // One report for System Report and About, as under DI, where About is built with the container's
+        // SystemReportService rather than one of its own (#2827).
+        var systemReport = new SystemReportService(sysInfo, diskHealth, battery, new EventLogService());
 
         return new Dictionary<Type, object>
         {
             // The switch for the app-updates check at startup over lookRecords, which holds no setting, so this graph checks
             // as a first launch does, whatever the user has ticked in About (#2613).
-            [typeof(DashboardViewModel)] = new DashboardViewModel(sysInfo, tuneUp, healthScore, new TemperatureService(diskHealth, nvidia: nvidia), winget, new CrashMarkerService(lookRecords), new MemoryTestService(), designerNavigation, windowsUpdate, speedTest, speedHistory,
+            [typeof(DashboardViewModel)] = new DashboardViewModel(sysInfo, tuneUp, healthScore, temperature, new WingetService(new PowerShellRunner()), new CrashMarkerService(lookRecords), memoryTest, designerNavigation, windowsUpdate, speedTest, speedHistory,
                 new UpdateCheckPreferenceService(lookRecords),
                 slowdown: new SlowdownService(processes, sysInfo, startup, bootAnalyzer), gaming: gamingProfiles,
                 gpu: gpuTelemetry),
-            [typeof(AppUpdatesViewModel)] = new AppUpdatesViewModel(winget),
-            [typeof(WindowsUpdateViewModel)] = new WindowsUpdateViewModel(runner, windowsUpdate, new WindowsUpdatePolicyService()),
-            [typeof(SystemHealthViewModel)] = new SystemHealthViewModel(sysInfo, diskHealth, new MemoryTestService(), fixedDrives, runner, new BiosService()),
-            [typeof(CleanupViewModel)] = new CleanupViewModel(runner, new CleanupPreScanService(recycleBin), recycleBin, tuneUp),
+            [typeof(AppUpdatesViewModel)] = new AppUpdatesViewModel(new WingetService(new PowerShellRunner())),
+            [typeof(WindowsUpdateViewModel)] = new WindowsUpdateViewModel(new PowerShellRunner(), windowsUpdate, new WindowsUpdatePolicyService()),
+            [typeof(SystemHealthViewModel)] = new SystemHealthViewModel(sysInfo, diskHealth, memoryTest, fixedDrives, new PowerShellRunner(), new BiosService()),
+            [typeof(CleanupViewModel)] = new CleanupViewModel(new PowerShellRunner(), new CleanupPreScanService(recycleBin), recycleBin, tuneUp),
             [typeof(DeepCleanupViewModel)] = new DeepCleanupViewModel(
-                new DeepCleanupService(runner, recycleBin, new PreviousInstallationCleanup(runner))),
+                new DeepCleanupService(new PowerShellRunner(), recycleBin, new PreviousInstallationCleanup(new PowerShellRunner()))),
             [typeof(LargeFilesViewModel)] = new LargeFilesViewModel(new LargeFileScanner(), fixedDrives),
             [typeof(DuplicateFileViewModel)] = new DuplicateFileViewModel(new DuplicateFileService()),
-            [typeof(DiskAnalyzerViewModel)] = new DiskAnalyzerViewModel(new DiskAnalyzerService(), new DiskScanHistoryService(lookRecords)),
+            [typeof(DiskAnalyzerViewModel)] = new DiskAnalyzerViewModel(new DiskAnalyzerService(), new DiskScanHistoryService(lookRecords),
+                new DiskAnalyzerPreferenceService(lookRecords)),
             [typeof(ProcessManagerViewModel)] = new ProcessManagerViewModel(processes),
-            [typeof(BatteryHealthViewModel)] = new BatteryHealthViewModel(battery, new BatteryReportService(runner)),
-            [typeof(UninstallerViewModel)] = new UninstallerViewModel(new UninstallerService(runner), new LeftoverService(runner)),
+            [typeof(BatteryHealthViewModel)] = new BatteryHealthViewModel(battery, new BatteryReportService(new PowerShellRunner())),
+            [typeof(UninstallerViewModel)] = new UninstallerViewModel(new UninstallerService(new PowerShellRunner()), new LeftoverService(new PowerShellRunner())),
             [typeof(PerformanceViewModel)] = new PerformanceViewModel(performance, gamingProfiles, putBack),
             [typeof(StartupViewModel)] = new StartupViewModel(startup, bootAnalyzer),
             [typeof(NetworkSharedState)] = networkShared,
@@ -849,20 +858,20 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable,
             [typeof(TracerouteViewModel)] = new TracerouteViewModel(networkShared),
             [typeof(SpeedTestViewModel)] = new SpeedTestViewModel(networkShared, speedHistory),
             [typeof(NetworkRepairViewModel)] = new NetworkRepairViewModel(networkShared, sessionRestorePoint),
-            [typeof(DriversViewModel)] = new DriversViewModel(runner),
+            [typeof(DriversViewModel)] = new DriversViewModel(new PowerShellRunner()),
             [typeof(LogsViewModel)] = new LogsViewModel(new EventLogService()),
-            [typeof(AboutViewModel)] = new AboutViewModel(lookRecords),
-            [typeof(ServicesViewModel)] = new ServicesViewModel(runner, serviceLedger, putBack),
+            [typeof(AboutViewModel)] = new AboutViewModel(new UpdateService(), systemReport, lookRecords),
+            [typeof(ServicesViewModel)] = new ServicesViewModel(new PowerShellRunner(), serviceLedger, putBack),
             [typeof(AppAlertsViewModel)] = new AppAlertsViewModel(new AppAlertService(), appAlertHistory),
             [typeof(ShortcutCleanerViewModel)] = new ShortcutCleanerViewModel(shortcuts),
             [typeof(AppBlockerViewModel)] = new AppBlockerViewModel(new AppBlockerService()),
             [typeof(BulkInstallerViewModel)] = new BulkInstallerViewModel(new BulkInstallerService(new PowerShellRunner()), new AppIconService(configDir: lookRecords)),
             [typeof(FileShredderViewModel)] = new FileShredderViewModel(new FileShredderService()),
             [typeof(DnsHostsViewModel)] = new DnsHostsViewModel(new DnsService(new PowerShellRunner()), hosts, putBack),
-            [typeof(WindowsFeaturesViewModel)] = new WindowsFeaturesViewModel(new WindowsFeaturesService(runner), sessionRestorePoint, new FeatureParentsService()),
+            [typeof(WindowsFeaturesViewModel)] = new WindowsFeaturesViewModel(new WindowsFeaturesService(new PowerShellRunner()), sessionRestorePoint, new FeatureParentsService()),
             [typeof(PrivacyViewModel)] = new PrivacyViewModel(privacy, sessionRestorePoint, privacyChoices),
             [typeof(ContextMenuViewModel)] = new ContextMenuViewModel(new ContextMenuService(new PowerShellRunner())),
-            [typeof(SystemReportViewModel)] = new SystemReportViewModel(new SystemReportService(sysInfo, diskHealth, battery, new EventLogService())),
+            [typeof(SystemReportViewModel)] = new SystemReportViewModel(systemReport),
             [typeof(EnvironmentVariablesViewModel)] = new EnvironmentVariablesViewModel(environment, putBack),
             [typeof(RestorePointsViewModel)] = new RestorePointsViewModel(restorePoints),
             [typeof(DebloaterViewModel)] = new DebloaterViewModel(new DebloaterService(new PowerShellRunner()), sessionRestorePoint),
@@ -875,15 +884,15 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable,
             [typeof(BrowserCleanerViewModel)] = new BrowserCleanerViewModel(new BrowserCleanerService(), new BrowserExtensionService()),
             [typeof(PrivacyMonitorViewModel)] = new PrivacyMonitorViewModel(new PrivacyMonitorService()),
             [typeof(BootAnalyzerViewModel)] = new BootAnalyzerViewModel(bootAnalyzer, designerNavigation),
-            [typeof(TimerResolutionViewModel)] = new TimerResolutionViewModel(new TimerResolutionService()),
+            [typeof(TimerResolutionViewModel)] = new TimerResolutionViewModel(timerResolution),
             [typeof(FileLockViewModel)] = new FileLockViewModel(new FileLockService()),
             [typeof(DisplayProfileViewModel)] = new DisplayProfileViewModel(new DisplayProfileService()),
-            [typeof(CpuAffinityViewModel)] = new CpuAffinityViewModel(new CpuAffinityService()),
+            [typeof(CpuAffinityViewModel)] = new CpuAffinityViewModel(gamingCpu),
             [typeof(DefenderViewModel)] = new DefenderViewModel(new DefenderService(new PowerShellRunner()), sessionRestorePoint),
             [typeof(TaskSchedulerViewModel)] = new TaskSchedulerViewModel(new TaskSchedulerService(new PowerShellRunner())),
             [typeof(DarkModeViewModel)] = new DarkModeViewModel(new WindowsThemeService(lookRecords)),
-            [typeof(StandbyMemoryViewModel)] = new StandbyMemoryViewModel(new StandbyMemoryService()),
-            [typeof(ResourceHistoryViewModel)] = new ResourceHistoryViewModel(new ResourceHistoryService(sysInfo, new TemperatureService(diskHealth, nvidia: nvidia), lookRecords, gpu: gpuTelemetry)),
+            [typeof(StandbyMemoryViewModel)] = new StandbyMemoryViewModel(standby, new StandbyPreferenceService(lookRecords)),
+            [typeof(ResourceHistoryViewModel)] = new ResourceHistoryViewModel(new ResourceHistoryService(sysInfo, temperature, lookRecords, gpu: gpuTelemetry)),
             [typeof(BandwidthMonitorViewModel)] = new BandwidthMonitorViewModel(new BandwidthHistoryService(lookRecords)),
             [typeof(SettingsWatchdogViewModel)] = new SettingsWatchdogViewModel(watchdog),
             [typeof(CliInterfaceViewModel)] = new CliInterfaceViewModel(),

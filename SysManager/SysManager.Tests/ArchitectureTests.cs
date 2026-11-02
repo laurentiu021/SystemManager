@@ -366,10 +366,171 @@ public partial class ArchitectureTests
             .Where(b => LeavesConfigDirAtItsDefault(b.Arguments, seams[b.Type]))
             .Select(b => $"new {b.Type}({string.Join(", ", b.Arguments)})")
             .ToList();
+
+        // A type that builds its own store when one is left out builds it over the real profile as well. Standby List
+        // Cleaner's preferences and Disk Analyzer's were left out here, so every build of the graph read the user's
+        // own (#2766). The same store half as the tests' guard.
+        var stores = StoreSeams();
+        var storeSeams = stores.ToDictionary(s => s.Key, s => s.Value.Overloads);
+        var storesBuilt = ConfigDirConstructions(graph, storeSeams).ToList();
+        Assert.True(storesBuilt.Count >= 3,
+            $"only {storesBuilt.Count} constructions of a type taking a store were found in BuildDesignerGraph, and 3 "
+            + "were measured. The scan stopped matching, so the store half would pass while checking nothing.");
+        overTheRealProfile.AddRange(storesBuilt
+            .Where(b => LeavesConfigDirAtItsDefault(b.Arguments, storeSeams[b.Type], stores[b.Type].Parameter))
+            .Select(b => $"new {b.Type}({string.Join(", ", b.Arguments)}) leaves out {stores[b.Type].Parameter}"));
+
         Assert.True(overTheRealProfile.Count == 0,
             "BuildDesignerGraph builds these over the real profile, %LocalAppData%\\SysManager. Give each lookRecords as "
             + "its folder (#2740):\n  " + string.Join("\n  ", overTheRealProfile));
     }
+
+    /// <summary>
+    /// The shell's no-container graph shares what the container shares, and nothing it does not (#2766).
+    /// </summary>
+    /// <remarks>
+    /// The graph is what the XAML designer and every test that builds the shell run, so where it parts from
+    /// <c>ServiceRegistration</c> those tests run a graph production never builds. It had: one runner fed most of the
+    /// tabs, where the container gives each consumer its own so that one tab's output cannot reach another's console,
+    /// one <c>WingetService</c> served two tabs, and five services the container builds once were built twice. Read
+    /// from both files, comments and literals blanked: a type the container builds once is built at most as often as
+    /// its registrations build it, and a type it builds afresh for each consumer is never held in a local, where it
+    /// would be shared.
+    /// </remarks>
+    [Fact]
+    public void TheDesignerGraph_SharesWhatTheContainerShares()
+    {
+        var appDir = TestPaths.AppProject();
+        var registration = WithStringsBlanked(WithoutComments(File.ReadAllText(Path.Combine(appDir, "ServiceRegistration.cs"))));
+        var shell = File.ReadAllText(Path.Combine(appDir, "ViewModels", "MainWindowViewModel.cs"));
+        var at = shell.IndexOf("private Dictionary<Type, object> BuildDesignerGraph()", StringComparison.Ordinal);
+        Assert.True(at > 0, "BuildDesignerGraph was not found in MainWindowViewModel.cs, so nothing below is checked.");
+        var graph = WithStringsBlanked(WithoutComments(shell[at..]));
+
+        // How many instances of each type the container makes: one for each registration that maps a type, plus each
+        // one its factories construct, as SystemReportService's factory makes its own EventLogService.
+        Dictionary<string, int> containerBuilds = new(StringComparer.Ordinal);
+        HashSet<string> perConsumer = new(StringComparer.Ordinal);
+        var registrations = 0;
+        foreach (Match m in ServiceRegistrationCall().Matches(registration))
+        {
+            registrations++;
+            var implementation = m.Groups["second"].Success ? m.Groups["second"].Value : m.Groups["first"].Value;
+            if (m.Groups["life"].Value == "Transient") perConsumer.Add(implementation);
+            else if (m.Groups["factory"].Value.Trim().Length == 0)
+                containerBuilds[implementation] = containerBuilds.GetValueOrDefault(implementation) + 1;
+        }
+        foreach (Match m in Construction().Matches(registration))
+            containerBuilds[m.Groups["type"].Value] = containerBuilds.GetValueOrDefault(m.Groups["type"].Value) + 1;
+
+        // Known answers, so a parse that stops matching fails rather than passing.
+        Assert.True(registrations >= 150, $"only {registrations} registrations were read from ServiceRegistration.cs, "
+            + "and 162 were measured. The pattern stopped matching, so this would pass while checking nothing.");
+        Assert.Equal(2, containerBuilds.GetValueOrDefault("EventLogService"));
+        Assert.Equal(1, containerBuilds.GetValueOrDefault("TemperatureService"));
+        Assert.Equal("PowerShellRunner, WingetService", string.Join(", ", perConsumer.Order(StringComparer.Ordinal)));
+
+        var graphBuilds = Construction().Matches(graph)
+            .GroupBy(m => m.Groups["type"].Value, StringComparer.Ordinal)
+            .ToDictionary(g => g.Key, g => g.Count(), StringComparer.Ordinal);
+        Assert.True(graphBuilds.Values.Sum() >= 100, $"only {graphBuilds.Values.Sum()} constructions were read from "
+            + "BuildDesignerGraph. The pattern stopped matching, so this would pass while checking nothing.");
+
+        var builtMoreOften = graphBuilds
+            .Where(b => containerBuilds.TryGetValue(b.Key, out var n) && b.Value > n)
+            .Select(b => $"{b.Key}: built {b.Value} times here, {containerBuilds[b.Key]} by the container")
+            .ToList();
+        var heldInALocal = perConsumer
+            .Where(t => Regex.IsMatch(graph, @"\bvar\s+\w+\s*=\s*new\s+" + Regex.Escape(t) + @"\s*\("))
+            .Select(t => $"{t}: held in a local, where the container gives each consumer its own")
+            .ToList();
+
+        Assert.True(builtMoreOften.Count + heldInALocal.Count == 0,
+            "BuildDesignerGraph shares differently from ServiceRegistration. Build a shared type once and hand the one "
+            + "instance on, and build a per-consumer type at each use:\n  "
+            + string.Join("\n  ", builtMoreOften.Concat(heldInALocal)));
+    }
+
+    /// <summary>
+    /// The shell's no-container graph builds each view model with the constructor the container calls (#2766).
+    /// </summary>
+    /// <remarks>
+    /// A view model with a convenience constructor builds its own services there, which the counts above cannot see.
+    /// About's did: the graph called <c>new AboutViewModel(lookRecords)</c>, which made About its own report, while the
+    /// container builds About with the <c>SystemReportService</c> System Report uses. The container calls the public
+    /// constructor with the most parameters it can fill, each registered or optional. This finds that constructor for
+    /// every view model the container registers, and fails a construction in the graph whose arguments, by position
+    /// and by name, it could not take.
+    /// </remarks>
+    [Fact]
+    public void TheDesignerGraph_BuildsEachViewModelWithTheConstructorTheContainerCalls()
+    {
+        var appDir = TestPaths.AppProject();
+        var registration = WithStringsBlanked(WithoutComments(File.ReadAllText(Path.Combine(appDir, "ServiceRegistration.cs"))));
+        var shell = File.ReadAllText(Path.Combine(appDir, "ViewModels", "MainWindowViewModel.cs"));
+        var at = shell.IndexOf("private Dictionary<Type, object> BuildDesignerGraph()", StringComparison.Ordinal);
+        Assert.True(at > 0, "BuildDesignerGraph was not found in MainWindowViewModel.cs, so nothing below is checked.");
+        var graph = WithStringsBlanked(WithoutComments(shell[at..]));
+
+        var calls = ServiceRegistrationCall().Matches(registration).ToList();
+        var registered = calls.Select(m => m.Groups["first"].Value).ToHashSet(StringComparer.Ordinal);
+        var viewModels = calls
+            .Where(m => !m.Groups["second"].Success && m.Groups["factory"].Value.Trim().Length == 0
+                        && m.Groups["first"].Value.EndsWith("ViewModel", StringComparison.Ordinal))
+            .Select(m => m.Groups["first"].Value)
+            .ToList();
+        Assert.True(viewModels.Count >= 55, $"only {viewModels.Count} view models were read from ServiceRegistration.cs. "
+            + "The pattern stopped matching, so this would pass while checking nothing.");
+
+        List<string> offenders = [];
+        var judged = 0;
+        foreach (var name in viewModels)
+        {
+            var type = AppAssembly.GetTypes().Single(t => t.Name == name);
+            var chosen = type.GetConstructors(BindingFlags.Instance | BindingFlags.Public)
+                .Where(c => c.GetParameters().All(p => p.IsOptional || registered.Contains(p.ParameterType.Name)))
+                .MaxBy(c => c.GetParameters().Length);
+            Assert.True(chosen is not null, $"the container has no constructor of {name} it can call");
+
+            foreach (Match m in Regex.Matches(graph, @"\bnew\s+" + Regex.Escape(name) + @"\s*\("))
+            {
+                var arguments = TopLevelArguments(graph, m.Index + m.Length - 1);
+                if (arguments is null) continue;
+                judged++;
+                if (!Takes(chosen!.GetParameters(), arguments))
+                    offenders.Add($"new {name}({string.Join(", ", arguments)}): the container calls "
+                                  + $"{name}({string.Join(", ", chosen.GetParameters().Select(p => p.Name))})");
+            }
+        }
+
+        Assert.True(judged >= 55, $"only {judged} view models were found built in BuildDesignerGraph. The pattern "
+            + "stopped matching, so this would pass while checking nothing.");
+        Assert.True(offenders.Count == 0,
+            "BuildDesignerGraph builds these with a constructor the container does not call, so the graph is not the one "
+            + "production runs. Use the container's, handing on the graph's shared instances:\n  "
+            + string.Join("\n  ", offenders));
+
+        // Whether a constructor with these parameters accepts these arguments: no more positional ones than it takes,
+        // every named one among its parameters, and every parameter it requires given one way or the other.
+        static bool Takes(ParameterInfo[] parameters, List<string> arguments)
+        {
+            var positional = arguments.TakeWhile(a => !NamedArgument().IsMatch(a)).Count();
+            if (positional > parameters.Length) return false;
+            var named = arguments.Skip(positional).Select(a => a[..a.IndexOf(':', StringComparison.Ordinal)].Trim()).ToList();
+            if (named.Any(n => parameters.All(p => p.Name != n))) return false;
+            return parameters.Skip(positional).All(p => p.IsOptional || named.Contains(p.Name!));
+        }
+    }
+
+    /// <summary>
+    /// A <c>services.AddSingleton&lt;…&gt;(…)</c> or <c>AddTransient</c> call: the one or two types, and the factory, if any.
+    /// </summary>
+    [GeneratedRegex(@"\bAdd(?<life>Singleton|Transient)<(?<first>\w+)(?:\s*,\s*(?<second>\w+))?>\((?<factory>[^;]*)\);")]
+    private static partial Regex ServiceRegistrationCall();
+
+    /// <summary><c>new T(</c>, with or without a namespace in front of <c>T</c>.</summary>
+    [GeneratedRegex(@"\bnew\s+(?:\w+\.)*(?<type>[A-Z]\w*)\s*\(")]
+    private static partial Regex Construction();
 
     /// <summary>
     /// Every type in the app with a constructor that takes a <c>configDir</c>, keyed by name, and all of its
@@ -12954,13 +13115,15 @@ public partial class ArchitectureTests
         var registration = WithoutComments(File.ReadAllText(Path.Combine(appDir, "ServiceRegistration.cs")));
         Assert.Contains("AddSingleton<INvidiaGpuReader, NvidiaGpuReader>()", registration, StringComparison.Ordinal);
 
-        // And the designer graph builds ONE and hands it on, rather than one per consumer. Two hand-offs now
-        // rather than three: both remaining ones are a TemperatureService, the Dashboard's and the Resource
-        // History service's, since those two tabs read their GPU LOAD through IGpuTelemetry instead (#2857).
+        // And the designer graph builds ONE and hands it on, rather than one per consumer: to each TemperatureService it
+        // builds, which is one, shared by the Dashboard and the Resource History service as the container's is (#2766).
+        // It built two, one for each, until the graph was made to share what the container shares; those two tabs read
+        // their GPU LOAD through IGpuTelemetry (#2857).
         var designer = WithoutComments(File.ReadAllText(Path.Combine(appDir, "ViewModels", "MainWindowViewModel.cs")));
         Assert.Single(NvidiaReaderConstruction().Matches(designer));
-        Assert.True(designer.Split("nvidia: nvidia").Length - 1 >= 2,
-            "the designer graph must pass its one reader to every consumer that still needs it, or that graph "
+        var temperatureServices = Regex.Matches(designer, @"\bnew\s+TemperatureService\s*\(").Count;
+        Assert.True(temperatureServices >= 1 && designer.Split("nvidia: nvidia").Length - 1 == temperatureServices,
+            "the designer graph must pass its one reader to every temperature service it builds, or that graph "
             + "has readers of its own after all.");
 
         Assert.True(offenders.Count == 0,

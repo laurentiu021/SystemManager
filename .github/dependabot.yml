@@ -1,8 +1,11 @@
 version: 2
 updates:
-  # Keep NuGet packages current (main app + test projects).
+  # Keep NuGet packages current: the app and its three test projects, read from the one solution. Every package's
+  # version is in SysManager/Directory.Packages.props and each test project references the app, so an entry per project
+  # proposed the app's own packages again under a test prefix and label, and a runtime upgrade arrived as
+  # "deps(tests)" (#2744). Dependabot reads the projects a solution lists, so one entry proposes each package once.
   - package-ecosystem: "nuget"
-    directory: "/SysManager/SysManager"
+    directory: "/SysManager"
     schedule:
       interval: "weekly"
       day: "monday"
@@ -13,60 +16,6 @@ updates:
       prefix: "deps"
       include: "scope"
     # Group minor+patch bumps into one PR; keep majors separate for careful review.
-    groups:
-      nuget-minor-patch:
-        update-types:
-          - "minor"
-          - "patch"
-
-  - package-ecosystem: "nuget"
-    directory: "/SysManager/SysManager.Tests"
-    schedule:
-      interval: "weekly"
-      day: "monday"
-    open-pull-requests-limit: 3
-    labels:
-      - "dependencies"
-      - "tests"
-    commit-message:
-      prefix: "deps(tests)"
-      include: "scope"
-    groups:
-      nuget-minor-patch:
-        update-types:
-          - "minor"
-          - "patch"
-
-  - package-ecosystem: "nuget"
-    directory: "/SysManager/SysManager.UITests"
-    schedule:
-      interval: "weekly"
-      day: "monday"
-    open-pull-requests-limit: 3
-    labels:
-      - "dependencies"
-      - "tests"
-    commit-message:
-      prefix: "deps(uitests)"
-      include: "scope"
-    groups:
-      nuget-minor-patch:
-        update-types:
-          - "minor"
-          - "patch"
-
-  - package-ecosystem: "nuget"
-    directory: "/SysManager/SysManager.IntegrationTests"
-    schedule:
-      interval: "weekly"
-      day: "monday"
-    open-pull-requests-limit: 3
-    labels:
-      - "dependencies"
-      - "tests"
-    commit-message:
-      prefix: "deps(integration)"
-      include: "scope"
     groups:
       nuget-minor-patch:
         update-types:

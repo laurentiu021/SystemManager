@@ -59,9 +59,11 @@ over SSH or in a non-interactive scheduled task.
 ./docs/manual-smoke.ps1
 ```
 
-It checks 11 of the 60 tabs (the list is at the top of the script), so treat a pass as
-"the shell starts and those tabs render", not as full coverage. Add a nav id to `$navIds`
-when a new tab is worth including in the quick check.
+It reads the tabs, and the header each one shows, from the UI suite's own table
+(`AllTabsSmokeUiTests.AllTabs()`), so a tab added there is in the smoke run too. It opens every
+sidebar group first, since a collapsed group's tabs are not in the automation tree, and for each
+tab waits up to ten seconds for its page header. It stops at once if SysManager shows its error
+box or exits.
 
 ## Running everything at once
 

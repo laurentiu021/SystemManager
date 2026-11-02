@@ -8,6 +8,17 @@ on:
       - "SysManager/Directory.Packages.props"
       - "SysManager/Directory.Build.props"
       - "global.json"
+  # The way back when a release was refused for its CHANGELOG entry (#2744). A re-run of the push run checks out the same
+  # commit, so it reads the same entry and refuses again, and a pull request that fixes only CHANGELOG.md starts no run:
+  # that file is not in the paths above, and its title releases nothing. Once that pull request is merged, run this on
+  # main with the bump the refused merge asked for.
+  workflow_dispatch:
+    inputs:
+      bump:
+        description: "The bump the refused merge asked for: patch for fix:, minor for feat:, major for either with a !"
+        type: choice
+        options: [patch, minor, major]
+        required: true
 
 permissions:
   contents: write
@@ -29,8 +40,9 @@ jobs:
     # version tag, so a new image under it should arrive as a reviewed change that is seen to pass.
     # Every Linux job here uses the same label, and ArchitectureTests holds them to it.
     runs-on: ubuntu-24.04
-    # Don't run on commits that are already tagged (avoids infinite loop)
-    if: "!startsWith(github.event.head_commit.message, 'chore: release')"
+    # Don't run on commits that are already tagged (avoids infinite loop). Run by hand, only on main: a run on another
+    # branch would tag that branch's commit.
+    if: "github.ref == 'refs/heads/main' && !startsWith(github.event.head_commit.message, 'chore: release')"
     timeout-minutes: 5
 
     steps:
@@ -40,12 +52,33 @@ jobs:
           fetch-depth: 0
           token: ${{ secrets.GITHUB_TOKEN }}
 
+      # A re-run of a run that pushed its tag and then failed to start the release finds the tag on this commit. Bumping
+      # from it would ask for the version after it and refuse for want of that entry, which left this version a tag
+      # with no release, behind a green "Merged version is tagged" (#2744). The tag on the commit is the version then,
+      # and starting the release is all that is left.
+      - name: Find a version already on this commit
+        id: tagged
+        shell: bash
+        run: |
+          ON_COMMIT=$(git tag --points-at "$GITHUB_SHA" --sort=-v:refname | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' || true)
+          TAG=${ON_COMMIT%%$'\n'*}
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+          if [ -n "$TAG" ]; then echo "This commit is already $TAG: no bump, no tag, only the release."; fi
+
       - name: Determine bump type from commit message
         id: bump
         shell: bash
         env:
           COMMIT_MSG: ${{ github.event.head_commit.message }}
+          EVENT: ${{ github.event_name }}
+          DISPATCH_BUMP: ${{ inputs.bump }}
         run: |
+          if [ "$EVENT" = "workflow_dispatch" ]; then
+            echo "type=$DISPATCH_BUMP" >> "$GITHUB_OUTPUT"
+            echo "Run by hand on main with bump=$DISPATCH_BUMP."
+            exit 0
+          fi
+
           # Extract first line (PR title after squash merge). Parameter expansion, not `echo | head`:
           # see "Get latest tag" below for why a pipe into `head` under pipefail is the one to avoid —
           # COMMIT_MSG carries the whole PR description, and 43 of the last 400 commits on main ran
@@ -66,7 +99,7 @@ jobs:
           fi
 
       - name: Get latest tag
-        if: steps.bump.outputs.type != 'none'
+        if: steps.bump.outputs.type != 'none' && steps.tagged.outputs.tag == ''
         id: latest
         shell: bash
         run: |
@@ -83,7 +116,7 @@ jobs:
           echo "Latest tag: $TAG"
 
       - name: Compute next version
-        if: steps.bump.outputs.type != 'none'
+        if: steps.bump.outputs.type != 'none' && steps.tagged.outputs.tag == ''
         id: next
         shell: bash
         run: |
@@ -110,25 +143,29 @@ jobs:
       # Verify the CHANGELOG BEFORE the tag exists. release.yml already refuses to publish a release
       # whose version has no CHANGELOG section — but by then the tag is pushed, so the failure leaves
       # a tag with no release, and the next fix: merge simply tags another one. Checking here means a
-      # missing entry costs a re-run instead of a stranded version.
+      # missing entry costs a CHANGELOG fix and a run by hand instead of a stranded version.
       #
       # The author cannot reliably know this number in advance (it depends on the commit type AND the
       # previous tag), so the message says exactly what to add rather than implying carelessness.
       - name: Verify CHANGELOG has an entry for the computed version
-        if: steps.bump.outputs.type != 'none'
+        if: steps.bump.outputs.type != 'none' && steps.tagged.outputs.tag == ''
         shell: bash
+        env:
+          BUMP: ${{ steps.bump.outputs.type }}
         run: |
           NEXT="${{ steps.next.outputs.version }}"
           VERSION="${NEXT#v}"
           ESCAPED=${VERSION//./\\.}
+          # The way back for every refusal below. A re-run reads this same commit and refuses again (#2744).
+          RECOVER="Fix it in a pull request, and once that is merged run this workflow on main with bump=$BUMP: Actions, Auto-release, Run workflow, or gh workflow run auto-release.yml --ref main -f bump=$BUMP. No tag was created."
           if ! grep -qE "^## \[${ESCAPED}\]" CHANGELOG.md; then
-            echo "::error::No CHANGELOG.md entry for $VERSION (a ${{ steps.bump.outputs.type }} bump from ${{ steps.latest.outputs.tag }}). Add a '## [$VERSION] - <date>' section, then re-run this workflow. No tag was created."
+            echo "::error::No CHANGELOG.md entry for $VERSION (a $BUMP bump from ${{ steps.latest.outputs.tag }}). Add a '## [$VERSION] - <date>' section. $RECOVER"
             exit 1
           fi
           # A header with nothing under it would publish a release with empty notes.
           SECTION=$(awk -v hdr="## [$VERSION]" 'index($0,hdr)==1{f=1;next} /^## \[/{f=0} f' CHANGELOG.md | tr -d '[:space:]')
           if [ -z "$SECTION" ]; then
-            echo "::error::The CHANGELOG.md entry for $VERSION is empty. Add the notes under its header, then re-run. No tag was created."
+            echo "::error::The CHANGELOG.md entry for $VERSION is empty. Add the notes under its header. $RECOVER"
             exit 1
           fi
           # The date has to be TODAY in UTC. release.yml no longer copies this header verbatim — since
@@ -140,25 +177,25 @@ jobs:
           # with the release it describes, even though the published surfaces read correctly (#2847).
           #
           # Not checkable on the pull request: CI passing at 23:50 says nothing about a merge at 00:05.
-          # Here the tag does not exist yet, so refusing costs a one-line edit and a re-run.
+          # Here the tag does not exist yet, so refusing costs a one-line fix and a run by hand.
           HEADER=$(grep -m1 -E "^## \[${ESCAPED}\]" CHANGELOG.md)
           ENTRY_DATE=$(printf '%s\n' "$HEADER" | grep -oE '[0-9]{4}-[0-9]{2}-[0-9]{2}' || true)
           TODAY=$(date -u +%Y-%m-%d)
 
           if [ -z "$ENTRY_DATE" ]; then
-            echo "::error::The CHANGELOG.md header for $VERSION carries no date. Keep a Changelog expects '## [$VERSION] - $TODAY'. Add it, then re-run. No tag was created."
+            echo "::error::The CHANGELOG.md header for $VERSION carries no date. Keep a Changelog expects '## [$VERSION] - <the day it releases, in UTC>'. $RECOVER"
             exit 1
           fi
 
           if [ "$ENTRY_DATE" != "$TODAY" ]; then
-            echo "::error::The CHANGELOG.md entry for $VERSION is dated $ENTRY_DATE, but this release publishes today, $TODAY (UTC). release.yml rewrites the published date on its own, so the release body and announcement will be correct either way — but this file would keep saying $ENTRY_DATE forever, disagreeing with the release it describes. Change the header to '## [$VERSION] - $TODAY' and re-run. No tag was created."
+            echo "::error::The CHANGELOG.md entry for $VERSION is dated $ENTRY_DATE, but this release publishes today, $TODAY (UTC). release.yml rewrites the published date on its own, so the release body and announcement will be correct either way — but this file would keep saying $ENTRY_DATE forever, disagreeing with the release it describes. Date the header the day the run by hand will be, in UTC. $RECOVER"
             exit 1
           fi
 
           echo "CHANGELOG has a non-empty entry for $VERSION, dated $ENTRY_DATE (today in UTC)."
 
       - name: Create and push tag
-        if: steps.bump.outputs.type != 'none'
+        if: steps.bump.outputs.type != 'none' && steps.tagged.outputs.tag == ''
         shell: bash
         run: |
           NEXT="${{ steps.next.outputs.version }}"
@@ -168,15 +205,19 @@ jobs:
           git push origin "$NEXT"
           echo "Pushed tag $NEXT"
 
+      # release.yml does nothing for a version that already has a release, and runs one at a time per tag, so starting
+      # it again for the tag already on this commit is safe.
       - name: Trigger release workflow
         if: steps.bump.outputs.type != 'none'
         shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAGGED: ${{ steps.tagged.outputs.tag }}
+          COMPUTED: ${{ steps.next.outputs.version }}
         run: |
-          NEXT="${{ steps.next.outputs.version }}"
+          NEXT="${TAGGED:-$COMPUTED}"
           # On the tag, so the run's own commit is the tag's. The attestation signs with the run's
           # GITHUB_SHA and GITHUB_REF, and a run on main has main's head as of the dispatch, which is
           # the tag's commit only while nothing has landed in between (#2805).
           gh workflow run release.yml --ref "$NEXT" -f tag="$NEXT"
           echo "Triggered release.yml on $NEXT"
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

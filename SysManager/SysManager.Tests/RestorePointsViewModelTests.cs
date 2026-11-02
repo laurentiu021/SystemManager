@@ -136,6 +136,27 @@ public class RestorePointsViewModelTests
         Assert.False(vm.IsBusy);
     }
 
+    /// <summary>
+    /// The restore restarts Windows, so its question names any work SysManager is still doing, as every other way of
+    /// closing SysManager does (#2754). It takes only the system-change lock, so a clean-up or an install is not
+    /// stopped by it, and the restart cut such work off unannounced.
+    /// </summary>
+    [Fact]
+    public async Task Restore_NamesTheWorkSysManagerIsStillDoing_BeforeWindowsRestarts()
+    {
+        var vm = NewVm(out _);
+        await vm.InitializationComplete;
+        vm.SelectedPoint = new SysManager.Models.RestorePoint(7, "Before the driver update", DateTime.Now, "12", "100");
+        using var dialog = new DialogAnswer(confirm: false);
+        using var held = OperationLockService.Instance.TryAcquire(OperationCategory.Disk, "Deep Cleanup");
+        Assert.NotNull(held);
+
+        await vm.RestoreCommand.ExecuteAsync(null);
+
+        Assert.Contains("SysManager is still working on: Deep Cleanup.", Assert.Single(dialog.Messages),
+            StringComparison.Ordinal);
+    }
+
     // ---------- a refused list is not an empty one (#2476) ----------
     // Windows answers a standard user's request for the list with "Access denied". The tab used to report that as
     // "No restore points found. System Restore may be turned off for this PC." about a PC that had several.

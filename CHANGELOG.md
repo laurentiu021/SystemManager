@@ -10,6 +10,19 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.136.72] - 2026-11-02
+
+**Restore Points names each point's type in words, and warns before a restore cuts off work SysManager is still doing.**
+
+### Fixed
+- Restore Points' Type column showed numbers such as 12 and 0, because Windows reports the type as a number and only
+  PowerShell's own table turns it into a name. It now reads App install, App uninstall, Before a restore, Automatic,
+  Driver install, Manual / settings or Cancelled operation, and "Other" with the number for one SysManager does not
+  know. This was there since the tab was added in 1.23.0.
+- Restoring restarts Windows, and its question did not name work SysManager was still doing, such as a Deep Cleanup or
+  an install, which the restart then cut off. It names it now, as closing the window, tray Exit, Run as administrator
+  and installing an update have done since 1.114.15.
+
 ## [1.136.71] - 2026-11-02
 
 **Starting and stopping a service on Services no longer freezes SysManager, a service that stops at once says so straight away, and the filter counts keep up.**

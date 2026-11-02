@@ -89,7 +89,9 @@ public class QaAuditTests
     [Fact]
     public async Task PingMonitor_ConcurrentStartStop_IsSafe()
     {
-        // Hammer Start/Stop from many threads to check for race on _cts / _loop.
+        // Start and Stop from many threads never throw, and leave the monitor stopped. The race on the pump's token is
+        // pinned without threads in PingMonitorServiceLifecycleTests; this used to wrap both calls in empty catches, so
+        // nothing could fail it (#2742).
         using var svc = new PingMonitorService
         {
             Interval = TimeSpan.FromMilliseconds(50),
@@ -102,14 +104,15 @@ public class QaAuditTests
         {
             while (!ct.IsCancellationRequested)
             {
-                try { svc.Start(); } catch { }
-                try { svc.Stop(); } catch { }
+                svc.Start();
+                svc.Stop();
             }
         })).ToArray();
 
         var ex = await Record.ExceptionAsync(async () => await Task.WhenAll(workers));
         Assert.Null(ex);
         svc.Stop();
+        Assert.False(svc.IsRunning);
     }
 
     [Fact]

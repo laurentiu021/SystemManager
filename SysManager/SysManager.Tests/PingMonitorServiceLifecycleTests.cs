@@ -58,6 +58,47 @@ public class PingMonitorServiceLifecycleTests
     }
 
     // ---------------------------------------------------------------------------------------------
+    // The pump runs on the token it was started with (#2751). Start queued it as
+    // `Task.Run(() => PumpAsync(_cts.Token))`, and the lambda read the field when a pool thread got to it, after
+    // the lock was released: a Stop that came first left it reading null, and a Stop whose wait ran out, then a
+    // Start, left it reading the next one, so two pumps ran. The integration test that hammered Start and Stop
+    // could see neither, since Stop's wait swallows a pump's fault (#2742). These hold the pump back, and run it
+    // once the Stop or the next Start has happened.
+    // ---------------------------------------------------------------------------------------------
+
+    private static PingMonitorService HeldBack(List<Func<Task>> queued) =>
+        new(new HeldTimers(), (pump, _) => { queued.Add(pump); return Task.CompletedTask; });
+
+    [Fact]
+    public void APumpThatRunsAfterItsStop_EndsAtOnce()
+    {
+        var queued = new List<Func<Task>>();
+        using var svc = HeldBack(queued);
+        svc.Start();
+        svc.Stop();
+
+        var pump = Assert.Single(queued)();
+
+        Assert.True(pump.IsCompletedSuccessfully);
+    }
+
+    [Fact]
+    public void APumpThatRunsAfterTheNextStart_DoesNotRunOnItsToken()
+    {
+        var queued = new List<Func<Task>>();
+        using var svc = HeldBack(queued);
+        svc.Start();
+        svc.Stop();
+        svc.Start();
+
+        var first = queued[0]();
+
+        // On the next Start's token it would be a second pump, waiting for its next tick.
+        Assert.True(first.IsCompletedSuccessfully);
+        svc.Stop();
+    }
+
+    // ---------------------------------------------------------------------------------------------
     // Cadence. These replace an integration test that started the real pump, slept 1.2 real seconds
     // and asserted a tick COUNT — which on a loaded machine measured how much CPU the host had spare
     // rather than anything about this class, and went red once during a full local run (2 samples

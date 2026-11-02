@@ -10,6 +10,17 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.136.63] - 2026-11-02
+
+**Stopping and restarting Ping monitoring or auto-trace on a busy PC no longer leaves two of them running.**
+
+### Fixed
+- Ping monitoring and Traceroute's auto-trace start their work on a background thread, and the work only
+  looked up which run it belonged to once that thread got going. On a busy PC, stopping and starting again
+  in that moment could leave the stopped run going alongside the new one, so every target was pinged, or
+  traced, twice as often as set until the next stop. Each run now keeps the one it was started for. This was
+  there since 0.3.0.
+
 ## [1.136.62] - 2026-10-31
 
 **Closing SysManager while Performance Mode or Gaming Profile is still changing a setting no longer ends that change in an error.**

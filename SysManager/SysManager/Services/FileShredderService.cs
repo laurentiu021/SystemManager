@@ -144,8 +144,8 @@ public sealed partial class FileShredderService
                 + "that attribute first, or delete it normally and rely on full-disk encryption (BitLocker) to "
                 + "protect what remains on the drive.");
 
-        if (attrs.HasFlag(FileAttributes.ReadOnly))
-            File.SetAttributes(filePath, attrs & ~FileAttributes.ReadOnly);
+        // Cleared so the write handle can open, and set again if not a byte gets overwritten after all.
+        using var readOnly = ClearedReadOnly.From(filePath, attrs);
 
         var totalPasses = (int)method;
         var patterns = GetPatterns(method);
@@ -245,6 +245,7 @@ public sealed partial class FileShredderService
                         // check above refuses to.
                         await stream.WriteAsync(buffer.AsMemory(0, writeSize), CancellationToken.None).ConfigureAwait(false);
                         overwriteBegan = true;
+                        readOnly?.Overwritten();
                         bytesRemaining -= writeSize;
                     }
 
@@ -465,11 +466,7 @@ public sealed partial class FileShredderService
 
             try
             {
-                // Remove read-only attribute if present
-                var attrs = File.GetAttributes(files[i]);
-                if (attrs.HasFlag(FileAttributes.ReadOnly))
-                    File.SetAttributes(files[i], attrs & ~FileAttributes.ReadOnly);
-
+                // ShredFileAsync clears ReadOnly itself, and sets it again on a file it then leaves (#2757).
                 await ShredFileAsync(files[i], method, null, ct).ConfigureAwait(false);
                 shredded++;
             }
@@ -730,6 +727,56 @@ public sealed partial class FileShredderService
             result = result[dosPrefix.Length..];
 
         return result;
+    }
+
+    /// <summary>
+    /// The ReadOnly flag cleared so the write handle can open, set again when the shred returns without having
+    /// overwritten a byte: a file refused after the open, or cancelled before its first byte, is left as it was found.
+    /// </summary>
+    /// <remarks>
+    /// It was cleared before the hard-link refusal and the first cancellation check, so a file the shred left
+    /// "untouched" had lost it, and attributes belong to the file rather than to a name: a refused hard link lost it
+    /// under every name the file has (#2757).
+    /// </remarks>
+    private sealed class ClearedReadOnly : IDisposable
+    {
+        private readonly string _path;
+        private readonly FileAttributes _attributes;
+        private bool _overwritten;
+
+        private ClearedReadOnly(string path, FileAttributes attributes)
+        {
+            _path = path;
+            _attributes = attributes;
+        }
+
+        /// <summary>Clears ReadOnly on <paramref name="path"/>, or returns null when it is not set.</summary>
+        public static ClearedReadOnly? From(string path, FileAttributes attributes)
+        {
+            if (!attributes.HasFlag(FileAttributes.ReadOnly)) return null;
+            File.SetAttributes(path, attributes & ~FileAttributes.ReadOnly);
+            return new ClearedReadOnly(path, attributes);
+        }
+
+        /// <summary>The overwrite has begun, so the file is no longer the one that was found.</summary>
+        public void Overwritten() => _overwritten = true;
+
+        public void Dispose()
+        {
+            if (_overwritten || !File.Exists(_path)) return;
+            // No path in either arm: the file's name is the evidence a shred is meant to remove (#2796).
+            try { File.SetAttributes(_path, _attributes); }
+            catch (IOException ex)
+            {
+                Log.Warning("Could not set ReadOnly again on a file the shred left. {ExceptionType} (HResult {HResult})",
+                    ex.GetType().Name, ex.HResult);
+            }
+            catch (UnauthorizedAccessException ex)
+            {
+                Log.Warning("Could not set ReadOnly again on a file the shred left. {ExceptionType} (HResult {HResult})",
+                    ex.GetType().Name, ex.HResult);
+            }
+        }
     }
 
     /// <summary>

@@ -25,6 +25,8 @@ public sealed partial class FileShredderViewModel : ViewModelBase
 
     private readonly FileShredderService _service;
     private readonly IDialogService _dialog;
+    // How a folder added to the queue is sized: the folder's files, or a stand-in in a test.
+    private readonly Func<string, long> _folderSize;
     private CancellationTokenSource? _cts;
 
     public BulkObservableCollection<ShredItem> Items { get; } = new();
@@ -34,10 +36,13 @@ public sealed partial class FileShredderViewModel : ViewModelBase
 
     /// <summary>Builds the File Shredder tab over an empty queue.</summary>
     /// <param name="dialog">Defaults to <see cref="DialogService.Instance"/> (#2860).</param>
-    public FileShredderViewModel(FileShredderService service, IDialogService? dialog = null)
+    /// <param name="folderSize">How a folder added to the queue is sized; <see cref="FolderSize"/> unless a test says.</param>
+    public FileShredderViewModel(
+        FileShredderService service, IDialogService? dialog = null, Func<string, long>? folderSize = null)
     {
         _service = service;
         _dialog = dialog ?? DialogService.Instance;
+        _folderSize = folderSize ?? FolderSize;
         Items.CollectionChanged += (_, _) => ShredAllCommand.NotifyCanExecuteChanged();
     }
 
@@ -134,7 +139,7 @@ public sealed partial class FileShredderViewModel : ViewModelBase
     ];
 
     [RelayCommand(CanExecute = nameof(CanEditQueue))]
-    private void AddFolder()
+    private async Task AddFolderAsync()
     {
         var folderPath = _dialog.PickFolder("Select folder to shred");
         if (folderPath is null) return;
@@ -145,8 +150,10 @@ public sealed partial class FileShredderViewModel : ViewModelBase
         try
         {
             var dirInfo = new DirectoryInfo(folderPath);
-            var size = dirInfo.EnumerateFiles("*", SearchOption.AllDirectories)
-                .Sum(f => f.Length);
+            // Off the window's thread: the walk reads every file in the tree, and a photo archive or a USB drive froze
+            // the window for all of it (#2757).
+            StatusMessage = $"Reading \"{dirInfo.Name}\"…";
+            var size = await Task.Run(() => _folderSize(folderPath)).ConfigureAwait(true);
 
             Items.Add(new ShredItem
             {
@@ -175,6 +182,28 @@ public sealed partial class FileShredderViewModel : ViewModelBase
         }
     }
 
+    /// <summary>
+    /// The bytes a shred of <paramref name="folderPath"/> would overwrite: the files the shred's own walk reaches.
+    /// </summary>
+    /// <remarks>
+    /// A folder inside it that cannot be read is passed over, as the shred passes over it. The default enumeration
+    /// threw out of the whole walk for one such folder anywhere, and the folder was refused as unreadable (#2757).
+    /// </remarks>
+    /// <exception cref="UnauthorizedAccessException">The folder itself cannot be read.</exception>
+    internal static long FolderSize(string folderPath)
+    {
+        // The folder itself has to be readable: the walk below passes over any folder it cannot read, this one too.
+        _ = Directory.EnumerateFileSystemEntries(folderPath).Any();
+        return SafeFileWalk.Files(folderPath, CancellationToken.None, new SafeWalkOptions()).Sum(LengthOf);
+    }
+
+    private static long LengthOf(string path)
+    {
+        try { return new FileInfo(path).Length; }
+        catch (IOException) { return 0; }                  // gone since the walk listed it
+        catch (UnauthorizedAccessException) { return 0; }
+    }
+
     [RelayCommand(CanExecute = nameof(CanEditQueue))]
     private void RemoveItem(ShredItem? item)
     {
@@ -187,8 +216,11 @@ public sealed partial class FileShredderViewModel : ViewModelBase
     {
         if (Items.Count == 0) return;
 
+        // Read once: the confirmation names it, and every item and the activity entry use it. The box was read again
+        // for each item, so switching it part-way changed the overwrite for the rest of the run (#2757).
+        var method = SelectedMethod;
         var confirmed = DialogService.Instance.Confirm(
-            $"You are about to permanently shred {Items.Count} item(s) using the {SelectedMethod} method.\n\n" +
+            $"You are about to permanently shred {Items.Count} item(s) using the {method} method.\n\n" +
             "This action is IRREVERSIBLE. The data cannot be recovered.\n\nContinue?",
             "Confirm Secure Shred");
 
@@ -246,7 +278,7 @@ public sealed partial class FileShredderViewModel : ViewModelBase
                 var place = next++;
                 if (ct.IsCancellationRequested) { cancelled = true; break; }
 
-                var totalPasses = (int)SelectedMethod;
+                var totalPasses = (int)method;
 
                 // Stops reporting the moment the shred ends, so none of the final statuses below can be
                 // overwritten by a report that drains afterwards and leaves an erased file looking
@@ -270,7 +302,7 @@ public sealed partial class FileShredderViewModel : ViewModelBase
                         // which throw if run off the UI thread. The service's internal awaits keep
                         // ConfigureAwait(false).
                         var report = await itemProgress.SettleAfterAsync(
-                            reporter => _service.ShredFolderAsync(item.Path, SelectedMethod, reporter, ct));
+                            reporter => _service.ShredFolderAsync(item.Path, method, reporter, ct));
                         if (report.Notice is { } notice)
                             notices.Add($"{item.Name}: {notice}");
 
@@ -288,7 +320,7 @@ public sealed partial class FileShredderViewModel : ViewModelBase
                     {
                         item.Status = $"Shredding pass 1/{totalPasses}...";
                         var passesRun = await itemProgress.SettleAfterAsync(
-                            reporter => _service.ShredFileAsync(item.Path, SelectedMethod, reporter, ct));
+                            reporter => _service.ShredFileAsync(item.Path, method, reporter, ct));
 
                         // Cancelling after the overwrite began cannot bring the file back, so the service
                         // finishes and removes it rather than leaving a corrupt one behind. It IS shredded —
@@ -360,7 +392,7 @@ public sealed partial class FileShredderViewModel : ViewModelBase
             {
                 ActivityLogService.Instance.Log("File Shredder",
                     string.Create(CultureInfo.InvariantCulture,
-                        $"Securely erased {completed:N0} item{(completed == 1 ? "" : "s")} ({(int)SelectedMethod}-pass overwrite)"));
+                        $"Securely erased {completed:N0} item{(completed == 1 ? "" : "s")} ({(int)method}-pass overwrite)"));
             }
         }
         finally

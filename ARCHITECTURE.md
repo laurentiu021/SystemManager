@@ -357,7 +357,9 @@ to scroll.
   notification (#2878).
 - `ShortcutCleanerViewModel` — scans and removes broken desktop/Start Menu shortcuts.
 - `AppBlockerViewModel` — block/unblock apps via IFEO (Image File Execution Options) registry mechanism. A block list that could not be read sets `ListFailed`; a failed refresh keeps the list and its warning.
-- `FileShredderViewModel` — secure multi-pass file overwrite and deletion.
+- `FileShredderViewModel` — secure multi-pass file overwrite and deletion. Add Folder measures the folder off the
+  UI thread with `SafeFileWalk`, the walk the shred itself takes, and a run uses the method read when it was
+  confirmed (#2757).
 - `BulkInstallerViewModel` — batch app installation via winget with progress tracking. Install Selected confirms first, because winget turns an install of an installed app into an upgrade. Cancel and Escape stop a batch before its next app: the running winget has a token of its own, which only `Dispose` cancels (#2942).
   A winget search marks the tab busy as an install does, and the install's Cancel, its bar and the Install Selected
   gate follow `IsInstalling` alone, so a search leaves them as they are (#2876).
@@ -1312,6 +1314,8 @@ Key services:
   `{Path}`/`{Dir}`/`{Stream}` template token, a path-shaped argument, or the caught exception object
   itself — the sink's real output template renders a logged exception's full message, which commonly
   is the path — only the outcome, the method, and for a failure the exception type and HResult (#2796).
+  ReadOnly is cleared so the write handle can open, and `ClearedReadOnly` sets it again on a file the shred leaves
+  as it found it, refused after the open or cancelled before its first byte (#2757).
 - `PrivacyService` (`IPrivacyService`) — reads and writes Windows privacy and telemetry
   registry toggles (activity history, advertising ID, diagnostics, etc.). Each toggle carries a
   stable `Key` that a privacy profile names it by; the list is pinned by a test, because renaming a

@@ -472,6 +472,102 @@ public class FileShredderServiceTests
         }
     }
 
+    // ---------- a file the shredder does not overwrite keeps its attributes (#2757) ----------
+    // ReadOnly was cleared before the hard-link refusal and the first cancellation check, so a file left "untouched"
+    // had lost it, and attributes belong to the file, not the name: a refused hard link lost it under every name.
+
+    [Fact]
+    public async Task ShredFileAsync_AReadOnlyFileWithASecondHardLink_IsRefused_AndStaysReadOnlyUnderBothNames()
+    {
+        var svc = NewService();
+        var target = Path.Combine(Path.GetTempPath(), "smtest_rohl_" + Guid.NewGuid().ToString("N") + ".dat");
+        var link = Path.Combine(Path.GetTempPath(), "smtest_rohlink_" + Guid.NewGuid().ToString("N") + ".dat");
+        await File.WriteAllTextAsync(target, "shared data behind two hard links");
+
+        try
+        {
+            Symlinks.RequireHardLink(link, target);
+            File.SetAttributes(target, FileAttributes.ReadOnly);
+
+            await Assert.ThrowsAsync<IOException>(
+                () => svc.ShredFileAsync(link, ShredMethod.Quick, null, CancellationToken.None));
+
+            Assert.True(File.GetAttributes(link).HasFlag(FileAttributes.ReadOnly), "the refused name lost ReadOnly");
+            Assert.True(File.GetAttributes(target).HasFlag(FileAttributes.ReadOnly), "the other name lost ReadOnly");
+        }
+        finally
+        {
+            foreach (var name in new[] { link, target })
+            {
+                if (!File.Exists(name)) continue;
+                File.SetAttributes(name, FileAttributes.Normal);
+                File.Delete(name);
+            }
+        }
+    }
+
+    [Fact]
+    public async Task ShredFileAsync_AReadOnlyFile_CancelledBeforeTheFirstByte_IsLeftAsItWas()
+    {
+        var svc = NewService();
+        var path = Path.Combine(Path.GetTempPath(), "smtest_rocancel_" + Guid.NewGuid().ToString("N") + ".dat");
+        const string content = "kept, as it was";
+        await File.WriteAllTextAsync(path, content);
+        File.SetAttributes(path, FileAttributes.ReadOnly);
+        using var cts = new CancellationTokenSource();
+        cts.Cancel();
+
+        try
+        {
+            await Assert.ThrowsAnyAsync<OperationCanceledException>(
+                () => svc.ShredFileAsync(path, ShredMethod.Quick, null, cts.Token));
+
+            Assert.True(File.GetAttributes(path).HasFlag(FileAttributes.ReadOnly), "the cancelled file lost ReadOnly");
+            Assert.Equal(content, await File.ReadAllTextAsync(path));
+        }
+        finally
+        {
+            if (File.Exists(path))
+            {
+                File.SetAttributes(path, FileAttributes.Normal);
+                File.Delete(path);
+            }
+        }
+    }
+
+    [Fact]
+    public async Task ShredFolderAsync_AReadOnlyHardLinkedFileItRefuses_StaysReadOnly()
+    {
+        var svc = NewService();
+        var root = Directory.CreateTempSubdirectory("smtest_rofolder_").FullName;
+        var inside = Path.Combine(root, "shared.dat");
+        var outside = Path.Combine(Path.GetTempPath(), "smtest_rooutside_" + Guid.NewGuid().ToString("N") + ".dat");
+        await File.WriteAllTextAsync(inside, "shared data");
+
+        try
+        {
+            Symlinks.RequireHardLink(outside, inside);
+            File.SetAttributes(inside, FileAttributes.ReadOnly);
+
+            // Reported as left in place, which is what ShredFolderAsync throws for a file it could not shred.
+            await Assert.ThrowsAsync<IOException>(
+                () => svc.ShredFolderAsync(root, ShredMethod.Quick, null, CancellationToken.None));
+
+            Assert.True(File.Exists(inside), "the hard-linked file was removed");
+            Assert.True(File.GetAttributes(inside).HasFlag(FileAttributes.ReadOnly), "the refused file lost ReadOnly");
+        }
+        finally
+        {
+            foreach (var name in new[] { inside, outside })
+            {
+                if (!File.Exists(name)) continue;
+                File.SetAttributes(name, FileAttributes.Normal);
+                File.Delete(name);
+            }
+            if (Directory.Exists(root)) Directory.Delete(root, recursive: true);
+        }
+    }
+
     [Fact]
     public async Task ShredFolderAsync_WithUnshreddableFile_LeavesItAndReportsFailure()
     {

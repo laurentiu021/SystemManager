@@ -52,6 +52,7 @@
                            Foreground="{DynamicResource TextSecondary}"/>
                 <ComboBox ItemsSource="{Binding Source={StaticResource ShredMethods}}"
                           SelectedItem="{Binding SelectedMethod}"
+                          IsEnabled="{Binding IsShredding, Converter={StaticResource BoolInvert}}"
                           AutomationProperties.Name="Shred method"
                           Width="120" Margin="0,0,16,0" VerticalAlignment="Center"/>
                 <Button Content="Add Files" Command="{Binding AddFilesCommand}"

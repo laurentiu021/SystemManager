@@ -1487,8 +1487,11 @@ Answers "what is actually using my space?" by listing the biggest files in one p
   plainly that overwriting is unreliable** — wear-levelling can keep copies that no overwrite reaches —
   and points to full-disk encryption (BitLocker or VeraCrypt) instead
 - Three shred methods: Quick (1 pass, zero fill), Standard (3 passes) and Thorough (7 passes); Standard
-  and Thorough end with a pass of cryptographically random data (RandomNumberGenerator)
-- Add files or entire folders via file picker dialogs
+  and Thorough end with a pass of cryptographically random data (RandomNumberGenerator). The method you
+  confirm is the one the whole run uses: the box is off until the run ends
+- Add files or entire folders via file picker dialogs. A folder is measured in the background, so a large
+  one never freezes the window, and a folder inside it that cannot be read is passed over, as the shred
+  passes over it, rather than turning the whole folder away
 - The Size column sorts by the file's size in bytes, not by its text
 - Per-item progress, and **Cancel stops the queue rather than abandoning a file mid-overwrite.**
   Nothing that has not started is touched; a file whose overwrite has already begun is finished
@@ -1501,7 +1504,8 @@ Answers "what is actually using my space?" by listing the biggest files in one p
   short name, a file with more than one hard link, a selected folder that is itself a link, and a
   compressed, sparse or encrypted file: NTFS writes those to new disk clusters rather than overwriting
   in place, so the original bytes would stay readable in the space the old clusters occupied. A file
-  it cannot overwrite is left where it is and named, never deleted the ordinary way
+  it cannot overwrite is left where it is and named, never deleted the ordinary way, and keeps its
+  read-only flag, as one cancelled before its first byte does
 - A write error partway through an overwrite (a full disk, a removed drive) still finishes the job —
   the file is truncated and removed rather than left half-overwritten under its original name — and
   says so plainly instead of reporting it as left untouched

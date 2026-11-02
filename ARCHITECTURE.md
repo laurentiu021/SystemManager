@@ -354,7 +354,8 @@ to scroll.
   in `IAppAlertHistory`, read and written on the UI thread as the list changes, so they outlive the session and
   Recent Changes lists them; Clear History clears that record too (#1507). A folder alert that a new uninstall entry
   claims is renamed after the program by `Identify`, in the list and in the record, with no second row or
-  notification (#2878).
+  notification (#2878). A detection is a toast in the window, or, while the window is minimized or hidden in the
+  notification area, a Windows notification through `INotificationArea` (#2769).
 - `ShortcutCleanerViewModel` — scans and removes broken desktop/Start Menu shortcuts.
 - `AppBlockerViewModel` — block/unblock apps via IFEO (Image File Execution Options) registry mechanism. A block list that could not be read sets `ListFailed`; a failed refresh keeps the list and its warning.
 - `FileShredderViewModel` — secure multi-pass file overwrite and deletion. Add Folder measures the folder off the
@@ -449,7 +450,7 @@ to scroll.
 
 Thin wrappers around the underlying platform. Each service is designed to be
 unit-testable. Services that a view-model needs to substitute in tests sit behind
-an interface seam. Forty-two are registered against their implementation in `ServiceRegistration.cs` and
+an interface seam. Forty-three are registered against their implementation in `ServiceRegistration.cs` and
 constructor-injected: `IDialogService`, `IOperationLock`, `IToastService` and `IActivityLog` (all four
 via a factory resolving to the same process-wide `.Instance` singleton everything else still calls
 directly, not a second disconnected one), `IPowerShellRunner` (PowerShellRunner), `IWingetService` (WingetService),
@@ -477,8 +478,9 @@ Changes tab), `IPutBackSignal` (PutBackSignal, which tells a tab that Undo Chang
 `IRecentChangesService` (RecentChangesService, the Recent Changes tab, over `IReliabilityHistory`,
 `IInstalledProgramsHistory` and `IAppAlertHistory`, which New App Alerts writes), `IFirstRunService`
 (FirstRunService, whether the Welcome screen has been seen on this PC),
-`IGamingProfileService`, and `ISessionRestorePoint` (the last two via a factory). `INavigationService`, like
-`ISpeedTestService`, forwards to the concrete singleton.
+`INotificationArea` (TrayIconService, which tells New App Alerts' detections from the tray icon while the window is
+away), `IGamingProfileService`, and `ISessionRestorePoint` (the last two via a factory). `INavigationService`, like
+`ISpeedTestService` and `INotificationArea`, forwards to the concrete singleton.
 
 `IDialogService`, `IOperationLock`, `IToastService` and `IActivityLog` are migrated one view model at a
 time (#2860) rather than all at once: `BrowserCleanerViewModel` is the first. The rest still call
@@ -733,6 +735,8 @@ Key services:
   otherwise, which put the app and every tool it starts at idle priority under EcoQoS (#2722). A source guard,
   `TheTrayIcon_IsCreatedWithoutEfficiencyMode`, keeps any other mention of Efficiency Mode out of the app, and
   the library's Hide and Show extensions, which switch it, from being called on a window.
+  `TryNotifyWhileAway` (`INotificationArea`) shows an information notification only while the window it was
+  initialized with is hidden or minimized and `NotificationsEnabled` is on, and says whether it did (#2769).
 - `LogService` — Serilog wrapper with a rolling file sink, wrapped by
   `UserPathScrubbingSink`. That wrapper renders each event and runs the finished line through
   `SanitizePath` before writing, so the Windows user name cannot reach the log regardless of

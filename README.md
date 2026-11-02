@@ -1741,7 +1741,9 @@ Answers "what is actually using my space?" by listing the biggest files in one p
   in your `%LocalAppData%\SysManager` folder — and Recent Changes lists them too. Clear History clears
   both, and asks first, since it cannot be undone
 - Notifies you when a new install is detected, so you find out even when you are
-  on another tab or the window is in the notification area
+  on another tab or the window is in the notification area: a notice inside the window while
+  it is on screen, and a Windows notification from the SysManager icon while it is minimized
+  or in the notification area
 - **One install, one alert.** An installer creates its folder first and registers the program
   minutes later. When a new program turns out to live in a folder announced in the last ten
   minutes, that alert takes the program's name, "VLC media player" rather than "VideoLAN", and

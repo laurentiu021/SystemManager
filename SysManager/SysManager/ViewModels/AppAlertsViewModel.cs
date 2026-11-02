@@ -33,6 +33,8 @@ public sealed partial class AppAlertsViewModel : ViewModelBase
     private readonly IAppAlertHistory _history;
     private readonly Dispatcher _dispatcher;
     private readonly IDialogService _dialog;
+    private readonly INotificationArea? _notificationArea;
+    private readonly IToastService _toasts;
 
     public BulkObservableCollection<AppInstallEntry> Alerts { get; } = new();
 
@@ -44,13 +46,23 @@ public sealed partial class AppAlertsViewModel : ViewModelBase
     [ObservableProperty] private int _unacknowledgedCount;
 
     /// <summary>Monitors for new application installations and keeps a timestamped history of them.</summary>
+    /// <param name="service">Watches for installs.</param>
+    /// <param name="history">Keeps what was noticed.</param>
     /// <param name="dialog">Defaults to <see cref="DialogService.Instance"/> (#2860).</param>
-    public AppAlertsViewModel(AppAlertService service, IAppAlertHistory history, IDialogService? dialog = null)
+    /// <param name="notificationArea">
+    /// Speaks for a detection while the window is not on screen. None, as in the designer, and every detection is a
+    /// toast in the window.
+    /// </param>
+    /// <param name="toasts">Defaults to <see cref="ToastService.Instance"/>.</param>
+    public AppAlertsViewModel(AppAlertService service, IAppAlertHistory history, IDialogService? dialog = null,
+                              INotificationArea? notificationArea = null, IToastService? toasts = null)
     {
         _service = service;
         _history = history ?? throw new ArgumentNullException(nameof(history));
         _dispatcher = Application.Current?.Dispatcher ?? Dispatcher.CurrentDispatcher;
         _dialog = dialog ?? DialogService.Instance;
+        _notificationArea = notificationArea;
+        _toasts = toasts ?? ToastService.Instance;
         _service.NewAppDetected += OnNewAppDetected;
         _service.AppIdentified += OnAppIdentified;
         InitializeAsync(() => { LoadHistory(); return Task.CompletedTask; });
@@ -188,8 +200,11 @@ public sealed partial class AppAlertsViewModel : ViewModelBase
         // Surface it outside this tab. The whole point of monitoring is to learn about an
         // install you did not start, and the user is almost never sitting on this tab when
         // that happens — the list entry and the status line were only visible to someone
-        // already looking at them, so a detection went unnoticed.
-        ToastService.Instance.Show("New app installed", entry.Name);
+        // already looking at them, so a detection went unnoticed. With the window minimized or
+        // in the notification area, a toast inside it was gone before anyone looked, so it is
+        // Windows' own notification from the tray icon then (#2769).
+        if (_notificationArea?.TryNotifyWhileAway("New app installed", entry.Name) != true)
+            _toasts.Show("New app installed", entry.Name);
     }
 
     private void OnAppIdentified(AppInstallEntry alert, AppInstallEntry app) =>

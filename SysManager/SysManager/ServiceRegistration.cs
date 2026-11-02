@@ -36,6 +36,8 @@ public static class ServiceRegistration
         // Dashboard and AppUpdates both run winget concurrently.
         services.AddTransient<IWingetService, WingetService>();
         services.AddSingleton<TrayIconService>();
+        // The same instance behind the seam New App Alerts takes, as ISpeedTestService is, not a second tray icon (#2769).
+        services.AddSingleton<INotificationArea>(sp => sp.GetRequiredService<TrayIconService>());
         services.AddSingleton<IUpdateService, UpdateService>();
         services.AddSingleton<ShortcutCleanerService>();
         services.AddSingleton<DiskHealthService>();

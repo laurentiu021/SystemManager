@@ -448,4 +448,56 @@ public class TrayIconServiceTests
         // not a disk dying, and an unprompted "back up important data" toast over one would be exactly
         // the false alarm this fix removes.
     }
+
+    // ---------- a notification for someone away from the window (#2769) ----------
+    // A toast is drawn in the window and hides itself after five seconds, so with the window minimized or in the
+    // notification area, New App Alerts told nobody about the install it noticed.
+
+    private static (TrayIconService Service, List<string> Informed) Informing()
+    {
+        var informed = new List<string>();
+        var service = new TrayIconService(new SystemInfoService(), new TestClock(), notify: (_, _) => { },
+            inform: (title, message) => informed.Add($"{title}: {message}"));
+        return (service, informed);
+    }
+
+    /// <summary>With the window away, the notification comes from the tray icon, and the caller is told so.</summary>
+    [Fact]
+    public void WhileTheWindowIsAway_TheNotificationComesFromTheTray()
+    {
+        var (service, informed) = Informing();
+        using var _ = service;
+        service.WindowOnScreen = () => false;
+
+        Assert.True(service.TryNotifyWhileAway("New app installed", "Contoso Player"));
+
+        Assert.Equal(["New app installed: Contoso Player"], informed);
+    }
+
+    /// <summary>With the window on screen, nothing comes from the tray: the window's own toast is enough.</summary>
+    [Fact]
+    public void WhileTheWindowIsOnScreen_NothingComesFromTheTray()
+    {
+        var (service, informed) = Informing();
+        using var _ = service;
+        service.WindowOnScreen = () => true;
+
+        Assert.False(service.TryNotifyWhileAway("New app installed", "Contoso Player"));
+
+        Assert.Empty(informed);
+    }
+
+    /// <summary>With background notifications off, the tray stays quiet even while the window is away.</summary>
+    [Fact]
+    public void WithNotificationsOff_NothingComesFromTheTray()
+    {
+        var (service, informed) = Informing();
+        using var _ = service;
+        service.WindowOnScreen = () => false;
+        service.NotificationsEnabled = false;
+
+        Assert.False(service.TryNotifyWhileAway("New app installed", "Contoso Player"));
+
+        Assert.Empty(informed);
+    }
 }

@@ -239,6 +239,28 @@ public class AppAlertsViewModelTests
         Assert.Equal(2, vm.AlertCount);
     }
 
+    // ---------- telling the user while the window is away (#2769) ----------
+
+    /// <summary>
+    /// While the window is away, a detection is told from the notification area and not as a toast in a window nobody is
+    /// looking at; while it is on screen, it is the toast (#2769).
+    /// </summary>
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public void ADetection_IsToldFromTheNotificationArea_OnlyWhileTheWindowIsAway(bool away)
+    {
+        var area = Substitute.For<INotificationArea>();
+        area.TryNotifyWhileAway(Arg.Any<string>(), Arg.Any<string>()).Returns(away);
+        var toasts = Substitute.For<IToastService>();
+        var vm = new AppAlertsViewModel(new Services.AppAlertService(), NoHistory(), notificationArea: area, toasts: toasts);
+
+        vm.Record(new AppInstallEntry { Name = "Contoso Player" });
+
+        area.Received(1).TryNotifyWhileAway("New app installed", "Contoso Player");
+        toasts.Received(away ? 0 : 1).Show("New app installed", "Contoso Player", Arg.Any<int>());
+    }
+
     [Fact]
     public void AcknowledgeAll_IsKept()
     {

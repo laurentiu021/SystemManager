@@ -221,6 +221,102 @@ public class GamingProfileServiceTests
         await GamingProfileService.RunRevertAsync([], default); // must not throw
     }
 
+    // ── The steps run off the thread that starts or stops game mode ────────
+
+    /// <summary>
+    /// Starting game mode runs its steps on a worker thread, so a step that holds the thread it runs on does not freeze
+    /// the window that pressed Start.
+    /// </summary>
+    /// <remarks>
+    /// The steps ran on the thread that started game mode until one of them first went asynchronous: the gate before
+    /// them is free, so waiting on it never left that thread. The visual-effects step is one Windows call that ends by
+    /// telling every open window of the change, which took about a second when measured, and the standby purge can
+    /// take long too.
+    /// Without the power plan step first, both ran on the window's thread (the class of #2750).
+    /// </remarks>
+    [Fact]
+    public async Task RunApply_RunsTheSteps_OffTheThreadThatStartedGameMode()
+    {
+        var held = new HeldTweak();
+        var applied = new List<IGamingTweak>();
+        Task<List<GamingStepOutcome>> running;
+
+        try
+        {
+            running = GamingProfileService.RunApplyAsync([held], isElevated: true, applied, default);
+
+            Assert.False(held.HasReturned, "the step held the thread that started game mode until it was done");
+        }
+        finally
+        {
+            held.Release();
+        }
+
+        Assert.Equal(GamingStepStatus.Applied, Assert.Single(await running).Status);
+        Assert.Same(held, Assert.Single(applied));
+    }
+
+    /// <summary>Stopping game mode reverts its steps on a worker thread too, for the same reason.</summary>
+    [Fact]
+    public async Task RunRevert_RevertsTheSteps_OffTheThreadThatStoppedGameMode()
+    {
+        var held = new HeldTweak();
+        Task<GamingRevertResult> running;
+
+        try
+        {
+            running = GamingProfileService.RunRevertAsync([held], default);
+
+            Assert.False(held.HasReturned, "the step held the thread that stopped game mode until it was done");
+        }
+        finally
+        {
+            held.Release();
+        }
+
+        Assert.True((await running).FullyRestored);
+    }
+
+    /// <summary>
+    /// A step that waits, as the visual-effects step does while every open window is told of the change, and says
+    /// whether it has returned.
+    /// </summary>
+    /// <remarks>
+    /// Only the test releases it, and only once the thread that ran the steps is free again, so steps run on that
+    /// thread would wait forever: the wait is bounded, and they fail the test instead.
+    /// </remarks>
+    private sealed class HeldTweak : IGamingTweak
+    {
+        private readonly TaskCompletionSource _released = new();
+        private readonly TaskCompletionSource _returned = new();
+
+        public string Label => "held";
+        public bool RequiresAdmin => false;
+
+        /// <summary>Whether the step's apply or revert has returned.</summary>
+        public bool HasReturned => _returned.Task.IsCompleted;
+
+        public void Release() => _released.TrySetResult();
+
+        public Task<GamingTweakResult> ApplyAsync(CancellationToken ct)
+        {
+            Hold();
+            return Task.FromResult(GamingTweakResult.Applied);
+        }
+
+        public Task RevertAsync(CancellationToken ct)
+        {
+            Hold();
+            return Task.CompletedTask;
+        }
+
+        private void Hold()
+        {
+            _released.Task.Wait(TimeSpan.FromSeconds(10));
+            _returned.TrySetResult();
+        }
+    }
+
     // ── PerformanceCoreMask (pure) ─────────────────────────────────────────
 
     [Fact]

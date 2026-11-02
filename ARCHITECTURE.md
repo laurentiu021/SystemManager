@@ -1815,7 +1815,8 @@ Key services:
   the steps whose undo failed, so the tab never announces a restore it did not get. The
   apply/revert engine (order, admin-skip, failure-isolation, reverse-revert) is two internal
   static methods, `RunApplyAsync` and `RunRevertAsync`, exercised by unit tests with fake steps — no
-  real system call.
+  real system call. Both run the steps on a worker thread, whichever thread calls them, so Start and Stop
+  never hold the window while the visual-effects broadcast or the standby purge runs (the class of #2750).
   `CpuAffinityService` gained a small `Get`/`TrySetPriority` capability (behind
   `ICpuAffinityService`) for the game's priority. The game is a `GameTarget` that carries its
   start time: Apply refuses a game that has closed before changing anything

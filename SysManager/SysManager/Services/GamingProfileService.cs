@@ -119,13 +119,24 @@ public sealed class GamingProfileService : IGamingProfileService, IDisposable
     // ── The engine (pure, unit-testable with fake IGamingTweak steps) ──────────
 
     /// <summary>
-    /// Apply each enabled step in order. Admin-only steps are skipped-for-admin when
+    /// Apply each enabled step in order, on a worker thread. Admin-only steps are skipped-for-admin when
     /// <paramref name="isElevated"/> is false. A step that throws is isolated (logged) and
     /// reported as failed — the batch continues so one bad step never aborts the rest. The
     /// applied steps are appended to <paramref name="applied"/> in apply order for later
     /// reverse-order revert.
     /// </summary>
-    internal static async Task<List<GamingStepOutcome>> RunApplyAsync(
+    /// <remarks>
+    /// On a worker thread whichever thread calls it. The gate before the steps is usually free, so awaiting it finishes
+    /// at once and stays on the caller's thread, <c>ConfigureAwait(false)</c> or not, and the steps ran there until one
+    /// of them first went asynchronous: from Start, the window's thread. The visual-effects step ends by telling every
+    /// open window of the change, the standby purge can take long, and asking Windows to stop or start the search
+    /// indexer waits on it, so without the power plan step first they froze the window (the class of #2750).
+    /// </remarks>
+    internal static Task<List<GamingStepOutcome>> RunApplyAsync(
+        IReadOnlyList<IGamingTweak> steps, bool isElevated, List<IGamingTweak> applied, CancellationToken ct) =>
+        Task.Run(() => ApplyInOrderAsync(steps, isElevated, applied, ct));
+
+    private static async Task<List<GamingStepOutcome>> ApplyInOrderAsync(
         IReadOnlyList<IGamingTweak> steps, bool isElevated, List<IGamingTweak> applied, CancellationToken ct)
     {
         var outcomes = new List<GamingStepOutcome>(steps.Count);
@@ -175,7 +186,15 @@ public sealed class GamingProfileService : IGamingProfileService, IDisposable
     /// safe no-op when it has nothing to undo). A step that throws is named in the result: the
     /// isolation used to end at the log line, so every caller announced a full restore (#2445).
     /// </summary>
-    internal static async Task<GamingRevertResult> RunRevertAsync(IReadOnlyList<IGamingTweak> applied, CancellationToken ct)
+    /// <remarks>
+    /// On a worker thread, as <see cref="RunApplyAsync"/> is and for the same reason: Stop calls it from the window's
+    /// thread.
+    /// </remarks>
+    internal static Task<GamingRevertResult> RunRevertAsync(IReadOnlyList<IGamingTweak> applied, CancellationToken ct) =>
+        Task.Run(() => RevertInReverseAsync(applied, ct));
+
+    private static async Task<GamingRevertResult> RevertInReverseAsync(
+        IReadOnlyList<IGamingTweak> applied, CancellationToken ct)
     {
         List<string> notRestored = [];
         for (int i = applied.Count - 1; i >= 0; i--)

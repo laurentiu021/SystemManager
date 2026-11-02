@@ -1991,7 +1991,8 @@ offers, "rate us" prompts:
 
 ### Gaming Profile 🔬
 - **One-click "game mode"** — apply a bundle of reversible optimizations together,
-  then restore them automatically when the game exits (or with a single Stop)
+  then restore them automatically when the game exits (or with a single Stop). SysManager keeps
+  responding while they are made and put back
 - **Optionally target a running game** — two ticks apply to it: High CPU priority, on by
   default, and pinning it to the performance cores, off by default because many games schedule
   better across all cores (on a CPU without performance cores, pinning uses all of them). Its

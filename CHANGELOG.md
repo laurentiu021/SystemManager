@@ -10,6 +10,20 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.136.70] - 2026-11-02
+
+**Starting and stopping Gaming Profile, and Performance Mode's Restore All, no longer freeze SysManager while the visual effects change.**
+
+### Fixed
+- Gaming Profile's Start and Stop froze SysManager's window while they worked. They ran their steps on the thread that
+  draws the window until one of them went to the background, and with the power plan step off, that left the visual
+  effects, Free standby memory and pausing or restarting search indexing on it. Turning the visual effects off or back
+  on ends with Windows telling every open window about it, which took about a second on my PC. The steps now always
+  run in the background. This was there since Gaming Profile was added as a preview in 1.52.38.
+- Performance Mode's Restore All put the visual effects back on the window's thread, freezing it the same way, when
+  the power plan it recorded is no longer on the PC. It does that in the background now. This was there since
+  1.136.35, when Restore All started leaving such a plan out.
+
 ## [1.136.69] - 2026-11-02
 
 **Switching the Windows theme on Dark Mode Scheduler no longer freezes SysManager while other programs catch up.**

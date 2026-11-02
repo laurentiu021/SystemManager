@@ -303,7 +303,7 @@ public class UninstallerServiceTests
         }
     }
 
-    // ── SEC-LPE: user-writable per-user location is trusted only when NOT elevated ──
+    // ── A user-writable per-user location is trusted only when NOT elevated (#906) ──
 
     [Fact]
     public void IsUnderTrustedDirectory_LocalAppData_TrustedWhenNotElevated()
@@ -364,8 +364,8 @@ public class UninstallerServiceTests
     [Fact]
     public void ValidateTrustedBinaryArgs_Rundll32_DllInLocalAppData_NotTrustedWhenElevated_Throws()
     {
-        // SEC-LPE: a rundll32 DLL planted in user-writable %LocalAppData% must be
-        // rejected when elevated, even though it would be allowed un-elevated.
+        // A rundll32 DLL planted in user-writable %LocalAppData% must be
+        // rejected when elevated, even though it would be allowed un-elevated (#906).
         var localAppData = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
         var dll = System.IO.Path.Combine(localAppData, "evil.dll");
         var ex = Record.Exception(() =>
@@ -659,7 +659,7 @@ public class UninstallerServiceTests
     [Fact]
     public void ParseUninstallCommand_NoExeExtension_ThrowsInvalidOperation()
     {
-        // SEC-M7: Commands without a valid .exe boundary are rejected for security.
+        // Commands without a valid .exe boundary are rejected for security (#403).
         Assert.Throws<InvalidOperationException>(
             () => UninstallerService.ParseUninstallCommand("some-command"));
     }
@@ -681,7 +681,7 @@ public class UninstallerServiceTests
     [InlineData("app.exe $(malicious)")]
     public void ParseUninstallCommand_ShellMetacharacters_Throws(string command)
     {
-        // SEC-M7: Shell metacharacters are rejected to prevent command injection.
+        // Shell metacharacters are rejected to prevent command injection (#403).
         Assert.Throws<InvalidOperationException>(
             () => UninstallerService.ParseUninstallCommand(command));
     }
@@ -689,7 +689,7 @@ public class UninstallerServiceTests
     [Fact]
     public void ParseUninstallCommand_ExeInMiddleOfPath_FindsCorrectBoundary()
     {
-        // SEC-M7: ".exe" followed by non-boundary char should not split there.
+        // ".exe" followed by a non-boundary character should not split there (#403).
         var (exe, args) = UninstallerService.ParseUninstallCommand(
             @"C:\dir\app.exefiles\tool.exe /silent");
         Assert.Equal(@"C:\dir\app.exefiles\tool.exe", exe);

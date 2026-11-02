@@ -329,7 +329,7 @@ public class AppAlertsViewModelTests
     [Fact]
     public async Task StartMonitoring_IsAsync_AndSetsMonitoringState()
     {
-        // Regression (P2 #42): StartMonitoring was a synchronous [RelayCommand] that ran the
+        // Regression (#1424): StartMonitoring was a synchronous [RelayCommand] that ran the
         // full baseline scan (Program Files walk + double HKLM Uninstall enumeration) on the
         // UI thread, freezing the window. It is now an async command that offloads the scan.
         // The generated command must expose IAsyncRelayCommand and, once awaited, leave the

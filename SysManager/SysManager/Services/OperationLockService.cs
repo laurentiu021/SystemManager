@@ -35,12 +35,14 @@ public enum OperationCategory
     /// System modification: the repairs that service the running Windows image (SFC, DISM, the component-store
     /// cleanup), Windows feature changes, Windows Update installs and resets, creating or restoring a restore point,
     /// and the tabs that change Windows settings or services: Performance Mode, Gaming Profile, Environment Variables,
-    /// Preinstalled Apps, Privacy &amp; Telemetry, Defender Tweaks, Edge/OneDrive Remover and Services. Network
+    /// Preinstalled Apps, Privacy &amp; Telemetry, Defender Tweaks, Edge/OneDrive Remover, Services and Settings
+    /// Watchdog's Restore. Undo Changes takes it under its own name for the put-backs whose tabs take it. Network
     /// Repair's Winsock and TCP/IP resets take it beside their Network one, with the restore point before them.
     /// Deep Cleanup takes it too while it deletes one of its Windows Update caches.
     /// </summary>
     /// <remarks>
     /// Most of these service the same running Windows image, and a restore restarts it, so no two may overlap.
+    /// Settings Watchdog's Restore has taken it since #2639, and Undo Changes since #1525.
     /// Deep Cleanup's two caches sit inside SoftwareDistribution, which an update install reads from and Reset
     /// Windows Update renames (#2510). Windows Features, Windows Update, Reset Windows Update and the Restore Points
     /// tab took no lock until #2484.

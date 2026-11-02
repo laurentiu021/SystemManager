@@ -135,7 +135,7 @@ public class DiskHealthReportEdgeCaseTests
     public void TemperatureColorHex_NullTemp_FallsToDefault()
     {
         var report = new DiskHealthReport { TemperatureC = null };
-        // QA-004 fix: null temperature returns grey (no sensor) instead of red
+        // A null temperature is grey (no sensor), not red (#252)
         Assert.Equal(StatusColors.Neutral, report.TemperatureColorHex);
     }
 

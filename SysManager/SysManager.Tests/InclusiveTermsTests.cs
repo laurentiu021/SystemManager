@@ -28,7 +28,7 @@ public partial class InclusiveTermsTests
     public void EveryTextFile_UsesInclusiveTerms()
     {
         var root = TestPaths.RepoRoot();
-        var files = TextFiles(root);
+        var files = TestPaths.RepositoryTextFiles().Where(p => Path.GetFileName(p) != ThisFile).ToList();
 
         var offenders = new List<string>();
         foreach (var file in files)
@@ -81,32 +81,6 @@ public partial class InclusiveTermsTests
     // A line uses an old word when one is still there after the kept uses are taken out of it.
     private static bool UsesAnOldTerm(string line)
         => OldTerm().IsMatch(line) && OldTerm().IsMatch(KeptUse().Replace(line, ""));
-
-    // Every text file in the four places the repository's files live: its top folder, .github, docs and the
-    // solution. Images and this file are left out.
-    private static List<string> TextFiles(string root)
-    {
-        string[] places = [".github", "docs", "SysManager"];
-        string[] images = [".png", ".gif", ".ico"];
-        return Directory.EnumerateFiles(root, "*", SearchOption.TopDirectoryOnly)
-            .Concat(places.SelectMany(place => FilesBelow(Path.Combine(root, place))))
-            .Where(p => !images.Contains(Path.GetExtension(p), StringComparer.OrdinalIgnoreCase))
-            .Where(p => Path.GetFileName(p) != ThisFile)
-            .OrderBy(p => p, StringComparer.Ordinal)
-            .ToList();
-    }
-
-    // The files below a place, without the folders the repository ignores there: build output, test results, and
-    // the ones an editor keeps beside the solution (.vs, .idea). None of them is a file the repository publishes.
-    private static IEnumerable<string> FilesBelow(string place)
-        => Directory.EnumerateFiles(place, "*", SearchOption.AllDirectories)
-            .Where(p => !Path.GetRelativePath(place, p)
-                .Split(Path.DirectorySeparatorChar)
-                .SkipLast(1)
-                .Any(folder => folder.StartsWith('.')
-                               || folder.Equals("bin", StringComparison.OrdinalIgnoreCase)
-                               || folder.Equals("obj", StringComparison.OrdinalIgnoreCase)
-                               || folder.Equals("TestResults", StringComparison.OrdinalIgnoreCase)));
 
     /// <summary>The old words, inside identifiers too, so <c>OnMasterEnabledChanged</c> is found like prose.</summary>
     [GeneratedRegex(@"master|slave|whitelist|blacklist", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)]

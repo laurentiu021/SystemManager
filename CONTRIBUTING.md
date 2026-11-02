@@ -137,6 +137,10 @@ guide. That said, a few explicit rules:
   uses that have to stay (Windows API names such as `SetMasterVolume`, a file
   name already on users' PCs, and winget-pkgs' own branch) are listed in
   `InclusiveTermsTests`.
+- **A change is cited by its issue or pull request number**, as `(#1234)`. A
+  review's own labels, a category with an item number or an audit's numbering,
+  point nowhere a reader can look, and `IssueReferenceTests` fails the build on
+  them anywhere but the CHANGELOG.
 - **Doc comments are checked**: every project generates its documentation
   file, so a `cref` that names nothing or could mean two overloads, a
   `paramref` to a parameter that is not there, and an unescaped `&` all fail

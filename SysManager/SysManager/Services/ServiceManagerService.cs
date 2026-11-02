@@ -200,7 +200,7 @@ public sealed partial class ServiceManagerService
     }
 
     /// <summary>
-    /// Whether <paramref name="serviceName"/> may go on the sc.exe command line (SEC-006): letters, digits,
+    /// Whether <paramref name="serviceName"/> may go on the sc.exe command line (#296): letters, digits,
     /// spaces, hyphens, underscores, dots and dollar signs only.
     /// </summary>
     /// <remarks>
@@ -220,7 +220,7 @@ public sealed partial class ServiceManagerService
     /// <summary>Change the startup type of a service via sc.exe. Requires admin.</summary>
     public static async Task SetStartupTypeAsync(string serviceName, string startType, IPowerShellRunner ps, CancellationToken ct = default)
     {
-        // SEC-006: the name is interpolated into the sc.exe command line below. See IsSafeForScExe.
+        // The name is interpolated into the sc.exe command line below. See IsSafeForScExe.
         if (!IsSafeForScExe(serviceName))
             throw new ArgumentException("Invalid service name.", nameof(serviceName));
 
@@ -425,7 +425,7 @@ public sealed partial class ServiceManagerService
     {
         try
         {
-            // SEC-M6: Validate service name before interpolating into registry path.
+            // Validate service name before interpolating into registry path (#403).
             // Although ServiceController.GetServices() returns names from the SCM
             // (trusted source), we defensively reject names with path separators or
             // registry metacharacters to prevent registry path traversal.

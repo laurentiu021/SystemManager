@@ -88,12 +88,12 @@ public class FixedDriveServiceTests
         Assert.Contains(result.Recommendations, r => r.NavTargetId == "nav-deep-cleanup");
     }
 
-    // ---------- P2 #33 regression: structural verification ----------
+    // ---------- structural verification (#1400) ----------
 
     [Fact]
     public void Enumerate_NeverThrows()
     {
-        // P2 #33: DriveFormat was previously read in a LINQ .Where() predicate (lazy
+        // #1400: DriveFormat was previously read in a LINQ .Where() predicate (lazy
         // evaluation) that ran during foreach MoveNext — OUTSIDE the per-drive try/catch.
         // An IOException from a BitLocker-locked volume would abort enumeration of ALL
         // remaining drives. After the fix, DriveFormat is read inside the try block, so

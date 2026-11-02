@@ -386,7 +386,7 @@
             <!-- Card — the primary content surface. Background + border are theme-derived depth
                  brushes (CardSurface = top sheen fading to Surface1; CardRim = top-lit hairline
                  fading to Border1), built by ThemeService per preset. Pure gradients, no shadow
-                 (PERF-008-safe on repeated cards). This is the revamp's signature "glass depth". -->
+                 (cheap on repeated cards, #300). This is the revamp's signature "glass depth". -->
             <Style x:Key="Card" TargetType="Border">
                 <Setter Property="Background" Value="{DynamicResource CardSurface}"/>
                 <Setter Property="BorderBrush" Value="{DynamicResource CardRim}"/>
@@ -410,7 +410,7 @@
                 </Style.Triggers>
             </Style>
 
-            <!-- NOTE: PERF-008 (no DropShadowEffect on cards — software-rendered shadows are
+            <!-- NOTE: the rule from #300 (no DropShadowEffect on cards — software-rendered shadows are
                  expensive when many cards are visible) still stands. It used to be documented on a
                  CardElevated style that no view ever applied; CardInner below is the live variant
                  and follows the same rule. -->

@@ -121,7 +121,7 @@ public class ProfileServiceTests : IDisposable
     [Fact]
     public void Deserialize_MissingSectionsProperty_YieldsEmptyList_NotNull()
     {
-        // Regression (P2 #11): a syntactically-valid profile JSON that OMITS "Sections"
+        // Regression (#1406): a syntactically-valid profile JSON that OMITS "Sections"
         // (a truncated export, an empty-ish object, or foreign JSON picked in Import)
         // used to deserialize Sections to null — System.Text.Json does not enforce
         // non-null on positional record params — and ProfileViewModel.Import then threw

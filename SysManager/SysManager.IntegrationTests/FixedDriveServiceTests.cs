@@ -121,7 +121,7 @@ public class FixedDriveServiceTests
         Assert.All(r, d => Assert.False(string.IsNullOrWhiteSpace(d.Label)));
     }
 
-    // ---------- P2 #33 regression: DriveFormat IOException must not abort all drives ----------
+    // ---------- DriveFormat IOException must not abort all drives (#1400) ----------
 
     [Fact]
     public void Enumerate_DoesNotThrow_WhenDriveFormatAccessible()

@@ -345,7 +345,7 @@ public class EnvironmentVariableServiceTests
         Assert.Equal(names.OrderBy(n => n, StringComparer.OrdinalIgnoreCase).ToList(), names);
     }
 
-    // ── P2 #17 regression: TryValidateName, non-throwing restore, kind fidelity ──
+    // ── TryValidateName, non-throwing restore, kind fidelity (#1397) ──
 
     [Theory]
     [InlineData("PATH", true)]

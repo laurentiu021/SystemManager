@@ -32,9 +32,9 @@ public sealed class SpeedTestHistoryService : IDisposable
         DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull
     };
 
-    // FUNC-M4: Serialize all file operations to prevent concurrent SaveAsync
+    // Serialize all file operations to prevent concurrent SaveAsync
     // calls from racing (load-modify-save is not atomic). A SemaphoreSlim(1,1)
-    // acts as an async-compatible mutex.
+    // acts as an async-compatible mutex (#405).
     private readonly SemaphoreSlim _fileLock = new(1, 1);
 
     // Idempotent, and paired with the guarded releases below: this is a DI singleton disposed at

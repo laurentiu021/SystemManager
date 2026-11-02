@@ -32,7 +32,7 @@ public class TracerouteServiceTests
         var svc = new TracerouteService { MaxHops = 2, TimeoutMs = 500, ProbesPerHop = 1 };
         using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(10));
 
-        // P2 #39: the destination is now resolved ONCE up front. An unresolvable host
+        // #1404: the destination is now resolved ONCE up front. An unresolvable host
         // fails at that single resolution and surfaces as InvalidOperationException —
         // the type the ViewModel's catch already handles — rather than silently looping
         // MaxHops times with per-probe DNS failures. (Before: the raw hostname went into

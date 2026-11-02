@@ -11,7 +11,7 @@ using SysManager.Services;
 namespace SysManager.Tests;
 
 /// <summary>
-/// Tests for <see cref="DnsService"/> (audit finding tests #5).
+/// Tests for <see cref="DnsService"/> (#824).
 /// <para>
 /// <c>SetDnsAsync</c> validates both addresses with <c>IPAddress.TryParse</c>
 /// and throws <see cref="ArgumentException"/> before any PowerShell runs — the
@@ -56,7 +56,7 @@ public class DnsServiceTests
         return new Collection<PSObject>(values.Select(PSObject.AsPSObject).ToList());
     }
 
-    // ---------- IP-validation guard (#5) ----------
+    // ---------- IP-validation guard ----------
 
     public static IEnumerable<object[]> InvalidAddresses()
     {
@@ -324,7 +324,7 @@ public class DnsServiceTests
         Assert.Equal("8.8.4.4", google.Secondary);
     }
 
-    // ---------- snapshot / restore (reversibility, #3) ----------
+    // ---------- snapshot / restore (reversibility, #825) ----------
 
     [Fact]
     public async Task CaptureCurrentServersAsync_ReturnsParsedAddresses()
@@ -625,7 +625,7 @@ public class DnsServiceTests
         await runner.DidNotReceiveWithAnyArgs().RunAsync(default!, default, default);
     }
 
-    // ---------- adapter-pinned snapshot (#23 reversibility) ----------
+    // ---------- adapter-pinned snapshot (reversibility, #1390) ----------
 
     [Fact]
     public async Task CaptureSnapshotAsync_PopulatesStableAdapterIdentity()

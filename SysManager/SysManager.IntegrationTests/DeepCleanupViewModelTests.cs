@@ -79,7 +79,7 @@ public class DeepCleanupViewModelTests
     [Fact]
     public async Task ScanCommand_EnablesCleanButton_WhenPreSelectedCategoriesArrive()
     {
-        // Regression (P2 #43): scanned categories arrive PRE-SELECTED (size>0 &&
+        // Regression (#1412): scanned categories arrive PRE-SELECTED (size>0 &&
         // !IsDestructiveHint), but ScanCoreAsync repopulates via Categories.ReplaceWith —
         // a collection Reset that raises no per-item PropertyChanged. CommunityToolkit's
         // RelayCommand only re-raises CanExecuteChanged via NotifyCanExecuteChanged(), so

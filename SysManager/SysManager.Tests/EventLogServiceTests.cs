@@ -347,9 +347,9 @@ public class EventLogServiceTests
     [Fact]
     public async Task Enumerate_ReaderAlwaysFaults_EndsInsteadOfSpinning()
     {
-        // The P1. The loop's only progress variable is the emitted count, which a failure never increments,
-        // so `catch (EventLogException) { continue; }` spun with no delay — one Task.Run per iteration, one
-        // core at 100%, the tab stuck loading with Refresh disabled because it is gated on not-busy. This
+        // The spin #2042 fixed. The loop's only progress variable is the emitted count, which a failure never
+        // increments, so `catch (EventLogException) { continue; }` spun with no delay — one Task.Run per iteration,
+        // one core at 100%, the tab stuck loading with Refresh disabled because it is gated on not-busy. This
         // test simply cannot finish against that code.
         var svc = new EventLogService();
         var reads = 0;
@@ -374,8 +374,8 @@ public class EventLogServiceTests
     [Fact]
     public async Task Enumerate_CancelledMidRead_ThrowsInsteadOfCompleting()
     {
-        // The P2. `catch (OperationCanceledException) { yield break; }` made Cancel look like a finished
-        // load, so the caller reported "Loaded N events" for a truncated list and LogsViewModel's cancel
+        // The cancel #2042 fixed. `catch (OperationCanceledException) { yield break; }` made Cancel look like a
+        // finished load, so the caller reported "Loaded N events" for a truncated list and LogsViewModel's cancel
         // branch was dead code. Two sibling scanners already throw after their loop for this exact reason.
         var svc = new EventLogService();
         using var cts = new CancellationTokenSource();

@@ -27,7 +27,7 @@ public sealed class TrayIconService : IDisposable
     // which is process-wide and must NOT be disposed.
     private System.Drawing.Icon? _ownedIcon;
     private bool _disposed;
-    private int _updating; // PERF-M4: re-entrancy guard for WMI calls
+    private int _updating; // re-entrancy guard for WMI calls (#406)
 
     /// <summary>
     /// The one-line CPU/RAM/uptime readout the context menu shows, refreshed by the same 60-second poll
@@ -325,7 +325,7 @@ public sealed class TrayIconService : IDisposable
 
     private async Task UpdateTooltipAsync()
     {
-        // PERF-M4: Skip if a previous update is still running (WMI can be slow).
+        // Skip if a previous update is still running; WMI can be slow (#406).
         if (Interlocked.CompareExchange(ref _updating, 1, 0) != 0)
             return;
         try

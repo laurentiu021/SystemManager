@@ -307,7 +307,7 @@ public sealed class DiskAnalyzerService
 
     private static bool ShouldSkip(string path)
     {
-        // PERF-006: Use OrdinalIgnoreCase instead of allocating a lowercase copy.
+        // Use OrdinalIgnoreCase instead of allocating a lowercase copy (#296).
         return SkipSegments.Any(seg => path.Contains(seg, StringComparison.OrdinalIgnoreCase));
     }
 

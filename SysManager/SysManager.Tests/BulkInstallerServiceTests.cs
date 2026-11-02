@@ -8,7 +8,7 @@ using SysManager.Services;
 namespace SysManager.Tests;
 
 /// <summary>
-/// Tests for <see cref="BulkInstallerService"/> (audit finding tests #4, #9).
+/// Tests for <see cref="BulkInstallerService"/> (#824).
 /// <para>
 /// The service is the only barrier between preset/user package IDs and a
 /// shelled-out winget process: <c>InstallAsync</c> rejects anything that
@@ -20,7 +20,7 @@ namespace SysManager.Tests;
 /// </summary>
 public class BulkInstallerServiceTests
 {
-    // ---------- injection / validation guard (#4) ----------
+    // ---------- injection / validation guard ----------
 
     public static IEnumerable<object[]> InvalidPackageIds()
     {
@@ -60,7 +60,7 @@ public class BulkInstallerServiceTests
         await Assert.ThrowsAsync<ArgumentException>(() => svc.InstallAsync(badId!));
     }
 
-    // ---------- happy path: exact winget invocation (#9) ----------
+    // ---------- happy path: exact winget invocation ----------
 
     [Fact]
     public async Task InstallAsync_ValidId_InvokesWingetWithExpectedArgs()

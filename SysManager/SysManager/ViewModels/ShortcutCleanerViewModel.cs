@@ -68,8 +68,8 @@ public sealed partial class ShortcutCleanerViewModel : ElevatedViewModelBase
         // to read it from.
         var previous = BrokenShortcuts.ToList();
 
-        // MEM-007: Unsubscribe from old items before clearing to prevent
-        // PropertyChanged lambda leaks across rescans.
+        // Unsubscribe from old items before clearing to prevent
+        // PropertyChanged lambda leaks across rescans (#296).
         foreach (var old in BrokenShortcuts)
             old.PropertyChanged -= OnShortcutPropertyChanged;
         BrokenShortcuts.ReplaceWith(Array.Empty<BrokenShortcut>());

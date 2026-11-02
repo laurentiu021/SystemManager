@@ -184,8 +184,8 @@ public class HealthAnalyzerTests
             M("dns", TargetRole.PublicDns, loss: 5),
             M("game", TargetRole.GameServer, loss: 5),
         });
-        // FUNC-M2: dns bad + game bad → Mixed (not GameServer, because DNS
-        // is NOT clean — claiming "it's the game server, not you" would be wrong).
+        // dns bad + game bad → Mixed, not GameServer (#405), because DNS
+        // is NOT clean — claiming "it's the game server, not you" would be wrong.
         Assert.Equal(HealthVerdict.Mixed, d.Verdict);
     }
 

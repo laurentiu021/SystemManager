@@ -104,6 +104,38 @@ internal static class TestPaths
         return path;
     }
 
+    /// <summary>
+    /// Every text file in the four places the repository's files live: its top folder, .github, docs and the
+    /// solution. Images are left out, and so are the folders the repository ignores there.
+    /// </summary>
+    /// <remarks>
+    /// One list for every sweep that reads the whole repository for something that must not be anywhere, so each
+    /// reads the same files. A sweep that has to name what it keeps out leaves its own file out.
+    /// </remarks>
+    internal static List<string> RepositoryTextFiles()
+    {
+        var root = RepoRoot();
+        string[] places = [".github", "docs", "SysManager"];
+        string[] images = [".png", ".gif", ".ico"];
+        return Directory.EnumerateFiles(root, "*", SearchOption.TopDirectoryOnly)
+            .Concat(places.SelectMany(place => FilesBelow(Path.Combine(root, place))))
+            .Where(p => !images.Contains(Path.GetExtension(p), StringComparer.OrdinalIgnoreCase))
+            .OrderBy(p => p, StringComparer.Ordinal)
+            .ToList();
+    }
+
+    // The files below a place, without the folders the repository ignores there: build output, test results, and
+    // the ones an editor keeps beside the solution (.vs, .idea). None of them is a file the repository publishes.
+    private static IEnumerable<string> FilesBelow(string place)
+        => Directory.EnumerateFiles(place, "*", SearchOption.AllDirectories)
+            .Where(p => !Path.GetRelativePath(place, p)
+                .Split(Path.DirectorySeparatorChar)
+                .SkipLast(1)
+                .Any(folder => folder.StartsWith('.')
+                               || folder.Equals("bin", StringComparison.OrdinalIgnoreCase)
+                               || folder.Equals("obj", StringComparison.OrdinalIgnoreCase)
+                               || folder.Equals("TestResults", StringComparison.OrdinalIgnoreCase)));
+
     /// <summary>The nearest ancestor of the test output that <paramref name="found"/> accepts.</summary>
     /// <param name="found">Whether a candidate directory is the one being looked for.</param>
     /// <param name="what">What is being looked for, for the exception message.</param>

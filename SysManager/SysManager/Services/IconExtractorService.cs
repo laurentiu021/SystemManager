@@ -371,8 +371,8 @@ public sealed partial class IconExtractorService
         return null;
     }
 
-    // PERF-M5: Cache resolved executable paths to avoid re-scanning Program Files
-    // directories on every process list refresh (~100+ subdirs per scan).
+    // Cache resolved executable paths to avoid re-scanning Program Files
+    // directories on every process list refresh (~100+ subdirs per scan, #414).
     private static readonly ConcurrentDictionary<string, string?> _pathCache = new(StringComparer.OrdinalIgnoreCase);
 
     private static string? FindExecutableByName(string processName)

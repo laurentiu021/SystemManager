@@ -42,7 +42,7 @@ public class EnvVariableTests
     [InlineData("pathext")]
     public void IsDirectoryList_FalseForPathext(string name)
     {
-        // Regression (P2 #12): PATHEXT is a list of file EXTENSIONS (.COM;.EXE;…), not
+        // Regression (#1406): PATHEXT is a list of file EXTENSIONS (.COM;.EXE;…), not
         // directories. Before the fix, IsPathLike alone gated the PATH editor's
         // Directory.Exists() annotation, so every PATHEXT entry (present in System scope
         // on every Windows install) was flagged IsMissing=true and the whole list

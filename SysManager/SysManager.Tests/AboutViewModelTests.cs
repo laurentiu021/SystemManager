@@ -587,8 +587,9 @@ public class AboutViewModelTests
     }
 
     // ── QuestionsUrl (the "Ask a question" button) ──
-    // The button used to open the Discussions root, which every release fills with an auto-posted
-    // announcement — so a user looking for the question box landed in a wall of changelogs.
+    // The button used to open the Discussions root, which release announcements fill, one for every feature
+    // release now and one for every release before that — so a user looking for the question box landed in a
+    // wall of changelogs.
 
     [Fact]
     public void QuestionsUrl_DeepLinksTheQAndACategory_NotTheDiscussionsRoot()

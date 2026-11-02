@@ -206,12 +206,12 @@ public class AppUpdatesViewModelTests
         Assert.Empty(vm.Console.Lines);
     }
 
-    // ---------- winget-unavailable friendly message (regression P2 #41) ----------
+    // ---------- winget-unavailable friendly message (regression #1408) ----------
 
     [Fact]
     public async Task Scan_WhenWingetMissing_ShowsFriendlyMessage_NotRawError()
     {
-        // Regression (P2 #41): winget.exe missing (App Installer absent / execution alias
+        // Regression (#1408): winget.exe missing (App Installer absent / execution alias
         // off) makes Process.Start throw Win32Exception. Scan is the tab's first action;
         // before the fix that exception escaped the AsyncRelayCommand to the global
         // dispatcher handler and popped a raw OS-error dialog. Now it must be caught and

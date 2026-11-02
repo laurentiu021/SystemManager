@@ -28,7 +28,7 @@ namespace SysManager.Services;
 /// found", and Defender Tweaks as a status it had never read. Administrator sessions, and therefore CI,
 /// already ran the 5.1 child, which is why nothing caught it.</para>
 ///
-/// <para><b>Security note (SEC-005 / SEC-M8):</b> ExecutionPolicy is set to Bypass because
+/// <para><b>Security note (#300, #403):</b> ExecutionPolicy is set to Bypass because
 /// SysManager only executes its own static scripts — never user-supplied or downloaded
 /// scripts. Every runspace child receives a machine-owned-only module path, and so does a
 /// <c>powershell.exe</c> this class starts directly when the session is elevated.</para>

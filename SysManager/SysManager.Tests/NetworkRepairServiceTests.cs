@@ -8,7 +8,7 @@ using SysManager.Services;
 namespace SysManager.Tests;
 
 /// <summary>
-/// Tests for <see cref="NetworkRepairService"/> (audit finding tests #8).
+/// Tests for <see cref="NetworkRepairService"/> (#824).
 /// <para>
 /// Each repair routes a fixed command through the <see cref="IPowerShellRunner"/>
 /// seam (<c>ipconfig /flushdns</c>, <c>netsh winsock reset</c>,

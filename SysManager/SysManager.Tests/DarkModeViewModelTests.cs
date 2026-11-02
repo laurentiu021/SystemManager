@@ -155,7 +155,7 @@ public class DarkModeViewModelTests
     [Fact]
     public void EvaluateSchedule_WhileSuppressed_DoesNotWriteTheme()
     {
-        // Regression (P2 #45): during LoadFromSchedule the [ObservableProperty] setters fire
+        // Regression (#1411): during LoadFromSchedule the [ObservableProperty] setters fire
         // one at a time under _suppressSave. Before the fix, _suppressSave gated only
         // SaveSchedule — NOT EvaluateSchedule — so the ScheduleEnabled setter fired
         // OnScheduleEnabledChanged -> EvaluateSchedule -> SetTheme while the other fields

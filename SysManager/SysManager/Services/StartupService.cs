@@ -96,7 +96,7 @@ public sealed class StartupService
 
         // Shell startup folders (user + common). The common (all-users) folder's enabled/disabled
         // state lives under HKLM, not HKCU — flag it so ApplyApprovedState/SetEnabledAsync target
-        // the right hive (see #38).
+        // the right hive (see #1430).
         ReadStartupFolder(
             Environment.GetFolderPath(Environment.SpecialFolder.Startup),
             "User Startup Folder", isCommon: false, results);

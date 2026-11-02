@@ -121,7 +121,7 @@ public sealed partial class ProcessManagerViewModel : ElevatedViewModelBase
 
         try
         {
-            // PERF-007: snapshot + enrichment on a background thread to avoid UI freezes.
+            // Snapshot + enrichment on a background thread to avoid UI freezes (#298).
             // Icon extraction (the expensive part) is done ONLY for processes not already
             // shown — see ReconcileInto, which keeps what the rows of those already have.
             var shown = Processes.Select(ProcessManagerService.ProcessIdentity.Of).ToHashSet();

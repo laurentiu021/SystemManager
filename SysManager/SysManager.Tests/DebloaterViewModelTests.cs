@@ -101,12 +101,12 @@ public class DebloaterViewModelTests
         Assert.DoesNotContain("Refresh", vm.EmptyMessage);
     }
 
-    // ---------- removal-batch resilience (regression P2 #44) ----------
+    // ---------- removal-batch resilience (regression #1411) ----------
 
     [Fact]
     public async Task RemoveSelected_RunspaceFault_FailsRowsAndCompletes_NoEscape()
     {
-        // Regression (P2 #44): RemoveAsync runs PowerShell; a runspace-level fault
+        // Regression (#1411): RemoveAsync runs PowerShell; a runspace-level fault
         // (InvalidOperationException — e.g. PSInvalidOperationException from a failed
         // runspace open) is NOT the RuntimeException the service catches. Before the fix
         // the whole RemoveSelected loop had a single OperationCanceledException catch, so

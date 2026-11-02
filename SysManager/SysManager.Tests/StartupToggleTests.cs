@@ -10,7 +10,7 @@ namespace SysManager.Tests;
 
 /// <summary>
 /// Tests for <see cref="StartupService.SetEnabledAsync(StartupEntry, bool)"/> covering registry-based
-/// and Task Scheduler entries, plus specific error messages (#159, #160), and for the scan's read of the same
+/// and Task Scheduler entries, plus specific error messages (#176), and for the scan's read of the same
 /// StartupApproved lists (#2741).
 /// </summary>
 public sealed class StartupToggleTests : IDisposable
@@ -139,7 +139,7 @@ public sealed class StartupToggleTests : IDisposable
         Assert.True(entry.IsEnabled);
     }
 
-    // ---------- RunOnce entries can't be toggled via StartupApproved (P2 #35) ----------
+    // ---------- RunOnce entries can't be toggled via StartupApproved (#1428) ----------
 
     [Theory]
     [InlineData(StartupSource.RegistryCurrentUser)]
@@ -147,7 +147,7 @@ public sealed class StartupToggleTests : IDisposable
     [InlineData(StartupSource.RegistryLocalMachine32)]
     public async Task SetEnabledAsync_RunOnce_ReturnsFalseWithHonestMessage_AndDoesNotDisable(StartupSource source)
     {
-        // Regression (P2 #35): Windows has no StartupApproved\RunOnce and never consults
+        // Regression (#1428): Windows has no StartupApproved\RunOnce and never consults
         // StartupApproved for RunOnce keys, so the old code wrote the disable blob to
         // StartupApproved\Run and returned true — the item still ran at next boot while the
         // UI showed "Disabled". The toggle must now report a truthful non-success and leave

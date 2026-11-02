@@ -437,7 +437,7 @@ public sealed partial class EventLogService
 
         if (!string.IsNullOrWhiteSpace(opt.ProviderName))
         {
-            // SEC-003: Allowlist rather than strip. A real Windows provider name is
+            // Allowlist rather than strip (#249). A real Windows provider name is
             // letters/digits/dot/dash/underscore plus spaces. If it matches, use it
             // verbatim; if not, skip the provider clause entirely instead of silently
             // deleting metacharacters — which could mangle a legitimate name into a

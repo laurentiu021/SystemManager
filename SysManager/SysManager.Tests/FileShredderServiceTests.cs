@@ -12,7 +12,7 @@ namespace SysManager.Tests;
 
 /// <summary>
 /// Regression coverage for <see cref="FileShredderService"/> — the most
-/// data-loss-sensitive guard in the app (audit finding tests #1, P0).
+/// data-loss-sensitive guard in the app (#822).
 /// <para>
 /// <see cref="FileShredderService.ShredFileAsync"/> /
 /// <c>ShredFolderAsync</c> reject any path under a system-protected root
@@ -31,7 +31,7 @@ public class FileShredderServiceTests
     private static string ProtectedRoot(Environment.SpecialFolder folder) =>
         Environment.GetFolderPath(folder);
 
-    // ---------- denylist: protected roots rejected (P0) ----------
+    // ---------- denylist: protected roots rejected ----------
 
     public static IEnumerable<object[]> ProtectedRoots()
     {
@@ -330,7 +330,7 @@ public class FileShredderServiceTests
         }
     }
 
-    // ---------- symlink bypass regression (P0) ----------
+    // ---------- symlink bypass regression (#858) ----------
 
     /// <summary>
     /// A temp folder the service under test treats as a protected root, holding one victim file, so a link test aims
@@ -396,7 +396,7 @@ public class FileShredderServiceTests
         Assert.IsNotType<SecurityException>(ex);
     }
 
-    // ---------- mid-path junction bypass regression (P0) ----------
+    // ---------- mid-path junction bypass regression (#988) ----------
 
     [Fact]
     public async Task ShredFileAsync_FileBehindMidPathJunctionToProtected_ThrowsSecurityException()

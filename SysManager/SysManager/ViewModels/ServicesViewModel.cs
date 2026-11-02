@@ -151,7 +151,7 @@ public sealed partial class ServicesViewModel : ElevatedViewModelBase, IFilterab
             // would restore an Automatic service as Manual after any refresh or restart.
             RehydratePreviousStartTypes();
             // Ensure collection updates happen on the UI thread to prevent
-            // cross-thread exceptions when navigating during concurrent scans (#154).
+            // cross-thread exceptions when navigating during concurrent scans (#212).
             // Awaited rather than posted: the finally below clears IsBusy, and posting would stop the
             // spinner before the list it is waiting for had appeared. Awaiting a DispatcherOperation
             // keeps that order without parking this thread the way Invoke did (#2152).

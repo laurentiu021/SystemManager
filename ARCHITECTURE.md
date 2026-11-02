@@ -1256,7 +1256,8 @@ Key services:
   DISM repairs, the component-store cleanup, Windows feature changes, Windows Update installs, Reset
   Windows Update, and creating or restoring a restore point, besides every tab that writes a system-wide
   registry value or changes a Windows service (Performance Mode, Gaming Profile, Environment Variables,
-  Preinstalled Apps, Privacy & Telemetry, Defender Tweaks, Edge/OneDrive Remover, Services), and Undo Changes,
+  Preinstalled Apps, Privacy & Telemetry, Defender Tweaks, Edge/OneDrive Remover, Services, and Settings
+  Watchdog's Restore since #2639), and Undo Changes,
   which takes it under its own name for the three put-backs whose tabs take it: Performance Mode, the services
   and the environment variables (#1525).
   Feature changes, update installs, Reset Windows Update and the Restore Points tab took no lock until

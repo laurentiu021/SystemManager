@@ -164,14 +164,14 @@ project defines them in `TestCollections.cs`:
   `DialogService.Instance`, acquiring `OperationLockService.Instance`, or pinning elevation with
   `AdminHelper.ForceElevation`. This was once two collections, `"DialogService"` and `"OperationLock"`.
   xUnit puts a class in one collection only, so a class that needed both statics could not declare
-  both; merging them is what lets one class swap the dialog and hold the lock. 63 of the 317 unit test
-  files use it, and an `ArchitectureTests` guard fails the build when a class touches one of those
-  statics without it.
+  both; merging them is what lets one class swap the dialog and hold the lock. An `ArchitectureTests`
+  guard fails the build when a class touches one of those statics without it.
 - `[Collection("ProcessEnvironment")]` — tests that mutate the process's environment variables.
 - `[Collection("IconCache")]` — tests touching the shared icon cache.
 - `[Collection("Network")]` — defined here for tests using ICMP sockets, and used by none of them today.
 
-`SysManager.IntegrationTests` defines its own `Network` collection, which 28 of its classes use, and
+`SysManager.IntegrationTests` defines its own `Network` collection, for the classes that touch the network
+stack or share `StaHelper`'s one STA thread, and
 `SysManager.UITests` defines `App` in `AppFixture.cs`. `CatalogSignatureTests` names a `Sequential`
 collection that nothing defines; the integration project runs serially anyway, so it changes nothing.
 

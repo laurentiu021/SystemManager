@@ -68,16 +68,26 @@ What the app can and cannot do by design:
 - Run read-only disk checks (`chkdsk` without `/f`).
 - Run PowerShell scripts that are part of the app (DNS & Hosts, Preinstalled Apps,
   Defender Tweaks, Edge/OneDrive Remover, Restore Points, Scheduled Maintenance, Task
-  Scheduler, Drivers, System Fixes, Windows Features, and the Windows Update history).
+  Scheduler, Drivers, System Fixes, Windows Features, the Windows Update history, and Deep
+  Cleanup's emptying of the Delivery Optimization cache).
 - Launch Windows' own tools — `sc.exe`, `powercfg`, `netsh`, `ipconfig`, `DISM`, `sfc`,
-  `chkdsk`, `schtasks`, `reg`, `cleanmgr`, `powershell.exe` — always from their System32 path, plus
-  `winget` (as administrator only from the App Installer's own folder, which only an
-  administrator can change, and otherwise from your account's own winget shortcut), the
-  Ookla `speedtest` CLI, OneDrive's own setup and a program's own uninstaller. Ping and traceroute are sent by SysManager itself, not through `ping.exe`
-  or `tracert.exe`.
+  `chkdsk`, `schtasks`, `reg`, `cleanmgr`, `mdsched` (System Health's memory test), `eventvwr`
+  (System Logs), `powershell.exe`, and the classic panels Legacy Panels and System Fixes open
+  through `control.exe`, `mmc.exe`, `netplwiz.exe` and `SystemPropertiesAdvanced.exe` — always by
+  their full path in System32, and `explorer.exe` from the Windows folder, where it lives, so a
+  program of the same name somewhere else is never the one started. Plus `winget` (as
+  administrator only from the App Installer's own folder, which only an administrator can
+  change, and otherwise from your account's own winget shortcut), the Ookla `speedtest` CLI,
+  OneDrive's own setup, a program's own uninstaller, Windows Settings pages, and your browser,
+  for a link you click and, only while SysManager is not running as administrator, a browser's
+  extensions page (Browser Cleaner). Ping and traceroute are sent by SysManager itself, not
+  through `ping.exe` or `tracert.exe`.
 - Change Windows settings through the registry on the tabs built for it — Privacy &
   Telemetry, Right-Click Menu, Startup Manager, Notification Blocker, Performance Mode, Gaming
-  Profile, Environment Variables, and Windows Update's deferral policy and pause. App
+  Profile, Environment Variables, Edge/OneDrive Remover (Edge's background and startup-boost
+  policies, and OneDrive's place in Explorer's sidebar), Dark Mode Scheduler (light or dark mode),
+  Settings Watchdog's Restore (putting a watched setting back), and Windows Update's deferral
+  policy and pause. App
   Blocker keeps programs from starting through Image File Execution Options, and refuses
   the executables Windows needs to boot or to elevate.
 - Change a service's startup type with `sc.exe` (Services), recording the type it had so

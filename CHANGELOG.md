@@ -10,6 +10,20 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.136.79] - 2026-11-02
+
+**On Dark Mode Scheduler, a switch you make holds until the schedule's next change, and a time it cannot read is refused instead of quietly replaced.**
+
+### Fixed
+- With the schedule on, Dark or Light on Dark Mode Scheduler was undone within a minute: the schedule's check compared
+  the theme it wanted with the one SysManager had last set, so it switched straight back, while the same change made
+  in Windows Settings held. A switch made here now holds until the schedule's next change, and the status line says
+  when the schedule takes over. Changing the schedule ends it. This was there since the tab was added in 1.41.0.
+- The schedule's two time boxes took any text and saved it as typed, and the schedule read what it could not, "1900",
+  "19h" or "19;00", as 19:00 or 07:00 without a word, while the box went on showing the text. A time it cannot read is
+  refused now: the box goes back to the time the schedule runs on, the status line says how to write one, and nothing
+  is saved. A time it reads is saved the way it reads it, "7:30" as "07:30". This was there since 1.41.0 too.
+
 ## [1.136.78] - 2026-11-02
 
 **After a cancelled scan, Browser Cleaner's Selected total follows your ticks again.**

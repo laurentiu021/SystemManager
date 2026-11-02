@@ -15,8 +15,10 @@ namespace SysManager.Services;
 /// <param name="UninstallCommand">The UninstallString, or empty.</param>
 /// <param name="IsSystemComponent">SystemComponent is 1: a part of something else that Windows' own list hides.</param>
 /// <param name="IsUpdate">An update to another program, not a program: it names a parent, or its release type says so.</param>
+/// <param name="Key">The entry's own registry key, hive and view included, or empty.</param>
+/// <param name="DisplayIcon">The DisplayIcon, or empty.</param>
 public sealed record UninstallEntry(string Name, string Publisher, string InstallLocation, string UninstallCommand,
-                                    bool IsSystemComponent, bool IsUpdate)
+                                    bool IsSystemComponent, bool IsUpdate, string Key = "", string DisplayIcon = "")
 {
     /// <summary>
     /// Whether Windows' own Installed apps list shows it: it has a name, and is neither a hidden component nor an update.
@@ -70,7 +72,7 @@ public static class UninstallEntries
                     try
                     {
                         using var entry = key.OpenSubKey(name);
-                        if (entry is not null) entries.Add(Read(entry));
+                        if (entry is not null) entries.Add(Read(entry, $@"{hive.Name}\{path}\{name}"));
                     }
                     catch (System.Security.SecurityException) { /* one protected entry: the rest still count */ }
                     catch (UnauthorizedAccessException) { /* ditto */ }
@@ -96,10 +98,11 @@ public static class UninstallEntries
         return new UninstallList(entries, complete);
     }
 
-    private static UninstallEntry Read(RegistryKey entry) => new(
+    private static UninstallEntry Read(RegistryKey entry, string key) => new(
         Text(entry, "DisplayName"), Text(entry, "Publisher"), Text(entry, "InstallLocation"), Text(entry, "UninstallString"),
         IsSystemComponent: entry.GetValue("SystemComponent") is int component && component == 1,
-        IsUpdate: Text(entry, "ParentKeyName").Length > 0 || UpdateReleaseTypes.Contains(Text(entry, "ReleaseType")));
+        IsUpdate: Text(entry, "ParentKeyName").Length > 0 || UpdateReleaseTypes.Contains(Text(entry, "ReleaseType")),
+        Key: key, DisplayIcon: Text(entry, "DisplayIcon"));
 
     private static string Text(RegistryKey key, string name) => (key.GetValue(name) as string)?.Trim() ?? "";
 }

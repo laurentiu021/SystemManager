@@ -10,6 +10,18 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.136.89] - 2026-11-02
+
+**New App Alerts announces new programs only: no hidden parts of other programs, and no updates.**
+
+### Fixed
+- New App Alerts read the PC's uninstall entries itself and kept every one with a name, so the hidden parts of .NET
+  and Visual C++, and updates, were announced as new programs, several at once for a .NET SDK, and a program installed
+  for your account only was never noticed. It now reads the list Windows' own Installed apps page shows, the PC's and
+  yours. It also remembered programs by name alone, so an app with its version in its name, such as 7-Zip or Python,
+  was announced again at every update; it now goes by each entry's own key, and by the publisher and the name without
+  its version. This was there since the tab was added in 0.33.0.
+
 ## [1.136.88] - 2026-11-02
 
 **The speed test's Ookla CLI runs through the shared runner, the last program whose output SysManager read on its own.**

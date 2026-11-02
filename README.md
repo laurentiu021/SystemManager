@@ -1719,9 +1719,12 @@ Answers "what is actually using my space?" by listing the biggest files in one p
 - Some apps install system-wide and need administrator rights; the banner at the top says so
 
 ### New App Alerts
-- Monitors Program Files, Program Files (x86), AppData\Local\Programs and the
-  machine-wide registry uninstall keys for new application installations, from the
+- Monitors Program Files, Program Files (x86), AppData\Local\Programs and the list of
+  installed programs Windows keeps, for the whole PC and for your own account, from the
   moment you press **Start Monitoring**
+- **Only what Windows' own Installed apps list shows is announced.** The hidden parts of other
+  programs, such as the dozens that come with .NET, and updates are not new programs, and an
+  update that renames a program, or comes with a new entry of its own, is not announced again
 - FileSystemWatcher on install directories + 30-second registry poll cycle
 - Shows timestamped install history with app name, publisher, path, and
   detection source

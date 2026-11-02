@@ -584,6 +584,9 @@ Edit Windows environment variables without the cramped built-in dialog:
   to start with, and whatever you tick after that survives a refresh — so a rescan cannot
   quietly point a long disk check at a drive you deselected. chkdsk needs administrator
   rights, and without them each drive you ticked says so
+- It runs `chkdsk /scan /forceofflinefix`, so it repairs nothing itself: a drive with problems
+  reads **Problems found**, and the status line says how Windows repairs them while the drive
+  is not in use. A drive's result stays on its row when the list is refreshed
 - A running chkdsk shows under System Health in the sidebar and on the taskbar button, and
   closing SysManager during one asks first. It waits for a disk scan or clean-up another tab
   is running, and says which

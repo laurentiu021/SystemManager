@@ -10,6 +10,26 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.136.67] - 2026-11-02
+
+**System Health's disk check repairs nothing, as its card says, says in plain words what chkdsk found, and keeps its result when the drive list is refreshed.**
+
+### Fixed
+- The disk check ran `chkdsk /scan`, which repairs what it can while the drive is in use, under a card that says
+  it reports problems without fixing them. It now runs `chkdsk /scan /forceofflinefix`, which leaves every repair
+  for when the drive is not in use, and a drive with problems reads "Problems found", with the status line saying
+  how Windows repairs them. This was there since 0.3.0.
+- A repair could not be shown: chkdsk follows "Windows has made corrections to the file system." with "No
+  further action is required.", which a healthy scan ends with too, and the healthy sentence was read first. A scan
+  that found problems matched no sentence and read "Exit 3". chkdsk's own sentences are now read in an order where
+  none hides another, and an exit code with no sentence the tab knows is said in words. This was there since
+  0.28.3.
+- Refreshing the drive list, Scan or F5 while a check ran left the drive's row saying "Idle": the check wrote
+  "Running..." and its verdict to the rows it started with, which a refresh had replaced. The check now writes to
+  the row on screen, and a refresh keeps each drive's status as it keeps its tick. This was there since 0.4.0.
+- A row's own Scan left the header showing what the last "Scan selected" did, in the running colour, for the whole
+  run. It now says which drive it scans and how the scan ended. This was there since 0.4.0.
+
 ## [1.136.66] - 2026-11-02
 
 **System Health reads no errors as 0, no longer calls a drive Healthy when nothing could be read from it, and colours a drive's temperature the way its verdict reads it.**

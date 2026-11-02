@@ -6,6 +6,7 @@ using System.Reflection;
 using System.Text;
 using NSubstitute;
 using SysManager.Helpers;
+using SysManager.Models;
 using SysManager.Services;
 using SysManager.ViewModels;
 
@@ -278,11 +279,42 @@ public class SystemHealthViewModelTests
     }
 
     [Fact]
-    public void ParseChkdskVerdict_EmptyOutput_NonZeroExit_ReturnsExitCode()
+    public void ParseChkdskVerdict_EmptyOutput_NonZeroExit_SaysWhatTheCodeMeans()
     {
+        // It read "Exit 3", which the people this card is for cannot read (#2753).
         string[] lines = [];
-        Assert.Equal("Exit 3", SystemHealthViewModel.ParseChkdskVerdict(lines, 3));
+        Assert.Equal("Problems found or not checked", SystemHealthViewModel.ParseChkdskVerdict(lines, 3));
     }
+
+    // chkdsk's own messages, as its message table (ulib.dll.mui) holds them (#2753). Several share words: the sentence
+    // after "made corrections" is the one a healthy scan ends with, so "Repaired" could not be reached, and a scan that
+    // found problems matched nothing and read "Exit 3".
+    [Theory]
+    [InlineData("Windows has scanned the file system and found no problems.|No further action is required.", 0, "Healthy")]
+    [InlineData("Windows has made corrections to the file system.|No further action is required.", 0, "Repaired")]
+    [InlineData("Windows has found problems and they were all fixed online.|No further action is required.", 0, "Repaired")]
+    [InlineData("Windows has fixed all previously identified issues with this drive.|No further action is required.", 0, "Repaired")]
+    [InlineData("Windows has checked the file system and found problems.|Run CHKDSK with the /F (fix) option to correct these.", 3, "Problems found")]
+    [InlineData("Windows found problems with the file system that could not be corrected.", 3, "Problems found")]
+    [InlineData("Windows has found problems and some were fixed online; the remaining problems must be fixed offline.", 3, "Problems found")]
+    [InlineData("Windows has found problems that must be fixed offline.|Please run \"chkdsk /spotfix\" to fix the issues.", 3, "Problems found")]
+    [InlineData("Windows has found problems and encountered online repair failure -- \"chkdsk /f\" required.", 3, "Problems found")]
+    [InlineData("Windows has found problems that must be fixed offline.", 0, "Problems found")]
+    [InlineData("Snapshot creation failed. CHKDSK cannot perform an online scan of the volume.", 3, "Could not check")]
+    [InlineData("A scan is already running on this drive. Chkdsk can not run more than one scan on a drive at a time.", 3, "Could not check")]
+    [InlineData("Parameters not supported.", 3, "Not supported")]
+    [InlineData("Disk checking is not available on disk E:.", 3, "Not supported")]
+    public void AChkdskMessage_GivesItsVerdict(string message, int exit, string verdict)
+        => Assert.Equal(verdict, SystemHealthViewModel.ParseChkdskVerdict(message.Split('|'), exit));
+
+    [Theory]
+    [InlineData(0, "Healthy")]
+    [InlineData(1, "Repaired")]
+    [InlineData(2, "Healthy")]
+    [InlineData(3, "Problems found or not checked")]
+    [InlineData(5, "Unexpected result (code 5)")]
+    public void AnExitCode_WithNoSentenceTheTabKnows_IsSaidInWords(int exit, string verdict)
+        => Assert.Equal(verdict, SystemHealthViewModel.ParseChkdskVerdict(["Laufwerk C: wird überprüft."], exit));
 
     // ── Elevation gate on chkdsk ─────────────────────────────────────────────
     //
@@ -452,6 +484,112 @@ public class SystemHealthViewModelTests
 
         await runner.DidNotReceive().RunProcessAsync("chkdsk.exe", Arg.Any<string>(), Arg.Any<CancellationToken>(),
                                                      Arg.Any<Encoding?>());
+    }
+
+    // ---------- what the check is, and where its verdict goes (#2753) ----------
+
+    /// <summary>
+    /// A runner whose chkdsk prints <paramref name="lines"/>, then waits for <paramref name="chkdsk"/>.
+    /// </summary>
+    private static IPowerShellRunner PrintingChkdsk(TaskCompletionSource<int> chkdsk, params string[] lines)
+    {
+        var runner = Substitute.For<IPowerShellRunner>();
+        runner.RunProcessAsync("chkdsk.exe", Arg.Any<string>(), Arg.Any<CancellationToken>(), Arg.Any<Encoding?>())
+              .Returns(_ =>
+              {
+                  foreach (var line in lines)
+                      runner.LineReceived += Raise.Event<Action<PowerShellLine>>(PowerShellLine.Output(line));
+                  return chkdsk.Task;
+              });
+        return runner;
+    }
+
+    private static SystemHealthViewModel Over(IPowerShellRunner runner) =>
+        new(new SystemInfoService(), new DiskHealthService(), new MemoryTestService(), new FixedDriveService(), runner,
+            new BiosService());
+
+    [Fact]
+    public async Task TheCheck_ReportsProblemsWithoutRepairingAny()
+    {
+        // /scan alone repairs what it can online, so the card's "reports problems without fixing them" was not true.
+        // /forceofflinefix leaves every repair for when the drive is not in use.
+        using var elevated = AdminHelper.ForceElevation(true);
+        var chkdsk = new TaskCompletionSource<int>(TaskCreationOptions.RunContinuationsAsynchronously);
+        chkdsk.SetResult(0);
+        var runner = PrintingChkdsk(chkdsk);
+        using var vm = Over(runner);
+        await vm.InitializationComplete.WaitAsync(Bound);
+
+        await vm.RunChkdskCommand.ExecuteAsync("C:").WaitAsync(Bound);
+
+        await runner.Received(1).RunProcessAsync(
+            "chkdsk.exe", "C: /scan /forceofflinefix", Arg.Any<CancellationToken>(), Arg.Any<Encoding?>());
+    }
+
+    [Fact]
+    public async Task ProblemsFound_SaysHowWindowsRepairsThem()
+    {
+        using var elevated = AdminHelper.ForceElevation(true);
+        var chkdsk = new TaskCompletionSource<int>(TaskCreationOptions.RunContinuationsAsynchronously);
+        chkdsk.SetResult(3);
+        using var vm = Over(PrintingChkdsk(chkdsk, "Windows has found problems that must be fixed offline."));
+        await vm.InitializationComplete.WaitAsync(Bound);
+
+        await vm.RunChkdskCommand.ExecuteAsync("C:").WaitAsync(Bound);
+
+        Assert.Equal("chkdsk C: found problems. Windows repairs them while the drive is not in use: in File Explorer, "
+                     + "open the drive's Properties, then Tools, then Check.", vm.StatusMessage);
+    }
+
+    [Fact]
+    public async Task AVerdict_ReachesTheRowOnScreen_WhenTheDrivesWereRefreshedDuringTheCheck()
+    {
+        // Refresh, Scan and F5 build new rows, carrying only the ticks, and the check wrote "Running..." and its
+        // verdict to the rows it started with, which were no longer on screen.
+        using var elevated = AdminHelper.ForceElevation(true);
+        var chkdsk = new TaskCompletionSource<int>(TaskCreationOptions.RunContinuationsAsynchronously);
+        using var vm = Over(PrintingChkdsk(chkdsk, "Windows has scanned the file system and found no problems."));
+        await vm.InitializationComplete.WaitAsync(Bound);
+        var letter = vm.ChkdskDrives.First().Letter;
+
+        var run = vm.RunChkdskCommand.ExecuteAsync(letter);
+        try
+        {
+            await vm.RefreshDrivesCommand.ExecuteAsync(null).WaitAsync(Bound);
+            Assert.Equal("Running...", vm.ChkdskDrives.Single(d => d.Letter == letter).Status);
+        }
+        finally
+        {
+            chkdsk.TrySetResult(0);
+            await run.WaitAsync(Bound);
+        }
+
+        Assert.Equal("Healthy", vm.ChkdskDrives.Single(d => d.Letter == letter).Status);
+    }
+
+    [Fact]
+    public async Task ARowsOwnScan_SaysInTheHeaderWhatItScans_AndThatItEnded()
+    {
+        // Only Scan selected wrote the header, so a row's own scan showed the last batch's "All scans finished." in
+        // the running colour for the whole run.
+        using var elevated = AdminHelper.ForceElevation(true);
+        var chkdsk = new TaskCompletionSource<int>(TaskCreationOptions.RunContinuationsAsynchronously);
+        using var vm = Over(PrintingChkdsk(chkdsk, "Windows has scanned the file system and found no problems."));
+        await vm.InitializationComplete.WaitAsync(Bound);
+        vm.ChkdskStatus = "All scans finished.";
+
+        var run = vm.RunChkdskCommand.ExecuteAsync("C:");
+        try
+        {
+            Assert.Equal("Scanning C:…", vm.ChkdskStatus);
+        }
+        finally
+        {
+            chkdsk.TrySetResult(0);
+            await run.WaitAsync(Bound);
+        }
+
+        Assert.Equal("C: — Healthy", vm.ChkdskStatus);
     }
 
     // ---------- the memory verdict (#2715) ----------

@@ -285,7 +285,7 @@ public class PcVolumeViewModelTests
         await card.Vm.OutputSwitch;
 
         var entry = Assert.Single(ActivityLogService.Instance.GetRecent(10));
-        Assert.Equal("Volume", entry.Action);
+        Assert.Equal("Volume Control", entry.Action);
         Assert.Equal("Sound now plays through Speakers (Desk)", entry.Detail);
     }
 

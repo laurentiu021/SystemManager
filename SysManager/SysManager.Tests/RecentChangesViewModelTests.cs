@@ -393,7 +393,7 @@ public sealed class RecentChangesViewModelTests
     [InlineData(ChangeKind.ProgramInstalled, "Open Uninstaller", "nav-uninstaller")]
     [InlineData(ChangeKind.ProgramAppeared, "Open Uninstaller", "nav-uninstaller")]
     [InlineData(ChangeKind.ProgramUpdated, "Open Uninstaller", "nav-uninstaller")]
-    [InlineData(ChangeKind.ProgramDetected, "Open App Alerts", "nav-app-alerts")]
+    [InlineData(ChangeKind.ProgramDetected, "Open New App Alerts", "nav-app-alerts")]
     [InlineData(ChangeKind.SettingChanged, "Review", "nav-settings-watchdog")]
     public void ARowsButton_OpensTheTabThatCanDoSomethingAboutIt(ChangeKind kind, string text, string navId)
     {

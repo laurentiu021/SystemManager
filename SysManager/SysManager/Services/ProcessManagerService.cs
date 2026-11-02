@@ -197,8 +197,22 @@ public sealed partial class ProcessManagerService
     /// </remarks>
     internal static void VerifySignatures(
         IReadOnlyList<ProcessEntry> entries,
+        Dictionary<string, (SignatureTrust Trust, string Detail)> cache) =>
+        ApplySignatures(ReadSignatures(entries, cache));
+
+    /// <summary>
+    /// The verdict for each entry that has a path, as <see cref="VerifySignatures"/> reaches it, with no row changed.
+    /// </summary>
+    /// <remarks>
+    /// The slow half, for a worker thread. The rows are what the grid shows, so <see cref="ApplySignatures"/> writes the
+    /// verdicts on the window's thread afterwards: the fill ran <see cref="VerifySignatures"/> on the worker, which set
+    /// the bound columns there while the once-a-second refresh changed the same rows on the window's thread (#2765).
+    /// </remarks>
+    internal static List<(ProcessEntry Entry, SignatureTrust Trust, string Detail)> ReadSignatures(
+        IReadOnlyList<ProcessEntry> entries,
         Dictionary<string, (SignatureTrust Trust, string Detail)> cache)
     {
+        List<(ProcessEntry Entry, SignatureTrust Trust, string Detail)> verdicts = [];
         foreach (var entry in entries)
         {
             // No path: a system process whose module list Windows refused, which is most of them without
@@ -211,8 +225,18 @@ public sealed partial class ProcessManagerService
                 cache[entry.FilePath] = verdict;
             }
 
-            entry.Signature = verdict.Trust;
-            entry.SignatureDetail = verdict.Detail;
+            verdicts.Add((entry, verdict.Trust, verdict.Detail));
+        }
+        return verdicts;
+    }
+
+    /// <summary>Writes verdicts <see cref="ReadSignatures"/> read onto their rows, on the thread that owns them.</summary>
+    internal static void ApplySignatures(IEnumerable<(ProcessEntry Entry, SignatureTrust Trust, string Detail)> verdicts)
+    {
+        foreach (var (entry, trust, detail) in verdicts)
+        {
+            entry.Signature = trust;
+            entry.SignatureDetail = detail;
         }
     }
 

@@ -76,6 +76,31 @@ public class ProcessSignatureTests
         finally { File.Delete(exe); }
     }
 
+    /// <summary>
+    /// Reading the verdicts changes no row, and applying them does: the slow half runs on a worker, and the rows the grid
+    /// shows are written on the window's thread (#2765).
+    /// </summary>
+    [Fact]
+    public void ReadSignatures_ChangesNoRow_AndApplySignatures_WritesTheVerdicts()
+    {
+        var exe = WriteTempExe([0x4D, 0x5A, 0x90, 0x00]);
+        try
+        {
+            var entry = Entry(1002, exe);
+
+            var verdicts = ProcessManagerService.ReadSignatures([entry], ProcessManagerService.NewSignatureCache());
+
+            Assert.Equal(SignatureTrust.Unknown, entry.Signature);
+            Assert.Equal(SignatureTrust.Unsigned, Assert.Single(verdicts).Trust);
+
+            ProcessManagerService.ApplySignatures(verdicts);
+
+            Assert.Equal(SignatureTrust.Unsigned, entry.Signature);
+            Assert.Contains("does not mean it is unsafe", entry.SignatureDetail, StringComparison.Ordinal);
+        }
+        finally { File.Delete(exe); }
+    }
+
     [Fact]
     public void VerifySignatures_AProcessWithNoReadablePath_IsLeftUnknownWithNoPill()
     {

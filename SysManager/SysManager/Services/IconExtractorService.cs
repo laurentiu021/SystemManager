@@ -375,20 +375,46 @@ public sealed partial class IconExtractorService
     // directories on every process list refresh (~100+ subdirs per scan, #414).
     private static readonly ConcurrentDictionary<string, string?> _pathCache = new(StringComparer.OrdinalIgnoreCase);
 
-    private static string? FindExecutableByName(string processName)
+    private static string? FindExecutableByName(string processName) =>
+        FindExecutableByName(processName, DateTime.UtcNow, ResolveExecutablePath);
+
+    /// <summary>How long a name no search found is not searched for again.</summary>
+    /// <remarks>
+    /// The search tries every PATH entry, every folder under the two Program Files and the user's Programs, and App
+    /// Paths. Bandwidth Monitor asks for every new process ID, and names that never resolve, System, Store apps,
+    /// browser helpers, paid that whole search at every one (#2765). An exe installed meanwhile is found once this has
+    /// passed.
+    /// </remarks>
+    internal static readonly TimeSpan MissRemembered = TimeSpan.FromMinutes(5);
+
+    private static readonly ConcurrentDictionary<string, DateTime> _missedAtUtc = new(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// The exe a process name resolves to, through <paramref name="resolve"/>: a path found is kept for the run, and a
+    /// miss for <see cref="MissRemembered"/> from <paramref name="nowUtc"/>.
+    /// </summary>
+    internal static string? FindExecutableByName(string processName, DateTime nowUtc, Func<string, string?> resolve)
     {
         var exeName = processName.EndsWith(".exe", StringComparison.OrdinalIgnoreCase)
             ? processName : processName + ".exe";
 
-        // Only cache POSITIVE results. GetOrAdd would store a null (not-found) result
-        // permanently, so an exe installed after the first lookup would never resolve
-        // for the lifetime of the process. Re-resolve on a miss instead.
+        // A path found is kept for the run. A miss is kept only for a while: kept for good, an exe installed after the
+        // first lookup would never resolve for the lifetime of the process.
         if (_pathCache.TryGetValue(exeName, out var cached))
             return cached;
+        if (_missedAtUtc.TryGetValue(exeName, out var missedAt) && nowUtc - missedAt < MissRemembered)
+            return null;
 
-        var resolved = ResolveExecutablePath(exeName);
+        var resolved = resolve(exeName);
         if (resolved is not null)
+        {
             _pathCache[exeName] = resolved;
+            _missedAtUtc.TryRemove(exeName, out _);
+        }
+        else
+        {
+            _missedAtUtc[exeName] = nowUtc;
+        }
         return resolved;
     }
 

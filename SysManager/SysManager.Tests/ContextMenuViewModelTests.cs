@@ -140,8 +140,7 @@ public class ContextMenuViewModelTests
     {
         service = Substitute.For<IContextMenuService>();
         service.ScanEntries().Returns([]);
-        service.EnableEntry(Arg.Any<ContextMenuEntry>()).Returns(toggleSucceeds);
-        service.DisableEntry(Arg.Any<ContextMenuEntry>()).Returns(toggleSucceeds);
+        service.WriteState(Arg.Any<ContextMenuEntry>(), Arg.Any<bool>()).Returns(toggleSucceeds);
 
         var vm = new ContextMenuViewModel(service);
         vm.InitializationComplete.GetAwaiter().GetResult();
@@ -217,8 +216,7 @@ public class ContextMenuViewModelTests
 
         // The direction matters: the command reads the switch's NEW position and asks the service to
         // match it, so an inverted call would disable what the user just turned on.
-        if (desiredState) service.Received(1).EnableEntry(entry);
-        else service.Received(1).DisableEntry(entry);
+        service.Received(1).WriteState(entry, desiredState);
     }
 
     /// <summary>
@@ -252,8 +250,7 @@ public class ContextMenuViewModelTests
 
         var service = Substitute.For<IContextMenuService>();
         service.ScanEntries().Returns([files, folders, other]);
-        service.EnableEntry(Arg.Any<ContextMenuEntry>()).Returns(true);
-        service.DisableEntry(Arg.Any<ContextMenuEntry>()).Returns(true);
+        service.WriteState(Arg.Any<ContextMenuEntry>(), Arg.Any<bool>()).Returns(true);
         var vm = new ContextMenuViewModel(service);
         await vm.InitializationComplete;
 
@@ -265,8 +262,7 @@ public class ContextMenuViewModelTests
         Assert.Equal(!desiredState, other.IsEnabled);
         Assert.Equal(desiredState ? 2 : 1, vm.EnabledCount);
         Assert.Equal(desiredState ? 1 : 2, vm.DisabledCount);
-        if (desiredState) service.Received(1).EnableEntry(files);
-        else service.Received(1).DisableEntry(files);
+        service.Received(1).WriteState(files, desiredState);
     }
 
     [Fact]
@@ -278,8 +274,7 @@ public class ContextMenuViewModelTests
         await vm.ToggleEntryCommand.ExecuteAsync("not an entry");
 
         Assert.Equal(0, dialog.Calls);
-        service.DidNotReceive().EnableEntry(Arg.Any<ContextMenuEntry>());
-        service.DidNotReceive().DisableEntry(Arg.Any<ContextMenuEntry>());
+        service.DidNotReceive().WriteState(Arg.Any<ContextMenuEntry>(), Arg.Any<bool>());
     }
 
     // ── filters that hide every entry are not "run a scan" (#2811) ─────────
@@ -350,8 +345,7 @@ public class ContextMenuViewModelTests
     {
         service = Substitute.For<IContextMenuService>();
         service.ScanEntries().Returns([NewEntry(enabled: true)]);
-        service.DisableEntry(Arg.Any<ContextMenuEntry>()).Returns(true);
-        service.EnableEntry(Arg.Any<ContextMenuEntry>()).Returns(true);
+        service.WriteState(Arg.Any<ContextMenuEntry>(), Arg.Any<bool>()).Returns(true);
         service.IsClassicMenuEnabled().Returns(classicMenu);
 
         var vm = new ContextMenuViewModel(service);
@@ -383,8 +377,7 @@ public class ContextMenuViewModelTests
         Assert.False(vm.IsClassicMenuEnabled);
         Assert.Equal("win11", vm.ActivePresetId);
         service.Received(1).EnableClassicMenu();
-        service.DidNotReceive().DisableEntry(Arg.Any<ContextMenuEntry>());
-        service.DidNotReceive().EnableEntry(Arg.Any<ContextMenuEntry>());
+        service.DidNotReceive().WriteState(Arg.Any<ContextMenuEntry>(), Arg.Any<bool>());
     }
 
     [Fact]
@@ -397,8 +390,35 @@ public class ContextMenuViewModelTests
 
         service.DidNotReceive().EnableClassicMenu();
         service.DidNotReceive().DisableClassicMenu();
-        service.Received(1).DisableEntry(Arg.Any<ContextMenuEntry>());
+        service.Received(1).WriteState(Arg.Any<ContextMenuEntry>(), false);
         Assert.StartsWith("\"" + ContextMenuPreset.All["win11"].Name + "\" applied", vm.StatusMessage,
             StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// A preset writes each entry's new state from a worker thread and sets the row once the write is made, on the
+    /// thread that applied it (#2765).
+    /// </summary>
+    /// <remarks>
+    /// The writes went through DisableEntry and EnableEntry, which set the row the grid shows as well, inside the
+    /// <c>Task.Run</c> whose comment said no UI state was touched there.
+    /// </remarks>
+    [Fact]
+    public async Task APreset_SetsTheRowsItWrote_OnlyOnceTheWritesAreMade()
+    {
+        var vm = WithThirdPartyEntry(classicMenu: false, out var service);
+        var entry = Assert.Single(vm.Entries);
+        var shownWhileWriting = new List<bool>();
+        service.WriteState(Arg.Any<ContextMenuEntry>(), Arg.Any<bool>()).Returns(call =>
+        {
+            lock (shownWhileWriting) shownWhileWriting.Add(call.Arg<ContextMenuEntry>().IsEnabled);
+            return true;
+        });
+        using var dialog = new DialogAnswer(confirm: true);
+
+        await vm.ApplyPresetCommand.ExecuteAsync("win11");
+
+        Assert.Equal([true], shownWhileWriting);
+        Assert.False(entry.IsEnabled);
     }
 }

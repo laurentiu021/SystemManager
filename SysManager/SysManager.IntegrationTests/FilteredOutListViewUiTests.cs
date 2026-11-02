@@ -67,6 +67,8 @@ public sealed class FilteredOutListViewUiTests
 
         public bool EnableEntry(ContextMenuEntry entry) => throw new NotSupportedException("nothing here changes");
 
+        public bool WriteState(ContextMenuEntry entry, bool enabled) => throw new NotSupportedException("nothing here changes");
+
         public bool IsClassicMenuEnabled() => false;
 
         public bool EnableClassicMenu() => throw new NotSupportedException("nothing here changes");

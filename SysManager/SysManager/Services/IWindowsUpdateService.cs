@@ -13,7 +13,10 @@ namespace SysManager.Services;
 /// </summary>
 public interface IWindowsUpdateService
 {
-    /// <summary>Raised on the calling thread for each progress/log line.</summary>
+    /// <summary>
+    /// Raised for each progress/log line, on a worker thread: the scan and the install run in <c>Task.Run</c>, so a
+    /// subscriber that touches the window marshals to its thread itself (#2765).
+    /// </summary>
     event Action<string>? Log;
 
     /// <summary>

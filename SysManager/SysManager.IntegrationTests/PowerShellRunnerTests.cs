@@ -192,9 +192,9 @@ public class PowerShellRunnerTests
     /// </summary>
     /// <remarks>
     /// The half of the design that keeps reuse from becoming a memory trade. Nothing disposes most of these
-    /// runners — nine are built directly in <c>MainWindowViewModel</c>'s designer graph and live as long as
-    /// the window — so without eviction a dozen <c>powershell.exe</c> processes would be resident for the
-    /// whole run, in an app whose pitch is making a PC feel faster.
+    /// runners — the container builds one for each consumer, as <c>MainWindowViewModel</c>'s designer graph
+    /// does, and they live as long as the window — so without eviction dozens of <c>powershell.exe</c>
+    /// processes could be resident for the whole run, in an app whose pitch is making a PC feel faster.
     /// <para>Driven with a 200&#160;ms lifetime through the constructor seam. The wait is bounded and
     /// polls for the state change rather than sleeping a fixed interval and hoping.</para>
     /// </remarks>

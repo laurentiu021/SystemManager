@@ -586,10 +586,10 @@ Key services:
   that runspace down takes the same minute, so it is left to the thread pool, #2608);
   pipelines are serialised behind a gate, because a runspace runs one at a time
   and a shared one turns concurrent calls into a conflict; and the runspace is
-  evicted after ~20 s idle, which matters because eleven runners are constructed
-  directly in `MainWindowViewModel`'s designer graph and nothing ever disposes
-  them — without eviction a dozen `powershell.exe` processes would be resident for
-  the whole run; and each script runs in a scope of its own
+  evicted after ~20 s idle, which matters because `MainWindowViewModel`'s designer
+  graph constructs a runner for each consumer, as the container does (#2766), and
+  nothing ever disposes them — without eviction dozens of `powershell.exe` processes
+  could be resident for the whole run; and each script runs in a scope of its own
   (`AddScript(script, useLocalScope: true)`), so no variable or preference one script
   sets reaches the next. In the runspace's global scope they did, from 1.78.7 to 1.130.13.
   `Dispose` releases it deterministically where a consumer is disposed. It does not wait for the gate, so the

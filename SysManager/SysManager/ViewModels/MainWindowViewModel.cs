@@ -833,7 +833,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable,
             [typeof(AppUpdatesViewModel)] = new AppUpdatesViewModel(winget),
             [typeof(WindowsUpdateViewModel)] = new WindowsUpdateViewModel(runner, windowsUpdate, new WindowsUpdatePolicyService()),
             [typeof(SystemHealthViewModel)] = new SystemHealthViewModel(sysInfo, diskHealth, new MemoryTestService(), fixedDrives, runner, new BiosService()),
-            [typeof(CleanupViewModel)] = new CleanupViewModel(runner, new CleanupPreScanService(recycleBin), recycleBin),
+            [typeof(CleanupViewModel)] = new CleanupViewModel(runner, new CleanupPreScanService(recycleBin), recycleBin, tuneUp),
             [typeof(DeepCleanupViewModel)] = new DeepCleanupViewModel(
                 new DeepCleanupService(runner, recycleBin, new PreviousInstallationCleanup(runner))),
             [typeof(LargeFilesViewModel)] = new LargeFilesViewModel(new LargeFileScanner(), fixedDrives),

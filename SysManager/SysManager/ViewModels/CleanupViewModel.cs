@@ -97,8 +97,20 @@ public sealed partial class CleanupViewModel : ElevatedViewModelBase
     /// <summary>True whenever any background task is running — for a small badge.</summary>
     public bool IsAnyRunning => IsTempRunning || IsBinRunning || IsStoreRunning;
 
-    public CleanupViewModel(IPowerShellRunner runner, ICleanupPreScanService preScan, IRecycleBin recycleBin)
-        : this(runner, preScan, recycleBin, TuneUpService.CleanTempFilesAsync) { }
+    /// <summary>
+    /// The tab, with the temp sweep reached through <paramref name="tuneUp"/>, the seam the Dashboard's Quick Cleanup
+    /// uses for the same sweep.
+    /// </summary>
+    /// <remarks>
+    /// It called the Tune-Up's static sweep, so a test of this constructor could reach the real temp folders, and the
+    /// container's <see cref="ITuneUpService"/> was not the one the tab used (#2766).
+    /// </remarks>
+    public CleanupViewModel(IPowerShellRunner runner, ICleanupPreScanService preScan, IRecycleBin recycleBin,
+                            ITuneUpService tuneUp)
+        : this(runner, preScan, recycleBin,
+               (tuneUp ?? throw new ArgumentNullException(nameof(tuneUp))).CleanTempFilesAsync)
+    {
+    }
 
     /// <summary>Test seam: the same view model with the temp sweep supplied.</summary>
     /// <param name="runner">Runs the component store commands.</param>

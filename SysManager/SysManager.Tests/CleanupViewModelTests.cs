@@ -44,7 +44,8 @@ public class CleanupViewModelTests
 
     /// <summary>A view-model over a substitute Recycle Bin unless a test hands it one, so none empties the real bin.</summary>
     private static CleanupViewModel NewVm(ICleanupPreScanService? preScan = null, IRecycleBin? recycleBin = null) =>
-        new(new PowerShellRunner(), preScan ?? StubPreScan(), recycleBin ?? Substitute.For<IRecycleBin>());
+        new(new PowerShellRunner(), preScan ?? StubPreScan(), recycleBin ?? Substitute.For<IRecycleBin>(),
+            Substitute.For<ITuneUpService>());
 
     // ---------- construction & defaults ----------
 
@@ -223,7 +224,7 @@ public class CleanupViewModelTests
     public void RunnerLineReceived_AppendsToConsole()
     {
         var runner = new PowerShellRunner();
-        var vm = new CleanupViewModel(runner, StubPreScan(), Substitute.For<IRecycleBin>());
+        var vm = new CleanupViewModel(runner, StubPreScan(), Substitute.For<IRecycleBin>(), Substitute.For<ITuneUpService>());
         var before = vm.Console.Lines.Count;
 
         // Simulate the runner emitting a line. The VM subscribes in its
@@ -243,7 +244,7 @@ public class CleanupViewModelTests
     public void RunnerProgressChanged_UpdatesProgressProperty()
     {
         var runner = new PowerShellRunner();
-        var vm = new CleanupViewModel(runner, StubPreScan(), Substitute.For<IRecycleBin>());
+        var vm = new CleanupViewModel(runner, StubPreScan(), Substitute.For<IRecycleBin>(), Substitute.For<ITuneUpService>());
 
         var ev = typeof(PowerShellRunner)
             .GetField(nameof(PowerShellRunner.ProgressChanged), BindingFlags.Instance | BindingFlags.NonPublic | BindingFlags.Public);
@@ -592,6 +593,28 @@ public class CleanupViewModelTests
 
         Assert.Equal("Temp cleanup cancelled after it freed 0 B.", vm.StatusMessage);
         Assert.Empty(ActivityLogService.Instance.GetRecent(10));
+    }
+
+    /// <summary>
+    /// Clean TEMP runs the sweep of the Tune-Up the tab was given, the one the container registers, with the tab's own
+    /// token (#2766).
+    /// </summary>
+    /// <remarks>It called the static sweep, whatever the container held.</remarks>
+    [Fact]
+    public async Task CleanTemp_RunsTheSweepOfTheTuneUpItWasGiven()
+    {
+        using var activity = new ActivityLogScope();
+        using var confirm = new DialogAnswer(confirm: true);
+        var tuneUp = Substitute.For<ITuneUpService>();
+        tuneUp.CleanTempFilesAsync(Arg.Any<CancellationToken>())
+            .Returns(new TempCleanResult(1L << 20, 3, 0, Cancelled: false));
+        var vm = new CleanupViewModel(new PowerShellRunner(), StubPreScan(), Substitute.For<IRecycleBin>(), tuneUp);
+        await vm.InitializationComplete;
+
+        await vm.CleanTempCommand.ExecuteAsync(null);
+
+        await tuneUp.Received(1).CleanTempFilesAsync(Arg.Is<CancellationToken>(t => t.CanBeCanceled));
+        Assert.Equal("Temp cleanup done", vm.StatusMessage);
     }
 
     [Fact]

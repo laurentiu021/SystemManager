@@ -240,7 +240,11 @@ public sealed class TuneUpService : ITuneUpService
     /// stopped it part-way. Shared by the full Tune-Up sequence and the Dashboard's Quick
     /// Cleanup shortcut so both use this one safe implementation.
     /// </summary>
-    public static Task<TempCleanResult> CleanTempFilesAsync(CancellationToken ct = default)
+    /// <remarks>
+    /// Internal: a view model reaches it through <see cref="ITuneUpService"/>, and only the command line, which has no
+    /// container, calls it directly (#2766).
+    /// </remarks>
+    internal static Task<TempCleanResult> CleanTempFilesAsync(CancellationToken ct = default)
         => Task.Run(() => CleanTempFiles(ct), ct);
 
     /// <summary>The same sweep, reached through the seam, so that Quick Cleanup can be tested without running it.</summary>

@@ -18235,6 +18235,40 @@ public partial class ArchitectureTests
     }
 
     /// <summary>
+    /// No view model calls the Tune-Up's static temp sweep: each reaches it through <c>ITuneUpService</c> (#2766).
+    /// </summary>
+    /// <remarks>
+    /// Quick Cleanup's constructor bound the static, so a test of it could reach the real temp folders, and the tab
+    /// did not use the <c>ITuneUpService</c> the container registers and the Dashboard's Quick Cleanup goes through.
+    /// The static is internal now, which keeps it out of other assemblies but not out of this one, hence the scan. A
+    /// call and a method group both count. The command line, which has no container, is the caller it stays for, and
+    /// is the scan's known answer.
+    /// </remarks>
+    [Fact]
+    public void NoViewModel_CallsTheStaticTempSweep()
+    {
+        var appDir = TestPaths.AppProject();
+
+        Assert.Matches(StaticTempSweep(),
+            SourceBraces.CodeOnly(File.ReadAllText(Path.Combine(appDir, "Services", "CliRunner.cs"))));
+
+        var viewModels = Directory.GetFiles(Path.Combine(appDir, "ViewModels"), "*.cs", SearchOption.AllDirectories);
+        Assert.NotEmpty(viewModels);
+        var callers = viewModels
+            .Where(f => StaticTempSweep().IsMatch(SourceBraces.CodeOnly(File.ReadAllText(f))))
+            .Select(Path.GetFileName)
+            .ToList();
+
+        Assert.True(callers.Count == 0,
+            "these view models name TuneUpService.CleanTempFilesAsync, the static sweep, rather than the ITuneUpService "
+            + "they should take by constructor:\n  " + string.Join("\n  ", callers));
+    }
+
+    /// <summary>The Tune-Up's static temp sweep, called or passed as a method group; not the interface's member.</summary>
+    [GeneratedRegex(@"(?<!\w)TuneUpService\.CleanTempFilesAsync\b")]
+    private static partial Regex StaticTempSweep();
+
+    /// <summary>
     /// Every call into a temp-tree walker must pass the own-extraction exclusion.
     /// </summary>
     /// <remarks>

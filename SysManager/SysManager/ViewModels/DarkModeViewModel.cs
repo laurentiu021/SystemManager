@@ -22,6 +22,9 @@ public sealed partial class DarkModeViewModel : ViewModelBase
     private readonly DispatcherTimer? _timer;
     private bool _suppressSave;
 
+    /// <summary>Whether a theme switch is running, on a worker thread (see <see cref="SwitchAsync"/>).</summary>
+    private bool _switching;
+
     [ObservableProperty] private bool _isDarkNow;
     [ObservableProperty] private bool _scheduleEnabled;
     [ObservableProperty] private string _darkStart = "19:00";
@@ -44,21 +47,23 @@ public sealed partial class DarkModeViewModel : ViewModelBase
             {
                 Interval = TimeSpan.FromSeconds(60),
             };
-            _timer.Tick += (_, _) => EvaluateSchedule();
+            _timer.Tick += (_, _) => InitializeAsync(EvaluateScheduleAsync);
             _timer.Start();
-            EvaluateSchedule(); // apply immediately so the theme is correct on open
+            InitializeAsync(EvaluateScheduleAsync); // apply immediately so the theme is correct on open
         }
     }
 
-    [RelayCommand]
-    private void SwitchToDark() => ApplyTheme(true, "Switched to dark.");
+    [RelayCommand(CanExecute = nameof(CanSwitch))]
+    private Task SwitchToDarkAsync() => ApplyThemeAsync(true, "Switched to dark.");
 
-    [RelayCommand]
-    private void SwitchToLight() => ApplyTheme(false, "Switched to light.");
+    [RelayCommand(CanExecute = nameof(CanSwitch))]
+    private Task SwitchToLightAsync() => ApplyThemeAsync(false, "Switched to light.");
 
-    private void ApplyTheme(bool dark, string okMessage)
+    private bool CanSwitch() => !_switching;
+
+    private async Task ApplyThemeAsync(bool dark, string okMessage)
     {
-        if (_service.SetTheme(dark, ApplyToSystem))
+        if (await SwitchAsync(dark))
         {
             IsDarkNow = dark;
             StatusMessage = okMessage;
@@ -69,22 +74,54 @@ public sealed partial class DarkModeViewModel : ViewModelBase
         }
     }
 
+    /// <summary>
+    /// Switches the Windows theme on a worker thread. Both buttons are off until it is done, and the schedule does not
+    /// start another meanwhile, so two switches never race to write the theme.
+    /// </summary>
+    /// <remarks>
+    /// The switch ends by telling every open window that the theme changed, and Windows gives each window up to five
+    /// seconds to answer. Run on the window's thread, one program that was busy but not yet "not responding" froze
+    /// SysManager for that long, and several added up (#2750).
+    /// </remarks>
+    private async Task<bool> SwitchAsync(bool dark)
+    {
+        var includeSystem = ApplyToSystem;
+        SetSwitching(true);
+        try
+        {
+            return await Task.Run(() => _service.SetTheme(dark, includeSystem)).ConfigureAwait(true);
+        }
+        finally
+        {
+            SetSwitching(false);
+        }
+    }
+
+    private void SetSwitching(bool value)
+    {
+        _switching = value;
+        SwitchToDarkCommand.NotifyCanExecuteChanged();
+        SwitchToLightCommand.NotifyCanExecuteChanged();
+    }
+
     /// <summary>Apply the scheduled theme if the schedule is on and the current theme differs.</summary>
-    private void EvaluateSchedule()
+    private async Task EvaluateScheduleAsync()
     {
         // Suppress the theme side effect during LoadFromSchedule: the [ObservableProperty]
         // setters fire one at a time, so the ScheduleEnabled setter would run this while
         // DarkStart/LightStart/ApplyToSystem still hold their defaults — writing the WRONG
         // (and possibly system-wide) theme against the user's saved preference. The ctor
-        // runs one authoritative EvaluateSchedule() after load completes and IsDarkNow is
+        // runs one authoritative EvaluateScheduleAsync() after load completes and IsDarkNow is
         // set, so nothing is lost. _suppressSave already gates SaveSchedule for the same reason.
         if (_suppressSave) return;
         if (!ScheduleEnabled) return;
+        // A switch is already running: it decides the theme for now, and the next minute's check starts from it.
+        if (_switching) return;
         var now = TimeOnly.FromDateTime(DateTime.Now);
         bool wantDark = WindowsThemeService.ShouldBeDark(now, ParseTime(DarkStart, 19, 0), ParseTime(LightStart, 7, 0));
         if (wantDark == IsDarkNow) return;
 
-        if (_service.SetTheme(wantDark, ApplyToSystem))
+        if (await SwitchAsync(wantDark))
         {
             IsDarkNow = wantDark;
             StatusMessage = $"Schedule applied {(wantDark ? "dark" : "light")} theme.";
@@ -94,10 +131,16 @@ public sealed partial class DarkModeViewModel : ViewModelBase
 
     // Saved after the schedule is evaluated, so a change that could not be saved is the last word on the status
     // line: switching the theme would otherwise replace it with "Schedule applied" (#2521).
-    partial void OnScheduleEnabledChanged(bool value) { EvaluateSchedule(); SaveSchedule(); }
-    partial void OnDarkStartChanged(string value) { EvaluateSchedule(); SaveSchedule(); }
-    partial void OnLightStartChanged(string value) { EvaluateSchedule(); SaveSchedule(); }
+    partial void OnScheduleEnabledChanged(bool value) => ApplyThenSaveSchedule();
+    partial void OnDarkStartChanged(string value) => ApplyThenSaveSchedule();
+    partial void OnLightStartChanged(string value) => ApplyThenSaveSchedule();
     partial void OnApplyToSystemChanged(bool value) => SaveSchedule();
+
+    private void ApplyThenSaveSchedule() => InitializeAsync(async () =>
+    {
+        await EvaluateScheduleAsync();
+        SaveSchedule();
+    });
 
     private void LoadFromSchedule()
     {

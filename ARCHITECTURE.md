@@ -1853,7 +1853,8 @@ Key services:
   `ThemeService` (which themes SysManager's own WPF UI). `SaveSchedule` returns false, and writes
   nothing, after a `LoadSchedule` that could not read the file; one that does not parse is set
   aside first. `DarkModeViewModel` saves after it evaluates the schedule, so the not-saved status
-  is the last word on the status line.
+  is the last word on the status line. It calls `SetTheme` on a worker thread, one switch at a time,
+  because the broadcast waits up to five seconds on each window that is slow to answer (#2750).
 - `StandbyMemoryService` — `GlobalMemoryStatusEx` for stats (no admin) and ntdll
   `NtSetSystemInformation(SystemMemoryListInformation, MemoryPurgeStandbyList)` to purge,
   after enabling `SeProfileSingleProcessPrivilege` via `AdjustTokenPrivileges` (the

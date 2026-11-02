@@ -533,6 +533,10 @@ public class PowerShellRunnerTests
     /// the scheduler instead, which here holds it until the test runs it, so the order is decided by the test and
     /// not by timing: the loop's own deadline is 20 seconds away, so a run that had finished would mean the stop ran
     /// inside <c>Cancel()</c>. The deadline is there so a stop that never lands cannot hang the suite.
+    /// <para>One stop or two: <c>RunAsync</c> asks again just after <c>BeginInvoke</c> returns when the token is
+    /// already cancelled, so a stop asked of an instance that had not started is not lost, and under load the cancel
+    /// can land before that check. Both are the same request, so every stop asked for is run, and none may have run
+    /// inside <c>Cancel()</c>. Taking exactly one failed the full suite now and then.</para>
     /// </remarks>
     [Fact]
     public async Task Cancel_AsksForTheStop_WithoutWaitingForThePipelineToStop()
@@ -562,11 +566,12 @@ public class PowerShellRunnerTests
 
         cts.Cancel();
 
-        Action stop;
-        lock (stops) stop = Assert.Single(stops);
+        Action[] asked;
+        lock (stops) asked = [.. stops];
+        Assert.NotEmpty(asked);
         Assert.False(run.IsCompleted, "the pipeline stopped inside Cancel(), so a stop that hangs freezes the caller");
 
-        stop();
+        foreach (var stop in asked) stop();
         await Assert.ThrowsAsync<OperationCanceledException>(() => run);
     }
 
@@ -579,7 +584,8 @@ public class PowerShellRunnerTests
     /// and the run's disposal clears it once the stopped run ends: when the disposal came first, <c>Stop()</c> threw a
     /// <see cref="NullReferenceException"/> from inside PowerShell, which nothing caught, and failed the test above
     /// now and then. The call here waits on a gate only the test opens, so a stop that waits for the pipeline cannot
-    /// return before it; the ten seconds bound a stop that waits, and one that does not returns at once.
+    /// return before it; the ten seconds bound a stop that waits, and one that does not returns at once. Every stop
+    /// asked for is run, for the reason the test above gives: there can be two.
     /// </remarks>
     [Fact]
     public async Task TheStopItAsksFor_ReturnsAtOnce_EvenWhileThePipelineCannotStopYet()
@@ -608,14 +614,15 @@ public class PowerShellRunnerTests
             cts.Token);
         await started.Task.WaitAsync(TimeSpan.FromSeconds(30));
         cts.Cancel();
-        Action stop;
-        lock (stops) stop = Assert.Single(stops);
+        Action[] asked;
+        lock (stops) asked = [.. stops];
+        Assert.NotEmpty(asked);
 
         Task stopping;
         Task first;
         try
         {
-            stopping = Task.Run(stop);
+            stopping = Task.WhenAll(asked.Select(stop => Task.Run(stop)));
             first = await Task.WhenAny(stopping, Task.Delay(TimeSpan.FromSeconds(10)));
         }
         finally

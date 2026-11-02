@@ -598,10 +598,12 @@ Key services:
   beside the pipeline, so a child that dies under it fails the run then, not when the
   transport gives up about a minute later; the pipeline and the runspace are let go on
   the thread pool, because disposing either with the child gone waits for that same
-  minute (#2637). Cancelling hands `Stop()` to the
-  thread pool: `Stop()` waits for the stop to land, and on a session whose child had
-  died that froze the caller of `Cancel()`, a Cancel button's UI thread, for about a
-  minute (#2608). A run whose token is cancelled by the end of the lease is cancelled
+  minute (#2637). Cancelling asks for the stop on the thread pool, with `BeginStop`:
+  `Stop()` waits for the stop to land, and on a session whose child had died that froze
+  the caller of `Cancel()`, a Cancel button's UI thread, for about a minute (#2608). Run
+  on the pool it held a thread for that minute instead, and when the stopped run had been
+  disposed by the time the wait ended, it threw a `NullReferenceException` from inside
+  PowerShell. A run whose token is cancelled by the end of the lease is cancelled
   there and never invoked (`CancelledBeforeItStarted`): the registration would ask an
   instance that has not run to stop, and `BeginInvoke` refuses one that is still
   stopping with an `InvalidOperationException` no caller's cancel branch catches, or,

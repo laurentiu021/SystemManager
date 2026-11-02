@@ -10,6 +10,18 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.136.73] - 2026-11-02
+
+**Cancelling a task that runs PowerShell no longer leaves a background thread waiting, or an error in the log.**
+
+### Fixed
+- Cancelling a scan, repair or other task that runs PowerShell asked PowerShell to stop and then waited, on a
+  background thread, for the stop to land: up to a minute on a session whose PowerShell had died. When the stopped
+  task finished first and cleaned up after itself, that wait failed inside PowerShell with an error nothing caught,
+  which the log recorded as an unobserved task exception, and one of SysManager's own tests failed now and then
+  because of it. The stop is now asked for without waiting. This was there since 1.127.3, when the stop moved off the
+  thread that cancels.
+
 ## [1.136.72] - 2026-11-02
 
 **Restore Points names each point's type in words, and warns before a restore cuts off work SysManager is still doing.**

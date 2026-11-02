@@ -571,6 +571,65 @@ public class PowerShellRunnerTests
     }
 
     /// <summary>
+    /// The stop the runner asks for returns at once, also while the pipeline cannot stop yet.
+    /// </summary>
+    /// <remarks>
+    /// <c>PowerShell.Stop()</c> waits for the stop to land, so a script inside a .NET call held the thread the stop ran
+    /// on until the call returned. Waiting also meant reading, afterwards, the result PowerShell keeps for the stop,
+    /// and the run's disposal clears it once the stopped run ends: when the disposal came first, <c>Stop()</c> threw a
+    /// <see cref="NullReferenceException"/> from inside PowerShell, which nothing caught, and failed the test above
+    /// now and then. The call here waits on a gate only the test opens, so a stop that waits for the pipeline cannot
+    /// return before it; the ten seconds bound a stop that waits, and one that does not returns at once.
+    /// </remarks>
+    [Fact]
+    public async Task TheStopItAsksFor_ReturnsAtOnce_EvenWhileThePipelineCannotStopYet()
+    {
+        var stops = new List<Action>();
+        using var gate = new ManualResetEventSlim();
+        using var runner = new PowerShellRunner(
+            action => Task.Run(action),
+            openRunspace: runspace => Task.Run(runspace.Open),
+            createRunspace: () => (RunspaceFactory.CreateRunspace(InitialSessionState.CreateDefault2()), null, null),
+            scheduleStop: stop =>
+            {
+                lock (stops) stops.Add(stop);
+                return Task.CompletedTask;
+            });
+        var started = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        runner.LineReceived += line =>
+        {
+            if (line.Text == "started") started.TrySetResult();
+        };
+        using var cts = new CancellationTokenSource();
+
+        var run = runner.RunAsync(
+            "param($gate) 'started'; $null = $gate.Wait(30000)",
+            new Dictionary<string, object?> { ["gate"] = gate },
+            cts.Token);
+        await started.Task.WaitAsync(TimeSpan.FromSeconds(30));
+        cts.Cancel();
+        Action stop;
+        lock (stops) stop = Assert.Single(stops);
+
+        Task stopping;
+        Task first;
+        try
+        {
+            stopping = Task.Run(stop);
+            first = await Task.WhenAny(stopping, Task.Delay(TimeSpan.FromSeconds(10)));
+        }
+        finally
+        {
+            gate.Set();
+        }
+
+        Assert.True(ReferenceEquals(stopping, first),
+            "the stop waited for the pipeline, which could not stop before the gate opened");
+        await stopping;
+        await Assert.ThrowsAsync<OperationCanceledException>(() => run);
+    }
+
+    /// <summary>
     /// A cancel that lands while the runspace is still opening cancels the run, and the script never starts.
     /// </summary>
     /// <remarks>

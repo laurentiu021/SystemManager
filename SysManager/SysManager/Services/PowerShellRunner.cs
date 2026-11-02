@@ -959,11 +959,16 @@ public sealed partial class PowerShellRunner : IPowerShellRunner, IDisposable
     /// for all of it (#2608). So the stop is handed to <see cref="_scheduleStop"/>, the thread pool outside tests.
     /// What a stop on a finished, disposed or broken pipeline throws is logged there, so cancelling cannot throw
     /// either.
+    /// <para>Asked for with <c>BeginStop</c>, which returns without waiting. <c>Stop()</c> held its thread until the
+    /// stop landed, a minute on that dead session, and then read the result PowerShell keeps for the stop, which the
+    /// run's disposal clears once the stopped run ends: when the disposal came first, <c>Stop()</c> threw a
+    /// <see cref="NullReferenceException"/> from inside PowerShell that nothing caught, and the log recorded it as an
+    /// unobserved task exception.</para>
     /// </remarks>
     private void RequestStop(PowerShell ps)
         => _ = _scheduleStop(() =>
         {
-            try { ps.Stop(); }
+            try { _ = ps.BeginStop(null, null); }
             catch (Exception ex) when (ex is InvalidOperationException or RuntimeException
                                            or InvalidRunspaceStateException or InvalidPowerShellStateException)
             {

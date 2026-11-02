@@ -18936,6 +18936,56 @@ public partial class ArchitectureTests
     }
 
     /// <summary>
+    /// A program whose output is read is started through the runner, and nowhere else (#2766).
+    /// </summary>
+    /// <remarks>
+    /// Startup Manager's schtasks, Right-Click Menu's reg export and the speed test's CLI each started their program
+    /// with their own <c>ProcessStartInfo</c>, pipes, timeout and kill. None of them could be tested without running
+    /// the real program: one test ran schtasks on the machine, and every run of the suite exported the real Blocked list
+    /// into the user's backups. A program started for the user to look at, through the shell, reads nothing back and is
+    /// not this guard's business. This reads every app file but the runner's own, its comments and literals blanked,
+    /// and fails one that redirects a stream or reads one.
+    /// </remarks>
+    [Fact]
+    public void EveryProgramWhoseOutputIsRead_IsStartedThroughTheRunner()
+    {
+        var sourceDir = Path.Combine(TestPaths.RepoRoot(), "SysManager", "SysManager");
+        var files = Directory.GetFiles(sourceDir, "*.cs", SearchOption.AllDirectories)
+            .Where(f => !f.Contains($"{Path.DirectorySeparatorChar}obj{Path.DirectorySeparatorChar}")
+                        && !f.Contains($"{Path.DirectorySeparatorChar}bin{Path.DirectorySeparatorChar}"))
+            .ToArray();
+        Assert.NotEmpty(files);
+
+        string[] reads =
+        [
+            "RedirectStandardOutput", "RedirectStandardError", ".StandardOutput.", ".StandardError.",
+            "BeginOutputReadLine", "BeginErrorReadLine", "OutputDataReceived", "ErrorDataReceived",
+        ];
+        List<string> offenders = [];
+        var runnerReads = -1;
+        foreach (var file in files)
+        {
+            var code = SourceBraces.CodeOnly(File.ReadAllText(file));
+            var found = reads.Where(r => code.Contains(r, StringComparison.Ordinal)).ToList();
+            if (Path.GetFileName(file) == "PowerShellRunner.cs")
+            {
+                runnerReads = found.Count;
+                continue;
+            }
+            if (found.Count > 0) offenders.Add($"{Path.GetFileName(file)}: {string.Join(", ", found)}");
+        }
+
+        // The runner has to be seen doing all of it itself, or the scan is not finding what it looks for: it redirects
+        // both streams and reads both through the two events and the two BeginRead calls.
+        Assert.True(runnerReads >= 6,
+            $"{runnerReads} of the markers were found in PowerShellRunner.cs, so the scan no longer finds what the runner "
+            + "does — fix the scan rather than trusting the pass");
+        Assert.True(offenders.Count == 0,
+            "these start a program and read what it prints themselves. Run it through IPowerShellRunner.RunProcessAsync "
+            + "and read LineReceived, as StartupService does for schtasks:\n  " + string.Join("\n  ", offenders));
+    }
+
+    /// <summary>
     /// The code of each <c>new ProcessStartInfo(…) { … }</c> construction in <paramref name="source"/>, its literals
     /// and comments blanked, ended where <see cref="SourceBraces.MatchingBrace"/> says its initializer ends.
     /// </summary>

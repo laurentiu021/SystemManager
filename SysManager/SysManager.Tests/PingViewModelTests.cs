@@ -17,7 +17,7 @@ public class PingViewModelTests
     [Fact]
     public void Constructor_SetsShared()
     {
-        var shared = new NetworkSharedState(new Services.PingMonitorService(), new Services.TracerouteService(), new Services.TracerouteMonitorService(), new Services.SpeedTestService(), new Services.NetworkRepairService(new Services.PowerShellRunner()));
+        var shared = new NetworkSharedState(new Services.PingMonitorService(), new Services.TracerouteService(), new Services.TracerouteMonitorService(), new Services.SpeedTestService(new Services.PowerShellRunner()), new Services.NetworkRepairService(new Services.PowerShellRunner()));
 
         var vm = new PingViewModel(shared);
 
@@ -38,7 +38,7 @@ public class PingViewModelTests
     [Fact]
     public void ClearHistoryCommand_ResetsStats()
     {
-        var shared = new NetworkSharedState(new Services.PingMonitorService(), new Services.TracerouteService(), new Services.TracerouteMonitorService(), new Services.SpeedTestService(), new Services.NetworkRepairService(new Services.PowerShellRunner()));
+        var shared = new NetworkSharedState(new Services.PingMonitorService(), new Services.TracerouteService(), new Services.TracerouteMonitorService(), new Services.SpeedTestService(new Services.PowerShellRunner()), new Services.NetworkRepairService(new Services.PowerShellRunner()));
         var vm = new PingViewModel(shared);
 
         Assert.NotEmpty(shared.Targets);   // otherwise the Assert.All below succeeds over nothing
@@ -66,7 +66,7 @@ public class PingViewModelTests
     [Fact]
     public void AddCustomTargetCommand_DelegatesToShared()
     {
-        var shared = new NetworkSharedState(new Services.PingMonitorService(), new Services.TracerouteService(), new Services.TracerouteMonitorService(), new Services.SpeedTestService(), new Services.NetworkRepairService(new Services.PowerShellRunner()));
+        var shared = new NetworkSharedState(new Services.PingMonitorService(), new Services.TracerouteService(), new Services.TracerouteMonitorService(), new Services.SpeedTestService(new Services.PowerShellRunner()), new Services.NetworkRepairService(new Services.PowerShellRunner()));
         shared.NewTargetHost = "10.88.88.88";
         var vm = new PingViewModel(shared);
         var before = shared.Targets.Count;

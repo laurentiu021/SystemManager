@@ -33,7 +33,7 @@ public class NetworkSharedStateAutoTraceTests
             new PingMonitorService { Interval = TimeSpan.FromMilliseconds(100), TimeoutMs = 300 },
             new TracerouteService(),
             new TracerouteMonitorService(),
-            new SpeedTestService(),
+            new SpeedTestService(new PowerShellRunner()),
             new NetworkRepairService(new PowerShellRunner()),
             () => UnreachableHost);
 

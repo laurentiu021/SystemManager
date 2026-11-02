@@ -1214,7 +1214,7 @@ public sealed class DashboardViewModelTests : IDisposable
         {
             var history = new SpeedTestHistoryService(dir);
             var tab = new SpeedTestViewModel(new NetworkSharedState(new PingMonitorService(), new TracerouteService(),
-                new TracerouteMonitorService(), new SpeedTestService(), new NetworkRepairService(new PowerShellRunner())), history);
+                new TracerouteMonitorService(), new SpeedTestService(new PowerShellRunner()), new NetworkRepairService(new PowerShellRunner())), history);
             await tab.InitializationComplete;
             var vm = NewVm(QuietWinget(), speedTest: EngineThatMeasures(QuickResult), speedHistory: history);
 

@@ -85,7 +85,7 @@ public sealed class DashboardSlowdownViewUiTests
             new MemoryTestService(),
             new NavigationService(),
             new WindowsUpdateService(),
-            new SpeedTestService(),
+            new SpeedTestService(new PowerShellRunner()),
             new SpeedTestHistoryService(Path.Combine(Path.GetTempPath(), "SysManagerTests", "dash-slow-speed")),
             new UpdateCheckPreferenceService(Path.Combine(Path.GetTempPath(), "SysManagerTests", "dash-slow-update-check")),
             slowdown: new UnusedSlowdown());

@@ -8,6 +8,9 @@ using System.Net;
 using System.Net.Http;
 using System.Net.NetworkInformation;
 using System.Security.Cryptography;
+using System.Text;
+using NSubstitute;
+using SysManager.Models;
 using SysManager.Services;
 
 namespace SysManager.Tests;
@@ -65,7 +68,7 @@ public class SpeedTestServiceTests
         // filesystem work, so this test is deterministic and offline. Not elevated, or the run would be refused
         // before it got that far, as it is on an elevated host.
         using var http = new HttpClient(new Serving([]));
-        var svc = new SpeedTestService(http, toolsDir: null, SpeedTestService.OoklaRelease.Pinned, isElevated: () => false);
+        var svc = new SpeedTestService(Substitute.For<IPowerShellRunner>(), http, toolsDir: null, SpeedTestService.OoklaRelease.Pinned, isElevated: () => false);
         using var cts = new CancellationTokenSource();
         cts.Cancel();
 
@@ -227,7 +230,7 @@ public class SpeedTestServiceTests
         var server = new Serving(zip);
         using var http = new HttpClient(server);
         var release = new SpeedTestService.OoklaRelease("https://ookla.test/cli.zip", Sha256(zip), Sha256(cli));
-        var svc = new SpeedTestService(http, dir, release, isElevated: () => false);
+        var svc = new SpeedTestService(Substitute.For<IPowerShellRunner>(), http, dir, release, isElevated: () => false);
 
         try
         {
@@ -249,7 +252,7 @@ public class SpeedTestServiceTests
         var zip = ZipOf(cli);
         using var http = new HttpClient(new Serving(zip));
         var release = new SpeedTestService.OoklaRelease("https://ookla.test/cli.zip", Sha256(ZipOf(FakeCli(0x42))), Sha256(cli));
-        var svc = new SpeedTestService(http, dir, release, isElevated: () => false);
+        var svc = new SpeedTestService(Substitute.For<IPowerShellRunner>(), http, dir, release, isElevated: () => false);
 
         try
         {
@@ -269,7 +272,7 @@ public class SpeedTestServiceTests
         File.WriteAllBytes(Path.Combine(dir, "speedtest.exe"), cli);
         var server = new Serving([]);
         using var http = new HttpClient(server);
-        var svc = new SpeedTestService(http, dir, new("https://ookla.test/cli.zip", "", Sha256(cli)), isElevated: () => false);
+        var svc = new SpeedTestService(Substitute.For<IPowerShellRunner>(), http, dir, new("https://ookla.test/cli.zip", "", Sha256(cli)), isElevated: () => false);
 
         try
         {
@@ -289,7 +292,7 @@ public class SpeedTestServiceTests
         var zip = ZipOf(cli);
         var server = new Serving(zip);
         using var http = new HttpClient(server);
-        var svc = new SpeedTestService(http, dir, new("https://ookla.test/cli.zip", Sha256(zip), Sha256(cli)), isElevated: () => false);
+        var svc = new SpeedTestService(Substitute.For<IPowerShellRunner>(), http, dir, new("https://ookla.test/cli.zip", Sha256(zip), Sha256(cli)), isElevated: () => false);
 
         try
         {
@@ -310,7 +313,7 @@ public class SpeedTestServiceTests
         var dir = NewToolsDir();
         var server = new Serving(ZipOf(FakeCli()));
         using var http = new HttpClient(server);
-        var svc = new SpeedTestService(http, dir, SpeedTestService.OoklaRelease.Pinned, isElevated: () => true);
+        var svc = new SpeedTestService(Substitute.For<IPowerShellRunner>(), http, dir, SpeedTestService.OoklaRelease.Pinned, isElevated: () => true);
 
         try
         {
@@ -319,6 +322,85 @@ public class SpeedTestServiceTests
             Assert.Equal(SpeedTestService.OoklaNeedsStandardRunMessage, ex.Message);
             Assert.Equal(0, server.Requests);
             Assert.Empty(Directory.EnumerateFileSystemEntries(dir));
+        }
+        finally { Directory.Delete(dir, recursive: true); }
+    }
+
+    // ---------- the CLI's run, through the runner (#2766) ----------
+
+    /// <summary>What a finished Ookla run prints with <c>--format=json</c>, cut to the fields the result reads.</summary>
+    private const string OoklaJson =
+        """{"type":"result","ping":{"latency":12.5},"download":{"bandwidth":12500000},"upload":{"bandwidth":2500000},"server":{"name":"Test Server","location":"Testville"}}""";
+
+    /// <summary>A service over a cached CLI in <paramref name="dir"/> whose run is <paramref name="runner"/>'s answer.</summary>
+    private static SpeedTestService WithCachedCli(string dir, IPowerShellRunner runner, HttpClient http)
+    {
+        var cli = FakeCli();
+        File.WriteAllBytes(Path.Combine(dir, "speedtest.exe"), cli);
+        return new SpeedTestService(runner, http, dir, new("https://ookla.test/cli.zip", "", Sha256(cli)), isElevated: () => false);
+    }
+
+    /// <summary>
+    /// The prepared CLI runs through the runner with the JSON options and the chosen server, and the result is what it
+    /// printed (#2766).
+    /// </summary>
+    /// <remarks>
+    /// The service started the CLI itself, with its own pipe reads and kill, so no test could see a run: one would have
+    /// started the test's stand-in file, which is not a program.
+    /// </remarks>
+    [Fact]
+    public async Task APreparedCli_RunsThroughTheRunner_AndTheResultIsWhatItPrinted()
+    {
+        var dir = NewToolsDir();
+        var exe = Path.Combine(dir, "speedtest.exe");
+        using var http = new HttpClient(new Serving([]));
+        var runner = Substitute.For<IPowerShellRunner>();
+        runner.RunProcessAsync(exe, Arg.Any<string>(), Arg.Any<CancellationToken>(), Arg.Any<Encoding?>())
+            .Returns(_ =>
+            {
+                runner.LineReceived += Raise.Event<Action<PowerShellLine>>(PowerShellLine.Output(OoklaJson));
+                return Task.FromResult(0);
+            });
+        using var svc = WithCachedCli(dir, runner, http);
+
+        try
+        {
+            var result = await svc.RunOoklaAsync(progress: null, CancellationToken.None, serverId: 1234);
+
+            await runner.Received(1).RunProcessAsync(exe,
+                "--accept-license --accept-gdpr --format=json --progress=no --server-id=1234",
+                Arg.Any<CancellationToken>(), Arg.Any<Encoding?>());
+            Assert.Equal("Ookla", result.Engine);
+            Assert.Equal(100.0, result.DownloadMbps, 6);
+            Assert.Equal(20.0, result.UploadMbps!.Value, 6);
+            Assert.Equal(12.5, result.PingMs!.Value, 6);
+            Assert.Equal("Test Server (Testville)", result.Server);
+        }
+        finally { Directory.Delete(dir, recursive: true); }
+    }
+
+    /// <summary>A run that fails says what the CLI printed on its error stream, with its exit code (#2766).</summary>
+    [Fact]
+    public async Task ACliRunThatFails_SaysWhatItPrintedOnItsErrorStream()
+    {
+        var dir = NewToolsDir();
+        using var http = new HttpClient(new Serving([]));
+        var runner = Substitute.For<IPowerShellRunner>();
+        runner.RunProcessAsync(Arg.Any<string>(), Arg.Any<string>(), Arg.Any<CancellationToken>(), Arg.Any<Encoding?>())
+            .Returns(_ =>
+            {
+                runner.LineReceived += Raise.Event<Action<PowerShellLine>>(
+                    PowerShellLine.Err("[error] Cannot read from socket: Connection reset by peer"));
+                return Task.FromResult(2);
+            });
+        using var svc = WithCachedCli(dir, runner, http);
+
+        try
+        {
+            var ex = await Assert.ThrowsAsync<InvalidOperationException>(
+                () => svc.RunOoklaAsync(progress: null, CancellationToken.None));
+
+            Assert.Equal("Ookla failed (2): [error] Cannot read from socket: Connection reset by peer", ex.Message);
         }
         finally { Directory.Delete(dir, recursive: true); }
     }

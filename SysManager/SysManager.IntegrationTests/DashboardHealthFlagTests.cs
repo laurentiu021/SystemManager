@@ -35,7 +35,7 @@ public class DashboardHealthFlagTests
             new MemoryTestService(),
             new NavigationService(),
             new WindowsUpdateService(),
-            new SpeedTestService(),
+            new SpeedTestService(new PowerShellRunner()),
             new SpeedTestHistoryService(Path.Combine(Path.GetTempPath(), "SysManagerTests", "dash-health-speed")),
             new UpdateCheckPreferenceService(Path.Combine(Path.GetTempPath(), "SysManagerTests", "dash-health-update-check")));
     }

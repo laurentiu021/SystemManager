@@ -40,7 +40,7 @@ public sealed class SpeedTestViewModelTests : IDisposable
 
     private static NetworkSharedState NewShared() => new(
         new Services.PingMonitorService(), new Services.TracerouteService(),
-        new Services.TracerouteMonitorService(), new Services.SpeedTestService(),
+        new Services.TracerouteMonitorService(), new Services.SpeedTestService(new Services.PowerShellRunner()),
         new Services.NetworkRepairService(new Services.PowerShellRunner()));
 
     /// <summary>History service scoped to this test's temp directory — never the real profile.</summary>

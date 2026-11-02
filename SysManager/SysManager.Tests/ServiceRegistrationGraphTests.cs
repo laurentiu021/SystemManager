@@ -2,7 +2,11 @@
 // Author: laurentiu021 · https://github.com/laurentiu021/SystemManager
 // License: MIT
 
+using System.Reflection;
+using System.Runtime.CompilerServices;
 using Microsoft.Extensions.DependencyInjection;
+using NSubstitute;
+using SysManager.Services;
 
 namespace SysManager.Tests;
 
@@ -98,40 +102,190 @@ public class ServiceRegistrationGraphTests
     /// a default is one the container fills with that default when its type is not registered, and it does so silently:
     /// the validation above passes either way. Unregistered, the Dashboard would lose its blocked-apps alert and its "Why
     /// is it slow?" button would never run (#1529), and a tab whose change Undo Changes put back would not hear of it.
-    /// <para>The constructor read is the public one with the most parameters, the one the container uses when it can
-    /// satisfy all of them, which the validation above has just proved it can.</para>
+    /// <para>The constructor read is the one the container calls (<see cref="ContainerConstructor"/>). This used to read
+    /// the widest public one, which is not always it: Deep Cleanup's widest takes the cleanup roots, which nothing
+    /// registers, so the container builds it through the three-parameter one, and the scan read optional services of a
+    /// constructor that never runs (#2742).</para>
+    /// <para>A registration the app builds in a factory has no constructor the container chooses, and was not read at
+    /// all. Its factory is run over stand-ins (<see cref="StandInProvider"/>) and the object it builds is read instead:
+    /// each optional service its type takes must be in the field that holds it, and each service the factory asks for
+    /// must be registered, which the validation above cannot see either, since a factory is code it never runs.</para>
     /// </remarks>
     [Fact]
     public void EveryOptionalServiceAConstructorTakes_IsRegistered()
     {
+        var scan = ScanOptionalServices(RealGraph());
+
+        // Floors, so a reader that stopped finding them cannot pass by checking nothing: 35 optional services in the
+        // constructors the container calls when this was written, 11 factories, and the 2 services two of them hand over.
+        Assert.True(scan.Optional.Count >= 30,
+            $"only {scan.Optional.Count} optional services were found in the constructors the real graph calls.");
+        Assert.Contains(scan.Optional, o => o.Owner == "DashboardViewModel" && o.Parameter.ParameterType == typeof(ISlowdownService));
+        Assert.True(scan.Factories >= 11, $"only {scan.Factories} factory registrations were found in the real graph.");
+        Assert.Contains($"{nameof(TemperatureService)}({nameof(INvidiaGpuReader)})", scan.FactoryFields);
+        Assert.Contains($"{nameof(ResourceHistoryService)}({nameof(IGpuTelemetry)})", scan.FactoryFields);
+
+        Assert.True(scan.Missing.Count == 0,
+            "these registrations leave out an optional service, or ask for one nothing registers, so the app gets the "
+            + "default or an error instead:\n  " + string.Join("\n  ", scan.Missing));
+    }
+
+    /// <summary>
+    /// The scan reads the constructor the container calls, and asks the container which that is: a type whose widest
+    /// constructor takes something nothing registers is built through the narrower one, and an optional service that one
+    /// leaves out is reported, though the widest one's is registered (#2742).
+    /// </summary>
+    [Fact]
+    public void TheOptionalServiceScan_ReadsTheConstructorTheContainerCalls()
+    {
         var services = RealGraph();
-        var registered = services.Select(d => d.ServiceType).ToHashSet();
+        services.AddSingleton<ProbeWithAnUnfillableWidestConstructor>();
+
+        using (var provider = services.BuildServiceProvider(StrictOptions))
+        {
+            Assert.Equal("narrower", provider.GetRequiredService<ProbeWithAnUnfillableWidestConstructor>().Built);
+            Assert.Equal([typeof(IPowerShellRunner), typeof(IRecycleBin), typeof(IPreviousInstallationCleanup)],
+                ContainerConstructor(typeof(DeepCleanupService), provider.GetRequiredService<IServiceProviderIsService>())!
+                    .GetParameters().Select(p => p.ParameterType));
+        }
+
+        var scan = ScanOptionalServices(services);
+        Assert.Contains($"{nameof(ProbeWithAnUnfillableWidestConstructor)}({nameof(IProbeNeverRegistered)} optional)", scan.Missing);
+        Assert.DoesNotContain(scan.Optional, o => o.Owner == nameof(DeepCleanupService));
+    }
+
+    /// <summary>
+    /// The scan reads what a factory builds: one that leaves an optional service out, and one that asks for a service
+    /// nothing registers, are both reported, while the validation above passes both (#2742). One that hands over another
+    /// registration's object is not read as if it had built a stand-in.
+    /// </summary>
+    [Fact]
+    public void TheOptionalServiceScan_ReadsWhatAFactoryBuilds()
+    {
+        var services = RealGraph();
+        services.AddSingleton(sp => new ProbeBuiltByAFactory(sp.GetRequiredService<SystemInfoService>()));
+        services.AddSingleton(sp => new ProbeAskingForTheUnregistered(sp.GetRequiredService<NeverRegistered>()));
+        services.AddSingleton<ProbeForwarded>();
+        services.AddSingleton<IProbeForward>(sp => sp.GetRequiredService<ProbeForwarded>());
+
+        Assert.Null(Record.Exception(() => services.BuildServiceProvider(StrictOptions).Dispose()));
+        var scan = ScanOptionalServices(services);
+
+        Assert.Contains($"{nameof(ProbeBuiltByAFactory)} is built by a factory that leaves out its {nameof(IPutBackSignal)} signal",
+            scan.Missing);
+        Assert.Contains($"{nameof(ProbeAskingForTheUnregistered)}'s factory asks for {nameof(NeverRegistered)}, which nothing registers",
+            scan.Missing);
+        Assert.DoesNotContain(scan.Missing, m => m.Contains(nameof(ProbeForwarded), StringComparison.Ordinal));
+    }
+
+    /// <summary>What <see cref="ScanOptionalServices"/> read, and what it found missing.</summary>
+    private sealed record OptionalServiceScan(
+        List<(string Owner, ParameterInfo Parameter)> Optional, int Factories, List<string> FactoryFields, List<string> Missing);
+
+    /// <summary>
+    /// Reads every optional service <paramref name="services"/> hands over: from the constructor the container calls for
+    /// each registered type, and from what each factory builds.
+    /// </summary>
+    private static OptionalServiceScan ScanOptionalServices(IServiceCollection services)
+    {
+        using var provider = services.BuildServiceProvider(StrictOptions);
+        var isService = provider.GetRequiredService<IServiceProviderIsService>();
 
         var optional = services
             .Select(d => d.ImplementationType)
             .OfType<Type>()
             .Distinct()
-            .SelectMany(type => type.GetConstructors()
-                .OrderByDescending(c => c.GetParameters().Length)
-                .Take(1)
-                .SelectMany(c => c.GetParameters())
-                .Where(p => p.HasDefaultValue
-                            && (p.ParameterType.IsInterface || p.ParameterType.Assembly == typeof(ServiceRegistration).Assembly))
+            .SelectMany(type => (ContainerConstructor(type, isService)?.GetParameters() ?? [])
+                .Where(IsOptionalService)
                 .Select(p => (Owner: type.Name, Parameter: p)))
             .ToList();
-
-        // Floor: nine when written — Undo Changes' signal in five tabs, the Dashboard's two, Deep Cleanup's runner and the
-        // Services tab's ledger. A reader that stopped finding them would pass by checking nothing.
-        Assert.True(optional.Count >= 9, $"only {optional.Count} optional services were found in the real graph's constructors.");
-        Assert.Contains(optional, o => o.Owner == "DashboardViewModel" && o.Parameter.ParameterType == typeof(Services.ISlowdownService));
-
         var missing = optional
-            .Where(o => !registered.Contains(o.Parameter.ParameterType))
+            .Where(o => !isService.IsService(o.Parameter.ParameterType))
             .Select(o => $"{o.Owner}({o.Parameter.ParameterType.Name} {o.Parameter.Name})")
             .ToList();
-        Assert.True(missing.Count == 0,
-            "these constructors take an optional service the container does not register, so it passes the default "
-            + "instead:\n  " + string.Join("\n  ", missing));
+
+        var factories = 0;
+        var fields = new List<string>();
+        foreach (var descriptor in services.Where(d => d.ImplementationFactory is not null))
+        {
+            factories++;
+            var standIns = new StandInProvider(isService);
+            var built = descriptor.ImplementationFactory!(standIns);
+            missing.AddRange(standIns.Unregistered.Select(t =>
+                $"{built.GetType().Name}'s factory asks for {t.Name}, which nothing registers"));
+
+            // One that hands over another registration's object is that registration's, and was read above.
+            if (standIns.HandedOut(built)) continue;
+
+            var type = built.GetType();
+            var parameters = type.GetConstructors(BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic)
+                .SelectMany(c => c.GetParameters())
+                .Where(IsOptionalService)
+                .DistinctBy(p => p.ParameterType);
+            foreach (var parameter in parameters)
+            {
+                var holders = InstanceFields(type).Where(f => f.FieldType == parameter.ParameterType).ToList();
+                if (holders.Count == 0)
+                    missing.Add($"{type.Name} is built by a factory, and no field holds its {parameter.ParameterType.Name}, "
+                        + "so this scan cannot tell whether the factory passes one");
+                else if (holders.All(f => f.GetValue(built) is null))
+                    missing.Add($"{type.Name} is built by a factory that leaves out its {parameter.ParameterType.Name} {parameter.Name}");
+                else
+                    fields.Add($"{type.Name}({parameter.ParameterType.Name})");
+            }
+        }
+
+        return new(optional, factories, fields, missing);
+    }
+
+    /// <summary>A parameter with a default whose type is a service: an interface, or a type of the app's own.</summary>
+    private static bool IsOptionalService(ParameterInfo p) =>
+        p.HasDefaultValue && (p.ParameterType.IsInterface || p.ParameterType.Assembly == typeof(ServiceRegistration).Assembly);
+
+    /// <summary>
+    /// The public constructor the container calls for <paramref name="type"/>: of those whose every parameter it can fill,
+    /// from a registration or from the parameter's default, the one with the most parameters. That is how
+    /// Microsoft.Extensions.DependencyInjection chooses, and the container itself says what it can fill.
+    /// </summary>
+    private static ConstructorInfo? ContainerConstructor(Type type, IServiceProviderIsService isService) =>
+        type.GetConstructors()
+            .OrderByDescending(c => c.GetParameters().Length)
+            .FirstOrDefault(c => c.GetParameters().All(p => p.HasDefaultValue || isService.IsService(p.ParameterType)));
+
+    /// <summary>Every instance field of <paramref name="type"/> and of the types it derives from.</summary>
+    private static IEnumerable<FieldInfo> InstanceFields(Type type)
+    {
+        for (var t = type; t is not null; t = t.BaseType)
+        {
+            foreach (var field in t.GetFields(BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.DeclaredOnly))
+                yield return field;
+        }
+    }
+
+    /// <summary>
+    /// What a factory is handed in <see cref="ScanOptionalServices"/>: for each service it asks for, an object of that type
+    /// whose constructor never ran, so the factory runs without building anything under it, and a record of what it asked
+    /// for that the container could not supply.
+    /// </summary>
+    private sealed class StandInProvider(IServiceProviderIsService isService) : IServiceProvider
+    {
+        private readonly List<object> _handedOut = [];
+
+        public List<Type> Unregistered { get; } = [];
+
+        public bool HandedOut(object built) => _handedOut.Any(o => ReferenceEquals(o, built));
+
+        public object GetService(Type serviceType)
+        {
+            if (!isService.IsService(serviceType)) Unregistered.Add(serviceType);
+            var standIn = serviceType.IsInterface || serviceType.IsAbstract
+                ? Substitute.For([serviceType], [])
+                : RuntimeHelpers.GetUninitializedObject(serviceType);
+            // An object whose constructor never ran must not reach its finalizer either.
+            GC.SuppressFinalize(standIn);
+            _handedOut.Add(standIn);
+            return standIn;
+        }
     }
 
     // Probes for the two negative tests. Intentionally never registered as a dependency of anything in
@@ -148,5 +302,42 @@ public class ServiceRegistrationGraphTests
     private sealed class SingletonCapturingScopedProbe(ScopedProbe scoped)
     {
         private readonly ScopedProbe _scoped = scoped;
+    }
+
+    // Probes for the optional-service scan. The widest constructor takes something nothing registers, beside an optional
+    // service that is registered; the one the container calls takes an optional service nothing registers.
+    public interface IProbeNeverRegistered;
+
+    private sealed class ProbeWithAnUnfillableWidestConstructor
+    {
+        public ProbeWithAnUnfillableWidestConstructor(NeverRegistered missing, IPutBackSignal? signal = null) =>
+            (Built, _missing, _signal) = ("widest", missing, signal);
+
+        public ProbeWithAnUnfillableWidestConstructor(IProbeNeverRegistered? optional = null) =>
+            (Built, _optional) = ("narrower", optional);
+
+        public string Built { get; }
+
+        private readonly NeverRegistered? _missing;
+        private readonly IPutBackSignal? _signal;
+        private readonly IProbeNeverRegistered? _optional;
+    }
+
+    private sealed class ProbeBuiltByAFactory(SystemInfoService sys, IPutBackSignal? signal = null)
+    {
+        private readonly SystemInfoService _sys = sys;
+        private readonly IPutBackSignal? _signal = signal;
+    }
+
+    private sealed class ProbeAskingForTheUnregistered(NeverRegistered missing)
+    {
+        private readonly NeverRegistered _missing = missing;
+    }
+
+    public interface IProbeForward;
+
+    private sealed class ProbeForwarded(IPutBackSignal? signal = null) : IProbeForward
+    {
+        private readonly IPutBackSignal? _signal = signal;
     }
 }

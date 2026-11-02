@@ -245,7 +245,7 @@ public sealed partial class DebloaterViewModel : ViewModelBase
             // one point per 24h and System Restore is off entirely on many consumer machines, so the
             // removal must not be gated on it — and must never be claimed unless it really happened.
             var snapshotTaken = await _restorePoint
-                .EnsureAsync("SysManager Debloater", _cts.Token).ConfigureAwait(true);
+                .EnsureAsync("SysManager Preinstalled Apps", _cts.Token).ConfigureAwait(true);
             IsProgressIndeterminate = false;
 
             for (var i = 0; i < targets.Count; i++)
@@ -310,7 +310,7 @@ public sealed partial class DebloaterViewModel : ViewModelBase
                 : $"Removed {removed}; {failed} could not be removed.{rp}";
             Log.Information("Debloater: removed {Removed}, failed {Failed}", removed, failed);
             if (removed > 0)
-                ActivityLogService.Instance.Log("Debloater", $"Removed {removed} app{(removed == 1 ? "" : "s")}");
+                ActivityLogService.Instance.Log("Preinstalled Apps", $"Removed {removed} app{(removed == 1 ? "" : "s")}");
         }
         catch (OperationCanceledException)
         {
@@ -321,7 +321,7 @@ public sealed partial class DebloaterViewModel : ViewModelBase
             StatusMessage = $"Cancelled after removing {removed} app{(removed == 1 ? "" : "s")}.";
             Log.Information("Debloater: cancelled after removing {Removed}, failed {Failed}", removed, failed);
             if (removed > 0)
-                ActivityLogService.Instance.Log("Debloater",
+                ActivityLogService.Instance.Log("Preinstalled Apps",
                     $"Removed {removed} app{(removed == 1 ? "" : "s")}, then the removal was cancelled");
         }
         finally

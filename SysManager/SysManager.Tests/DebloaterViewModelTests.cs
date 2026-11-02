@@ -197,7 +197,7 @@ public class DebloaterViewModelTests
 
         await vm.RemoveSelectedCommand.ExecuteAsync(null);
 
-        await restorePoint.Received(1).EnsureAsync("SysManager Debloater", Arg.Any<CancellationToken>());
+        await restorePoint.Received(1).EnsureAsync("SysManager Preinstalled Apps", Arg.Any<CancellationToken>());
     }
 
     [Fact]
@@ -489,7 +489,7 @@ public class DebloaterViewModelTests
             Arg.Any<IDictionary<string, object?>>(), Arg.Any<CancellationToken>());
         Assert.Equal("Cancelled after removing 1 app.", vm.StatusMessage);
         var entry = Assert.Single(ActivityLogService.Instance.GetRecent(10));
-        Assert.Equal(("Debloater", "Removed 1 app, then the removal was cancelled"), (entry.Action, entry.Detail));
+        Assert.Equal(("Preinstalled Apps", "Removed 1 app, then the removal was cancelled"), (entry.Action, entry.Detail));
     }
 
     [Fact]

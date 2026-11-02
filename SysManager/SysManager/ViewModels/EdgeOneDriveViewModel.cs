@@ -267,7 +267,7 @@ public sealed partial class EdgeOneDriveViewModel : ElevatedViewModelBase
             // the user is trying to get back FROM. Applies to the Restore commands too — putting
             // Edge back is a system change like any other.
             var snapshotTaken = await _restorePoint
-                .EnsureAsync("SysManager Edge/OneDrive", CancellationToken.None).ConfigureAwait(true);
+                .EnsureAsync("SysManager Edge/OneDrive Remover", CancellationToken.None).ConfigureAwait(true);
 
             var outcome = await operation(CancellationToken.None).ConfigureAwait(true);
             result = outcome;
@@ -283,7 +283,7 @@ public sealed partial class EdgeOneDriveViewModel : ElevatedViewModelBase
             if (outcome == EdgeOneDriveOutcome.Success)
             {
                 Log.Information("EdgeOneDrive: {Component} {PastTense}", component, pastTense);
-                ActivityLogService.Instance.Log("Edge/OneDrive", $"{component} {pastTense}");
+                ActivityLogService.Instance.Log("Edge/OneDrive Remover", $"{component} {pastTense}");
             }
         }
         catch (InvalidOperationException ex) { StatusMessage = $"{component} operation failed: {ex.Message}"; }

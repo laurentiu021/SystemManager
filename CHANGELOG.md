@@ -10,6 +10,22 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.136.64] - 2026-11-02
+
+**Preinstalled Apps' restore points and history entries use the tab's name, and so do four more tabs' entries and Recent Changes' button for New App Alerts.**
+
+### Fixed
+- Preinstalled Apps still named its restore points "SysManager Debloater" and its entries in the activity
+  history "Debloater", the tab's name before 1.109.2, so the Restore Points list, Undo Changes' newest restore
+  point and Windows' own System Restore list named a tab the sidebar does not have. They now say Preinstalled
+  Apps. Restore points made before this keep the old name.
+- On Recent Changes, the button on a program New App Alerts noticed said "Open App Alerts", the tab's name
+  before 1.66.4. It says Open New App Alerts. This was there since 1.125.0.
+- Four more tabs wrote a short form of their name in the activity history: Privacy, Volume, Edge/OneDrive and
+  Standby cleaner. They now write Privacy & Telemetry, Volume Control, Edge/OneDrive Remover and Standby List
+  Cleaner, as the sidebar says, and Edge/OneDrive Remover's restore point does too. Entries already in the
+  history keep the name they were written with.
+
 ## [1.136.63] - 2026-11-02
 
 **Stopping and restarting Ping monitoring or auto-trace on a busy PC no longer leaves two of them running.**

@@ -195,7 +195,7 @@ public sealed class CliRunner
             return new CliResult(CliResult.Error, request.Json ? Json(new { error }) : $"Standby purge failed: {error}");
 
         var after = svc.GetMemoryStatus();
-        RecordHeadlessRun("Standby cleaner", "Purged the standby memory list");
+        RecordHeadlessRun("Standby List Cleaner", "Purged the standby memory list");
         return request.Json
             ? new CliResult(CliResult.Ok, Json(new { freedMB = Math.Round((after.AvailableBytes - before.AvailableBytes) / 1024.0 / 1024.0, 0), loadPercentAfter = after.LoadPercent }))
             : new CliResult(CliResult.Ok, $"Standby list purged. Memory load now {after.LoadPercent}%.");
@@ -209,7 +209,7 @@ public sealed class CliRunner
     /// The two mutating verbs delete temporary files and drop the standby memory list, and both were
     /// reachable from Scheduled Maintenance — which exists to run them while nobody is watching (it now
     /// offers only the cleanup, #2593). Neither left any trace: the GUI paths for the same two operations log ("Quick Cleanup" in
-    /// <c>CleanupViewModel</c>, "Standby cleaner" in <c>StandbyMemoryViewModel</c>), so a user who
+    /// <c>CleanupViewModel</c>, "Standby List Cleaner" in <c>StandbyMemoryViewModel</c>), so a user who
     /// scheduled a weekly cleanup opened the app afterwards and found nothing in the history to say it
     /// had ever run. That history file is described in <see cref="ActivityLogService"/> as the only record
     /// of what the app changed (#1509).

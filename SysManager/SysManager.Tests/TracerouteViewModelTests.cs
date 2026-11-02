@@ -18,7 +18,7 @@ public class TracerouteViewModelTests
     [Fact]
     public void Constructor_SetsShared()
     {
-        var shared = new NetworkSharedState(new Services.PingMonitorService(), new Services.TracerouteService(), new Services.TracerouteMonitorService(), new Services.SpeedTestService(), new Services.NetworkRepairService(new Services.PowerShellRunner()));
+        var shared = new NetworkSharedState(new Services.PingMonitorService(), new Services.TracerouteService(), new Services.TracerouteMonitorService(), new Services.SpeedTestService(new Services.PowerShellRunner()), new Services.NetworkRepairService(new Services.PowerShellRunner()));
         var vm = new TracerouteViewModel(shared);
         Assert.Same(shared, vm.Shared);
     }
@@ -26,7 +26,7 @@ public class TracerouteViewModelTests
     [Fact]
     public void DefaultTraceHost_Is8888()
     {
-        var shared = new NetworkSharedState(new Services.PingMonitorService(), new Services.TracerouteService(), new Services.TracerouteMonitorService(), new Services.SpeedTestService(), new Services.NetworkRepairService(new Services.PowerShellRunner()));
+        var shared = new NetworkSharedState(new Services.PingMonitorService(), new Services.TracerouteService(), new Services.TracerouteMonitorService(), new Services.SpeedTestService(new Services.PowerShellRunner()), new Services.NetworkRepairService(new Services.PowerShellRunner()));
         var vm = new TracerouteViewModel(shared);
         Assert.Equal("8.8.8.8", vm.TraceHost);
     }
@@ -34,7 +34,7 @@ public class TracerouteViewModelTests
     [Fact]
     public void IsTracing_DefaultFalse()
     {
-        var shared = new NetworkSharedState(new Services.PingMonitorService(), new Services.TracerouteService(), new Services.TracerouteMonitorService(), new Services.SpeedTestService(), new Services.NetworkRepairService(new Services.PowerShellRunner()));
+        var shared = new NetworkSharedState(new Services.PingMonitorService(), new Services.TracerouteService(), new Services.TracerouteMonitorService(), new Services.SpeedTestService(new Services.PowerShellRunner()), new Services.NetworkRepairService(new Services.PowerShellRunner()));
         var vm = new TracerouteViewModel(shared);
         Assert.False(vm.IsTracing);
     }
@@ -42,7 +42,7 @@ public class TracerouteViewModelTests
     [Fact]
     public void IsAutoTraceRunning_DefaultFalse()
     {
-        var shared = new NetworkSharedState(new Services.PingMonitorService(), new Services.TracerouteService(), new Services.TracerouteMonitorService(), new Services.SpeedTestService(), new Services.NetworkRepairService(new Services.PowerShellRunner()));
+        var shared = new NetworkSharedState(new Services.PingMonitorService(), new Services.TracerouteService(), new Services.TracerouteMonitorService(), new Services.SpeedTestService(new Services.PowerShellRunner()), new Services.NetworkRepairService(new Services.PowerShellRunner()));
         var vm = new TracerouteViewModel(shared);
         Assert.False(vm.IsAutoTraceRunning);
     }
@@ -50,7 +50,7 @@ public class TracerouteViewModelTests
     [Fact]
     public void CancelTraceCommand_DoesNotThrow()
     {
-        var shared = new NetworkSharedState(new Services.PingMonitorService(), new Services.TracerouteService(), new Services.TracerouteMonitorService(), new Services.SpeedTestService(), new Services.NetworkRepairService(new Services.PowerShellRunner()));
+        var shared = new NetworkSharedState(new Services.PingMonitorService(), new Services.TracerouteService(), new Services.TracerouteMonitorService(), new Services.SpeedTestService(new Services.PowerShellRunner()), new Services.NetworkRepairService(new Services.PowerShellRunner()));
         var vm = new TracerouteViewModel(shared);
         vm.CancelTraceCommand.Execute(null);
     }
@@ -63,7 +63,7 @@ public class TracerouteViewModelTests
 
     private static NetworkSharedState NewShared() => new(
         new Services.PingMonitorService(), new Services.TracerouteService(),
-        new Services.TracerouteMonitorService(), new Services.SpeedTestService(),
+        new Services.TracerouteMonitorService(), new Services.SpeedTestService(new Services.PowerShellRunner()),
         new Services.NetworkRepairService(new Services.PowerShellRunner()));
 
     // NOTE ON SCOPE: these deliberately do NOT call NetworkSharedState.StartMonitoring(), even
@@ -160,7 +160,7 @@ public class TracerouteViewModelTests
     [Fact]
     public void Escape_CancelsTheTrace_OnlyWhileItRuns()
     {
-        var shared = new NetworkSharedState(new Services.PingMonitorService(), new Services.TracerouteService(), new Services.TracerouteMonitorService(), new Services.SpeedTestService(), new Services.NetworkRepairService(new Services.PowerShellRunner()));
+        var shared = new NetworkSharedState(new Services.PingMonitorService(), new Services.TracerouteService(), new Services.TracerouteMonitorService(), new Services.SpeedTestService(new Services.PowerShellRunner()), new Services.NetworkRepairService(new Services.PowerShellRunner()));
         using var vm = new TracerouteViewModel(shared);
         Assert.Null(vm.EscapeCancel);
 
@@ -186,7 +186,7 @@ public class TracerouteViewModelTests
     }
 
     private static NetworkSharedState SharedWith(TracerouteService tracer, Action<Action>? postToUi = null) => new(
-        new PingMonitorService(), tracer, new TracerouteMonitorService(), new SpeedTestService(),
+        new PingMonitorService(), tracer, new TracerouteMonitorService(), new SpeedTestService(new PowerShellRunner()),
         new NetworkRepairService(new PowerShellRunner()), () => null, postToUi);
 
     [Fact]

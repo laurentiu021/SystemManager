@@ -10,6 +10,17 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.136.88] - 2026-11-02
+
+**The speed test's Ookla CLI runs through the shared runner, the last program whose output SysManager read on its own.**
+
+### Fixed
+- Speed Test's Ookla run started the CLI itself, with its own pipe reads, timeout and kill. It now goes through the
+  app's shared runner, which stops the CLI, and anything it started, when the five-minute limit or Cancel comes; the
+  results and messages are the ones it gave before. Every program SysManager reads the output of now runs through that
+  one runner, and a check fails a change that starts one any other way. This was there since the Ookla engine came
+  with the first release, 0.3.0.
+
 ## [1.136.87] - 2026-11-02
 
 **Right-click Menu's export before a change goes through the shared runner, which stops reg.exe when it hangs.**

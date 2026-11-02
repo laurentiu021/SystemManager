@@ -61,7 +61,7 @@ public sealed class DashboardAlertsViewUiTests
             new MemoryTestService(),
             new NavigationService(),
             new WindowsUpdateService(),
-            new SpeedTestService(),
+            new SpeedTestService(new PowerShellRunner()),
             new SpeedTestHistoryService(Path.Combine(dir, "speed")),
             updateCheck);
 

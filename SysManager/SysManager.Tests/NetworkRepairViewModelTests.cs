@@ -18,7 +18,7 @@ public class NetworkRepairViewModelTests
     // regressed check away from running netsh winsock reset or netsh int ip reset on the PC running the suite (#2740).
     private static NetworkSharedState NewShared(IPowerShellRunner? runner = null) =>
         new(new PingMonitorService(), new TracerouteService(), new TracerouteMonitorService(),
-            new SpeedTestService(), new NetworkRepairService(runner ?? Substitute.For<IPowerShellRunner>()));
+            new SpeedTestService(Substitute.For<IPowerShellRunner>()), new NetworkRepairService(runner ?? Substitute.For<IPowerShellRunner>()));
 
     private static Task<int> AnyProcess(IPowerShellRunner runner) =>
         runner.RunProcessAsync(Arg.Any<string>(), Arg.Any<string>(), Arg.Any<CancellationToken>(), Arg.Any<Encoding?>());

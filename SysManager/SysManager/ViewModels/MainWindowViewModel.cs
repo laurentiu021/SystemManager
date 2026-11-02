@@ -759,7 +759,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable,
         var pinger = new PingMonitorService();
         var tracer = new TracerouteService();
         var traceMonitor = new TracerouteMonitorService();
-        var speedTest = new SpeedTestService();
+        var speedTest = new SpeedTestService(new PowerShellRunner());
         var netRepair = new NetworkRepairService(runner);
         // One shared instance, as in the container: the four network view models coordinate through
         // it (one tab's Start must disable the other's), so a second copy would silently split them.

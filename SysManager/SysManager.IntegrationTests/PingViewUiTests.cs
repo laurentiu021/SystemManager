@@ -35,7 +35,7 @@ public sealed class PingViewUiTests
         {
             AppResources.Ensure();
             using var shared = new NetworkSharedState(new PingMonitorService(), new TracerouteService(),
-                new TracerouteMonitorService(), new SpeedTestService(),
+                new TracerouteMonitorService(), new SpeedTestService(new PowerShellRunner()),
                 new NetworkRepairService(new PowerShellRunner()));
             var view = new PingView { DataContext = new PingViewModel(shared) };
             Relayout(view);
@@ -66,7 +66,7 @@ public sealed class PingViewUiTests
         {
             AppResources.Ensure();
             using var shared = new NetworkSharedState(new PingMonitorService(), new TracerouteService(),
-                new TracerouteMonitorService(), new SpeedTestService(),
+                new TracerouteMonitorService(), new SpeedTestService(new PowerShellRunner()),
                 new NetworkRepairService(new PowerShellRunner()))
             {
                 Theme = () => light,

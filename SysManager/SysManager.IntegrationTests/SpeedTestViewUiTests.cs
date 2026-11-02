@@ -45,7 +45,7 @@ public sealed class SpeedTestViewUiTests : IDisposable
     private async Task<SpeedTestViewModel> VmShowingBothAsync()
     {
         var shared = new NetworkSharedState(new PingMonitorService(), new TracerouteService(),
-            new TracerouteMonitorService(), new SpeedTestService(), new NetworkRepairService(new PowerShellRunner()));
+            new TracerouteMonitorService(), new SpeedTestService(new PowerShellRunner()), new NetworkRepairService(new PowerShellRunner()));
         var vm = new SpeedTestViewModel(shared, new SpeedTestHistoryService(_dir));
         await vm.InitializationComplete;
         vm.HttpResult = NoUpload;
@@ -128,7 +128,7 @@ public sealed class SpeedTestViewUiTests : IDisposable
     {
         // Bound the way the view model exposes it: a chart per engine, hidden until there is a line to draw (#1499).
         var shared = new NetworkSharedState(new PingMonitorService(), new TracerouteService(),
-            new TracerouteMonitorService(), new SpeedTestService(), new NetworkRepairService(new PowerShellRunner()));
+            new TracerouteMonitorService(), new SpeedTestService(new PowerShellRunner()), new NetworkRepairService(new PowerShellRunner()));
         var vm = new SpeedTestViewModel(shared, new SpeedTestHistoryService(_dir));
         await vm.InitializationComplete;
         vm.AddToHistory(new SpeedTestResult("Ookla", 470, 48, 9, "Bucharest", new DateTime(2026, 9, 27, 20, 0, 0)));

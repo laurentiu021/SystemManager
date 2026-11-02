@@ -44,7 +44,7 @@ public class DashboardViewModelTests
             new MemoryTestService(),
             new NavigationService(),
             new WindowsUpdateService(),
-            new SpeedTestService(),
+            new SpeedTestService(new PowerShellRunner()),
             new SpeedTestHistoryService(Path.Combine(Path.GetTempPath(), "SysManagerTests", "dash-speed")),
             new UpdateCheckPreferenceService(Path.Combine(Path.GetTempPath(), "SysManagerTests", "dash-update-check")));
     }

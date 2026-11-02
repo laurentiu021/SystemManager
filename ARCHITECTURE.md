@@ -554,8 +554,10 @@ Key services:
   auto-downloaded on first use. The CLI is one pinned release, `OoklaRelease.Pinned`: nothing is extracted
   from a zip whose SHA-256 differs, and the exe's SHA-256 is read through the handle that stays open, denying
   writes, until the process exits, on every run. It never runs elevated, since it is kept in a folder the
-  user's account can write to. The internal constructor takes the download client, tools folder, release and
-  elevation probe, so the whole preparation is tested without a network. Behind `ISpeedTestService` for the
+  user's account can write to. The CLI runs through the `IPowerShellRunner` both constructors take, one run at
+  a time, and its JSON is read from `LineReceived` (#2766). The internal constructor also takes the download
+  client, tools folder, release and elevation probe, so the whole preparation and the run are tested without a
+  network. Behind `ISpeedTestService` for the
   Dashboard's quick test. A ping nobody
   answered and an upload the server refused are null, not 0: `MeasurePingAsync` is handed the single ping and
   `UploadMbps` is pure, so both are tested without a network. `SpeedTestResult` formats them, "—" when missing.

@@ -2,6 +2,7 @@
 // Author: laurentiu021 · https://github.com/laurentiu021/SystemManager
 // License: MIT
 
+using System.Collections.Concurrent;
 using System.Diagnostics;
 using System.IO;
 using System.IO.Compression;
@@ -25,28 +26,64 @@ namespace SysManager.Services;
 ///    --format=json. It does not run while SysManager is elevated.
 /// Progress reporting is in percent (0-100) plus a free-form status message.
 /// </summary>
-public sealed class SpeedTestService : ISpeedTestService
+public sealed class SpeedTestService : ISpeedTestService, IDisposable
 {
     private static readonly HttpClient _http = new() { Timeout = TimeSpan.FromMinutes(2) };
 
+    private readonly IPowerShellRunner _runner;
     private readonly HttpClient _download;
     private readonly string? _toolsDir;
     private readonly OoklaRelease _ookla;
     private readonly Func<bool> _isElevated;
 
-    public SpeedTestService() : this(_http, toolsDir: null, OoklaRelease.Pinned, AdminHelper.IsElevated) { }
+    // One CLI run at a time: what it prints arrives through the runner's one event, so two at once would each read the
+    // other's JSON. The tab's operation lock already keeps them apart; this keeps the service right on its own.
+    private readonly SemaphoreSlim _runGate = new(1, 1);
+
+    // Idempotent, and paired with the guarded release below, as in DnsService: a DI singleton disposed at exit.
+    private bool _disposed;
+
+    /// <summary>Runs the Ookla CLI through <paramref name="runner"/>, the one way this app runs a program (#2766).</summary>
+    public SpeedTestService(IPowerShellRunner runner)
+        : this(runner, _http, toolsDir: null, OoklaRelease.Pinned, AdminHelper.IsElevated) { }
 
     /// <summary>
     /// Prepares the Ookla CLI through <paramref name="download"/> into <paramref name="toolsDir"/> and checks it
     /// against <paramref name="ookla"/>, so a test needs no network and no real release.
     /// </summary>
+    /// <param name="runner">Runs the CLI once it is prepared, so a test decides what it prints.</param>
+    /// <param name="download">Fetches the CLI's zip.</param>
     /// <param name="toolsDir">Null for <see cref="AppDataFolders.Tools"/>, read on each run.</param>
-    internal SpeedTestService(HttpClient download, string? toolsDir, OoklaRelease ookla, Func<bool> isElevated)
+    /// <param name="ookla">The release the CLI is checked against.</param>
+    /// <param name="isElevated">Whether SysManager runs elevated, when the CLI is refused.</param>
+    internal SpeedTestService(IPowerShellRunner runner, HttpClient download, string? toolsDir, OoklaRelease ookla,
+                              Func<bool> isElevated)
     {
+        _runner = runner ?? throw new ArgumentNullException(nameof(runner));
         _download = download;
         _toolsDir = toolsDir;
         _ookla = ookla;
         _isElevated = isElevated;
+    }
+
+    /// <summary>
+    /// Releases the gate unless <see cref="Dispose"/> has already claimed it. Releasing a disposed
+    /// <see cref="SemaphoreSlim"/> throws, and the call site is a <c>finally</c> block, where that would replace a clean
+    /// shutdown with an unhandled exception.
+    /// </summary>
+    private void ReleaseGate()
+    {
+        if (_disposed) return;
+        try { _runGate.Release(); }
+        catch (ObjectDisposedException) { /* disposed mid-run at shutdown */ }
+    }
+
+    /// <inheritdoc/>
+    public void Dispose()
+    {
+        if (_disposed) return;
+        _disposed = true;
+        _runGate.Dispose();
     }
 
     // Cloudflare returns exactly N bytes from these endpoints; perfect for timing.
@@ -433,69 +470,41 @@ public sealed class SpeedTestService : ISpeedTestService
         var args = "--accept-license --accept-gdpr --format=json --progress=no";
         if (serverId is not null)
             args += $" --server-id={serverId}";
-        var psi = new ProcessStartInfo(exe, args)
-        {
-            RedirectStandardOutput = true,
-            RedirectStandardError = true,
-            UseShellExecute = false,
-            CreateNoWindow = true,
-            ErrorDialog = false,   // suppress Win32 "DLL not found" system dialogs
-            // System32 rather than the tools folder, so nothing is looked up relative to a folder the user can write
-            // to. It does not stop a DLL beside the exe from loading, since Windows searches the exe's own folder
-            // first: that is why the CLI never runs elevated, and why nothing is extracted from a zip that is not
-            // the pinned one.
-            WorkingDirectory = Environment.GetFolderPath(Environment.SpecialFolder.System)
-        };
+        // What the CLI prints, by stream, into ConcurrentQueues, because the runner raises lines from the output
+        // reader's thread and the error reader's.
+        ConcurrentQueue<string> output = new(), errors = new();
+        void OnLine(PowerShellLine line) => (line.Kind == OutputKind.Error ? errors : output).Enqueue(line.Text);
 
-        // Start the process on a thread-pool thread so Process.Start()
-        // never blocks the UI thread. Link a 5-minute timeout to prevent
-        // indefinite hangs if the Ookla CLI freezes (#370).
+        // A 5-minute timeout, linked to the caller's token, so a CLI that freezes cannot hang the tab (#370). The
+        // runner stops the CLI, and anything it started, when either fires. The runner starts it from System32, so
+        // nothing is looked up relative to a folder the user can write to. That does not stop a DLL beside the exe
+        // from loading, since Windows searches the exe's own folder first: that is why the CLI never runs elevated,
+        // and why nothing is extracted from a zip that is not the pinned one.
         using var timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
         timeoutCts.CancelAfter(TimeSpan.FromMinutes(5));
         var linked = timeoutCts.Token;
 
-        using var proc = new Process();
-        proc.StartInfo = psi;
-        await Task.Run(() => proc.Start(), linked).ConfigureAwait(false);
-
-        // Read stdout and stderr in parallel to prevent pipe buffer deadlock.
-        // If one pipe fills while the other is being read sequentially, the
-        // child process blocks indefinitely (classic Windows pipe deadlock).
-        string stdout, stderr;
+        int exitCode;
+        await _runGate.WaitAsync(ct).ConfigureAwait(false);
+        _runner.LineReceived += OnLine;
         try
         {
-            var stdoutTask = proc.StandardOutput.ReadToEndAsync(linked);
-            var stderrTask = proc.StandardError.ReadToEndAsync(linked);
-            await Task.WhenAll(stdoutTask, stderrTask).ConfigureAwait(false);
-            stdout = await stdoutTask.ConfigureAwait(false);
-            stderr = await stderrTask.ConfigureAwait(false);
-
-            await proc.WaitForExitAsync(linked).ConfigureAwait(false);
+            // It started the CLI itself, with its own pipe reads and kill, so no test could see a run (#2766).
+            exitCode = await _runner.RunProcessAsync(exe, args, linked).ConfigureAwait(false);
         }
-        catch (OperationCanceledException)
+        finally
         {
-            // Timeout or user cancellation can hit during the pipe reads OR the wait —
-            // kill the child either way so speedtest.exe is never orphaned. (Previously
-            // the kill only covered WaitForExitAsync, so a cancel during the reads
-            // leaked the process.)
-            // Kill(entireProcessTree: true) can throw Win32Exception (access denied) or
-            // AggregateException (a descendant couldn't be terminated) as well as
-            // InvalidOperationException — swallow all three so a failed cancel-kill never
-            // masks the OperationCanceledException re-thrown below (same filter as
-            // PowerShellRunner's cancel-kill).
-            try { if (!proc.HasExited) proc.Kill(entireProcessTree: true); }
-            catch (Exception ex) when (ex is InvalidOperationException or System.ComponentModel.Win32Exception
-                                           or AggregateException)
-            {
-                // Gone, denied or half-killed: whichever, the cancellation below is what the caller must see.
-            }
-            throw;
+            _runner.LineReceived -= OnLine;
+            ReleaseGate();
         }
+
+        var stdout = string.Join('\n', output);
+        var stderr = string.Join('\n', errors);
 
         // A failed run keeps the exe: its bytes were checked against the pinned release a moment ago, so it is not
         // corrupt, and downloading the same file again cannot change how it runs.
-        if (proc.ExitCode != 0)
-            throw new InvalidOperationException($"Ookla failed ({proc.ExitCode}): {stderr}");
+        if (exitCode != 0)
+            throw new InvalidOperationException($"Ookla failed ({exitCode}): {stderr}");
 
         JsonDocument doc;
         try

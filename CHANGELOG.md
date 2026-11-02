@@ -10,6 +10,20 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.136.77] - 2026-11-02
+
+**DNS & Hosts keeps a comment that starts with a number as you wrote it, and a screen reader hears what a save did.**
+
+### Fixed
+- DNS & Hosts read a hosts-file comment that starts with a number as disabled entries: "# 3 entries below block
+  telemetry" was listed as four disabled entries for IP 3, one per word, and the next Save wrote it back as one line
+  per word, or dropped it once you removed those rows. .NET reads "3", "2024" and "1.2.3" as addresses. Only a line
+  that starts with a whole address, as a hosts file writes one, is an entry now, and Add refuses the short forms too.
+  This was there since the tab was added in 1.6.0.
+- What Add, Save, Restore and Refresh did on the hosts card was shown in a line a screen reader is never told about,
+  and Save shows no other message, so a write you had just confirmed went unannounced, whether it worked or not. That
+  line is announced now. This was there since 1.6.0 too.
+
 ## [1.136.76] - 2026-11-02
 
 **File Shredder leaves a file it does not shred exactly as it found it, measures a folder without freezing, and keeps the method you confirmed.**

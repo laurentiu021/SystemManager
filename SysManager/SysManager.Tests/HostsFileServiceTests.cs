@@ -220,8 +220,17 @@ public class HostsFileServiceTests
     [InlineData("256.1.1.1")]         // first octet out of range
     [InlineData("notanip")]
     [InlineData("")]
-    // NOTE: do NOT use "1.2.3" here — IPAddress.TryParse accepts dotted shorthand
-    // ("1.2.3" -> 1.2.0.3), so it is a VALID address, not a rejection case.
+    // IPAddress.TryParse reads each of these as an address, and none is one as a hosts file writes it (#2758): a
+    // number, a short form ("1.2.3" is 1.2.0.3 to it), a leading zero read as octal, hex, and brackets with a port.
+    [InlineData("3")]
+    [InlineData("2024")]
+    [InlineData("1.2")]
+    [InlineData("1.2.3")]
+    [InlineData("4294967295")]
+    [InlineData("010.0.0.1")]
+    [InlineData("0x7f.0.0.1")]
+    [InlineData("[::1]")]
+    [InlineData("[::1]:80")]
     public void AddEntry_InvalidIp_Throws(string ip)
     {
         var (svc, _, dir) = NewServiceWithTempHosts("127.0.0.1 localhost\n");
@@ -249,6 +258,25 @@ public class HostsFileServiceTests
             Assert.Throws<ArgumentException>(() => svc.AddEntry("1.1.1.1", hostname));
         }
         finally { try { Directory.Delete(dir, recursive: true); } catch { } }
+    }
+
+    [Theory]
+    [InlineData("0.0.0.0")]
+    [InlineData("127.0.0.1")]
+    [InlineData("255.255.255.255")]
+    [InlineData("::1")]
+    [InlineData("fe80::1")]
+    [InlineData("FE80:0:0:0:0:0:0:1")]   // IPv6 in capitals and in full: an address, though not how .NET prints it
+    [InlineData("::ffff:127.0.0.1")]
+    public void AddEntry_AFullAddress_IsAccepted_AsWritten(string ip)
+    {
+        // The other half of AddEntry_InvalidIp_Throws: the check refuses short forms, not real addresses.
+        var (svc, _, dir) = NewServiceWithTempHosts("127.0.0.1 localhost\n");
+        try
+        {
+            Assert.Equal(ip, svc.AddEntry(ip, "example.com").IpAddress);
+        }
+        finally { Remove(dir); }
     }
 
     [Theory]
@@ -518,6 +546,52 @@ public class HostsFileServiceTests
             Assert.Contains(commentLine, saved);
         }
         finally { try { Directory.Delete(dir, recursive: true); } catch { } }
+    }
+
+    [Theory]
+    [InlineData("# 3 entries below block telemetry")]
+    [InlineData("# 2024 blocklist")]
+    [InlineData("# 1.2 is the router, in short")]
+    [InlineData("# [::1]:80 dev server")]
+    public async Task ACommentThatStartsWithANumber_IsNoEntry_AndIsKeptAsWritten(string commentLine)
+    {
+        // IPAddress.TryParse reads "3" as 0.0.0.3, so the first line was read as four disabled entries for IP 3, one per
+        // word after it, and the next save wrote it back as "# 3<TAB>entries", "# 3<TAB>below" and so on (#2758).
+        var content = $"{commentLine}\n127.0.0.1 localhost\n";
+        var (svc, hosts, dir) = NewServiceWithTempHosts(content);
+        try
+        {
+            var entries = await svc.ReadHostsAsync();
+            var only = Assert.Single(entries);
+            Assert.Equal("localhost", only.Hostname);
+
+            svc.SaveHosts(entries);
+            var saved = File.ReadAllText(hosts);
+            Assert.Equal(1, saved.Split(commentLine).Length - 1);
+            // A disabled entry is written "# <ip><TAB><host>", so no line of that shape means none was made up.
+            Assert.DoesNotContain(saved.Split('\n'), line => line.StartsWith('#') && line.Contains('\t'));
+        }
+        finally { Remove(dir); }
+    }
+
+    [Theory]
+    [InlineData("0.0.0.0 ads.example.com", "0.0.0.0", true)]
+    [InlineData("# 0.0.0.0 ads.example.com", "0.0.0.0", false)]
+    [InlineData("::1 ads.example.com", "::1", true)]
+    [InlineData("FE80:0:0:0:0:0:0:1 ads.example.com", "FE80:0:0:0:0:0:0:1", true)]
+    [InlineData("# ::ffff:127.0.0.1 ads.example.com", "::ffff:127.0.0.1", false)]
+    public async Task ALineThatStartsWithAFullAddress_IsStillAnEntry(string line, string ip, bool enabled)
+    {
+        // The other half: an entry, on or off, IPv6 in any spelling, is read as before.
+        var (svc, _, dir) = NewServiceWithTempHosts($"{line}\n127.0.0.1 localhost\n");
+        try
+        {
+            var entries = await svc.ReadHostsAsync();
+            var entry = Assert.Single(entries, e => e.Hostname == "ads.example.com");
+            Assert.Equal(ip, entry.IpAddress);
+            Assert.Equal(enabled, entry.IsEnabled);
+        }
+        finally { Remove(dir); }
     }
 
     [Fact]

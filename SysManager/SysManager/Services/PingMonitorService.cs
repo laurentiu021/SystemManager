@@ -33,6 +33,7 @@ public sealed class PingMonitorService : IDisposable
     private Task? _loop;
     private readonly Lock _stateLock = new();
     private readonly TimeProvider _time;
+    private readonly Func<Func<Task>, CancellationToken, Task> _run;
 
     /// <summary>
     /// Creates the monitor.
@@ -43,7 +44,18 @@ public sealed class PingMonitorService : IDisposable
     /// cadence assertable: the alternative is counting how many real ticks fit in a real second,
     /// which measures the host's spare CPU rather than this class.
     /// </param>
-    public PingMonitorService(TimeProvider? timeProvider = null) => _time = timeProvider ?? TimeProvider.System;
+    public PingMonitorService(TimeProvider? timeProvider = null) : this(timeProvider, run: null) { }
+
+    /// <summary>The monitor with how its pump is queued supplied, so a test decides when the pump runs.</summary>
+    /// <param name="timeProvider">Source of the pump's between-tick delay; the system's when null.</param>
+    /// <param name="run">Queues the pump with the token it runs on; the thread pool when null.</param>
+    internal PingMonitorService(TimeProvider? timeProvider, Func<Func<Task>, CancellationToken, Task>? run)
+    {
+        _time = timeProvider ?? TimeProvider.System;
+        _run = run ?? QueueOnThePool;
+    }
+
+    private static Task QueueOnThePool(Func<Task> pump, CancellationToken token) => Task.Run(pump, token);
 
     public bool IsRunning => _loop is { IsCompleted: false };
 
@@ -56,7 +68,11 @@ public sealed class PingMonitorService : IDisposable
         {
             if (IsRunning) return;
             _cts = new CancellationTokenSource();
-            _loop = Task.Run(() => PumpAsync(_cts.Token));
+            // The token, not the field: the pump starts on a pool thread once the lock is released, and by then a Stop can
+            // have cleared the field or the next Start set it again, which left the pump reading null, or running as a
+            // second pump on the next token (#2751).
+            var token = _cts.Token;
+            _loop = _run(() => PumpAsync(token), token);
         }
     }
 

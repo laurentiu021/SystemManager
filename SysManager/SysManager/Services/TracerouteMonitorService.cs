@@ -34,6 +34,15 @@ public sealed class TracerouteMonitorService : IDisposable
     private CancellationTokenSource? _cts;
     private Task? _loop;
     private readonly Lock _stateLock = new();
+    private readonly Func<Func<Task>, CancellationToken, Task> _run;
+
+    public TracerouteMonitorService() : this(run: null) { }
+
+    /// <summary>The monitor with how its pump is queued supplied, so a test decides when the pump runs.</summary>
+    /// <param name="run">Queues the pump with the token it runs on; the thread pool when null.</param>
+    internal TracerouteMonitorService(Func<Func<Task>, CancellationToken, Task>? run) => _run = run ?? QueueOnThePool;
+
+    private static Task QueueOnThePool(Func<Task> pump, CancellationToken token) => Task.Run(pump, token);
 
     public bool IsRunning => _loop is { IsCompleted: false };
 
@@ -57,7 +66,11 @@ public sealed class TracerouteMonitorService : IDisposable
         {
             if (IsRunning) return;
             _cts = new CancellationTokenSource();
-            _loop = Task.Run(() => PumpAsync(_cts.Token));
+            // The token, not the field: the pump starts on a pool thread once the lock is released, and by then a Stop can
+            // have cleared the field or the next Start set it again, which left the pump reading null, or running as a
+            // second pump on the next token (#2751).
+            var token = _cts.Token;
+            _loop = _run(() => PumpAsync(token), token);
         }
     }
 

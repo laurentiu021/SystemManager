@@ -10,6 +10,24 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.136.76] - 2026-11-02
+
+**File Shredder leaves a file it does not shred exactly as it found it, measures a folder without freezing, and keeps the method you confirmed.**
+
+### Fixed
+- File Shredder cleared a file's read-only flag before it refused a hard-linked file or honoured a cancel that came
+  before the first byte, so a file it left "untouched" had lost the flag, and a refused hard link lost it under every
+  name the file has. The flag is now set again on any file the shred leaves as it found it. This was there since
+  1.52.76.
+- Add Folder measured the folder on the thread that draws the window, so a large one, a photo archive or a USB drive,
+  froze SysManager for the whole walk, and one unreadable folder anywhere inside turned the whole folder away. It is
+  measured in the background now, with the walk the shred itself takes, which passes over a folder it cannot read.
+  This was there since the tab was added in 1.4.0.
+- The Method box stayed on during a run and every item read it again, so switching Thorough to Quick part-way shredded
+  the rest with one pass instead of the seven you confirmed, and the activity log recorded the whole run as a one-pass
+  overwrite. A run now uses the method you confirmed, and the box is off until it ends. This was there since 1.4.0
+  too.
+
 ## [1.136.75] - 2026-11-02
 
 **An empty Windows Features list now says why it is empty.**

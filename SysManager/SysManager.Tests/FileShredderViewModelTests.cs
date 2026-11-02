@@ -116,7 +116,7 @@ public class FileShredderViewModelTests
     }
 
     [Fact]
-    public void AddFolder_WhenAFolderIsPicked_QueuesIt()
+    public async Task AddFolder_WhenAFolderIsPicked_QueuesIt()
     {
         var folder = Directory.CreateTempSubdirectory("smtest_shredder_").FullName;
         File.WriteAllText(Path.Combine(folder, "inside.txt"), "12345");
@@ -126,7 +126,7 @@ public class FileShredderViewModelTests
             dialog.PickFolder(Arg.Any<string>()).Returns(folder);
             var vm = NewVm(dialog);
 
-            vm.AddFolderCommand.Execute(null);
+            await vm.AddFolderCommand.ExecuteAsync(null);
 
             var queued = Assert.Single(vm.Items);
             Assert.Equal(folder, queued.Path);
@@ -134,6 +134,102 @@ public class FileShredderViewModelTests
             Assert.Equal(5, queued.SizeBytes);
         }
         finally { Directory.Delete(folder, recursive: true); }
+    }
+
+    /// <summary>
+    /// Adding a folder sizes it off the window's thread (#2757). It walked the whole tree on the dispatcher, so a
+    /// photo archive or a USB drive froze the window for the whole walk. The size here holds until the test lets it
+    /// go, bounded, so code that sizes on the thread that added the folder fails instead of hanging.
+    /// </summary>
+    [Fact]
+    public async Task AddFolder_SizesTheFolderOffTheThreadThatAddedIt()
+    {
+        var folder = Directory.CreateTempSubdirectory("smtest_shredder_size_").FullName;
+        var released = new TaskCompletionSource();
+        var returned = new TaskCompletionSource();
+        try
+        {
+            var dialog = Substitute.For<IDialogService>();
+            dialog.PickFolder(Arg.Any<string>()).Returns(folder);
+            var vm = new FileShredderViewModel(new FileShredderService(), dialog, folderSize: _ =>
+            {
+                released.Task.Wait(TimeSpan.FromSeconds(10));
+                returned.TrySetResult();
+                return 42;
+            });
+
+            try
+            {
+                vm.AddFolderCommand.Execute(null);
+
+                Assert.False(returned.Task.IsCompleted, "the folder was sized on the thread that added it");
+            }
+            finally
+            {
+                released.TrySetResult();
+            }
+
+            await returned.Task.WaitAsync(TimeSpan.FromSeconds(10));
+            await vm.AddFolderCommand.ExecutionTask!;
+            Assert.Equal(42, Assert.Single(vm.Items).SizeBytes);
+        }
+        finally { Directory.Delete(folder, recursive: true); }
+    }
+
+    /// <summary>
+    /// A run uses the method that was confirmed, all the way through (#2757). The Method box stayed live during the run
+    /// and every item read it again, so switching Thorough to Quick part-way shredded the rest with one pass, and the
+    /// activity log recorded the whole run as a one-pass overwrite.
+    /// </summary>
+    [Fact]
+    public async Task ARun_UsesTheConfirmedMethod_EvenWhenTheBoxChangesPartWay()
+    {
+        var files = Enumerable.Range(0, 2)
+            .Select(_ => Path.Combine(Path.GetTempPath(), "smtest_shred_method_" + Guid.NewGuid().ToString("N") + ".dat"))
+            .ToArray();
+        foreach (var file in files) File.WriteAllBytes(file, new byte[4096]);
+        var firstOpened = new TaskCompletionSource();
+        var released = new TaskCompletionSource();
+        var opens = 0;
+        var service = new FileShredderService(path =>
+        {
+            if (Interlocked.Increment(ref opens) == 1)
+            {
+                firstOpened.TrySetResult();
+                released.Task.Wait(TimeSpan.FromSeconds(10));
+            }
+            return new FileStream(path, FileMode.Open, FileAccess.Write, FileShare.None);
+        });
+        using var dialog = new DialogAnswer(confirm: true);
+        using var activity = new ActivityLogScope();
+        try
+        {
+            var vm = new FileShredderViewModel(service) { SelectedMethod = ShredMethod.Thorough };
+            foreach (var file in files)
+                vm.Items.Add(new ShredItem { Path = file, Name = Path.GetFileName(file), SizeBytes = 4096, IsFolder = false });
+
+            Task run;
+            try
+            {
+                run = Task.Run(() => vm.ShredAllCommand.ExecuteAsync(null));
+                await firstOpened.Task.WaitAsync(TimeSpan.FromSeconds(10));
+                vm.SelectedMethod = ShredMethod.Quick;
+            }
+            finally
+            {
+                released.TrySetResult();
+            }
+            await run;
+
+            Assert.All(files, file => Assert.False(File.Exists(file)));
+            var entry = Assert.Single(ActivityLogService.Instance.GetRecent(10));
+            Assert.Contains("(7-pass overwrite)", entry.Detail, StringComparison.Ordinal);
+        }
+        finally
+        {
+            foreach (var file in files)
+                if (File.Exists(file)) File.Delete(file);
+        }
     }
 
     [Fact]
@@ -372,7 +468,7 @@ public class FileShredderViewModelTests
         var source = File.ReadAllText(TestPaths.AppFile("ViewModels", "FileShredderViewModel.cs"));
 
         var offenders = new List<string>();
-        foreach (var command in new[] { "private void AddFiles()", "private void AddFolder()" })
+        foreach (var command in new[] { "private void AddFiles()", "private async Task AddFolderAsync()" })
         {
             var start = source.IndexOf(command, StringComparison.Ordinal);
             Assert.True(start >= 0, $"{command} not found — update this guard.");
@@ -403,7 +499,7 @@ public class FileShredderViewModelTests
         var source = File.ReadAllText(TestPaths.AppFile("ViewModels", "FileShredderViewModel.cs"));
 
         var offenders = new List<string>();
-        foreach (var command in new[] { "private void AddFiles()", "private void AddFolder()" })
+        foreach (var command in new[] { "private void AddFiles()", "private async Task AddFolderAsync()" })
         {
             var start = source.IndexOf(command, StringComparison.Ordinal);
             Assert.True(start >= 0, $"{command} not found — update this guard.");

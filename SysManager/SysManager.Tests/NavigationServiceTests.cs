@@ -153,7 +153,6 @@ public class NavigationServiceTests
     [Theory]
     [InlineData("Service", "nav-services", "Open Services")]
     [InlineData("Application", "nav-startup", "Manage startup items")]
-    [InlineData("Background", "nav-startup", "Manage startup items")]
     public void BootDegradation_RoutesByWhatKindOfComponentItIs(string kind, string navId, string label)
     {
         var row = new BootDegradation(DateTime.UtcNow, kind, "Something", 4200);
@@ -166,11 +165,15 @@ public class NavigationServiceTests
     [Theory]
     [InlineData("Driver")]
     [InlineData("Device")]
+    [InlineData("Core system")]
+    [InlineData("Prefetching")]
+    [InlineData("Group Policy")]
     [InlineData("Something new Windows started reporting")]
     public void BootDegradation_OffersNothingForComponentsNoTabCanTouch(string kind)
     {
-        // No tab in this app disables a driver. Sending someone to Startup Manager to hunt for one they
-        // will not find is worse than showing no link at all.
+        // No tab in this app disables a driver, or changes the others. Sending someone to Startup Manager to hunt for
+        // one they will not find is worse than showing no link at all; session manager start-up and machine policy were
+        // offered "Manage startup items" and "Open Services" (#2770).
         var row = new BootDegradation(DateTime.UtcNow, kind, "Something", 4200);
 
         Assert.Equal("", row.NavTargetId);

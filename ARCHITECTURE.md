@@ -1600,14 +1600,16 @@ Key services:
   friendly-name decoding and FILETIME conversion are pure, unit-tested static methods.
   `Read` returns a `PrivacyAccessReport`: the entries, and the capabilities whose key
   could not be read, so a failed read is never presented as no access recorded.
-- `BootAnalyzerService` — read-only reader of the Diagnostics-Performance log
-  (event 100 boot durations; 101–110 slow-component events). Event-ID→kind mapping
-  and event-XML field parsing are pure, unit-tested static methods; reading the log
-  needs admin. Both reads return null when the log could not be read and an empty list
-  only when it was read and holds nothing. A read gives up after
-  `MaxConsecutiveReadFailures` failures in a row, keeping what it had already read. The
-  live log sits behind an internal `IBootEventReader` seam, so the loop is tested with
-  scripted readers.
+- `BootAnalyzerService` — read-only reader of the Diagnostics-Performance log (event 100
+  boot durations; 101–110 slow-component events). Event-ID→kind mapping and event-XML
+  field parsing are pure, unit-tested static methods. Each ID gets the kind the
+  provider's own message names, session manager start-up counted as the core system, and
+  a component's delay is the event's `DegradationTime`, what it added to the boot, not
+  its `TotalTime` (#2770). Reading the log needs admin. Both reads return null when the
+  log could not be read and an empty list only when it was read and holds nothing. A
+  read gives up after `MaxConsecutiveReadFailures` failures in a row, keeping what it
+  had already read. The live log sits behind an internal `IBootEventReader` seam, so the
+  loop is tested with scripted readers.
 - `TimerResolutionService` — thin wrapper over ntdll `NtQueryTimerResolution` /
   `NtSetTimerResolution`. The request is a per-process contribution Windows reverts
   on exit, so it's fully reversible and needs no admin; the 100ns→ms conversion and

@@ -10,6 +10,23 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.136.91] - 2026-11-02
+
+**Boot Analyzer names what Windows says slowed boot, with the delay each part added rather than the time it took.**
+
+### Fixed
+- Boot Analyzer gave seven of the ten kinds of slow start-up Windows records the wrong name: prefetching read as an
+  app or a driver, Group Policy as a service or a device, a device and Windows' Session Manager as "Background", and
+  the core system as a device. Each row now names what Windows' message names: an app, a driver, a service, the core
+  system, which the Session Manager is part of, prefetching, Group Policy or a device. Only an app or a service
+  links to Startup Manager or Services, the tabs that can switch one off; machine policy offered Open Services, and
+  a device and the Session Manager offered Manage startup items, though neither tab can change them.
+- Every delay was the time the part took altogether rather than the delay it added: Windows' Session Manager, which
+  added 0.45 s, read as 10.5 s, and a typical app's delay was about doubled. The Delay column now shows the delay
+  Windows measured, and so do Startup Manager's Startup impact column and the Dashboard's check for a slow start,
+  which adds the delays up and so says a start was slow less often. The names and the delays were wrong since the
+  tab was added in 1.33.0, and the links since rows got them in 1.105.0.
+
 ## [1.136.90] - 2026-11-02
 
 **New App Alerts tells you about an install with a Windows notification while SysManager's window is minimized or hidden.**

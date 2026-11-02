@@ -86,15 +86,67 @@ public class BootAnalyzerServiceTests
 
     // ---------- KindForEventId ----------
 
+    /// <summary>
+    /// Each event ID gets the kind the provider's own message gives it, quoted beside it (#2770). They were mapped in
+    /// pairs, so 104 to 110 all read as something else. Session manager initialization counts as the core system: the
+    /// Session Manager is the first user-mode process Windows starts.
+    /// </summary>
     [Theory]
-    [InlineData(101, "Application")]
-    [InlineData(102, "Driver")]
-    [InlineData(103, "Service")]
-    [InlineData(104, "Device")]
-    [InlineData(109, "Background")]
+    [InlineData(101, "Application")]          // "This application took longer than usual to start up"
+    [InlineData(102, "Driver")]               // "This driver took longer to initialize"
+    [InlineData(103, "Service")]              // "This startup service took longer than expected to startup"
+    [InlineData(104, "Core system")]          // "Core system took longer to initialize"
+    [InlineData(105, "Prefetching")]          // "Foreground optimizations (prefetching) took longer to complete"
+    [InlineData(106, "Prefetching")]          // "Background optimizations (prefetching) took longer to complete"
+    [InlineData(107, "Group Policy")]         // "Application of machine policy caused a slow down"
+    [InlineData(108, "Group Policy")]         // "Application of user policy caused a slow down"
+    [InlineData(109, "Device")]               // "This device took longer to initialize"
+    [InlineData(110, "Core system")]          // "Session manager initialization caused a slow down"
     [InlineData(999, "Component")]
-    public void KindForEventId_MapsKnownIds(int id, string expected)
+    public void KindForEventId_IsWhatTheProvidersMessageSays(int id, string expected)
         => Assert.Equal(expected, BootAnalyzerService.KindForEventId(id));
+
+    /// <summary>
+    /// The delay is the event's DegradationTime, what the component added, not its TotalTime (#2770). Session manager
+    /// start-up, measured at a TotalTime of 10,453 ms and a DegradationTime of 453 ms, read as 10.5 s.
+    /// </summary>
+    [Fact]
+    public void ParseDegradation_ReadsTheDelayItAdded_NotItsTotalTime()
+    {
+        var ev = Event(110, ("Name", "SMSSInit"), ("TotalTime", "10453"), ("DegradationTime", "453"));
+
+        var d = BootAnalyzerService.ParseDegradation(DateTime.Now, 110, ev);
+
+        Assert.NotNull(d);
+        Assert.Equal(("Core system", 453L), (d!.Kind, d.DurationMs));
+        Assert.Equal("453 ms", d.DurationDisplay);
+    }
+
+    /// <summary>
+    /// One event per ID, with the Name, TotalTime and DegradationTime every one of them carries, through to the row: the
+    /// kind, the delay and the link (#2770). Only an application and a service link anywhere, because no tab here
+    /// changes what the others name.
+    /// </summary>
+    [Theory]
+    [InlineData(101, "Application", "nav-startup")]
+    [InlineData(102, "Driver", "")]
+    [InlineData(103, "Service", "nav-services")]
+    [InlineData(104, "Core system", "")]
+    [InlineData(105, "Prefetching", "")]
+    [InlineData(106, "Prefetching", "")]
+    [InlineData(107, "Group Policy", "")]
+    [InlineData(108, "Group Policy", "")]
+    [InlineData(109, "Device", "")]
+    [InlineData(110, "Core system", "")]
+    public void ParseDegradation_GivesEachEventItsKindDelayAndLink(int id, string kind, string navTargetId)
+    {
+        var ev = Event(id, ("Name", $"component-{id}"), ("TotalTime", "3000"), ("DegradationTime", "1000"));
+
+        var d = BootAnalyzerService.ParseDegradation(DateTime.Now, id, ev);
+
+        Assert.NotNull(d);
+        Assert.Equal(($"component-{id}", kind, 1000L, navTargetId), (d!.Name, d.Kind, d.DurationMs, d.NavTargetId));
+    }
 
     // ---------- ParseBoot ----------
 

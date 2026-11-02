@@ -72,6 +72,10 @@ public sealed class TrayIconService : IDisposable
     internal long LastDiskNotificationStamp;
     private static readonly TimeSpan NotificationCooldown = TimeSpan.FromHours(4);
 
+    // What a notification goes to: the tray icon's balloon, unless a test hands its own, since there is no tray icon
+    // without Initialize and a notification raised then went nowhere a test could see (#2742).
+    private readonly Action<string, string> _notify;
+
     /// <summary>
     /// Whether the app should minimize to tray instead of closing.
     /// <para>No longer consulted when the window closes: that decision now comes from
@@ -86,9 +90,19 @@ public sealed class TrayIconService : IDisposable
     public bool NotificationsEnabled { get; set; } = true;
 
     public TrayIconService(SystemInfoService sysInfo, TimeProvider? timeProvider = null)
+        : this(sysInfo, timeProvider, notify: null)
+    {
+    }
+
+    /// <summary>The service with what a notification goes to supplied, so a test sees each one raised.</summary>
+    /// <param name="sysInfo">Reads the figures the tooltip, the menu and the notifications show.</param>
+    /// <param name="timeProvider">The cooldowns' clock; the system's when null.</param>
+    /// <param name="notify">Takes each notification's title and message; the tray icon's balloon when null.</param>
+    internal TrayIconService(SystemInfoService sysInfo, TimeProvider? timeProvider, Action<string, string>? notify)
     {
         _sysInfo = sysInfo;
         _time = timeProvider ?? TimeProvider.System;
+        _notify = notify ?? ShowTrayNotification;
         _timer = new DispatcherTimer
         {
             Interval = TimeSpan.FromSeconds(60)
@@ -430,7 +444,9 @@ public sealed class TrayIconService : IDisposable
         _ => false,
     };
 
-    private void ShowNotification(string title, string message)
+    private void ShowNotification(string title, string message) => _notify(title, message);
+
+    private void ShowTrayNotification(string title, string message)
     {
         try
         {

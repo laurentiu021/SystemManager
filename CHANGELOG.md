@@ -10,6 +10,19 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.136.93] - 2026-11-02
+
+**A maximized window comes back maximized from the notification area, and an unrecognized close setting asks again.**
+
+### Fixed
+- Bringing SysManager back from the notification area, from the tray icon, its menu or by starting it a second time,
+  set the window to its normal size every time, so a maximized window came back un-maximized, and a click on the
+  tray icon un-maximized a window that was already open. Now only a minimized window is restored, to the size it had
+  before, and any other comes back as it was left. This was there since the tray came in 0.38.0.
+- A close setting saved as a number or a list, such as "3", made the X button do nothing, with no message, until the
+  setting's file was deleted. It is now read as not chosen, so closing asks again. This was there since the setting
+  came in 1.56.9.
+
 ## [1.136.92] - 2026-11-02
 
 **Bulk Installer's search and installed check, and the Dashboard's app update checks, each read only their own winget output.**

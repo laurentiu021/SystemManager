@@ -15,6 +15,17 @@ namespace SysManager.Tests;
 /// </summary>
 public class TrayIconServiceTests
 {
+    /// <summary>
+    /// Bringing the window back restores only a minimized one (#2772). It was set to Normal every time, so a maximized
+    /// window came back at its restored size from the tray icon, the tray menu and a second launch.
+    /// </summary>
+    [Theory]
+    [InlineData(System.Windows.WindowState.Minimized, true)]
+    [InlineData(System.Windows.WindowState.Maximized, false)]
+    [InlineData(System.Windows.WindowState.Normal, false)]
+    public void ShowWindow_RestoresOnlyAMinimizedWindow(System.Windows.WindowState state, bool restored)
+        => Assert.Equal(restored, TrayIconService.NeedsRestoring(state));
+
     // ---------- construction & defaults ----------
 
     [Fact]

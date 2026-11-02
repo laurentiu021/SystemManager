@@ -6002,6 +6002,29 @@ public partial class ArchitectureTests
     }
 
     /// <summary>
+    /// Bringing the main window back from the notification area, the tray menu or a second launch sets no window state
+    /// of its own: only a minimized window is restored, by the system, and any other is shown as it was left (#2772).
+    /// </summary>
+    /// <remarks>
+    /// <c>ShowWindow</c> set Normal every time, which un-maximized the window. It shows a window, which no test here may
+    /// do, so this reads its body: no assignment to <c>WindowState</c>, and the restore behind
+    /// <c>NeedsRestoring</c>, which <c>TrayIconServiceTests</c> pins state by state.
+    /// </remarks>
+    [Fact]
+    public void BringingTheMainWindowBack_LeavesItAsItWasLeft()
+    {
+        var tray = File.ReadAllText(TestPaths.AppFile("Services", "TrayIconService.cs"));
+        var body = SourceBraces.CodeOnly(MethodBody(tray, "ShowWindow"));
+        Assert.True(body.Contains("window.Show()", StringComparison.Ordinal),
+            "ShowWindow's body was not found, or no longer shows the window, so this guard reads the wrong method.");
+
+        Assert.False(Regex.IsMatch(body, @"\bWindowState\s*=(?!=)"),
+            "ShowWindow sets the window's state, so a maximized window comes back at its restored size.");
+        Assert.Contains("if (NeedsRestoring(window.WindowState)) SystemCommands.RestoreWindow(window);", body,
+            StringComparison.Ordinal);
+    }
+
+    /// <summary>
     /// The text of a method from its signature to its closing brace, by brace matching.
     /// </summary>
     /// <remarks>

@@ -92,6 +92,13 @@ public class ClosePreferenceServiceTests : IDisposable
     [InlineData("{\"Behavior\":\"\"}")]
     [InlineData("{\"Behavior\":\"Nonsense\"}")]
     [InlineData("{\"SomethingElse\":\"Exit\"}")]
+    // A number or a list is not a name Save writes. Enum.TryParse took them, "3" and the list as values CloseBehavior
+    // does not define, so X did nothing at all (#2772), and "1" as a choice nobody made.
+    [InlineData("{\"Behavior\":\"3\"}")]
+    [InlineData("{\"Behavior\":\"-1\"}")]
+    [InlineData("{\"Behavior\":\"1\"}")]
+    [InlineData("{\"Behavior\":\"MinimizeToTray, Exit\"}")]
+    [InlineData("{\"Behavior\":\"Exit,Exit\"}")]
     public void Parse_InvalidInput_ReturnsAsk(string? json)
     {
         Assert.Equal(CloseBehavior.Ask, ClosePreferenceService.Parse(json));
@@ -109,6 +116,7 @@ public class ClosePreferenceServiceTests : IDisposable
     [InlineData("minimizetotray", CloseBehavior.MinimizeToTray)]
     [InlineData("MINIMIZETOTRAY", CloseBehavior.MinimizeToTray)]
     [InlineData("exit", CloseBehavior.Exit)]
+    [InlineData(" Exit ", CloseBehavior.Exit)]
     public void Parse_IsCaseInsensitive(string value, CloseBehavior expected)
     {
         Assert.Equal(expected, ClosePreferenceService.Parse("{\"Behavior\":\"" + value + "\"}"));

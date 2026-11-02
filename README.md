@@ -762,12 +762,13 @@ Across the tab:
   boot-performance history (Diagnostics-Performance log)
 - A trend line tells you whether the last boot was faster or slower than your
   recent average
-- Lists the apps, drivers, services, and devices Windows flagged as slowing boot,
-  with the delay attributed to each. Clicking When, Boot time or Delay sorts by the time
-  itself, so 9.8 s comes before 12.3 s
+- Lists what Windows flagged as slowing boot and what kind of thing each one is, as Windows' own
+  message names it: an app, a driver, a service, the core system, prefetching, Group Policy or a
+  device, with the delay it added.
+  Clicking When, Boot time or Delay sorts by the time itself, so 9.8 s comes before 12.3 s
 - **Each row links to the tab that can switch it off** — a slow service opens Services already
-  filtered to that service; a slow app or background task opens Startup Manager. Drivers and devices
-  get no link, because SysManager cannot disable one and sending you looking would waste your time
+  filtered to that service; a slow app opens Startup Manager. The rest get no link, because
+  SysManager cannot change them and sending you looking would waste your time
 - Read-only; reading the log requires administrator (elevation banner shown)
 - **A read that fails says so.** "No boot performance events found yet" is kept for a history
   Windows returned empty. When the log could not be read, the tab says that instead, and a

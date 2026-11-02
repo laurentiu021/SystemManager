@@ -26,13 +26,12 @@ public sealed record BootRecord(
 }
 
 /// <summary>
-/// A component (app, driver, service, or device) that Windows flagged as slowing boot,
-/// parsed from a Diagnostics-Performance degradation event (101–110). <see cref="DurationMs"/>
-/// is the delay attributed to it.
+/// A component that Windows flagged as slowing boot, parsed from a Diagnostics-Performance degradation event
+/// (101–110). <see cref="DurationMs"/> is the delay attributed to it, the event's DegradationTime.
 /// </summary>
 public sealed record BootDegradation(
     DateTime When,
-    string Kind,       // "Application" / "Driver" / "Service" / "Device" / "Background"
+    string Kind,       // what Windows says it is: see BootAnalyzerService.KindForEventId
     string Name,
     long DurationMs)
 {
@@ -47,14 +46,14 @@ public sealed record BootDegradation(
     /// act on it — the word "Startup" did not appear in its view at all (#1504). "My laptop takes forever
     /// to start" is this persona's commonest complaint, and this is the tab that answers it, then
     /// abandoned them at the answer.
-    /// <para>A Service goes to Services; an Application or a Background task goes to Startup Manager.
-    /// Drivers and Devices get nothing on purpose: this app has no tab that disables a driver, and sending
-    /// someone to Startup Manager to look for one they will not find is worse than an honest dead end.</para>
+    /// <para>A Service goes to Services; an Application goes to Startup Manager. The rest get nothing on purpose:
+    /// no tab here changes a driver, a device, the core system, prefetching or Group Policy, and sending someone to a
+    /// tab to look for one they will not find is worse than an honest dead end (#2770).</para>
     /// </remarks>
     public string NavTargetId => Kind switch
     {
         "Service" => "nav-services",
-        "Application" or "Background" => "nav-startup",
+        "Application" => "nav-startup",
         _ => "",
     };
 
@@ -71,7 +70,7 @@ public sealed record BootDegradation(
     public string NavLabel => Kind switch
     {
         "Service" => "Open Services",
-        "Application" or "Background" => "Manage startup items",
+        "Application" => "Manage startup items",
         _ => "",
     };
 }

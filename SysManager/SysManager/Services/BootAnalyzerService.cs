@@ -187,14 +187,25 @@ public sealed class BootAnalyzerService
         return new BootRecord(when, boot, ParseLong(xml, "MainPathBootTime"), ParseLong(xml, "BootPostBootTime"));
     }
 
-    /// <summary>Maps a Diagnostics-Performance degradation event ID to a component kind.</summary>
+    /// <summary>Maps a Diagnostics-Performance degradation event ID to what Windows says slowed boot.</summary>
+    /// <remarks>
+    /// One ID at a time, as the provider's own messages read them (<c>wevtutil gp
+    /// Microsoft-Windows-Diagnostics-Performance /ge /gm:true</c>). They were mapped in pairs, 101 and 105, 102 and 106
+    /// and so on, which gave seven of the ten the wrong kind: session manager start-up and machine policy read as a
+    /// Background item and a Service, with links to tabs that cannot change either (#2770).
+    /// <para>110, session manager initialization, is the core system too: the Session Manager is the first user-mode
+    /// process Windows starts, and its event names it, SMSSInit. "Session manager" would also be cut off in the Kind
+    /// column, 97 px of text in the 76 it has, which <c>BootAnalyzerViewUiTests</c> measures for every kind here.</para>
+    /// </remarks>
     internal static string KindForEventId(int eventId) => eventId switch
     {
-        101 or 105 => "Application",
-        102 or 106 => "Driver",
-        103 or 107 => "Service",
-        104 or 108 => "Device",
-        109 or 110 => "Background",
+        101 => "Application",
+        102 => "Driver",
+        103 => "Service",
+        104 or 110 => "Core system",
+        105 or 106 => "Prefetching",
+        107 or 108 => "Group Policy",
+        109 => "Device",
         _ => "Component"
     };
 
@@ -203,7 +214,11 @@ public sealed class BootAnalyzerService
     {
         var name = DataValue(xml, "Name") ?? DataValue(xml, "FriendlyName") ?? DataValue(xml, "FileName");
         if (string.IsNullOrWhiteSpace(name)) return null;
-        var ms = ParseLong(xml, "TotalTime");
+        // The delay the component added, which is what the row and the Startup impact column say. TotalTime is the time
+        // it took altogether: twice the delay for the median application on the PC #2770 was measured on, and 10,453 ms
+        // against 453 for session manager start-up. It is read only where an event has no DegradationTime.
+        var ms = ParseLong(xml, "DegradationTime");
+        if (ms == 0) ms = ParseLong(xml, "TotalTime");
         if (ms == 0) ms = ParseLong(xml, "Time");
         if (ms == 0) ms = ParseLong(xml, "Degradation");
         return new BootDegradation(when, KindForEventId(eventId), name.Trim(), ms);

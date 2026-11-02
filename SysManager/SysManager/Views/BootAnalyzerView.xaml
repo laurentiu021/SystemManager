@@ -113,10 +113,10 @@
                                 application lives nine rows down a collapsed group called System.
 
                                 Destination and label both come from the row, because the row is what knows
-                                its Kind: a Service opens Services, an Application or Background task opens
-                                Startup Manager, and a Driver or Device shows nothing — this app has no tab
-                                that disables a driver, and sending someone looking for one is worse than
-                                an honest dead end.
+                                its Kind: a Service opens Services, an Application opens Startup Manager,
+                                and the rest show nothing — this app has no tab that changes a driver, a
+                                device or the others, and sending someone looking for one is worse than an
+                                honest dead end.
 
                                 Same GhostButton + MetricBlue treatment as the Dashboard's "Fix this", so a
                                 link to another tab looks the same wherever it appears.

@@ -397,8 +397,8 @@ public sealed class SlowdownService : ISlowdownService
         var slow = slowed.Sum(d => d.DurationMs) > SlowStartAbove.TotalMilliseconds;
         if (!many && !slow) return ProbeOutcome.Of(SlowdownProbe.Startup, summary);
 
-        // Startup Manager can turn a program off. A driver or a device Windows blamed is Boot Analyzer's to explain, and
-        // the link each one carries there says where it can be dealt with.
+        // Startup Manager can turn a program off. Anything else Windows blamed, a driver or Group Policy among them, is
+        // Boot Analyzer's to explain, and the link each one carries there says where it can be dealt with.
         var toStartupManager = many || slowed[0].NavTargetId == "nav-startup";
 
         var detail = slowed.Count > 0
@@ -417,7 +417,7 @@ public sealed class SlowdownService : ISlowdownService
         return ProbeOutcome.Of(SlowdownProbe.Startup, summary, new SlowdownFinding(SlowdownKind.StartupHeavy, title, detail, actions));
     }
 
-    /// <summary>The two Windows blamed most, with how long Windows says each took: "Steam (7.7 s) and OneDrive (3.1 s)".</summary>
+    /// <summary>The two Windows blamed most, with the delay Windows says each added: "Steam (7.7 s) and OneDrive (3.1 s)".</summary>
     private static string Blame(IReadOnlyList<BootDegradation> slowed, Func<string, ProcessDescriptionEntry?> describe) =>
         FormatHelper.JoinForSentence([.. slowed.Take(2).Select(d => $"{DisplayName(d.Name, describe, [])} ({d.DurationDisplay})")]);
 

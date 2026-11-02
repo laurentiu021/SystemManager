@@ -10,6 +10,22 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.136.84] - 2026-11-02
+
+**Standby List Cleaner's auto-purge watches free memory instead of purging every 2 seconds under pressure, and the command line reports what a purge released.**
+
+### Fixed
+- Standby List Cleaner's auto-purge compared its threshold with available memory, which counts the standby list, and a
+  purge only moves that list's pages to the free list, so available memory stays where it was. It fell below the
+  threshold only once the standby list was almost empty, so under memory pressure it purged every 2 seconds, freed
+  next to nothing and threw away the cache Windows had just rebuilt, while with a large standby list and little free
+  memory, the case it exists for, it never fired. It now purges when free memory is below the threshold and the
+  standby list holds at least 1 GB, at most once every 30 seconds, and its switch says free RAM. This was there since
+  the tab was added in 1.42.0.
+- `--purge-standby --json` reported `freedMB` as the change in available memory, about zero, and when the second
+  reading was a few bytes lower the unsigned subtraction wrapped to 17,592,186,044,416. It now reports what the
+  standby list released, with its size before and after, as signed figures.
+
 ## [1.136.83] - 2026-11-02
 
 **A scripted or scheduled command-line run now writes a log, so a cleanup that failed or skipped a folder says why.**

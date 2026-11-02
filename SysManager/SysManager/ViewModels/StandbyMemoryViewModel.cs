@@ -14,7 +14,7 @@ namespace SysManager.ViewModels;
 
 /// <summary>
 /// ViewModel for the Standby List Cleaner tab. Shows live physical-memory stats and
-/// purges the Windows standby list on demand, or automatically when available RAM drops
+/// purges the Windows standby list on demand, or automatically when free RAM drops
 /// below a threshold (ISLC-style). Purging is safe/non-destructive but needs admin; auto
 /// and manual purge only run while the app is open.
 /// </summary>
@@ -79,9 +79,32 @@ public sealed partial class StandbyMemoryViewModel : ElevatedViewModelBase
         }
     }
 
-    /// <summary>Pure: should auto-purge fire? True when available RAM is below the threshold.</summary>
-    public static bool ShouldAutoPurge(double availableMb, double thresholdMb)
-        => thresholdMb > 0 && availableMb > 0 && availableMb < thresholdMb;
+    /// <summary>The standby list a purge has to find before it is worth making: 1 GB.</summary>
+    internal const double MinimumStandbyMb = 1024;
+
+    /// <summary>How long after an automatic purge the next one waits, whatever the memory says.</summary>
+    internal static readonly TimeSpan AutoPurgeCooldown = TimeSpan.FromSeconds(30);
+
+    /// <summary>
+    /// Pure: should auto-purge fire? True when free RAM is below the threshold, the standby list holds at least
+    /// <see cref="MinimumStandbyMb"/>, and no automatic purge was made in the last <see cref="AutoPurgeCooldown"/>.
+    /// </summary>
+    /// <remarks>
+    /// It compared the threshold with available memory, which is the free and standby lists together, and a purge only
+    /// moves pages from one to the other: available memory fell below the threshold only once the standby list was
+    /// almost empty, the purge then freed next to nothing, and it purged again every 2 seconds, dropping the cache Windows
+    /// had just rebuilt. The case it exists for, a large standby list and little free memory, has high available memory,
+    /// so it never fired there (#2768). Unknown figures purge nothing.
+    /// </remarks>
+    /// <param name="freeMb">The free and zero lists, or null when Windows would not say.</param>
+    /// <param name="standbyMb">The standby list, or null when Windows would not say.</param>
+    /// <param name="thresholdMb">The free memory to stay above.</param>
+    /// <param name="sinceLastPurge">How long since the last automatic purge, or null before the first.</param>
+    public static bool ShouldAutoPurge(double? freeMb, double? standbyMb, double thresholdMb, TimeSpan? sinceLastPurge)
+        => thresholdMb > 0
+           && freeMb is { } free && free >= 0 && free < thresholdMb
+           && standbyMb is { } standby && standby >= MinimumStandbyMb
+           && (sinceLastPurge is not { } since || since >= AutoPurgeCooldown);
 
     /// <summary>
     /// Pure: should the 2-second poll be running? True while the tab is visible, OR while auto-purge is
@@ -146,6 +169,9 @@ public sealed partial class StandbyMemoryViewModel : ElevatedViewModelBase
 
     private bool _autoPurgeInFlight;
 
+    // When the last automatic purge was made, on the monotonic tick count, or null before the first.
+    private long? _lastAutoPurgeAt;
+
     private async void Tick()
     {
         try
@@ -157,18 +183,25 @@ public sealed partial class StandbyMemoryViewModel : ElevatedViewModelBase
 
             // Auto-purge off the UI thread (same reason as PurgeAsync). _autoPurgeInFlight
             // guards against the 2s timer stacking a second purge on top of one still running.
+            TimeSpan? sinceLastPurge = _lastAutoPurgeAt is { } at
+                ? TimeSpan.FromMilliseconds(Environment.TickCount64 - at)
+                : null;
             if (AutoPurgeEnabled && IsElevated && !_autoPurgeInFlight
-                && ShouldAutoPurge(status.AvailableMb, ThresholdMb))
+                && ShouldAutoPurge(status.FreeMb, status.StandbyMb, ThresholdMb, sinceLastPurge))
             {
                 _autoPurgeInFlight = true;
                 try
                 {
-                    var avail = status.AvailableMb;
+                    var free = status.FreeMb;
+                    var standby = status.StandbyMb;
+                    // Stamped whether or not Windows accepts it: a refused purge is not tried again every 2 seconds.
+                    _lastAutoPurgeAt = Environment.TickCount64;
                     var purged = await Task.Run(() => _service.TryPurgeStandbyList(out _)).ConfigureAwait(true);
                     if (purged)
                     {
-                        Log.Information("Auto-purged standby list (available {Avail:F0} MB < {Threshold:F0} MB)", avail, ThresholdMb);
-                        StatusMessage = $"Auto-purged — available RAM was below {ThresholdMb:F0} MB.";
+                        Log.Information("Auto-purged standby list (free {Free:F0} MB < {Threshold:F0} MB, standby {Standby:F0} MB)",
+                            free, ThresholdMb, standby);
+                        StatusMessage = $"Auto-purged — free RAM was below {ThresholdMb:F0} MB.";
                         Refresh();
                     }
                 }

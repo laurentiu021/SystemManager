@@ -2126,8 +2126,9 @@ offers, "rate us" prompts:
 - **Frees cached standby memory** — the built-in equivalent of ISLC, to reduce
   stutter when RAM runs low in games
 - **Live stats** — total RAM, available, and memory load %, refreshed every 2s
-- **Purge on demand** or **auto-purge** when available RAM drops below a
-  threshold you set with a slider
+- **Purge on demand** or **auto-purge** when free RAM drops below a threshold you set with a
+  slider and the standby list holds at least 1 GB, at most once every 30 seconds. Available RAM
+  counts the standby list, so a purge cannot raise it. Free RAM is the figure a purge changes
 - **Safe and non-destructive** — the standby list is clean, disk-backed file
   cache, so clearing it loses nothing; Windows reloads from disk on next use
 - Reading stats needs no admin; purging requires administrator (it enables the

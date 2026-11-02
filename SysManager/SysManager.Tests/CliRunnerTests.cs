@@ -363,4 +363,38 @@ public class CliRunnerTests
         Assert.DoesNotContain("command line", entry.Action, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("run from the command line", entry.Detail, StringComparison.Ordinal);
     }
+
+    private const ulong Mib = 1024UL * 1024UL;
+
+    /// <summary>
+    /// A purge reports what it released from the standby list, signed, though available memory read lower the second
+    /// time (#2768).
+    /// </summary>
+    /// <remarks>
+    /// It reported the change in available memory, which a purge does not raise, and the unsigned subtraction wrapped to
+    /// about 17.6 million terabytes when the second reading was a few bytes lower.
+    /// </remarks>
+    [Fact]
+    public void ThePurgePayload_IsWhatTheStandbyListReleased_EvenWhenAvailableMemoryReadLower()
+    {
+        var before = new MemoryStatus(16384 * Mib, 8000 * Mib, 51, FreeBytes: 3000 * Mib, StandbyBytes: 5000 * Mib);
+        var after = new MemoryStatus(16384 * Mib, 8000 * Mib - 4096, 51, FreeBytes: 7900 * Mib, StandbyBytes: 100 * Mib);
+
+        using var json = System.Text.Json.JsonDocument.Parse(CliRunner.PurgeJson(before, after));
+
+        Assert.Equal(4900, json.RootElement.GetProperty("freedMB").GetDouble());
+        Assert.Equal(5000, json.RootElement.GetProperty("standbyBeforeMB").GetDouble());
+        Assert.Equal(100, json.RootElement.GetProperty("standbyAfterMB").GetDouble());
+    }
+
+    /// <summary>Where Windows would not report the standby list, the payload says nothing rather than a guess.</summary>
+    [Fact]
+    public void ThePurgePayload_SaysNothing_WhereTheStandbyListWasNotReported()
+    {
+        var unknown = new MemoryStatus(16384 * Mib, 8000 * Mib, 51);
+
+        using var json = System.Text.Json.JsonDocument.Parse(CliRunner.PurgeJson(unknown, unknown));
+
+        Assert.Equal(System.Text.Json.JsonValueKind.Null, json.RootElement.GetProperty("freedMB").ValueKind);
+    }
 }

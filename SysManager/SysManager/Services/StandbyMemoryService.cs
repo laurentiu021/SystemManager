@@ -33,9 +33,42 @@ public sealed partial class StandbyMemoryService
                 Log.Debug("GlobalMemoryStatusEx failed: {Code}", Marshal.GetLastPInvokeError());
                 return MemoryStatus.Empty;
             }
-            return new MemoryStatus(statex.ullTotalPhys, statex.ullAvailPhys, statex.dwMemoryLoad);
+            var (free, standby) = ReadMemoryLists();
+            return new MemoryStatus(statex.ullTotalPhys, statex.ullAvailPhys, statex.dwMemoryLoad, free, standby);
         }
         catch (DllNotFoundException ex) { Log.Warning("Memory status unavailable: {Error}", ex.Message); return MemoryStatus.Empty; }
+    }
+
+    /// <summary>
+    /// The free and zero lists together, and the standby list at every priority, in bytes, or nulls when Windows will not
+    /// say. Read by any user, elevated or not.
+    /// </summary>
+    /// <remarks>
+    /// The same lists RAMMap shows: <c>NtQuerySystemInformation</c> with <c>SystemMemoryListInformation</c>, the class the
+    /// purge itself is set through. Their sum is what <c>GlobalMemoryStatusEx</c> calls available (#2768).
+    /// </remarks>
+    private static (ulong? Free, ulong? Standby) ReadMemoryLists()
+    {
+        try
+        {
+            var status = NativeMethods.NtQuerySystemInformation(NativeMethods.SystemMemoryListInformation,
+                out var lists, Marshal.SizeOf<NativeMethods.SYSTEM_MEMORY_LIST_INFORMATION>(), out _);
+            if (status != NativeMethods.StatusSuccess)
+            {
+                Log.Debug("The memory lists could not be read (NTSTATUS 0x{Status:X8})", status);
+                return (null, null);
+            }
+
+            var page = (ulong)Environment.SystemPageSize;
+            ulong standby = 0;
+            foreach (var pages in lists.StandbyPagesByPriority) standby += (ulong)pages;
+            return (((ulong)lists.ZeroPageCount + (ulong)lists.FreePageCount) * page, standby * page);
+        }
+        catch (DllNotFoundException ex)
+        {
+            Log.Debug("The memory lists could not be read: {Error}", ex.Message);
+            return (null, null);
+        }
     }
 
     /// <summary>
@@ -132,6 +165,27 @@ public sealed partial class StandbyMemoryService
             public ulong ullAvailExtendedVirtual;
         }
 
+        /// <summary>The page counts of each memory list, as <c>SystemMemoryListInformation</c> returns them.</summary>
+        [StructLayout(LayoutKind.Sequential)]
+        internal struct SYSTEM_MEMORY_LIST_INFORMATION
+        {
+            public nuint ZeroPageCount;
+            public nuint FreePageCount;
+            public nuint ModifiedPageCount;
+            public nuint ModifiedNoWritePageCount;
+            public nuint BadPageCount;
+            public StandbyByPriority StandbyPagesByPriority;
+            public StandbyByPriority RepurposedPagesByPriority;
+            public nuint ModifiedPageCountPageFile;
+        }
+
+        /// <summary>One page count for each of the eight standby priorities.</summary>
+        [System.Runtime.CompilerServices.InlineArray(8)]
+        internal struct StandbyByPriority
+        {
+            private nuint _first;
+        }
+
         [StructLayout(LayoutKind.Sequential)]
         internal struct LUID
         {
@@ -149,6 +203,10 @@ public sealed partial class StandbyMemoryService
 
         [LibraryImport("ntdll.dll")]
         internal static partial int NtSetSystemInformation(int systemInformationClass, IntPtr systemInformation, int systemInformationLength);
+
+        [LibraryImport("ntdll.dll")]
+        internal static partial int NtQuerySystemInformation(int systemInformationClass,
+            out SYSTEM_MEMORY_LIST_INFORMATION systemInformation, int systemInformationLength, out int returnLength);
 
         [LibraryImport("kernel32.dll", SetLastError = true)]
         [return: MarshalAs(UnmanagedType.Bool)]

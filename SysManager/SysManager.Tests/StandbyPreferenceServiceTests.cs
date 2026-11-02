@@ -228,7 +228,7 @@ public class StandbyPreferenceServiceTests : IDisposable
         NewService().Save(new StandbyPreference(true, 2048));
         var loaded = NewService().Load();
 
-        Assert.True(ViewModels.StandbyMemoryViewModel.ShouldAutoPurge(1024, loaded.ThresholdMb));
-        Assert.False(ViewModels.StandbyMemoryViewModel.ShouldAutoPurge(4096, loaded.ThresholdMb));
+        Assert.True(ViewModels.StandbyMemoryViewModel.ShouldAutoPurge(1024, 6000, loaded.ThresholdMb, null));
+        Assert.False(ViewModels.StandbyMemoryViewModel.ShouldAutoPurge(4096, 6000, loaded.ThresholdMb, null));
     }
 }

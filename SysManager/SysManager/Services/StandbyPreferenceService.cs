@@ -13,7 +13,7 @@ namespace SysManager.Services;
 /// The user's standby-list auto-purge settings, as stored on disk.
 /// </summary>
 /// <param name="AutoPurgeEnabled">Whether auto-purge should be armed on startup.</param>
-/// <param name="ThresholdMb">Available-RAM threshold, in MB, below which auto-purge fires.</param>
+/// <param name="ThresholdMb">Free-RAM threshold, in MB, below which auto-purge fires.</param>
 public sealed record StandbyPreference(bool AutoPurgeEnabled, double ThresholdMb);
 
 /// <summary>

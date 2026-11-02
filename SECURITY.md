@@ -291,6 +291,15 @@ What the app can and cannot do by design:
   [ROADMAP.md](ROADMAP.md#trust-and-distribution) for why the two are sequenced
   together, and the README for
   [why the app ships portable at all](README.md#why-portable-and-why-there-is-no-installer).
+- **Native libraries unpacked to your temp folder**: the `.exe` carries the native libraries WPF,
+  SkiaSharp and Bandwidth Monitor's precise mode need, and Windows loads a library only from a file,
+  so the .NET runtime unpacks them once for each version, to a folder named after the `.exe` under
+  `%TEMP%\.net`, and every start loads them from there. That folder is in your profile, and any
+  program running as you can write to it, also when you choose **Run as administrator**: such a
+  program could replace one of those files before the elevated SysManager loads it. A build under
+  `Program Files` would still unpack to the same folder, so the machine-scope install above does
+  not close this.
+  [#2746](https://github.com/laurentiu021/SystemManager/issues/2746) tracks closing it.
 - **CSV export and formula injection**: the eleven Export CSV buttons write file, folder, program, window
   and publisher names SysManager does not control. A value starting with `=`, `+`, `-`, `@`, a tab or a
   carriage return is prefixed with a single quote before it is written, per OWASP's CSV injection guidance,

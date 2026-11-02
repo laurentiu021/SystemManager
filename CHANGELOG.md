@@ -10,6 +10,23 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.136.66] - 2026-11-02
+
+**System Health reads no errors as 0, no longer calls a drive Healthy when nothing could be read from it, and colours a drive's temperature the way its verdict reads it.**
+
+### Fixed
+- A drive whose error counters were read showed "—", which means not reported, for read and write errors when
+  there had been none: a reported 0 was turned into "not reported". It reads 0. This was there since 1.127.7.
+- A drive Windows gave no health status for, with nothing read from it, as without administrator rights, was
+  called "Healthy." in green, or "Healthy — N h on" from its power-on hours alone. It says Windows could not
+  report this drive's health, in grey. This was there since 0.3.0.
+- A drive Windows reports as failing showed its health gauge in amber under the red "Drive is failing": its score
+  is capped at 20, which is where the amber band starts. The gauge is red. This was there since 1.57.6.
+- System Health coloured a drive's temperature amber from 41 °C and red above 60 °C while its verdict warns only
+  from 70 °C, so a drive at 62 °C read red beside a green "Healthy — 62 °C", and the Dashboard showed the same
+  reading in blue. Both now use one scale: green to 50 °C, blue while warm, and amber from 70 °C, where the
+  verdict says the drive runs hot. System Health's scale was there since 0.16.0.
+
 ## [1.136.65] - 2026-11-02
 
 **Traceroute stops at a router that says the destination cannot be reached and shows which one, and a finished trace keeps saying Done.**

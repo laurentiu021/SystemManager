@@ -93,6 +93,37 @@ public class DiskHealthServiceTests
     }
 
     [Fact]
+    public void ApplyVerdict_NothingRead_SaysWindowsCouldNotReport_InNeutral()
+    {
+        // Windows gave no status SysManager recognises and no counter was read, as without administrator rights: the
+        // verdict said "Healthy" in green, or "Healthy — 5000 h on" from the power-on hours alone (#2753).
+        var r = new DiskHealthReport { HealthStatus = "Unknown", PowerOnHours = 5000 };
+
+        InvokeApplyVerdict(r);
+
+        Assert.Equal(("Windows could not report this drive's health.", StatusColors.Neutral),
+            (r.Verdict, r.VerdictColorHex));
+    }
+
+    [Theory]
+    [InlineData(0L, 0L)]
+    [InlineData(3L, 3L)]
+    [InlineData(null, null)]
+    public void AnErrorCount_KeepsAReportedZero(long? reported, long? expected)
+    {
+        // A reported 0 turned into "not reported", so every healthy drive whose counters were read showed "—" for its
+        // read and write errors (#2753).
+        Assert.Equal(expected, DiskHealthService.ToCount(reported));
+    }
+
+    [Fact]
+    public void APowerOnTime_OfZero_IsStillNotReported()
+    {
+        // Drivers that do not keep the hours report 0, so a zero here stays "—", as it always has.
+        Assert.Null(DiskHealthService.ToLong(0L));
+    }
+
+    [Fact]
     public void ApplyVerdict_AllGood_SetsGreen()
     {
         var r = new DiskHealthReport { HealthStatus = "Healthy" };

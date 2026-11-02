@@ -118,8 +118,8 @@ public sealed class DiskHealthService
                     var wear = ToInt(mo["Wear"]);
                     if (wear.HasValue) report.WearPercent = wear;
                     report.PowerOnHours = ToLong(mo["PowerOnHours"]);
-                    report.ReadErrors = ToLong(mo["ReadErrorsTotal"]);
-                    report.WriteErrors = ToLong(mo["WriteErrorsTotal"]);
+                    report.ReadErrors = ToCount(mo["ReadErrorsTotal"]);
+                    report.WriteErrors = ToCount(mo["WriteErrorsTotal"]);
                     report.StartStopCount = ToLong(mo["StartStopCycleCount"]);
                     return; // one counter per disk
                 }
@@ -161,6 +161,12 @@ public sealed class DiskHealthService
                 r.Verdict = $"{(r.ReadErrors ?? 0) + (r.WriteErrors ?? 0)} I/O errors logged. Monitor closely.";
                 r.VerdictColorHex = StatusColors.Warning;
                 return;
+            case DiskFinding.NothingRead:
+                // No status Windows gave that SysManager recognises, and no counter, as without administrator rights.
+                // It said "Healthy" in green, from nothing (#2753).
+                r.Verdict = "Windows could not report this drive's health.";
+                r.VerdictColorHex = StatusColors.Neutral;
+                return;
         }
 
         // All good
@@ -194,7 +200,22 @@ public sealed class DiskHealthService
         catch (InvalidCastException) { return null; }
     }
 
-    private static long? ToLong(object? o)
+    /// <summary>A count of events, such as read or write errors, where a reported 0 means none happened.</summary>
+    /// <remarks>
+    /// It went through <see cref="ToLong"/>, which reads 0 as "not reported", so a healthy drive showed "—" for both
+    /// error counts (#2753).
+    /// </remarks>
+    internal static long? ToCount(object? o)
+    {
+        if (o is null) return null;
+        try { return Convert.ToInt64(o); }
+        catch (FormatException) { return null; }
+        catch (OverflowException) { return null; }
+        catch (InvalidCastException) { return null; }
+    }
+
+    /// <summary>A figure a driver reports as 0 when it does not keep it, such as the power-on hours.</summary>
+    internal static long? ToLong(object? o)
     {
         if (o is null) return null;
         try { var v = Convert.ToInt64(o); return v == 0 ? null : v; }

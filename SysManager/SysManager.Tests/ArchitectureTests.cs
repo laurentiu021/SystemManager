@@ -10097,6 +10097,36 @@ public partial class ArchitectureTests
         Assert.Equal(unreadable, HeadingMarkupTheSlugCannotRead().IsMatch(heading));
 
     /// <summary>
+    /// The manual smoke script reads its tabs from the UI suite's table, and reads every row of it (#2744).
+    /// </summary>
+    /// <remarks>
+    /// It walked a list of its own, eleven ids long, of which it could reach three, since it never opened the sidebar
+    /// groups. It now reads <c>AllTabsSmokeUiTests.AllTabs()</c> when it runs, with the pattern read from it here, so a
+    /// row written another way would leave the smoke run unnoticed: the script launches the app and cannot run here.
+    /// </remarks>
+    [Fact]
+    public void TheSmokeScript_ReadsEveryRowOfTheUiSuitesTabTable()
+    {
+        var root = TestPaths.RepoRoot();
+        var pattern = SmokeScriptTablePattern().Match(File.ReadAllText(Path.Combine(root, "docs", "manual-smoke.ps1")));
+        Assert.True(pattern.Success,
+            "docs/manual-smoke.ps1 no longer reads the UI suite's table with Select-String -Path $tableFile -Pattern '...'.");
+
+        var table = File.ReadAllText(Path.Combine(root, "SysManager", "SysManager.UITests", "AllTabsSmokeUiTests.cs"));
+        var rows = Regex.Matches(table, @"new\s+object\s*\[\s*\]\s*\{").Count;
+        var read = Regex.Matches(table, pattern.Groups["pattern"].Value.Replace("''", "'", StringComparison.Ordinal)).Count;
+
+        // 60 rows when this was written.
+        Assert.True(rows >= 50, $"only {rows} rows were counted in AllTabsSmokeUiTests.AllTabs(), so this checks almost nothing.");
+        Assert.True(read == rows, $"the smoke script's pattern reads {read} of the table's {rows} rows, so the others are left "
+            + "out of the smoke run.");
+    }
+
+    /// <summary>The pattern <c>docs/manual-smoke.ps1</c> reads the UI suite's tab table with, from its single-quoted literal.</summary>
+    [GeneratedRegex(@"Select-String -Path \$tableFile -Pattern '(?<pattern>(?:[^']|'')+)'")]
+    private static partial Regex SmokeScriptTablePattern();
+
+    /// <summary>
     /// GitHub's anchor for a heading: lower-cased, with everything but word characters, hyphens and spaces dropped, and
     /// each space turned into its own hyphen. Nothing is trimmed once the rest is dropped, so a heading that starts with
     /// an emoji gets a leading hyphen and "DNS &amp; Hosts" two hyphens in a row.

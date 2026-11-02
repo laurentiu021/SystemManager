@@ -38,8 +38,9 @@ public sealed partial class LargeFilesViewModel : ViewModelBase
     protected internal override IRelayCommand? EscapeCancel =>
         IsScanning ? CancelCommand : null;
 
-    private readonly LargeFileScanner _scanner;
-    private readonly FixedDriveService _drives;
+    private readonly Func<string, long, int, IProgress<LargeFileScanner.LargeFileProgress>?, CancellationToken,
+        Task<IReadOnlyList<LargeFileEntry>>> _scan;
+    private readonly Func<Task<IReadOnlyList<FixedDriveService.FixedDrive>>> _enumerateDrives;
     private readonly Action<string> _selectInExplorer;
     private CancellationTokenSource? _cts;
 
@@ -59,6 +60,14 @@ public sealed partial class LargeFilesViewModel : ViewModelBase
     [ObservableProperty] private ScanLocation? _selectedLocation;
     [ObservableProperty] private int _topCount = 100;
 
+    /// <summary>
+    /// True while the tab is on screen. Set by <see cref="MainWindowViewModel.SetActive"/>.
+    /// </summary>
+    [ObservableProperty] private bool _isActive;
+
+    /// <summary>The read of the locations the tab started when it was last shown. Internal so a test can await it.</summary>
+    internal Task ShownLocations { get; private set; } = Task.CompletedTask;
+
     public string BytesScannedDisplay => FormatHelper.FormatSize(BytesScanned);
 
     public LargeFilesViewModel(LargeFileScanner scanner, FixedDriveService drives)
@@ -71,10 +80,20 @@ public sealed partial class LargeFilesViewModel : ViewModelBase
     /// Opens File Explorer with a file selected: the real launch unless a test passes its own, so a test of the checks
     /// in front of it cannot open a window on the PC running the suite when one of them breaks (#2740).
     /// </param>
-    internal LargeFilesViewModel(LargeFileScanner scanner, FixedDriveService drives, Action<string>? selectInExplorer)
+    /// <param name="scan">
+    /// The scan: <paramref name="scanner"/>'s unless a test passes its own, to hold it while the selection changes
+    /// (#2764).
+    /// </param>
+    /// <param name="enumerateDrives">
+    /// Lists the fixed drives: <paramref name="drives"/>' list unless a test passes its own, to connect a drive (#2764).
+    /// </param>
+    internal LargeFilesViewModel(LargeFileScanner scanner, FixedDriveService drives, Action<string>? selectInExplorer,
+        Func<string, long, int, IProgress<LargeFileScanner.LargeFileProgress>?, CancellationToken,
+            Task<IReadOnlyList<LargeFileEntry>>>? scan = null,
+        Func<Task<IReadOnlyList<FixedDriveService.FixedDrive>>>? enumerateDrives = null)
     {
-        _scanner = scanner;
-        _drives = drives;
+        _scan = scan ?? scanner.ScanAsync;
+        _enumerateDrives = enumerateDrives ?? (() => drives.EnumerateAsync());
         _selectInExplorer = selectInExplorer ?? SelectInExplorer;
         InitializeAsync(InitAsync);
     }
@@ -90,8 +109,10 @@ public sealed partial class LargeFilesViewModel : ViewModelBase
         catch (InvalidOperationException ex) { Log.Warning("Large-files location load failed: {Error}", ex.Message); }
     }
 
+    /// <summary>Reads the locations again, keeping the one picked while it is still listed.</summary>
     private async Task LoadLocationsAsync()
     {
+        var picked = SelectedLocation?.Path;
         try
         {
             ScanLocations.Clear();
@@ -108,11 +129,12 @@ public sealed partial class LargeFilesViewModel : ViewModelBase
             AddLocation("💼  Program Files", pf);
             AddLocation("💼  Program Files (x86)", pfx86);
 
-            var drives = await _drives.EnumerateAsync();
+            var drives = await _enumerateDrives();
             foreach (var d in drives)
                 AddLocation($"💾  Whole drive  {d.Letter}  ({d.SizeGB:F0} GB)", d.Letter + @"\");
 
-            SelectedLocation = ScanLocations.FirstOrDefault();
+            SelectedLocation = ScanLocations.FirstOrDefault(l => string.Equals(l.Path, picked, StringComparison.OrdinalIgnoreCase))
+                ?? ScanLocations.FirstOrDefault();
         }
         catch (IOException) { /* location enumeration is best-effort */ }
         catch (UnauthorizedAccessException) { /* location enumeration is best-effort */ }
@@ -122,6 +144,17 @@ public sealed partial class LargeFilesViewModel : ViewModelBase
     {
         if (string.IsNullOrWhiteSpace(path) || !Directory.Exists(path)) return;
         ScanLocations.Add(new ScanLocation(label, path));
+    }
+
+    /// <summary>Shown again: reads the locations again, keeping the one picked.</summary>
+    /// <remarks>
+    /// The tab is built once and kept for the whole run, so the list read when it was built went stale: a drive connected
+    /// later never appeared, and one unplugged stayed listed with its old size (#2764). Not while the first read or a scan
+    /// runs.
+    /// </remarks>
+    partial void OnIsActiveChanged(bool value)
+    {
+        if (value && InitializationComplete.IsCompleted && !IsScanning) ShownLocations = InitAsync();
     }
 
     partial void OnBytesScannedChanged(long value) => OnPropertyChanged(nameof(BytesScannedDisplay));
@@ -146,9 +179,25 @@ public sealed partial class LargeFilesViewModel : ViewModelBase
             ScanStatus = $"Cannot start — {OperationLockService.Instance.GetActiveOperationName(OperationCategory.Disk)} is already running.";
             return;
         }
-        if (SelectedLocation is null)
+        // Read once: the box and the size stay open while the scan runs, and the line, the toast and the log describe
+        // what was read. They were built from the selection again once the scan had ended (#2764).
+        var location = SelectedLocation;
+        var minSizeMb = MinSizeMB;
+        var top = TopCount;
+        if (location is null)
         {
             ScanStatus = "Pick a location first.";
+            return;
+        }
+
+        // A drive unplugged since the list was read, or a folder since removed: the scanner returns nothing for either,
+        // and that read as a scan that found nothing (#2764).
+        if (!Directory.Exists(location.Path))
+        {
+            ScanStatus = string.Equals(Path.GetPathRoot(location.Path), location.Path, StringComparison.OrdinalIgnoreCase)
+                ? $"Drive {location.Path.TrimEnd('\\')} is no longer connected, so nothing was scanned."
+                : $"{location.Label.Trim()} is no longer there, so nothing was scanned.";
+            await InitAsync();
             return;
         }
 
@@ -157,7 +206,7 @@ public sealed partial class LargeFilesViewModel : ViewModelBase
         FilesScanned = 0;
         BytesScanned = 0;
         CurrentFolder = string.Empty;
-        ScanStatus = $"Scanning {SelectedLocation.Label.Trim()}...";
+        ScanStatus = $"Scanning {location.Label.Trim()}...";
         _cts?.Dispose();
         _cts = new CancellationTokenSource();
         try
@@ -168,16 +217,16 @@ public sealed partial class LargeFilesViewModel : ViewModelBase
                 BytesScanned = p.BytesScanned;
                 CurrentFolder = p.CurrentFolder;
             });
-            var list = await progress.SettleAfterAsync(reporter => _scanner.ScanAsync(
-                rootPath: SelectedLocation.Path,
-                minSizeBytes: (long)MinSizeMB * 1024L * 1024L,
-                top: TopCount,
-                progress: reporter,
-                ct: _cts.Token));
+            var list = await progress.SettleAfterAsync(reporter => _scan(
+                location.Path,
+                (long)minSizeMb * 1024L * 1024L,
+                top,
+                reporter,
+                _cts.Token));
             Files.ReplaceWith(list);
-            ScanStatus = $"Found {list.Count} files ≥ {MinSizeMB} MB in {SelectedLocation.Label.Trim()}.";
-            ToastService.Instance.Show("Large file scan complete", $"{list.Count} files found ≥ {MinSizeMB} MB");
-            Log.Information("Large file scan completed: {Count} files ≥ {MinSize} MB", list.Count, MinSizeMB);
+            ScanStatus = $"Found {list.Count} files ≥ {minSizeMb} MB in {location.Label.Trim()}.";
+            ToastService.Instance.Show("Large file scan complete", $"{list.Count} files found ≥ {minSizeMb} MB");
+            Log.Information("Large file scan completed: {Count} files ≥ {MinSize} MB", list.Count, minSizeMb);
         }
         catch (OperationCanceledException) { ScanStatus = "Scan cancelled."; }
         catch (IOException ex) { ScanStatus = $"Error: {ex.Message}"; }

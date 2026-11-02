@@ -539,7 +539,8 @@ Edit Windows environment variables without the cramped built-in dialog:
   filter is hiding. A load keeps the marks, and the event open on the right, for every
   event it lists again
 - Export to CSV — every event loaded, including any a filter is hiding — with a "search
-  online" link for unknown events
+  online" link for unknown events. The line after a load, and the file an export suggests, name
+  the log that was read, even if the log box has been changed since
 - The Security log requires administrator rights. Without them a banner at the top says so,
   with a button that restarts SysManager elevated, rather than showing an empty list that
   looks like "no events"
@@ -1118,8 +1119,11 @@ System → System Fixes, where the tab name matches what they do.
 
 ### Large Files
 Answers "what is actually using my space?" by listing the biggest files in one place.
-- Scan Downloads, Documents, Desktop, Videos, Pictures, Music, Program Files, or a whole drive
-- Configurable minimum size (default 500 MB) and how many to list (default 100)
+- Scan Downloads, Documents, Desktop, Videos, Pictures, Music, Program Files, or a whole drive.
+  The list is read again each time the tab is shown, so a drive connected since is listed, and a
+  drive unplugged since, or a folder since removed, is said to be gone rather than scanned as empty
+- Configurable minimum size (default 500 MB) and how many to list (default 100). The result line
+  names the location and size the scan read, even if you change them while it runs
 - Click Size or Modified to sort by the size or the date itself: 800 MB before 1.2 GB, and
   by year and month rather than by the day of the month
 - **Read-only** — the only actions are "Show" (reveals the file in Explorer) and "Copy" (copies its

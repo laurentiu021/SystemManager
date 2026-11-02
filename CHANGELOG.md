@@ -10,6 +10,24 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.136.81] - 2026-11-02
+
+**Large Files and System Logs describe what they read, and Large Files no longer scans a drive that is gone as an empty one.**
+
+### Fixed
+- Large Files' result line, its toast and its log line named the location and minimum size chosen when the scan ended,
+  not the ones it read, and both stay open to change while it runs: picking Documents during a scan of Downloads at
+  500 MB reported Downloads' files as Documents' at the new size. They name what the scan read now. This was there
+  since 0.5.0, when the scan was part of Deep Cleanup.
+- Large Files read its list of locations once, when the tab was first opened, and the tab is kept for the whole run,
+  so a drive connected later never appeared, and one unplugged since stayed listed and scanned as a drive with nothing
+  on it, with a "Large file scan complete" toast. The list is read again each time the tab is shown, keeping the
+  location picked, and a location that is gone is said to be, without a scan. This was there since 0.5.0 too.
+- System Logs named the log in the box in the line after a load, which the "could not be read" overlay shows too, and
+  in the file an export suggests, though the box stays open during a load and changing it loads nothing: switching to
+  Security during a System load reported System's events as Security's. Both name the log that was read now. This was
+  there since 0.3.0, the first version.
+
 ## [1.136.80] - 2026-11-02
 
 **Gaming Profile's Start waits until a ticked optimization can run, and a start that changed nothing no longer says game mode is on.**

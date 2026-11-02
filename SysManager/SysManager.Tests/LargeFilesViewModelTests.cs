@@ -3,6 +3,7 @@
 // License: MIT
 
 using System.IO;
+using SysManager.Models;
 using SysManager.ViewModels;
 
 namespace SysManager.Tests;
@@ -210,6 +211,136 @@ public class LargeFilesViewModelTests
         await vm.ScanCommand.ExecuteAsync(null);
 
         Assert.Contains("location", vm.ScanStatus, StringComparison.OrdinalIgnoreCase);
+    }
+
+    // ── The result names what was read, and a location that is gone is said to be (#2764) ──
+
+    /// <summary>A scan whose result is held until the test lets it finish, and what it was asked to read.</summary>
+    private sealed class HeldScan
+    {
+        private readonly TaskCompletionSource<IReadOnlyList<LargeFileEntry>> _result =
+            new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        public List<(string Root, long MinBytes)> Asked { get; } = [];
+
+        public Task<IReadOnlyList<LargeFileEntry>> ScanAsync(string root, long minBytes, int top,
+            IProgress<Services.LargeFileScanner.LargeFileProgress>? progress, CancellationToken ct)
+        {
+            lock (Asked) Asked.Add((root, minBytes));
+            // Bounded, so a scan nothing lets finish fails the test instead of hanging the suite.
+            return _result.Task.WaitAsync(TimeSpan.FromSeconds(10), ct);
+        }
+
+        public void Finish() => _result.TrySetResult([]);
+    }
+
+    /// <summary>
+    /// The result line names the location and size the scan read, though both were changed while it ran (#2764).
+    /// </summary>
+    /// <remarks>
+    /// The scan started with the selection, and the line, the toast and the log were built from it again once the scan
+    /// had ended, while the box and the size stayed open to change. Picking Documents during a scan of Downloads
+    /// reported Downloads' files as Documents'.
+    /// </remarks>
+    [Fact]
+    public async Task TheResultLine_NamesTheLocationAndSizeTheScanRead_WhenTheyChangedWhileItRan()
+    {
+        var held = new HeldScan();
+        var vm = new LargeFilesViewModel(new Services.LargeFileScanner(), new Services.FixedDriveService(), _ => { },
+            held.ScanAsync);
+        await vm.InitializationComplete;
+        Assert.True(vm.ScanLocations.Count >= 2, $"only {vm.ScanLocations.Count} locations here, and this needs two");
+        var read = vm.ScanLocations[0];
+        vm.SelectedLocation = read;
+        vm.MinSizeMB = 500;
+
+        var scan = vm.ScanCommand.ExecuteAsync(null);
+        vm.SelectedLocation = vm.ScanLocations[1];
+        vm.MinSizeMB = 100;
+        held.Finish();
+        await scan;
+
+        Assert.Equal((read.Path, 500L * 1024 * 1024), Assert.Single(held.Asked));
+        Assert.Equal($"Found 0 files ≥ 500 MB in {read.Label.Trim()}.", vm.ScanStatus);
+    }
+
+    /// <summary>A folder that is gone is not scanned as one with nothing in it (#2764).</summary>
+    [Fact]
+    public async Task AScanOfAFolderThatIsGone_SaysSo_AndReadsNothing()
+    {
+        var held = new HeldScan();
+        held.Finish();
+        var vm = new LargeFilesViewModel(new Services.LargeFileScanner(), new Services.FixedDriveService(), _ => { },
+            held.ScanAsync);
+        await vm.InitializationComplete;
+        var gone = new ScanLocation("📥  Downloads",
+            Path.Combine(Path.GetTempPath(), "SysManagerTests", Guid.NewGuid().ToString("N")));
+        vm.SelectedLocation = gone;
+
+        await vm.ScanCommand.ExecuteAsync(null);
+
+        Assert.Empty(held.Asked);
+        Assert.Equal("📥  Downloads is no longer there, so nothing was scanned.", vm.ScanStatus);
+    }
+
+    /// <summary>
+    /// A drive unplugged since the list was read is said to be no longer connected, and the list is read again (#2764).
+    /// </summary>
+    /// <remarks>
+    /// The scanner returns nothing for a folder that is not there, so the tab said "Found 0 files ≥ 500 MB in Whole drive
+    /// E:" with a "Large file scan complete" toast: a wrong answer to what is filling that disk.
+    /// </remarks>
+    [Fact]
+    public async Task AScanOfADriveThatIsGone_SaysItIsNoLongerConnected_AndReadsTheListAgain()
+    {
+        var free = Enumerable.Range('D', 23).Select(c => $"{(char)c}:\\").FirstOrDefault(root => !Directory.Exists(root));
+        if (free is null) Assert.Skip("every drive letter from D: to Z: is in use on this PC");
+        var held = new HeldScan();
+        held.Finish();
+        var reads = 0;
+        var vm = new LargeFilesViewModel(new Services.LargeFileScanner(), new Services.FixedDriveService(), _ => { },
+            held.ScanAsync, () =>
+            {
+                Interlocked.Increment(ref reads);
+                return Task.FromResult<IReadOnlyList<Services.FixedDriveService.FixedDrive>>([]);
+            });
+        await vm.InitializationComplete;
+        vm.SelectedLocation = new ScanLocation($"💾  Whole drive  {free[..2]}  (931 GB)", free);
+
+        await vm.ScanCommand.ExecuteAsync(null);
+
+        Assert.Empty(held.Asked);
+        Assert.Equal($"Drive {free[..2]} is no longer connected, so nothing was scanned.", vm.ScanStatus);
+        Assert.Equal(2, Volatile.Read(ref reads));
+    }
+
+    /// <summary>
+    /// Showing the tab reads the locations again, so a drive connected since it opened is listed, and the location
+    /// picked stays picked (#2764).
+    /// </summary>
+    /// <remarks>
+    /// The list was read once, when the tab was built, and the tab is kept for the whole run: a drive connected later
+    /// never appeared, and one unplugged stayed listed with its old size.
+    /// </remarks>
+    [Fact]
+    public async Task ShowingTheTab_ReadsTheLocationsAgain_AndKeepsTheOnePicked()
+    {
+        var reads = 0;
+        var vm = new LargeFilesViewModel(new Services.LargeFileScanner(), new Services.FixedDriveService(), _ => { },
+            enumerateDrives: () => Task.FromResult<IReadOnlyList<Services.FixedDriveService.FixedDrive>>(
+                Interlocked.Increment(ref reads) == 1
+                    ? []
+                    : [new Services.FixedDriveService.FixedDrive("C:", "", "NTFS", 931, 100, "SSD", "NVMe")]));
+        await vm.InitializationComplete;
+        Assert.DoesNotContain(vm.ScanLocations, l => l.Path == @"C:\");
+        var picked = vm.ScanLocations[^1];
+        vm.SelectedLocation = picked;
+
+        vm.IsActive = true;
+        await vm.ShownLocations;
+
+        Assert.Contains(vm.ScanLocations, l => l.Path == @"C:\");
+        Assert.Equal(picked.Path, vm.SelectedLocation?.Path);
     }
 
     [Fact]

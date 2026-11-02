@@ -309,6 +309,55 @@ public sealed class PerformanceSnapshotRestartTests
         }
     }
 
+    /// <summary>
+    /// The visual effects are put back off the thread that asked for the restore, also when the recorded power plan is
+    /// gone and nothing before them left that thread.
+    /// </summary>
+    /// <remarks>
+    /// Windows tells every open window of the change before the write returns, which took about a second when measured.
+    /// The restore left the window's thread at the power plan switch, so with that step left out the write ran on the
+    /// window's thread (the class of #2750). The held write waits at most ten seconds, so a restore that runs it on the
+    /// thread that asked fails here instead of hanging.
+    /// </remarks>
+    [Fact]
+    public async Task RestoreOriginal_PutsTheVisualEffectsBack_OffTheThreadThatAsked_WhenThePowerPlanIsGone()
+    {
+        var dir = CreateTempDirectory();
+        var released = new TaskCompletionSource();
+        var written = new TaskCompletionSource<bool>();
+        try
+        {
+            var runner = NewRunner();
+            using var service = new PerformanceService(runner, new RestorePointService(runner), dir,
+                setUiEffects: enabled =>
+                {
+                    released.Task.Wait(TimeSpan.FromSeconds(10));
+                    written.TrySetResult(enabled);
+                },
+                plansOnThePc: () => new HashSet<Guid> { HighPerformance });
+            Task<bool> restoring;
+
+            try
+            {
+                restoring = service.RestoreOriginalAsync(ValidSnapshot(), card: null);
+
+                Assert.False(written.Task.IsCompleted,
+                    "the visual-effects write held the thread that asked for the restore until it was done");
+            }
+            finally
+            {
+                released.TrySetResult();
+            }
+
+            await restoring;
+            Assert.True(await written.Task);
+        }
+        finally
+        {
+            Directory.Delete(dir, recursive: true);
+        }
+    }
+
     [Theory]
     [InlineData(true)]
     [InlineData(false)]   // the plans could not be listed: switched on, as before

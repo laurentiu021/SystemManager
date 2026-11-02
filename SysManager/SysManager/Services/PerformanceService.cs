@@ -1448,8 +1448,10 @@ public sealed partial class PerformanceService : IDisposable
                 await SetActivePlanAsync(snapshot.PowerPlanGuid, ct).ConfigureAwait(false);
         }
 
-        // Visual effects
-        _setUiEffects(snapshot.UiEffectsEnabled);
+        // Visual effects, off the caller's thread: Windows tells every open window of the change before the write
+        // returns, and with the power plan left out above, nothing has left the window's thread yet (the class of
+        // #2750).
+        await Task.Run(() => _setUiEffects(snapshot.UiEffectsEnabled)).ConfigureAwait(false);
 
         // Game Mode
         _setGameMode(snapshot.GameModeEnabled);

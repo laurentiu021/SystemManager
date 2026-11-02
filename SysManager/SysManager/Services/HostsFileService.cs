@@ -4,6 +4,7 @@
 
 using System.IO;
 using System.Net;
+using System.Net.Sockets;
 using System.Text;
 using System.Text.RegularExpressions;
 using SysManager.Helpers;
@@ -115,8 +116,7 @@ public sealed partial class HostsFileService
 
             string ip = tokens[0];
 
-            // Validate IP
-            if (!IPAddress.TryParse(ip, out _)) continue;
+            if (!IsHostsAddress(ip)) continue;
 
             // A single hosts line can map one IP to several hostnames
             // (e.g. "127.0.0.1  a  b  c"). Emit one entry per hostname so none are
@@ -481,7 +481,8 @@ public sealed partial class HostsFileService
     /// </summary>
     public HostsEntry AddEntry(string ip, string hostname)
     {
-        if (!IPAddress.TryParse(ip, out _))
+        // The check the file is read with, so an entry added here is one the next read lists (#2758).
+        if (!IsHostsAddress(ip))
             throw new ArgumentException($"Invalid IP address: {ip}", nameof(ip));
 
         if (string.IsNullOrWhiteSpace(hostname))
@@ -501,7 +502,7 @@ public sealed partial class HostsFileService
     /// <summary>
     /// Determines whether <paramref name="candidate"/> is a hosts entry (IP + at least one hostname):
     /// strip an optional inline comment, split on whitespace, require at least two tokens, and
-    /// validate the first as an IP address.
+    /// check the first with <see cref="IsHostsAddress"/>.
     /// </summary>
     /// <remarks>
     /// This is the single acceptance test for "would ReadHostsAsync turn this into a HostsEntry", and
@@ -524,8 +525,28 @@ public sealed partial class HostsFileService
         string entryPart = parts[0].Trim();
         string[] tokens = entryPart.Split([' ', '\t'], StringSplitOptions.RemoveEmptyEntries);
 
-        return tokens.Length >= 2 && IPAddress.TryParse(tokens[0], out _);
+        return tokens.Length >= 2 && IsHostsAddress(tokens[0]);
     }
+
+    /// <summary>
+    /// Whether <paramref name="token"/> is an address as a hosts file writes one: IPv4 only as the four decimal numbers
+    /// <see cref="IPAddress"/> writes it back as, and IPv6 without brackets.
+    /// </summary>
+    /// <remarks>
+    /// <see cref="IPAddress.TryParse(string, out IPAddress)"/> alone reads far more than that: "3" is 0.0.0.3, "2024" is
+    /// 0.0.7.232, "1.2.3" is 1.2.0.3, "010.0.0.1" is octal and "[::1]:80" drops its brackets and port. So a comment
+    /// such as "# 3 entries below block telemetry" was read as four disabled entries for IP 3, and the next save
+    /// rewrote it as one line per word (#2758). IPv6 is not compared as written, because capitals and the full form
+    /// are both addresses, and .NET prints neither.
+    /// </remarks>
+    private static bool IsHostsAddress(string token) =>
+        IPAddress.TryParse(token, out var address)
+        && address.AddressFamily switch
+        {
+            AddressFamily.InterNetwork => string.Equals(address.ToString(), token, StringComparison.Ordinal),
+            AddressFamily.InterNetworkV6 => !token.StartsWith('['),
+            _ => false,
+        };
 }
 
 /// <summary>Whether the hosts file differs from the copy kept beside it, whether SysManager has written it, and when that

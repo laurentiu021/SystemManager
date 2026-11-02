@@ -172,7 +172,7 @@
                 </WrapPanel>
 
                 <!-- Status -->
-                <TextBlock Grid.Row="3" Text="{Binding HostsStatus}" Style="{StaticResource Subtle}"
+                <TextBlock Grid.Row="3" Text="{Binding HostsStatus}" Style="{StaticResource SubtleStatusLine}"
                            Margin="0,8,0,0"
                            Visibility="{Binding HostsStatus, Converter={StaticResource FlexVis}}"/>
             </Grid>

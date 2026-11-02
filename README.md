@@ -1671,6 +1671,10 @@ Answers "what is actually using my space?" by listing the biggest files in one p
 - **The file keeps its encoding.** A hosts file saved in the system's ANSI code page, as older
   Notepad and many localised tools save it, is written back in it, and a byte order mark stays,
   so a comment with letters outside English keeps them
+- **A comment stays a comment.** Only a line that starts with a whole address, such as `0.0.0.0`
+  or `::1`, is an entry, so a note such as `# 3 entries below block telemetry` is kept as you
+  wrote it rather than listed as four disabled entries. A screen reader reads out what Add,
+  Save, Restore and Refresh did
 - **Undo Changes can restore that copy too** — once SysManager has written the hosts file,
   and while the file differs from the copy, Undo Changes lists it as "Hosts file"
   (administrator rights needed). After it restores the copy, this tab reads the file again

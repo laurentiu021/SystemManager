@@ -117,6 +117,22 @@ public class DnsHostsViewModelTests
         vm.RemoveEntryCommand.Execute(entry);
         Assert.Contains("press Save", vm.HostsStatus, StringComparison.Ordinal);
     }
+
+    /// <summary>
+    /// A screen reader hears what Add, Save, Restore and Refresh did on the hosts card (#2758).
+    /// </summary>
+    /// <remarks>
+    /// Every outcome on the card goes to <c>HostsStatus</c>, and Save shows no toast, so that line is the only report of
+    /// a write the user has just confirmed. It used the plain <c>Subtle</c> style, which is not a live region.
+    /// <c>EveryLiveLine_IsAnnouncedWhenItChanges</c> holds <c>SubtleStatusLine</c> to being announced.
+    /// </remarks>
+    [Fact]
+    public void TheHostsCardsResult_IsAnnounced()
+    {
+        var root = System.Xml.Linq.XDocument.Load(TestPaths.AppFile("Views", "DnsHostsView.xaml")).Root!;
+        var line = Assert.Single(root.Descendants(), e => (string?)e.Attribute("Text") == "{Binding HostsStatus}");
+        Assert.Equal("{StaticResource SubtleStatusLine}", (string?)line.Attribute("Style"));
+    }
 }
 
 /// <summary>

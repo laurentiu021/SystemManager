@@ -151,8 +151,10 @@ public static partial class LogService
     /// </summary>
     /// <param name="logDir">
     /// Where to write. Null keeps the per-user default. Supplied only by a test that must not touch the
-    /// real log directory; the app's two call sites in <c>App.OnStartup</c> pass nothing, and they are
-    /// mutually exclusive, so this runs exactly once per process.
+    /// real log directory; the app's three call sites, the update applier's and the window's in
+    /// <c>App.OnStartup</c> and the command line's in <c>App.RunCliAndExit</c>, pass nothing, and they are
+    /// mutually exclusive, so this runs exactly once per process. The command line had none, and wrote no log
+    /// (#2767).
     /// </param>
     public static void Init(string? logDir = null)
     {

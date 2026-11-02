@@ -10,6 +10,18 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.136.83] - 2026-11-02
+
+**A scripted or scheduled command-line run now writes a log, so a cleanup that failed or skipped a folder says why.**
+
+### Fixed
+- A command-line run, from a script or from Task Scheduler, wrote no log at all: the log was set up only for the
+  window and the updater, so everything a `--cleanup`, `--health` or `--purge-standby` logged was dropped, as was a
+  fault the run itself caught, and the handlers that record a crash were never wired. A run from Task Scheduler has no
+  console, so a failed or partial scheduled cleanup left nothing to read. It now logs to the same folder as the
+  window, with the user name removed the same way, and notes the command and its exit code. This was there since the
+  command line was added in 1.49.0.
+
 ## [1.136.82] - 2026-11-02
 
 **Bandwidth Monitor finds app icons without holding up the window, and two tabs set their rows on the window's own thread.**

@@ -16,16 +16,31 @@ namespace SysManager.Services;
 /// </summary>
 public sealed class TracerouteService
 {
+    /// <summary>
+    /// The echo payload, 32 bytes as Windows' tracert sends. Ping only reads it, so one copy serves every probe.
+    /// </summary>
+    private static readonly byte[] Payload = new byte[32];
+
+    /// <summary>The answer to one probe: what came back, and the address it came from.</summary>
+    internal readonly record struct ProbeReply(IPStatus Status, IPAddress? Address);
+
+    private readonly Func<IPAddress, int, int, CancellationToken, Task<ProbeReply>> _probe;
+
     public event Action<TracerouteHop>? HopCompleted;
 
     public int MaxHops { get; set; } = 30;
     public int TimeoutMs { get; set; } = 2000;
     public int ProbesPerHop { get; set; } = 2;
 
+    public TracerouteService() : this(SendProbeAsync) { }
+
+    /// <summary>The service, with the probe given by a test.</summary>
+    /// <param name="probe">Sends one probe: the destination, the TTL and the timeout in milliseconds.</param>
+    internal TracerouteService(Func<IPAddress, int, int, CancellationToken, Task<ProbeReply>> probe) => _probe = probe;
+
     public async Task<IReadOnlyList<TracerouteHop>> RunAsync(string host, CancellationToken ct)
     {
         List<TracerouteHop> results = [];
-        var payload = new byte[32];
 
         // Resolve the destination ONCE, up front, and probe that fixed IP for every TTL.
         // Passing the raw hostname into SendPingAsync inside the loop re-resolves DNS on
@@ -38,7 +53,6 @@ public sealed class TracerouteService
         {
             ct.ThrowIfCancellationRequested();
 
-            var options = new PingOptions(ttl, true);
             List<double> latencies = [];
             IPAddress? replyAddress = null;
             // Track the destination-reached status across ALL probes of this hop, not
@@ -47,15 +61,18 @@ public sealed class TracerouteService
             // the hop and fail to stop the traceroute at the destination.
             bool reachedDestination = false;
             IPStatus replyStatus = IPStatus.Unknown;
+            // A router that answers that it cannot reach the destination, or that refuses it, is where the path ends.
+            // Its answer names it and says why, so it is the last hop, not a timeout before 30 more (#2751).
+            IPStatus? refusal = null;
+            IPAddress? refusedBy = null;
 
             for (int probe = 0; probe < ProbesPerHop; probe++)
             {
                 try
                 {
-                    using var ping = new Ping();
                     var sw = Stopwatch.StartNew();
                     var effectiveTimeout = TimeoutMs > 0 ? TimeoutMs : 3000;
-                    var reply = await ping.SendPingAsync(destination, effectiveTimeout, payload, options).WaitAsync(ct).ConfigureAwait(false);
+                    var reply = await _probe(destination, ttl, effectiveTimeout, ct).ConfigureAwait(false);
                     sw.Stop();
 
                     if (reply.Status is IPStatus.Success or IPStatus.TtlExpired)
@@ -67,6 +84,12 @@ public sealed class TracerouteService
                         if (replyStatus != IPStatus.Success) replyStatus = reply.Status;
                         if (reply.Status == IPStatus.Success) reachedDestination = true;
                     }
+                    else if (IsRefusal(reply.Status))
+                    {
+                        latencies.Add(sw.Elapsed.TotalMilliseconds);
+                        refusal ??= reply.Status;
+                        refusedBy ??= reply.Address;
+                    }
                 }
                 catch (OperationCanceledException) { throw; }
                 catch (System.Net.NetworkInformation.PingException) { /* per-probe failure; reported as timeout */ }
@@ -74,12 +97,14 @@ public sealed class TracerouteService
                 catch (InvalidOperationException) { /* per-probe failure; reported as timeout */ }
             }
 
+            // Reaching the destination outranks a refusal from another probe of the same hop.
+            var refused = !reachedDestination && refusal is not null;
             var hop = new TracerouteHop
             {
                 HopNumber = ttl,
-                Address = replyAddress?.ToString() ?? "*",
+                Address = (refused ? refusedBy : replyAddress)?.ToString() ?? "*",
                 LatencyMs = latencies.Count > 0 ? latencies.Average() : null,
-                Status = latencies.Count > 0 ? replyStatus.ToString() : "Timeout"
+                Status = refused ? refusal!.Value.ToString() : latencies.Count > 0 ? replyStatus.ToString() : "Timeout"
             };
 
             // No reverse lookup of the hop's address. It held each hop back for up to 800 ms, more where the lookup
@@ -88,7 +113,7 @@ public sealed class TracerouteService
             results.Add(hop);
             RaiseHopCompleted(hop);
 
-            if (reachedDestination) break; // any probe reached the destination
+            if (reachedDestination || refused) break; // the destination answered, or a router said it cannot be reached
         }
 
         return results;
@@ -132,6 +157,39 @@ public sealed class TracerouteService
         {
             throw new InvalidOperationException($"Could not resolve host '{host}': {ex.Message}", ex);
         }
+    }
+
+    /// <summary>
+    /// The answers that end the path at the router that sent them: no route to the destination's network or to the
+    /// destination, or a refusal. Protocol unreachable has the value of prohibited, so it is one of them too.
+    /// </summary>
+    private static bool IsRefusal(IPStatus status) => status is IPStatus.DestinationNetworkUnreachable
+        or IPStatus.DestinationHostUnreachable or IPStatus.DestinationUnreachable
+        or IPStatus.DestinationProhibited or IPStatus.DestinationPortUnreachable;
+
+    /// <summary>
+    /// What the router that ended a trace answered, in words; null for a hop that did not end it that way.
+    /// </summary>
+    internal static string? DescribeRefusal(TracerouteHop hop) =>
+        !Enum.TryParse<IPStatus>(hop.Status, out var status) ? null : status switch
+        {
+            IPStatus.DestinationNetworkUnreachable => "it has no route to the destination's network",
+            IPStatus.DestinationHostUnreachable or IPStatus.DestinationUnreachable => "it cannot reach the destination",
+            IPStatus.DestinationProhibited or IPStatus.DestinationPortUnreachable
+                => "the destination refused the trace",
+            _ => null,
+        };
+
+    /// <summary>
+    /// One ICMP echo with the TTL given, answered by the destination or by the router where the TTL ran out.
+    /// </summary>
+    private static async Task<ProbeReply> SendProbeAsync(
+        IPAddress destination, int ttl, int timeoutMs, CancellationToken ct)
+    {
+        using var ping = new Ping();
+        var reply = await ping.SendPingAsync(destination, timeoutMs, Payload, new PingOptions(ttl, true))
+            .WaitAsync(ct).ConfigureAwait(false);
+        return new ProbeReply(reply.Status, reply.Address);
     }
 
     /// <summary>

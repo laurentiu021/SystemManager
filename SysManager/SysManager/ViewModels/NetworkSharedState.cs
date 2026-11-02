@@ -127,13 +127,19 @@ public sealed partial class NetworkSharedState : ObservableObject, IDisposable
     // Counts the gateway lookups started, so an answer that a newer lookup overtook is not applied after it (#2712).
     private int _gatewayLookup;
 
+    private readonly Action<Action> _postToUi;
+
     public NetworkSharedState(PingMonitorService pinger, TracerouteService tracer, TracerouteMonitorService traceMonitor, SpeedTestService speed, NetworkRepairService repair)
         : this(pinger, tracer, traceMonitor, speed, repair, GatewayHelper.DetectDefaultGateway) { }
 
     /// <summary>The shared state, with the gateway lookup given by a test.</summary>
     /// <param name="detectGateway">Returns the default gateway's address, or null when the PC has none.</param>
+    /// <param name="postToUi">
+    /// How <see cref="InvokeOnUi"/> hands work to the UI thread; null for the dispatcher's own background queue.
+    /// </param>
     internal NetworkSharedState(PingMonitorService pinger, TracerouteService tracer, TracerouteMonitorService traceMonitor,
-        SpeedTestService speed, NetworkRepairService repair, Func<string?> detectGateway)
+        SpeedTestService speed, NetworkRepairService repair, Func<string?> detectGateway,
+        Action<Action>? postToUi = null)
     {
         Pinger = pinger;
         Tracer = tracer;
@@ -143,6 +149,7 @@ public sealed partial class NetworkSharedState : ObservableObject, IDisposable
         _detectGateway = detectGateway;
 
         Dispatcher = Application.Current?.Dispatcher;
+        _postToUi = postToUi ?? (action => Helpers.UiThread.Post(Dispatcher, action, DispatcherPriority.Background));
         if (Dispatcher is not null)
         {
             FlushTimer = new DispatcherTimer(DispatcherPriority.Background, Dispatcher)
@@ -724,7 +731,8 @@ public sealed partial class NetworkSharedState : ObservableObject, IDisposable
         LatestRoutes[host] = hops;
         if (TraceBuffers.TryGetValue(host, out var buffer))
         {
-            buffer.ReplaceWith(hops.Select(h => new ObservablePoint(h.HopNumber, h.LatencyMs ?? 0)));
+            // A hop that did not answer has no latency, and is a gap, as a lost ping is on the chart beside it (#2751).
+            buffer.ReplaceWith(hops.Select(h => new ObservablePoint(h.HopNumber, h.LatencyMs)));
         }
         RefreshHopTable();
     }
@@ -777,8 +785,7 @@ public sealed partial class NetworkSharedState : ObservableObject, IDisposable
     /// and passed explicitly: chart and buffer updates should yield to input rather than compete with
     /// it, which is the opposite of what a status line wants, so it stays a per-caller decision.
     /// </remarks>
-    internal void InvokeOnUi(Action action) =>
-        Helpers.UiThread.Post(Dispatcher, action, DispatcherPriority.Background);
+    internal void InvokeOnUi(Action action) => _postToUi(action);
 
     // ── Chart theming ──
 

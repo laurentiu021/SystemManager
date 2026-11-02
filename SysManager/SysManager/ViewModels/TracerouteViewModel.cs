@@ -82,7 +82,9 @@ public sealed partial class TracerouteViewModel : ViewModelBase
     [RelayCommand]
     private async Task TraceAsync()
     {
-        if (string.IsNullOrWhiteSpace(TraceHost)) return;
+        // Read once: the route belongs to the host that was traced, whatever the box says when the trace ends (#2751).
+        var host = TraceHost;
+        if (string.IsNullOrWhiteSpace(host)) return;
         using var opLock = OperationLockService.Instance.TryAcquire(OperationCategory.Network, "Traceroute");
         if (opLock is null)
         {
@@ -90,40 +92,54 @@ public sealed partial class TracerouteViewModel : ViewModelBase
             return;
         }
         IsTracing = true;
-        TraceStatus = $"Tracing {TraceHost}…";
+        TraceStatus = $"Tracing {host}…";
 
         _traceCts?.Dispose();
         _traceCts = new CancellationTokenSource();
         List<TracerouteHop> collected = [];
+        // Set on the UI thread when the trace has ended, before its last line is written. A hop's update waits at
+        // background priority behind the UI's own work, so the last one could run after "Done" and put "hop N" back.
+        var ended = false;
         void OnHop(TracerouteHop hop)
         {
             collected.Add(hop);
             Shared.InvokeOnUi(() =>
             {
-                TraceStatus = $"Tracing {TraceHost}… hop {hop.HopNumber}";
+                if (!ended) TraceStatus = $"Tracing {host}… hop {hop.HopNumber}";
             });
         }
 
         Shared.Tracer.HopCompleted += OnHop;
         try
         {
-            await Shared.Tracer.RunAsync(TraceHost, _traceCts.Token);
+            await Shared.Tracer.RunAsync(host, _traceCts.Token);
+            ended = true;
             Shared.InvokeOnUi(() =>
             {
-                Shared.ApplyRoute(TraceHost, collected);
-                TraceStatus = $"Done — {collected.Count} hops";
+                Shared.ApplyRoute(host, collected);
+                TraceStatus = Finished(collected);
             });
         }
-        catch (OperationCanceledException) { TraceStatus = "Cancelled"; }
+        catch (OperationCanceledException) { ended = true; TraceStatus = "Cancelled"; }
         catch (System.ComponentModel.Win32Exception ex)
-        { TraceStatus = "Error: " + ex.Message; }
+        { ended = true; TraceStatus = "Error: " + ex.Message; }
         catch (InvalidOperationException ex)
-        { TraceStatus = "Error: " + ex.Message; }
+        { ended = true; TraceStatus = "Error: " + ex.Message; }
         finally
         {
             Shared.Tracer.HopCompleted -= OnHop;
             IsTracing = false;
         }
+    }
+
+    /// <summary>The line a finished trace leaves, with what the router that ended it answered, when one did.</summary>
+    internal static string Finished(IReadOnlyList<TracerouteHop> hops)
+    {
+        var done = $"Done — {hops.Count} hops";
+        if (hops.Count == 0 || TracerouteService.DescribeRefusal(hops[^1]) is not { } answer) return done;
+
+        var router = hops[^1].Address == "*" ? "A router" : hops[^1].Address;
+        return $"{done}. {router} answered that {answer}.";
     }
 
     [RelayCommand]

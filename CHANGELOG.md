@@ -10,6 +10,25 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.136.65] - 2026-11-02
+
+**Traceroute stops at a router that says the destination cannot be reached and shows which one, and a finished trace keeps saying Done.**
+
+### Fixed
+- A router that answered that it could not reach the destination, or that it refused the trace, was listed as a
+  hop that did not answer, and the trace went on probing up to 30 hops. That answer is where the path ends, so it
+  is now the last hop, with the router's address, and the status line names the router and says what it answered.
+- A one-off trace could say "Tracing … hop N" again a moment after it said "Done", because the update for the
+  last hop was still waiting behind the window's own work when the trace ended. Updates that arrive after the end
+  are now dropped.
+- A trace was kept under whatever the host box said when it ended, so typing another host while it ran filed the
+  route under the new name, or a half-typed one, and a Ping target of that name showed the other route. The host
+  is read once, when the trace starts, and the box cannot be changed until the trace ends.
+- The chart drew a hop that did not answer at 0 ms, as if it were the fastest, and the line dropped to the floor
+  between real hops. It is a gap now, as a lost ping is on the chart beside it.
+
+All four were there since 0.3.0.
+
 ## [1.136.64] - 2026-11-02
 
 **Preinstalled Apps' restore points and history entries use the tab's name, and so do four more tabs' entries and Recent Changes' button for New App Alerts.**

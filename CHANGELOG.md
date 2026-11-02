@@ -10,6 +10,17 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.136.78] - 2026-11-02
+
+**After a cancelled scan, Browser Cleaner's Selected total follows your ticks again.**
+
+### Fixed
+- On Browser Cleaner, after a scan was cancelled, the rescan that follows a clean included, ticking or unticking a
+  category no longer changed the Selected total, so it showed a size other than the one Clean would remove. The scan
+  stopped listening to the rows on screen before it began, and listened to the new ones only once it had them, so a
+  cancelled scan left the old rows with nothing listening. It lets go of them now only as the new rows replace them.
+  This was there since 1.99.3, when a cancelled scan began to end as cancelled.
+
 ## [1.136.77] - 2026-11-02
 
 **DNS & Hosts keeps a comment that starts with a number as you wrote it, and a screen reader hears what a save did.**

@@ -4,6 +4,7 @@
 
 using System.IO;
 using NSubstitute;
+using SysManager.Helpers;
 using SysManager.Models;
 using SysManager.Services;
 using SysManager.ViewModels;
@@ -351,6 +352,73 @@ public class BrowserCleanerViewModelTests
 
         toast.Received(1).Show(Arg.Any<string>(), Arg.Any<string>(), Arg.Any<int>());
         activityLog.Received(1).Log("Browser Cleaner", Arg.Any<string>());
+    }
+
+    private static BrowserCleanupItem Row(string category, long size, bool selected) => new()
+    {
+        Browser = "Test Browser",
+        Category = category,
+        Description = "test",
+        Paths = [],
+        SizeBytes = size,
+        IsSelected = selected,
+    };
+
+    /// <summary>
+    /// A view model whose first scan lists Cache (1 KB, ticked) and History (2 KB, not ticked), and whose every later
+    /// scan is cancelled.
+    /// </summary>
+    private static async Task<BrowserCleanerViewModel> ScannedOnceThenCancelled(IDialogService? dialog = null)
+    {
+        var root = Path.Combine(Path.GetTempPath(), "smtest_browsercleaner_" + Guid.NewGuid().ToString("N"));
+        var scans = 0;
+        var vm = new BrowserCleanerViewModel(
+            new BrowserCleanerService(Path.Combine(root, "Local"), Path.Combine(root, "Roaming")),
+            Substitute.For<IBrowserExtensionService>(),
+            dialog: dialog, toast: Substitute.For<IToastService>(), activityLog: Substitute.For<IActivityLog>(),
+            scan: _ => ++scans == 1
+                ? Task.FromResult<IReadOnlyList<BrowserCleanupItem>>([Row("Cache", 1024, true), Row("History", 2048, false)])
+                : Task.FromException<IReadOnlyList<BrowserCleanupItem>>(new OperationCanceledException()));
+        await vm.InitializationComplete;
+        Assert.Equal(FormatHelper.FormatSize(1024), vm.TotalSelectedDisplay);
+        return vm;
+    }
+
+    /// <summary>
+    /// After a scan that is cancelled, the rows still on screen go on updating the Selected total (#2759).
+    /// </summary>
+    /// <remarks>
+    /// The scan unhooked every row before it awaited the new list and hooked only the new rows, once it had them, so a
+    /// cancelled scan left the old rows on screen with nothing listening: ticking one no longer changed the total, which
+    /// then showed a size other than the one Clean would remove.
+    /// </remarks>
+    [Fact]
+    public async Task AfterACancelledScan_TickingARow_StillUpdatesTheSelectedTotal()
+    {
+        var vm = await ScannedOnceThenCancelled();
+
+        await vm.ScanCommand.ExecuteAsync(null);
+        Assert.Equal("Cancelled.", vm.StatusMessage);
+
+        vm.Items.Single(i => i.Category == "History").IsSelected = true;
+
+        Assert.Equal(FormatHelper.FormatSize(1024 + 2048), vm.TotalSelectedDisplay);
+    }
+
+    /// <summary>The same after the scan that follows a clean is cancelled, which is the one a user meets most (#2759).</summary>
+    [Fact]
+    public async Task AfterTheRescanThatFollowsACleanIsCancelled_TickingARow_StillUpdatesTheSelectedTotal()
+    {
+        var dialog = Substitute.For<IDialogService>();
+        dialog.Confirm(Arg.Any<string>(), Arg.Any<string>()).Returns(true);
+        var vm = await ScannedOnceThenCancelled(dialog);
+
+        await vm.CleanCommand.ExecuteAsync(null);
+        Assert.Equal("Cancelled.", vm.StatusMessage);
+
+        vm.Items.Single(i => i.Category == "History").IsSelected = true;
+
+        Assert.Equal(FormatHelper.FormatSize(1024 + 2048), vm.TotalSelectedDisplay);
     }
 
     [Fact]

@@ -120,7 +120,9 @@ public sealed record MaintenanceStatus(
     // How many scheduled runs Windows recorded as missed.
     int? MissedRuns = null,
     // Whether the task's command line purges standby memory, which needs administrator rights the task lacks.
-    bool PurgesStandby = false)
+    bool PurgesStandby = false,
+    // Whether Task Scheduler says the task has never run, which it reports as a date in 1999.
+    bool NeverRun = false)
 {
     /// <summary>No task is registered: Windows answered that the task does not exist.</summary>
     /// <remarks>

@@ -10,6 +10,17 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.136.68] - 2026-11-02
+
+**A scheduled task that has never run says Never on Scheduled Maintenance and Task Scheduler, not "1999-11-30 00:00".**
+
+### Fixed
+- Task Scheduler reports 30 November 1999 as the last run of a task that has never run, and both tabs showed it
+  as a real one: Scheduled Maintenance read "Last run: 1999-11-30 00:00" beside "Not run yet" from saving a
+  schedule until its first run, and selecting any of the many Windows tasks that have never run on Task Scheduler
+  showed the same date. Both now say Never, from one reading of Task Scheduler's times that the two tabs share.
+  Scheduled Maintenance's was there since 1.50.0, and Task Scheduler's since 1.40.0.
+
 ## [1.136.67] - 2026-11-02
 
 **System Health's disk check repairs nothing, as its card says, says in plain words what chkdsk found, and keeps its result when the drive list is refreshed.**

@@ -12,20 +12,58 @@ namespace SysManager.Tests;
 [Collection("ProcessWideStatics")]
 public class StandbyMemoryTests
 {
+    /// <summary>
+    /// Auto-purge fires on low free memory with a standby list worth purging, and not on low available memory (#2768).
+    /// </summary>
+    /// <remarks>
+    /// It compared the threshold with available memory, the free and standby lists together, which a purge does not
+    /// raise: under memory pressure it purged every 2 seconds and freed next to nothing, and with a large standby list
+    /// and little free memory, the case it exists for, available memory was high and it never fired.
+    /// </remarks>
     [Theory]
-    [InlineData(512, 1024, true)]    // 512 MB available, threshold 1 GB → purge
-    [InlineData(1023, 1024, true)]   // just below → purge
-    [InlineData(1024, 1024, false)]  // exactly at threshold → no purge
-    [InlineData(2048, 1024, false)]  // plenty available → no purge
-    public void ShouldAutoPurge_FiresBelowThreshold(double availableMb, double thresholdMb, bool expected)
-        => Assert.Equal(expected, StandbyMemoryViewModel.ShouldAutoPurge(availableMb, thresholdMb));
+    [InlineData(300, 6000, 1024, true)]     // little free memory, a large standby list → purge
+    [InlineData(1023, 1024, 1024, true)]    // just below, and just enough standby → purge
+    [InlineData(1024, 6000, 1024, false)]   // free memory at the threshold → no purge
+    [InlineData(4000, 6000, 1024, false)]   // plenty free → no purge
+    [InlineData(300, 1023, 1024, false)]    // a standby list too small to be worth it, as after a purge → no purge
+    [InlineData(300, 0, 1024, false)]
+    public void ShouldAutoPurge_FiresOnLowFreeMemory_WithAStandbyListWorthPurging(
+        double freeMb, double standbyMb, double thresholdMb, bool expected)
+        => Assert.Equal(expected, StandbyMemoryViewModel.ShouldAutoPurge(freeMb, standbyMb, thresholdMb, sinceLastPurge: null));
 
     [Fact]
-    public void ShouldAutoPurge_GuardsZeroOrNegative()
+    public void ShouldAutoPurge_GuardsAnUnknownReadingAndNoThreshold()
     {
-        Assert.False(StandbyMemoryViewModel.ShouldAutoPurge(0, 1024));   // no reading → don't purge
-        Assert.False(StandbyMemoryViewModel.ShouldAutoPurge(512, 0));    // no threshold → don't purge
-        Assert.False(StandbyMemoryViewModel.ShouldAutoPurge(-1, 1024));
+        Assert.False(StandbyMemoryViewModel.ShouldAutoPurge(null, 6000, 1024, null));   // free not reported
+        Assert.False(StandbyMemoryViewModel.ShouldAutoPurge(300, null, 1024, null));    // standby not reported
+        Assert.False(StandbyMemoryViewModel.ShouldAutoPurge(300, 6000, 0, null));       // no threshold
+        Assert.False(StandbyMemoryViewModel.ShouldAutoPurge(-1, 6000, 1024, null));
+    }
+
+    /// <summary>An automatic purge is not repeated until the cooldown has passed, whatever the memory says (#2768).</summary>
+    [Fact]
+    public void ShouldAutoPurge_WaitsOutTheCooldownAfterAPurge()
+    {
+        var cooldown = StandbyMemoryViewModel.AutoPurgeCooldown;
+
+        Assert.False(StandbyMemoryViewModel.ShouldAutoPurge(300, 6000, 1024, cooldown - TimeSpan.FromSeconds(1)));
+        Assert.True(StandbyMemoryViewModel.ShouldAutoPurge(300, 6000, 1024, cooldown));
+    }
+
+    /// <summary>
+    /// The free and standby lists are read on this PC, and with the available memory they make up: what a purge moves
+    /// between them is what auto-purge and the command line now look at (#2768).
+    /// </summary>
+    [Fact]
+    public void GetMemoryStatus_ReadsTheFreeAndStandbyLists_WhichMakeUpAvailableMemory()
+    {
+        var status = new Services.StandbyMemoryService().GetMemoryStatus();
+
+        Assert.True(status.FreeBytes is not null && status.StandbyBytes is not null,
+            "Windows did not report the memory lists, so neither auto-purge nor the command line has its figures");
+        // Read a moment apart from GlobalMemoryStatusEx, so they are close rather than equal.
+        var lists = (double)status.FreeBytes!.Value + status.StandbyBytes!.Value;
+        Assert.InRange(lists, status.AvailableBytes * 0.9, status.AvailableBytes * 1.1);
     }
 
     // ── When the 2-second poll may run ──────────────────────────────────────────────────────────────

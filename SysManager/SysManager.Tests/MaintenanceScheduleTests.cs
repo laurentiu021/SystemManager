@@ -364,7 +364,7 @@ public class MaintenanceScheduleTests
         // switch that purge with the rights this task does not have.
         Assert.Contains("Remove schedule", status.StandbyPurgeWarning, StringComparison.Ordinal);
         Assert.Contains("Standby List Cleaner", status.StandbyPurgeWarning, StringComparison.Ordinal);
-        Assert.Contains("Automatically purge when available RAM is low", status.StandbyPurgeWarning,
+        Assert.Contains("Automatically purge when free RAM is low", status.StandbyPurgeWarning,
                         StringComparison.Ordinal);
 
         // The names it quotes have to stay the names on screen: a renamed switch, button or page would leave
@@ -372,7 +372,7 @@ public class MaintenanceScheduleTests
         var views = Path.Combine(TestPaths.AppProject(), "Views");
         var standby = File.ReadAllText(Path.Combine(views, "StandbyMemoryView.xaml"));
         Assert.Contains("Text=\"Standby List Cleaner\"", standby, StringComparison.Ordinal);
-        Assert.Contains("Content=\"Automatically purge when available RAM is low\"", standby, StringComparison.Ordinal);
+        Assert.Contains("Content=\"Automatically purge when free RAM is low\"", standby, StringComparison.Ordinal);
         Assert.Contains("Content=\"Remove schedule\"",
                         File.ReadAllText(Path.Combine(views, "ScheduledMaintenanceView.xaml")), StringComparison.Ordinal);
     }

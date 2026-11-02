@@ -161,6 +161,6 @@ public sealed record MaintenanceStatus(
         ? "This schedule purges standby memory, which needs administrator rights the scheduled task does not "
           + "have, so every run fails. Saving a schedule below replaces it with a temporary-file cleanup, and "
           + "Remove schedule removes it. To purge standby memory automatically, tick \"Automatically purge when "
-          + "available RAM is low\" in Standby List Cleaner while SysManager runs as administrator."
+          + "free RAM is low\" in Standby List Cleaner while SysManager runs as administrator."
         : null;
 }

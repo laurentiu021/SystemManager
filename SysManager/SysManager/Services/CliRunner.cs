@@ -197,8 +197,32 @@ public sealed class CliRunner
         var after = svc.GetMemoryStatus();
         RecordHeadlessRun("Standby List Cleaner", "Purged the standby memory list");
         return request.Json
-            ? new CliResult(CliResult.Ok, Json(new { freedMB = Math.Round((after.AvailableBytes - before.AvailableBytes) / 1024.0 / 1024.0, 0), loadPercentAfter = after.LoadPercent }))
+            ? new CliResult(CliResult.Ok, PurgeJson(before, after))
             : new CliResult(CliResult.Ok, $"Standby list purged. Memory load now {after.LoadPercent}%.");
+    }
+
+    /// <summary>
+    /// The JSON a purge reports: the standby list before and after, and what it released, as signed figures in MB, null
+    /// where Windows would not report the list.
+    /// </summary>
+    /// <remarks>
+    /// It reported the change in available memory, which a purge does not raise, so <c>freedMB</c> was about zero, and
+    /// when the second reading was a few bytes lower the unsigned subtraction wrapped to about 17.6 million terabytes
+    /// (#2768).
+    /// </remarks>
+    internal static string PurgeJson(MemoryStatus before, MemoryStatus after)
+    {
+        static double? Mb(ulong? bytes) => bytes is { } b ? Math.Round(b / 1024.0 / 1024.0, 0) : null;
+        double? freed = before.StandbyBytes is { } was && after.StandbyBytes is { } now
+            ? Math.Round(((double)was - now) / 1024.0 / 1024.0, 0)
+            : null;
+        return Json(new
+        {
+            freedMB = freed,
+            standbyBeforeMB = Mb(before.StandbyBytes),
+            standbyAfterMB = Mb(after.StandbyBytes),
+            loadPercentAfter = after.LoadPercent,
+        });
     }
 
     /// <summary>

@@ -359,6 +359,13 @@ jobs:
       - name: Build integration tests (compile check)
         run: dotnet build SysManager/SysManager.IntegrationTests/SysManager.IntegrationTests.csproj -c Release --no-restore
 
+      # The UI tests are compiled here too, and not run. They run in ui-tests below, which does not gate a
+      # merge and is skipped for a pull request from a fork, so a change to an app type they use could pass
+      # this gate and break their build, and a fork's change reached main with nothing having compiled them
+      # (#2745). With this step the gate builds all four projects, as CONTRIBUTING says.
+      - name: Build UI tests (compile check)
+        run: dotnet build SysManager/SysManager.UITests/SysManager.UITests.csproj -c Release --no-restore
+
       # DIAGNOSING A RED CHECK HERE: read the failure summary at the end of this step's log first.
       # If it reports zero failures, the tests passed and the JOB was killed — either by the timeout
       # above or by a transient GitHub failure ("Failed to resolve action download info"). A killed

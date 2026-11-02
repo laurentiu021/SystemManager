@@ -52,7 +52,8 @@ public sealed class ComponentStoreCleanupTests
     ];
 
     private static CleanupViewModel NewVm(IPowerShellRunner? runner = null)
-        => new(runner ?? Substitute.For<IPowerShellRunner>(), Substitute.For<ICleanupPreScanService>(), Substitute.For<IRecycleBin>());
+        => new(runner ?? Substitute.For<IPowerShellRunner>(), Substitute.For<ICleanupPreScanService>(), Substitute.For<IRecycleBin>(),
+               Substitute.For<ITuneUpService>());
 
     // ── What the analysis decides ────────────────────────────────────────────
 

@@ -19,7 +19,7 @@ public class LightTouchViewModelTests
     [Fact]
     public void CleanupVm_Ctor_IsSafe()
     {
-        var vm = new CleanupViewModel(new PowerShellRunner(), new CleanupPreScanService(new ShellRecycleBin()), new ShellRecycleBin());
+        var vm = new CleanupViewModel(new PowerShellRunner(), new CleanupPreScanService(new ShellRecycleBin()), new ShellRecycleBin(), new TuneUpService(new ShortcutCleanerService(), new DiskHealthService(), new SystemInfoService(), new ShellRecycleBin()));
         Assert.NotNull(vm.Console);
         Assert.False(vm.IsBusy);
     }
@@ -27,7 +27,7 @@ public class LightTouchViewModelTests
     [Fact]
     public void CleanupVm_AllCommandsExist()
     {
-        var vm = new CleanupViewModel(new PowerShellRunner(), new CleanupPreScanService(new ShellRecycleBin()), new ShellRecycleBin());
+        var vm = new CleanupViewModel(new PowerShellRunner(), new CleanupPreScanService(new ShellRecycleBin()), new ShellRecycleBin(), new TuneUpService(new ShortcutCleanerService(), new DiskHealthService(), new SystemInfoService(), new ShellRecycleBin()));
         Assert.NotNull(vm.CleanTempCommand);
         Assert.NotNull(vm.EmptyRecycleBinCommand);
         Assert.NotNull(vm.AnalyzeComponentStoreCommand);
@@ -38,7 +38,7 @@ public class LightTouchViewModelTests
     [Fact]
     public async Task CleanupVm_CancelBeforeStart_IsSafe()
     {
-        var vm = new CleanupViewModel(new PowerShellRunner(), new CleanupPreScanService(new ShellRecycleBin()), new ShellRecycleBin());
+        var vm = new CleanupViewModel(new PowerShellRunner(), new CleanupPreScanService(new ShellRecycleBin()), new ShellRecycleBin(), new TuneUpService(new ShortcutCleanerService(), new DiskHealthService(), new SystemInfoService(), new ShellRecycleBin()));
         await vm.InitializationComplete;
         var ex = Record.Exception(() => vm.CancelCommand.Execute(null));
         Assert.Null(ex);

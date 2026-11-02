@@ -10,6 +10,17 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.136.90] - 2026-11-02
+
+**New App Alerts tells you about an install with a Windows notification while SysManager's window is minimized or hidden.**
+
+### Fixed
+- New App Alerts told you about an install only with a notice drawn inside SysManager's window, which hides itself
+  after five seconds, so while the window was minimized or in the notification area, which is how monitoring is
+  usually left running, nobody saw it, although the tab said it would tell you even then. It now shows a Windows
+  notification from the SysManager icon while the window is away. This was there since the notice was added in
+  1.56.12.
+
 ## [1.136.89] - 2026-11-02
 
 **New App Alerts announces new programs only: no hidden parts of other programs, and no updates.**

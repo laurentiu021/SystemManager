@@ -17,7 +17,7 @@ namespace SysManager.Services;
 /// Windows toast notifications when system health degrades.
 /// Runs a background timer (60s) to poll CPU/RAM/disk status.
 /// </summary>
-public sealed class TrayIconService : IDisposable
+public sealed class TrayIconService : INotificationArea, IDisposable
 {
     private readonly SystemInfoService _sysInfo;
     private readonly DispatcherTimer _timer;
@@ -76,6 +76,17 @@ public sealed class TrayIconService : IDisposable
     // without Initialize and a notification raised then went nowhere a test could see (#2742).
     private readonly Action<string, string> _notify;
 
+    // What a notification for someone away from the window goes to: the tray icon's balloon with the information icon,
+    // unless a test hands its own, for the same reason.
+    private readonly Action<string, string> _inform;
+
+    /// <summary>
+    /// Whether the main window is on screen: shown, and not minimized. Set by <see cref="Initialize"/>; on screen until
+    /// then, since there is no notification area to speak from before it.
+    /// </summary>
+    /// <remarks><c>internal</c> so a test can say where the window is without one.</remarks>
+    internal Func<bool> WindowOnScreen { get; set; } = () => true;
+
     /// <summary>
     /// Whether the app should minimize to tray instead of closing.
     /// <para>No longer consulted when the window closes: that decision now comes from
@@ -98,11 +109,16 @@ public sealed class TrayIconService : IDisposable
     /// <param name="sysInfo">Reads the figures the tooltip, the menu and the notifications show.</param>
     /// <param name="timeProvider">The cooldowns' clock; the system's when null.</param>
     /// <param name="notify">Takes each notification's title and message; the tray icon's balloon when null.</param>
-    internal TrayIconService(SystemInfoService sysInfo, TimeProvider? timeProvider, Action<string, string>? notify)
+    /// <param name="inform">
+    /// Takes each <see cref="TryNotifyWhileAway"/> notification's title and message; the tray icon's balloon when null.
+    /// </param>
+    internal TrayIconService(SystemInfoService sysInfo, TimeProvider? timeProvider, Action<string, string>? notify,
+                             Action<string, string>? inform = null)
     {
         _sysInfo = sysInfo;
         _time = timeProvider ?? TimeProvider.System;
         _notify = notify ?? ShowTrayNotification;
+        _inform = inform ?? ShowTrayInformation;
         _timer = new DispatcherTimer
         {
             Interval = TimeSpan.FromSeconds(60)
@@ -137,6 +153,9 @@ public sealed class TrayIconService : IDisposable
         _trayIcon.ForceCreate(enablesEfficiencyMode: false);
 
         _trayIcon.TrayLeftMouseDown += (_, _) => ShowWindow(mainWindow);
+
+        // Minimized, a window is still IsVisible, so both count, as the shell's own poll gate counts them.
+        WindowOnScreen = () => mainWindow.IsVisible && mainWindow.WindowState != WindowState.Minimized;
 
         _timer.Start();
 
@@ -445,6 +464,30 @@ public sealed class TrayIconService : IDisposable
     };
 
     private void ShowNotification(string title, string message) => _notify(title, message);
+
+    /// <inheritdoc/>
+    /// <remarks>
+    /// Called on the window's thread, which is where the window's state is read. With background notifications off,
+    /// nothing is shown here and the caller's toast is all there is, as before.
+    /// </remarks>
+    public bool TryNotifyWhileAway(string title, string message)
+    {
+        if (WindowOnScreen() || !NotificationsEnabled) return false;
+        _inform(title, message);
+        return true;
+    }
+
+    private void ShowTrayInformation(string title, string message)
+    {
+        try
+        {
+            _trayIcon?.ShowNotification(title, message, NotificationIcon.Info);
+        }
+        catch (InvalidOperationException ex)
+        {
+            Log.Warning("TrayIcon notification failed: {Error}", ex.Message);
+        }
+    }
 
     private void ShowTrayNotification(string title, string message)
     {

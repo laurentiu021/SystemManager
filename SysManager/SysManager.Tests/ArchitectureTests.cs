@@ -10097,6 +10097,162 @@ public partial class ArchitectureTests
         Assert.Equal(unreadable, HeadingMarkupTheSlugCannotRead().IsMatch(heading));
 
     /// <summary>
+    /// The README's Operation Lock lists agree with the code both ways: a tab whose code takes the lock is in the
+    /// list that takes it and not in the one that changes things without it, a tab the first list names takes it,
+    /// and the second names only real tabs (#2745).
+    /// </summary>
+    /// <remarks>
+    /// Settings Watchdog's Restore has taken the lock since #2639 while the README still listed the tab with the
+    /// ones that do not, "Profile Export/Import" named no tab, and the list that takes it still said "Context Menu"
+    /// after the tab became Right-Click Menu. A tab's code is its view model, or the service named after it, which
+    /// is where Gaming Profile and Undo Changes take the lock. This replaces the README check the Gaming Profile
+    /// lock guard made of that one tab, which the section's own paragraphs about Gaming Profile passed whatever the
+    /// list said.
+    /// </remarks>
+    [Fact]
+    public void TheReadmeOperationLockLists_MatchTheTabsThatTakeIt()
+    {
+        var app = TestPaths.AppProject();
+        var shell = File.ReadAllText(Path.Combine(app, "ViewModels", "MainWindowViewModel.cs"));
+        var labels = TabLabel().Matches(shell).Concat(EagerTabLabel().Matches(shell))
+            .ToDictionary(m => m.Groups["vm"].Value, m => m.Groups["label"].Value, StringComparer.Ordinal);
+        Assert.True(labels.Count >= 55,
+            $"only {labels.Count} tabs were read from MainWindowViewModel, so this checks almost nothing.");
+
+        var takers = new SortedSet<string>(StringComparer.Ordinal);
+        foreach (var file in SourceFilesUnder(app, ".cs"))
+        {
+            if (!LockAcquisition().IsMatch(SourceBraces.CodeOnly(File.ReadAllText(file)))) continue;
+            var stem = Path.GetFileNameWithoutExtension(file);
+            var tab = stem.EndsWith("Service", StringComparison.Ordinal) ? stem[..^"Service".Length] : stem;
+            var viewModel = tab.EndsWith("ViewModel", StringComparison.Ordinal) ? tab : tab + "ViewModel";
+            if (labels.TryGetValue(viewModel, out var label)) takers.Add(label);
+        }
+
+        // 33 tabs when this was written.
+        Assert.True(takers.Count >= 28,
+            $"only {takers.Count} tabs were seen to take the lock, so this checks almost nothing.");
+
+        var readme = File.ReadAllText(Path.Combine(TestPaths.RepoRoot(), "README.md"));
+        var takenBy = Collapse(ReadmeBullet(readme, "### Operation Lock", "- Taken by the tabs"));
+        var without = Collapse(ReadmeBullet(readme, "### Operation Lock", "- These tabs change things without it:"));
+
+        var missing = takers.Where(l => !takenBy.Contains(l, StringComparison.Ordinal)).ToList();
+        Assert.True(missing.Count == 0,
+            "these tabs take the operation lock, and the README's list of the tabs that take it does not name "
+            + "them: " + string.Join(", ", missing));
+        var misplaced = takers.Where(l => without.Contains(l, StringComparison.Ordinal)).ToList();
+        Assert.True(misplaced.Count == 0,
+            "the README says these tabs change things without the operation lock, and they take it: "
+            + string.Join(", ", misplaced));
+
+        // And the other way. No tab's label is part of another's, so a label found in the list is that tab named.
+        var unfounded = labels.Values
+            .Where(l => takenBy.Contains(l, StringComparison.Ordinal) && !takers.Contains(l))
+            .Order(StringComparer.Ordinal)
+            .ToList();
+        Assert.True(unfounded.Count == 0,
+            "the README says these tabs take the operation lock, and their code does not: "
+            + string.Join(", ", unfounded));
+
+        // Its items are tab names, then the phrase about ending a process, which starts in lower case.
+        var items = without[(without.IndexOf(':', StringComparison.Ordinal) + 1)..]
+            .Split(',')
+            .Select(i => i.Trim())
+            .Select(i => i.StartsWith("and ", StringComparison.Ordinal) ? i["and ".Length..] : i)
+            .Where(i => i.Length > 0 && char.IsUpper(i[0]))
+            .ToList();
+        Assert.True(items.Count >= 8,
+            $"only {items.Count} tabs were read from the README's list, so this checks almost nothing.");
+        var unknown = items.Where(i => !labels.ContainsValue(i)).ToList();
+        Assert.True(unknown.Count == 0,
+            "the README's list of tabs that change things without the lock names no such tab: "
+            + string.Join(", ", unknown));
+    }
+
+    /// <summary>
+    /// The README's screen-reader section names every control that explains itself to assistive software (#2745).
+    /// </summary>
+    /// <remarks>
+    /// It said six, and there were more: the Uninstaller's Remove ticked, Quick Cleanup's Empty Recycle Bin and the
+    /// Clean buttons of Deep Cleanup and Browser Cleaner had theirs too, and nothing held the list or a number. Each
+    /// view with an explained control is here with the words the README uses for it, so one added to another view
+    /// fails this until the README says so.
+    /// </remarks>
+    [Fact]
+    public void TheReadmeScreenReaderSection_NamesEveryControlThatExplainsItself()
+    {
+        var named = new Dictionary<string, string[]>(StringComparer.Ordinal)
+        {
+            ["AdminBanner.xaml"] = ["Run as administrator"],
+            ["AudioMixerView.xaml"] = ["Delete preset"],
+            ["BrowserCleanerView.xaml"] = ["Clean selected on Deep Cleanup and on Browser Cleaner"],
+            ["CleanupView.xaml"] = ["Empty Recycle Bin"],
+            ["DeepCleanupView.xaml"] = ["Clean selected on Deep Cleanup"],
+            ["DiskAnalyzerView.xaml"] = ["Run as administrator"],
+            ["FileShredderView.xaml"] = ["Shred All"],
+            ["ProcessManagerView.xaml"] = ["Kill process"],
+            ["ShortcutCleanerView.xaml"] = ["Delete selected shortcuts"],
+            ["UndoChangesView.xaml"] = ["Undo Changes row"],
+            ["UninstallerView.xaml"] = ["Uninstall selected", "Remove ticked"],
+        };
+
+        var explaining = SourceFilesUnder(TestPaths.AppProject(), ".xaml")
+            .Where(f => WithoutXamlComments(File.ReadAllText(f))
+                .Contains("AutomationProperties.HelpText=", StringComparison.Ordinal))
+            .Select(f => Path.GetFileName(f)!)
+            .Order(StringComparer.Ordinal)
+            .ToList();
+        Assert.True(explaining.Count >= 8,
+            $"only {explaining.Count} views with an explained control were found, so this checks almost nothing.");
+        Assert.Equal(named.Keys.Order(StringComparer.Ordinal), explaining);
+
+        var readme = File.ReadAllText(Path.Combine(TestPaths.RepoRoot(), "README.md"));
+        var section = Collapse(ReadmeSection(readme, "### Screen readers"));
+        var unnamed = named.Values.SelectMany(v => v).Distinct()
+            .Where(p => !section.Contains(p, StringComparison.Ordinal))
+            .ToList();
+        Assert.True(unnamed.Count == 0,
+            "the README's Screen readers section does not name these controls that explain themselves: "
+            + string.Join(", ", unnamed));
+    }
+
+    /// <summary>The text of a README section, from its heading to the next heading of any level.</summary>
+    private static string ReadmeSection(string readme, string heading)
+    {
+        readme = readme.Replace("\r\n", "\n", StringComparison.Ordinal);
+        var start = readme.IndexOf("\n" + heading + "\n", StringComparison.Ordinal);
+        Assert.True(start >= 0, $"README.md has no '{heading}' section.");
+        var end = readme.IndexOf("\n#", start + heading.Length + 2, StringComparison.Ordinal);
+        return end < 0 ? readme[start..] : readme[start..end];
+    }
+
+    /// <summary>
+    /// One bullet of a README section, from its opening words to the next bullet or the end of the section.
+    /// </summary>
+    private static string ReadmeBullet(string readme, string heading, string opening)
+    {
+        var section = ReadmeSection(readme, heading);
+        var start = section.IndexOf("\n" + opening, StringComparison.Ordinal);
+        Assert.True(start >= 0, $"the README's '{heading}' section has no bullet starting '{opening}'.");
+        var end = section.IndexOf("\n- ", start + 1, StringComparison.Ordinal);
+        return end < 0 ? section[start..] : section[start..end];
+    }
+
+    /// <summary>A tab the shell builds, with its view model and its sidebar label.</summary>
+    [GeneratedRegex(@"Tab<(?<vm>\w+)>\(""nav-[\w-]+"",\s*""(?<label>[^""]+)""", RegexOptions.CultureInvariant)]
+    private static partial Regex TabLabel();
+
+    /// <summary>A tab the shell builds eagerly, such as the Dashboard, with its label and its view model.</summary>
+    [GeneratedRegex(@"EagerItem\(""nav-[\w-]+"",\s*""(?<label>[^""]+)""[^\n]*?Eager<(?<vm>\w+)>",
+        RegexOptions.CultureInvariant)]
+    private static partial Regex EagerTabLabel();
+
+    /// <summary>A call that takes the operation lock, written on one line or across two.</summary>
+    [GeneratedRegex(@"TryAcquire\(\s*OperationCategory\.", RegexOptions.CultureInvariant)]
+    private static partial Regex LockAcquisition();
+
+    /// <summary>
     /// The manual smoke script reads its tabs from the UI suite's table, and reads every row of it (#2744).
     /// </summary>
     /// <remarks>
@@ -13392,26 +13548,8 @@ public partial class ArchitectureTests
                     + "system change is exactly what a maintainer needs to see in the log");
         }
 
-        // ── The README claim must match the code, in both directions ──
-        var readme = Collapse(File.ReadAllText(Path.Combine(TestPaths.RepoRoot(), "README.md")));
-        var lockSectionAt = readme.IndexOf("### Operation Lock", StringComparison.Ordinal);
-        Assert.True(lockSectionAt > 0, "README.md has no '### Operation Lock' section — the guard would "
-            + "pass vacuously.");
-        var after = readme[(lockSectionAt + 1)..];
-        var end = after.IndexOf("### ", StringComparison.Ordinal);
-        var lockSection = end > 0 ? after[..end] : after;
-        Assert.True(lockSection.Length > 200,
-            $"the README Operation Lock section sliced to {lockSection.Length} chars — not the section.");
-
-        var takesLock = acquireAt >= 0;
-        var listed = lockSection.Contains("Gaming Profile", StringComparison.Ordinal);
-        if (takesLock && !listed)
-            offenders.Add("Gaming Profile takes the lock but the README Operation Lock section does not "
-                + "list it — the section claims the lock covers every tab that mutates system state");
-        if (!takesLock && listed)
-            offenders.Add("the README lists Gaming Profile under Operation Lock but the service no longer "
-                + "takes it — the claim is now false");
-
+        // What the README says about the lock is checked for every tab, this one included, by
+        // TheReadmeOperationLockLists_MatchTheTabsThatTakeIt.
         Assert.True(offenders.Count == 0,
             "the Gaming Profile lock contract is broken:\n  - " + string.Join("\n  - ", offenders));
     }

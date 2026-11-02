@@ -9983,6 +9983,9 @@ shipped in 1.56.8 below. Recorded here so the version history has no unexplained
 
 ## [1.52.75] - 2026-07-10
 
+Tagged but never published, so no download, notes or announcement exist for this version. The tag is
+kept rather than moved, and the fix below shipped in 1.52.76, whose release notes list it.
+
 ### Fixed
 - **Disk Analyzer over-counted drive usage by descending into WinSxS and other heavyweight system directories during recursion.** The `SkipSegments` filter (`\windows\winsxs`, `\windows\csc`, `\$recycle.bin`, `\system volume information`) was only applied to the top-level children of the analyzed root (line 71). The recursive `MeasureFolder` walk pushed every non-reparse subdirectory onto the stack without re-checking against `SkipSegments`, so scanning a drive root like `C:\` would enter `C:\Windows` (not skipped — it's not in the list) and then descend into `C:\Windows\WinSxS` (a hardlink farm, not a reparse point) and `C:\Windows\CSC` (offline files cache), double-counting hundreds of thousands of hardlinked files at full `FileInfo.Length`. The recursive loop now guards each subdirectory with `ShouldSkip(d)` before pushing it, matching the top-level behavior.
 
@@ -11645,6 +11648,9 @@ The same code as 1.7.18, released a second time from the same commit under a new
 - **Upgraded H.NotifyIcon to 2.3.0** for more reliable tray-icon handling.
 
 ## [1.7.15] - 2026-05-22
+
+Tagged but never published, so no download, notes or announcement exist for this version. The tag is
+kept rather than moved, and the fix below shipped in 1.7.16, whose notes do not list it.
 
 ### Fixed
 - **Tray icon reliability** — follow-up adjustments to ensure the system-tray icon initializes correctly during startup.
@@ -13656,6 +13662,9 @@ The same code as 1.7.18, released a second time from the same commit under a new
   widened status column from 90px to 160px (#163).
 
 ## [0.13.6] - 2026-04-25
+
+Tagged but never published, so no download, notes or announcement exist for this version. The tag is
+kept rather than moved, and the fix below shipped in 0.13.7, whose notes do not list it.
 
 ### Fixed
 - **Release workflow** — fixed `Rename-Item` in release.yml that was passing a

@@ -49,21 +49,15 @@ The largest gap between what the app is and how it is received.
   with signing rather than before it, because an installed build people trust should be a
   signed one. Background in
   [SECURITY.md](SECURITY.md#things-to-be-aware-of), under the portable distribution model.
-- **Shorter-lived release credentials.** The winget publish step currently holds a
-  long-lived cross-repository token;
-  [#1676](https://github.com/laurentiu021/SystemManager/issues/1676) covers replacing it.
 
 ## Making the app explain itself
 
 The target user is someone who wants their PC to run better and does not know what a
-working set is. Several tabs still assume otherwise.
-
-- **A first-run screen** — one page saying what this is, what is safe, and what needs
-  administrator rights ([#1635](https://github.com/laurentiu021/SystemManager/issues/1635)).
-
-Help inside the app (F1 and the `?` chip), one plain-language voice across the tab headers,
-and a startup update check you can switch off, which runs at most once a day, have shipped
-since this list was first written.
+working set is. The first-run Welcome screen, saying what this is, what is safe and what needs
+administrator rights ([#1635](https://github.com/laurentiu021/SystemManager/issues/1635)), help
+inside the app (F1 and the `?` chip), one plain-language voice across the tab headers, and a
+startup update check you can switch off, which runs at most once a day, have shipped since this
+list was first written. What is left comes from the open issues.
 
 ## Accessibility and keyboard use
 
@@ -76,11 +70,9 @@ so text stays readable. What is left:
 
 ## One design system rather than 59 views that resemble each other
 
-Corner radii now come from the `RadiusSm/Md/Lg` scale, held by a test, and the status footer
-that 37 views used to copy is one shared control. What is left:
-
-- **Typography scale** — raw `FontSize` values instead of the named text styles
-  ([#1634](https://github.com/laurentiu021/SystemManager/issues/1634)).
+Corner radii now come from the `RadiusSm/Md/Lg` scale, held by a test, the status footer
+that 37 views used to copy is one shared control, and body text uses the named text styles
+rather than sizes of its own ([#1634](https://github.com/laurentiu021/SystemManager/issues/1634)).
 
 Spacing has no token scale, on purpose: every view uses one of three documented layout
 strategies with literal values, and a test pins how the per-section pages end. A scale would
@@ -104,16 +96,6 @@ from the open issues, and this list names them once they are chosen.
 - **A landing page** ([#1679](https://github.com/laurentiu021/SystemManager/issues/1679))
 - **Screenshots for the tabs that have none**, several of them recent features
   ([#1664](https://github.com/laurentiu021/SystemManager/issues/1664))
-
-## Under the floor
-
-Not user-visible, and the reason the rest can move at all.
-
-- **A type scale the views actually use** — the named text styles exist, and most body text
-  still writes its own size ([#1634](https://github.com/laurentiu021/SystemManager/issues/1634))
-- **Command-line parsing that refuses what it does not recognise, wherever it appears.** An
-  unknown option is refused, except when a known command follows it: `-bogus --health` runs
-  the health check and ignores `-bogus`
 
 ## How this list changes
 

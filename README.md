@@ -136,7 +136,8 @@ MIT, BleachBit is GPL-3.0 — which is why that row no longer names one.</sub>
 every row of tells you nothing. Builds are unsigned, so Windows shows a warning on first launch. Why, what
 that warning looks like, and how to check the download yourself:
 [First launch](#first-launch-windows-will-warn-you) · [Verifying the download](#verifying-the-download).
-Sponsorship goes toward that certificate — see [Support](#support).</sub>
+Signing is planned through the SignPath Foundation's free certificates for open-source projects — see
+[Code signing](#code-signing).</sub>
 
 ## Features
 
@@ -291,16 +292,17 @@ Analyzer's map blocks are the exception: they are sized by their folders, and ne
 by 24.
 
 ### Screen readers
-The six controls whose effect is hardest to take back explain themselves, not just their label. Landing on
+The controls whose effect is hardest to take back explain themselves, not just their label. Landing on
 Shred All announces the button and then "Overwrites every item in the list so it cannot be recovered, then
 deletes it. This cannot be undone, not even from the Recycle Bin. SysManager asks you to confirm first." The
-same goes for Uninstall selected, Kill process, Delete preset, Delete selected shortcuts, and the Run as
+same goes for Uninstall selected and Remove ticked on the Uninstaller, Kill process, Delete preset, Delete
+selected shortcuts, Empty Recycle Bin, Clean selected on Deep Cleanup and on Browser Cleaner, and the Run as
 administrator button that appears on the 32 pages needing elevation.
 
 Before that, the red colour and the confirmation dialog were the only warnings, and neither reaches someone
 who cannot see the screen — the dialog arrives after the button has already been pressed. The explanation is
 not a tooltip for the same reason: a tooltip needs a mouse hovering over the control, so it never reaches
-someone who tabbed to it, and it is not reliably handed to assistive software. It is kept to those six,
+someone who tabbed to it, and it is not reliably handed to assistive software. It is kept to those,
 plus the button on each Undo Changes row, which says before you press it that it asks first — or why it
 cannot be pressed yet. An explanation on every button in the app would make it slower to navigate, not
 clearer.
@@ -1028,7 +1030,8 @@ System → System Fixes, where the tab name matches what they do.
   service it needs is turned off
 - Cancel and Escape stop a scan, never a change: stopping DISM part-way could leave a feature half-changed
 - **A Windows restore point is attempted before the first toggle of the session**, shared with the
-  other tabs that change system settings. This is the tab where it matters most: turning a feature
+  other tabs that try one before their first change, listed under
+  [Restore Points](#restore-points). This is the tab where it matters most: turning a feature
   back on is a second servicing operation that can itself fail, and unlike removing a Store app,
   a restore point really does cover this kind of change. Mentioned only when Windows actually made
   one, and never on a toggle that failed
@@ -1056,7 +1059,7 @@ System → System Fixes, where the tab name matches what they do.
   silently, each row shows its date so you can check it, and "Keep this one" moves the
   badge when you know better — a copy that preserved its timestamp, or a cloud-sync
   rewrite, will fool the heuristic
-- **Read-only** — **Open** (shows the file in Explorer), **Copy** (copies its path) and "Keep this
+- **Read-only** — **Show** (shows the file in Explorer), **Copy** (copies its path) and "Keep this
   one" only. Nothing is
   deleted, moved or renamed; deciding which of five identical photos to remove is done by
   you, in Explorer
@@ -1331,18 +1334,19 @@ Answers "what is actually using my space?" by listing the biggest files in one p
 - Taken by the tabs that change disk, network or system state, restart the Windows shell, or
   install, upgrade or uninstall software: Quick Cleanup, Deep Cleanup, Shortcut Cleaner, File
   Shredder, Browser Cleaner, Network Repair, DNS & Hosts, Performance Mode, Gaming Profile,
-  Environment Variables, System Fixes, Windows Features, Windows Update, Restore Points, Context
+  Environment Variables, System Fixes, Windows Features, Windows Update, Restore Points, Right-Click
   Menu, App Updates, Bulk Installer, Uninstaller, Preinstalled Apps, Privacy & Telemetry, Defender
-  Tweaks, Edge/OneDrive Remover, Services, Undo Changes, and the Dashboard's quick actions. Disk
-  Analyzer, Large Files, Duplicate Finder and System Health's chkdsk only read, and take it so a
-  scan never runs while a cleanup is deleting; Speed Test and Traceroute take it so a measurement
-  never runs during a network change; the Dashboard's Why is it slow? takes it so it never
-  measures SysManager's own cleanup as the thing slowing the PC down. Display Profiles holds one
-  of its own while a new display mode waits to be kept, so closing SysManager then asks first
+  Tweaks, Edge/OneDrive Remover, Services, Settings Watchdog's Restore, Undo Changes, and the
+  Dashboard's quick actions. Disk Analyzer, Large Files, Duplicate Finder and System Health's
+  chkdsk only read, and take it so a scan never runs while a cleanup is deleting; Speed Test and
+  Traceroute take it so a measurement never runs during a network change; the Dashboard's Why is
+  it slow? takes it so it never measures SysManager's own cleanup as the thing slowing the PC
+  down. Display Profiles holds one of its own while a new display mode waits to be kept, so
+  closing SysManager then asks first
 - These tabs change things without it: Startup Manager, Task Scheduler, App Blocker, Notification
-  Blocker, Settings Watchdog, Scheduled Maintenance, Standby List Cleaner, Display Profiles, Timer
-  Resolution, CPU Core Affinity, Dark Mode Scheduler, Volume Control, Profile Export/Import, and
-  ending a process on Process Manager or File Lock Detector
+  Blocker, Scheduled Maintenance, Standby List Cleaner, Timer Resolution, CPU Core Affinity, Dark
+  Mode Scheduler, Volume Control, Profile Export / Import, and ending a process on Process Manager
+  or File Lock Detector
 - **An MSI-based install, upgrade or uninstall started on one of App Updates, Bulk Installer,
   Uninstaller or the Dashboard's Update All Apps while another is running fails with exit code
   1618, because Windows Installer only ever runs one installation at a time.** The four now refuse
@@ -1463,9 +1467,10 @@ Answers "what is actually using my space?" by listing the biggest files in one p
 - Requires admin for HKLM-backed toggles
 - Fully reversible — switch a toggle back and press **Apply**. Turning one off removes the
   value SysManager wrote, so Windows goes back to its own default
-- **A Windows restore point is attempted before the first Apply of the session** — the same one
-  every tab that changes the system shares. It is attempted after you confirm, so declining
-  costs you nothing, and it is mentioned only when one was really created
+- **A Windows restore point is attempted before the first Apply of the session**, shared with the
+  other tabs that try one before their first change, listed under
+  [Restore Points](#restore-points). It is attempted after you confirm, so declining costs you
+  nothing, and it is mentioned only when one was really created
 
 ### File Shredder
 - Secure multi-pass file and folder deletion beyond recovery on a hard disk. **On an SSD the tab says
@@ -1755,7 +1760,8 @@ them:
   Store, unless Microsoft has retired it, as it has Skype and Mail & Calendar. The confirmation
   names any such app in your selection
 - **A Windows restore point is attempted before the first removal**, shared with the other tabs
-  that change system settings. Described honestly rather than reassuringly: System Restore does
+  that try one before their first change, listed under [Restore Points](#restore-points).
+  Described honestly rather than reassuringly: System Restore does
   **not** bring Store apps back, so reinstalling from the Store stays the real undo and the app
   says exactly that
 - **Cancel stops a removal between apps** — the app being removed is finished first, so its row
@@ -1845,7 +1851,8 @@ Get Microsoft Edge and OneDrive out of your way — reversibly:
   profile, or reach another administrator's account. As administrator the tab says so and changes
   nothing
 - **A Windows restore point is attempted before the first change of the session** — shared with
-  the other tabs that change system settings, so at most one is made no matter how many tabs you
+  the other tabs that try one before their first change, listed under
+  [Restore Points](#restore-points), so at most one is made no matter how many tabs you
   use. It is mentioned only when one was really created: System Restore is switched off on many
   PCs and Windows allows roughly one point a day, so silence means "no snapshot", never a promise
 
@@ -1876,7 +1883,8 @@ Manage Microsoft Defender without digging through Windows Security:
   with it, every change is confirmed first. Lowering a protection is always an
   explicit, reversible choice
 - **A Windows restore point is attempted before the first change of the session**, shared with the
-  other tabs that change system settings. All four changes run through one path, so none of them can
+  other tabs that try one before their first change, listed under
+  [Restore Points](#restore-points). All four changes run through one path, so none of them can
   quietly skip it, and it is mentioned only when Windows really made one — never on a change that
   was rejected
 
@@ -2941,8 +2949,11 @@ To remove it completely:
    settings rather than part of the app, so they stay as you set them. Open **System › Undo Changes**:
    it lists what SysManager can still put back — Performance Mode, the services it turned off, the
    hosts file, the environment variables, game mode, and the settings you saved in Settings Watchdog —
-   and links the tabs whose switches are their own undo. Files deleted for good, removed preinstalled
-   apps and uninstalled programs cannot be put back.
+   and links the tabs whose switches are their own undo. Two tabs are in neither list: the scan
+   exclusions you added on **Defender Tweaks** stay until you press **Remove** beside each, and a
+   feature-update deferral set on **Windows Update** stays until you press **Restore default** there (a
+   pause ends on its own, on the day it was set to). Files deleted for good, removed preinstalled apps
+   and uninstalled programs cannot be put back.
 2. **Remove the scheduled task, if you created one.** Only applies if you used **Scheduled
    Maintenance**: open that tab and press **Remove schedule**, and the app unregisters the task
    (`SysManager Scheduled Maintenance-` followed by your account's security ID, in the Task

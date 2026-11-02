@@ -6,6 +6,7 @@ using System.Collections.ObjectModel;
 using System.Diagnostics;
 using System.Globalization;
 using System.IO;
+using System.Management;
 using System.Text.RegularExpressions;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
@@ -139,7 +140,10 @@ public sealed partial class SystemHealthViewModel : ElevatedViewModelBase
             Log.Information("System health scan completed");
             await RefreshDrivesAsync();
         }
-        catch (System.Management.ManagementException ex) { StatusMessage = $"Scan failed: {ex.Message}"; }
+        catch (Exception ex) when (ex is ManagementException or System.Runtime.InteropServices.COMException)
+        {
+            StatusMessage = $"Scan failed: {ex.Message}";
+        }
         catch (InvalidOperationException ex) { StatusMessage = $"Scan failed: {ex.Message}"; }
         finally { EndRead(); }
     }
@@ -222,7 +226,10 @@ public sealed partial class SystemHealthViewModel : ElevatedViewModelBase
             DiskHealth.ReplaceWith(reports);
             StatusMessage = $"Collected {reports.Count} disk report(s).";
         }
-        catch (System.Management.ManagementException ex) { StatusMessage = $"CheckDiskHealth failed: {ex.Message}"; }
+        catch (Exception ex) when (ex is ManagementException or System.Runtime.InteropServices.COMException)
+        {
+            StatusMessage = $"CheckDiskHealth failed: {ex.Message}";
+        }
         catch (InvalidOperationException ex) { StatusMessage = $"CheckDiskHealth failed: {ex.Message}"; }
         finally { EndRead(); }
     }

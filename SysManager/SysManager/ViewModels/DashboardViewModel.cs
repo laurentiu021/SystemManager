@@ -1130,7 +1130,8 @@ public sealed partial class DashboardViewModel : ElevatedViewModelBase
             HasHealthScore = true;
             HealthHasNothingToImprove = HealthResult.Recommendations.Count == 0;
         }
-        catch (Exception ex) when (ex is System.Management.ManagementException or InvalidOperationException)
+        catch (Exception ex) when (ex is System.Management.ManagementException
+                                       or System.Runtime.InteropServices.COMException or InvalidOperationException)
         {
             Log.Warning("Health Score failed: {Error}", ex.Message);
         }

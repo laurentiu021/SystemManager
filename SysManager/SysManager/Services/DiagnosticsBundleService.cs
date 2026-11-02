@@ -123,7 +123,10 @@ public sealed partial class DiagnosticsBundleService
     }
 
     /// <summary>What went into the bundle, so the caller can say so rather than guess.</summary>
-    public sealed record BundleContents(int LogFilesIncluded, long TotalBytes);
+    /// <param name="LogFilesIncluded">The log files in the zip.</param>
+    /// <param name="TotalBytes">The zip's size.</param>
+    /// <param name="LogFilesUnreadable">The newest log files that could not be read, so are not in it (#2774).</param>
+    public sealed record BundleContents(int LogFilesIncluded, long TotalBytes, int LogFilesUnreadable = 0);
 
     /// <summary>
     /// Writes the bundle to <paramref name="zipPath"/>, replacing any file already there.
@@ -155,7 +158,17 @@ public sealed partial class DiagnosticsBundleService
     internal async Task<BundleContents> PackAsync(
         string zipPath, string environment, string report, CancellationToken ct = default)
     {
-        var logs = NewestLogs();
+        // Read before the README is written, so it and the count name only the logs in the zip. A log that could not be
+        // read was named and counted all the same, and the person reading the bundle looked for a file it did not have
+        // (#2774).
+        List<(string Name, string Text)> logs = [];
+        List<string> unreadable = [];
+        foreach (var log in NewestLogs())
+        {
+            ct.ThrowIfCancellationRequested();
+            if (ReadTail(log) is { } text) logs.Add((log.Name, text));
+            else unreadable.Add(log.Name);
+        }
 
         // Built in memory and written once. Creating the archive directly at the destination would leave a
         // half-written zip behind if the report or a log read threw part-way, and a corrupt file the user
@@ -163,18 +176,18 @@ public sealed partial class DiagnosticsBundleService
         using var buffer = new MemoryStream();
         using (var zip = new ZipArchive(buffer, ZipArchiveMode.Create, leaveOpen: true))
         {
-            await WriteEntryAsync(zip, "README.txt", Readme(logs), ct).ConfigureAwait(false);
+            await WriteEntryAsync(zip, "README.txt", Readme([.. logs.Select(l => l.Name)], unreadable, environment), ct)
+                .ConfigureAwait(false);
             await WriteEntryAsync(zip, "environment.txt", environment, ct).ConfigureAwait(false);
             await WriteEntryAsync(zip, "system-report.txt", report, ct).ConfigureAwait(false);
             await WriteEntryAsync(zip, "errors.txt", BuildErrorsText(_logDir, ct), ct).ConfigureAwait(false);
             await WriteEntryAsync(zip, "windows-events.txt",
                 await BuildWindowsEventsTextAsync(ct).ConfigureAwait(false), ct).ConfigureAwait(false);
 
-            foreach (var log in logs)
+            foreach (var (name, text) in logs)
             {
                 ct.ThrowIfCancellationRequested();
-                if (ReadTail(log) is not { } text) continue;
-                await WriteEntryAsync(zip, $"logs/{log.Name}", text, ct).ConfigureAwait(false);
+                await WriteEntryAsync(zip, $"logs/{name}", text, ct).ConfigureAwait(false);
             }
         }
 
@@ -184,8 +197,9 @@ public sealed partial class DiagnosticsBundleService
         // feature exists to shorten gets longer instead.
         await Helpers.AtomicFile.WriteAllBytesAsync(zipPath, bytes, ct).ConfigureAwait(false);
 
-        Log.Information("Diagnostics bundle written: {LogCount} log files, {Bytes} bytes", logs.Count, bytes.Length);
-        return new BundleContents(logs.Count, bytes.Length);
+        Log.Information("Diagnostics bundle written: {LogCount} log files, {Unreadable} unreadable, {Bytes} bytes",
+            logs.Count, unreadable.Count, bytes.Length);
+        return new BundleContents(logs.Count, bytes.Length, unreadable.Count);
     }
 
     /// <summary>
@@ -410,6 +424,54 @@ public sealed partial class DiagnosticsBundleService
             p => p.EventId == eventId && string.Equals(p.Provider, providerName, StringComparison.OrdinalIgnoreCase));
 
     /// <summary>
+    /// What each line of environment.txt says, by the word it starts with, in the order the About tab writes them.
+    /// </summary>
+    /// <remarks>
+    /// The README describes the file from this and from the file itself: each line's label that is here is described,
+    /// and one that is not is still named (#2774). The description used to be a sentence written apart from the file,
+    /// and it left out the build, the .NET runtime, the graphics cards, the drives and the display.
+    /// </remarks>
+    internal static readonly (string Label, string Says)[] EnvironmentLines =
+    [
+        ("SysManager", "its version, and the build it was made from"),
+        ("Windows", "the edition and build"),
+        ("Architecture", "whether Windows is 64-bit, and for which processors"),
+        (".NET", "the .NET runtime SysManager runs on"),
+        ("Elevated", "whether SysManager was running as administrator"),
+        ("Language", "your regional format and display language"),
+        ("CPU", "the processor's name, cores, threads and speed"),
+        ("RAM", "the memory, total and free"),
+        ("GPU", "each graphics card's name, video memory and driver version"),
+        ("Disk", "each fixed drive's letter, size, free space and format"),
+        ("Display", "the screen's resolution and refresh rate"),
+    ];
+
+    /// <summary>
+    /// The labels the lines of <paramref name="environment"/> start with, each once, in the file's order.
+    /// </summary>
+    /// <remarks>
+    /// A line is labelled by the entry of <see cref="EnvironmentLines"/> it starts with, followed by a colon or a space
+    /// ("Windows: …", "SysManager 1.136.0 …", "Disk C: …"); any other line by what comes before its first colon, or its
+    /// first word, so a line added to the file without a description is named rather than left out.
+    /// </remarks>
+    internal static List<string> EnvironmentLabels(string environment)
+    {
+        List<string> labels = [];
+        foreach (var raw in environment.Split('\n'))
+        {
+            var line = raw.Trim();
+            if (line.Length == 0) continue;
+            var label = EnvironmentLines
+                .Select(e => e.Label)
+                .FirstOrDefault(l => line.StartsWith(l + ":", StringComparison.Ordinal)
+                                     || line.StartsWith(l + " ", StringComparison.Ordinal))
+                ?? (line.IndexOf(':') is var colon and > 0 ? line[..colon] : line.Split(' ', 2)[0]);
+            if (!labels.Contains(label, StringComparer.Ordinal)) labels.Add(label);
+        }
+        return labels;
+    }
+
+    /// <summary>
     /// The note that ships inside the zip, naming every file and stating plainly that nothing was sent.
     /// </summary>
     /// <remarks>
@@ -417,8 +479,10 @@ public sealed partial class DiagnosticsBundleService
     /// whose contents you have to take on trust is one a careful user will not send, and the careful users
     /// are the ones who file good bugs. It also says what was removed, because "redacted" is only reassuring
     /// if it says what and why.
+    /// <para>It names the logs that are in the zip and, apart, the ones that could not be read, and describes
+    /// environment.txt line by line from what the file holds (#2774).</para>
     /// </remarks>
-    internal static string Readme(IReadOnlyList<FileInfo> logs)
+    internal static string Readme(IReadOnlyList<string> logs, IReadOnlyList<string> unreadable, string environment)
     {
         var sb = new StringBuilder();
         sb.AppendLine("SysManager diagnostics bundle");
@@ -430,9 +494,14 @@ public sealed partial class DiagnosticsBundleService
         sb.AppendLine("anything to. Attach it to a bug report if you want to; delete it if you do not.");
         sb.AppendLine();
         sb.AppendLine("What is in here");
-        sb.AppendLine("  environment.txt    SysManager and Windows versions, architecture, whether SysManager");
-        sb.AppendLine("                     was running as administrator, your Windows language, and your CPU");
-        sb.AppendLine("                     and memory.");
+        sb.AppendLine("  environment.txt    What SysManager and this PC are, one line each:");
+        foreach (var label in EnvironmentLabels(environment))
+        {
+            var says = Array.Find(EnvironmentLines, e => e.Label == label).Says;
+            sb.AppendLine(says is null
+                ? $"                       {label}"
+                : $"                       {label,-13} {says}");
+        }
         sb.AppendLine("  system-report.txt  The full system report: operating system, processor, memory,");
         sb.AppendLine("                     graphics, motherboard, drives and their health, network adapters.");
         sb.AppendLine("  errors.txt         Every line the log marked [ERR] or [FTL], with its continuation");
@@ -444,17 +513,21 @@ public sealed partial class DiagnosticsBundleService
 
         if (logs.Count == 0)
         {
-            sb.AppendLine("  (no log files)     SysManager found no log files to include.");
+            sb.AppendLine(unreadable.Count == 0
+                ? "  (no log files)     SysManager found no log files to include."
+                : "  (no log files)     SysManager could not read its newest log files, so none are included:");
         }
         else
         {
             sb.AppendLine(string.Create(CultureInfo.InvariantCulture,
                 $"  logs/              The {logs.Count} most recent daily log files:"));
-            foreach (var log in logs) sb.AppendLine($"                       {log.Name}");
+            foreach (var log in logs) sb.AppendLine($"                       {log}");
             sb.AppendLine(string.Create(CultureInfo.InvariantCulture,
                 $"                     A log larger than {MaxBytesPerLog / 1024} KB is cut to its most recent"));
             sb.AppendLine("                     activity, and says so at the top of the file.");
+            if (unreadable.Count > 0) sb.AppendLine("                     Could not be read, so not included:");
         }
+        foreach (var log in unreadable) sb.AppendLine($"                       {log}");
 
         sb.AppendLine();
         sb.AppendLine("What has been left out on purpose");

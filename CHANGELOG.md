@@ -10,6 +10,23 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.136.94] - 2026-11-03
+
+**The diagnostics bundle says exactly what is in it, and About's report buttons cope when Windows' management service fails.**
+
+### Fixed
+- About's diagnostics bundle named and counted its three newest logs before reading them, so one that could not be
+  read was still listed in the README inside the zip and counted in "Saved … and 3 log files", though the zip did
+  not have it. The README and the message now count and name the logs that are in the zip, and say which could not
+  be read. The README also describes environment.txt line by line, from the lines in it; it left out the build, the
+  .NET runtime, the graphics cards, the drives and the display. Both were there since the bundle came in 1.111.0.
+- "Copy environment info" and "Save diagnostics bundle" raised the app's error dialog when Windows' management
+  service failed in a way it reports as a COM error, such as the service being turned off, instead of leaving out
+  what it could not read. They now leave it out, as the system report does; this was there since the environment
+  info was read this way in 0.48.5. System Health's scan and disk check, Battery Health, the drive list, the
+  Dashboard's health score, the command line's health check and the resource history's temperatures handle the same
+  failure now too.
+
 ## [1.136.93] - 2026-11-02
 
 **A maximized window comes back maximized from the notification area, and an unrecognized close setting asks again.**

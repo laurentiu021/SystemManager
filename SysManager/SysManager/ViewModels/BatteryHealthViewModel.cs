@@ -89,7 +89,10 @@ public sealed partial class BatteryHealthViewModel : ViewModelBase
     private async Task InitAsync()
     {
         try { await RefreshAsync(); }
-        catch (ManagementException ex) { Log.Warning("Battery auto-scan failed: {Error}", ex.Message); }
+        catch (Exception ex) when (ex is ManagementException or System.Runtime.InteropServices.COMException)
+        {
+            Log.Warning("Battery auto-scan failed: {Error}", ex.Message);
+        }
         catch (InvalidOperationException ex) { Log.Warning("Battery auto-scan failed: {Error}", ex.Message); }
     }
 

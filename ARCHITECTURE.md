@@ -1460,6 +1460,10 @@ Key services:
   chronological and the failure being reported is at the tail. `PackAsync` is the
   internal seam that takes an already-gathered report, so the packaging is unit
   testable while the redaction decision stays on the one path a caller can reach.
+  The logs are read before the README is written, so it and `BundleContents` name and
+  count only the ones in the zip, with any that could not be read listed apart; the
+  README describes `environment.txt` from the labels its lines start with and
+  `EnvironmentLines`, so a line added there is named even before it has a description (#2774).
   `SysManager.IntegrationTests.DiagnosticsBundleRedactionTests` asserts against
   this machine's real adapters that the bundled report carries none of their
   hardware addresses or full IPv4 addresses, and that the report shows the redaction

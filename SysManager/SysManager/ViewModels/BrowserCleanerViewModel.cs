@@ -41,6 +41,7 @@ public sealed partial class BrowserCleanerViewModel : ViewModelBase, ISearchDest
         IsBusy ? CancelCommand : null;
 
     private readonly BrowserCleanerService _service;
+    private readonly Func<CancellationToken, Task<IReadOnlyList<BrowserCleanupItem>>> _scan;
     private readonly IBrowserExtensionService _extensions;
     private readonly Func<string, bool> _copyText;
     private readonly IDialogService _dialog;
@@ -104,11 +105,17 @@ public sealed partial class BrowserCleanerViewModel : ViewModelBase, ISearchDest
     /// <param name="operationLock">Defaults to <see cref="OperationLockService.Instance"/> (#2860).</param>
     /// <param name="toast">Defaults to <see cref="ToastService.Instance"/> (#2860).</param>
     /// <param name="activityLog">Defaults to <see cref="ActivityLogService.Instance"/> (#2860).</param>
+    /// <param name="scan">
+    /// Lists what can be cleaned; <paramref name="service"/>'s own scan unless a test passes its own, to decide what a
+    /// scan finds and whether it is cancelled (#2759).
+    /// </param>
     public BrowserCleanerViewModel(BrowserCleanerService service, IBrowserExtensionService extensions,
         Func<string, bool>? copyText = null, IDialogService? dialog = null, IOperationLock? operationLock = null,
-        IToastService? toast = null, IActivityLog? activityLog = null)
+        IToastService? toast = null, IActivityLog? activityLog = null,
+        Func<CancellationToken, Task<IReadOnlyList<BrowserCleanupItem>>>? scan = null)
     {
         _service = service;
+        _scan = scan ?? service.ScanAsync;
         _extensions = extensions;
         _copyText = copyText ?? CopyToClipboard;
         _dialog = dialog ?? DialogService.Instance;
@@ -245,17 +252,19 @@ public sealed partial class BrowserCleanerViewModel : ViewModelBase, ISearchDest
         // Snapshot the user's ticks before the rebuild replaces every item.
         var previous = Items.ToList();
 
-        foreach (var old in Items) old.PropertyChanged -= OnItemSelectionChanged;
         _cts?.Dispose();
         _cts = new CancellationTokenSource();
         try
         {
-            var items = await _service.ScanAsync(_cts.Token).ConfigureAwait(true);
+            var items = await _scan(_cts.Token).ConfigureAwait(true);
 
             // Applied before subscribing, so restoring a tick does not fire a selection-changed
             // notification for state the user has not just changed.
             CarryForwardSelection(previous, items);
 
+            // Unhooked only here, as the new rows replace them. Unhooked before the scan, the rows a cancelled scan
+            // left on screen had nothing listening, so a tick no longer moved the Selected total (#2759).
+            foreach (var old in previous) old.PropertyChanged -= OnItemSelectionChanged;
             Items.ReplaceWith(items);
             foreach (var i in Items) i.PropertyChanged += OnItemSelectionChanged;
             HasItems = Items.Count > 0;

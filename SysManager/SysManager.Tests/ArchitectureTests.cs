@@ -9940,13 +9940,7 @@ public partial class ArchitectureTests
         var root = TestPaths.RepoRoot();
         var lines = File.ReadAllLines(Path.Combine(root, "README.md"));
 
-        // GitHub's anchor rule: lower-case, drop everything but word characters, spaces and hyphens,
-        // then replace runs of whitespace with a single hyphen.
-        var anchors = lines
-            .Select(l => HeadingLine().Match(l))
-            .Where(m => m.Success)
-            .Select(m => Slug(m.Groups[1].Value))
-            .ToHashSet(StringComparer.Ordinal);
+        var anchors = PageAnchors(lines).ToHashSet(StringComparer.Ordinal);
 
         var start = Array.FindIndex(lines, l => l.Trim() == "## Table of contents");
         Assert.True(start >= 0, "README.md has no '## Table of contents' section — the guard is vacuous");
@@ -9965,18 +9959,16 @@ public partial class ArchitectureTests
         // The whole doc set, not just README's contents block: a prose cross-reference breaks exactly the
         // same way and is the one nobody re-reads.
         var pages = 0;
+        var unreadable = new List<string>();
         foreach (var path in Directory.EnumerateFiles(root, "*.md", SearchOption.TopDirectoryOnly))
         {
             pages++;
             var page = File.ReadAllLines(path);
-            var pageAnchors = page
-                .Select(l => HeadingLine().Match(l))
-                .Where(m => m.Success)
-                .Select(m => Slug(m.Groups[1].Value))
-                .ToHashSet(StringComparer.Ordinal);
             // The h1 is an anchor too, and prose links back to the top of the page through it.
-            foreach (var l in page.Where(l => l.StartsWith("# ", StringComparison.Ordinal)))
-                pageAnchors.Add(Slug(l[2..]));
+            var pageAnchors = PageAnchors(page).ToHashSet(StringComparer.Ordinal);
+            unreadable.AddRange(PageHeadings(page)
+                .Where(h => HeadingMarkupTheSlugCannotRead().IsMatch(h.Text))
+                .Select(h => $"{Path.GetFileName(path)}:{h.Line}  {h.Text}"));
 
             for (var i = 0; i < page.Length; i++)
             {
@@ -9996,15 +9988,7 @@ public partial class ArchitectureTests
         var headingsByPage = new Dictionary<string, HashSet<string>>(StringComparer.OrdinalIgnoreCase);
         foreach (var path in Directory.EnumerateFiles(root, "*.md", SearchOption.TopDirectoryOnly))
         {
-            var page = File.ReadAllLines(path);
-            var set = page
-                .Select(l => HeadingLine().Match(l))
-                .Where(m => m.Success)
-                .Select(m => Slug(m.Groups[1].Value))
-                .ToHashSet(StringComparer.Ordinal);
-            foreach (var l in page.Where(l => l.StartsWith("# ", StringComparison.Ordinal)))
-                set.Add(Slug(l[2..]));
-            headingsByPage[Path.GetFileName(path)] = set;
+            headingsByPage[Path.GetFileName(path)] = PageAnchors(File.ReadAllLines(path)).ToHashSet(StringComparer.Ordinal);
         }
 
         foreach (var path in Directory.EnumerateFiles(root, "*.md", SearchOption.TopDirectoryOnly))
@@ -10029,17 +10013,153 @@ public partial class ArchitectureTests
         Assert.True(crossPage >= 4,
             $"expected the doc set's cross-page anchor links, found {crossPage} — either they were "
             + "removed or the pattern no longer matches them, and this half of the guard is vacuous");
+        Assert.True(unreadable.Count == 0,
+            "these headings hold a link, inline HTML or underscore emphasis, which GitHub leaves out of the text it "
+            + "builds the anchor from and the slug below does not, so their anchors here would not be GitHub's:\n  "
+            + string.Join("\n  ", unreadable));
         Assert.True(dead.Count == 0,
             "these links point at headings that do not exist, so they render as text that "
             + $"quietly does nothing when clicked:\n  {string.Join("\n  ", dead)}");
     }
 
-    private static string Slug(string heading) =>
-        WhitespaceRun().Replace(NonAnchorCharacter().Replace(heading.Trim().ToLowerInvariant(), string.Empty).Trim(), "-");
+    /// <summary>
+    /// <see cref="Slug"/> gives the anchor GitHub gives a heading. Every row is a heading of this doc set, or of Keep a
+    /// Changelog's own changelog, with the anchor GitHub rendered for it. The first twelve are the doc set's headings the
+    /// earlier rule got wrong: it trimmed what was left once the punctuation and symbols were dropped, and turned each
+    /// run of spaces into one hyphen, so a link written the way GitHub needs it was reported dead and one written the
+    /// natural way passed and went nowhere (#2742).
+    /// </summary>
+    [Theory]
+    [InlineData("\u26A1 Get it in one line", "-get-it-in-one-line")]
+    [InlineData("Privacy & Telemetry", "privacy--telemetry")]
+    [InlineData("DNS & Hosts", "dns--hosts")]
+    [InlineData("Profile Export / Import", "profile-export--import")]
+    [InlineData("Resource History \U0001F52C", "resource-history-")]
+    [InlineData("Settings Watchdog \U0001F52C", "settings-watchdog-")]
+    [InlineData("Scheduled Maintenance \U0001F52C", "scheduled-maintenance-")]
+    [InlineData("Notification Blocker \U0001F52C", "notification-blocker-")]
+    [InlineData("Gaming Profile \U0001F52C", "gaming-profile-")]
+    [InlineData("CLI Interface \U0001F52C", "cli-interface-")]
+    [InlineData("By design \u2014 allowed", "by-design--allowed")]
+    [InlineData("By design \u2014 forbidden", "by-design--forbidden")]
+    [InlineData("SysManager for Windows", "sysmanager-for-windows")]
+    [InlineData("What the app stores, and where", "what-the-app-stores-and-where")]
+    [InlineData("Why portable, and why there is no installer", "why-portable-and-why-there-is-no-installer")]
+    [InlineData("2.0.0 - 2026-06-07", "200---2026-06-07")]
+    public void TheAnchorSlug_IsTheOneGitHubGives(string heading, string anchor) => Assert.Equal(anchor, Slug(heading));
 
-    /// <summary>A markdown heading of level 2 or deeper, capturing its text.</summary>
-    [GeneratedRegex(@"^#{2,}\s+(.*)$", RegexOptions.Compiled)]
-    private static partial Regex HeadingLine();
+    /// <summary>
+    /// A page's anchors leave out the comments in a fenced code block, which the guard used to count as headings (nine
+    /// of them across CONTRIBUTING, README, SECURITY and TESTING), and number a repeated heading from <c>-1</c>, as
+    /// GitHub does (#2742).
+    /// </summary>
+    [Fact]
+    public void ThePageAnchors_LeaveOutCodeAndNumberRepeats()
+    {
+        string[] page =
+        [
+            "# Changelog",
+            "## 2.0.0 - 2026-06-07",
+            "### Fixed",
+            "````powershell",
+            "# Compare the output to the published hash",
+            "```",
+            "## Still inside the block",
+            "````",
+            "## 1.1.2 - 2024-09-27",
+            "### Fixed",
+            "   ~~~",
+            "## Not a heading either",
+            "   ~~~",
+            "### Fixed ###",
+            "#Not a heading",
+            "####### Not one either",
+        ];
+
+        Assert.Equal(["changelog", "200---2026-06-07", "fixed", "112---2024-09-27", "fixed-1", "fixed-2"], PageAnchors(page));
+    }
+
+    /// <summary>
+    /// The headings the slug cannot read are the ones whose text on GitHub is not their source; an underscore inside a
+    /// word, a version in brackets and punctuation are read as GitHub reads them (#2742).
+    /// </summary>
+    [Theory]
+    [InlineData("A [linked](https://example.com) heading", true)]
+    [InlineData("A [referenced][docs] heading", true)]
+    [InlineData("<span>Tagged</span> heading", true)]
+    [InlineData("_Emphasised_ heading", true)]
+    [InlineData("An emphasised _word_", true)]
+    [InlineData("The IS_ADMIN flag", false)]
+    [InlineData("[1.136.62] - 2026-10-31", false)]
+    [InlineData("C# and .NET 10", false)]
+    [InlineData("Privacy & Telemetry", false)]
+    public void TheHeadingsTheSlugCannotRead_AreTheOnesGitHubRendersDifferently(string heading, bool unreadable) =>
+        Assert.Equal(unreadable, HeadingMarkupTheSlugCannotRead().IsMatch(heading));
+
+    /// <summary>
+    /// GitHub's anchor for a heading: lower-cased, with everything but word characters, hyphens and spaces dropped, and
+    /// each space turned into its own hyphen. Nothing is trimmed once the rest is dropped, so a heading that starts with
+    /// an emoji gets a leading hyphen and "DNS &amp; Hosts" two hyphens in a row.
+    /// </summary>
+    private static string Slug(string heading) =>
+        NonAnchorCharacter().Replace(heading.Trim().ToLowerInvariant(), string.Empty).Replace(' ', '-');
+
+    /// <summary>
+    /// The anchors GitHub gives a page, in order: one per heading outside a fenced code block, slugged by
+    /// <see cref="Slug"/>, a repeated one numbered from <c>-1</c>.
+    /// </summary>
+    private static List<string> PageAnchors(IEnumerable<string> lines)
+    {
+        var anchors = new List<string>();
+        var seen = new Dictionary<string, int>(StringComparer.Ordinal);
+        foreach (var (_, text) in PageHeadings(lines))
+        {
+            var slug = Slug(text);
+            var repeats = seen.GetValueOrDefault(slug);
+            seen[slug] = repeats + 1;
+            anchors.Add(repeats == 0 ? slug : $"{slug}-{repeats}");
+        }
+        return anchors;
+    }
+
+    /// <summary>
+    /// Every heading of a page outside a fenced code block, with its one-based line and its text, without the closing
+    /// run of <c>#</c> a heading may end on.
+    /// </summary>
+    private static IEnumerable<(int Line, string Text)> PageHeadings(IEnumerable<string> lines)
+    {
+        string? fence = null;
+        var number = 0;
+        foreach (var line in lines)
+        {
+            number++;
+            var code = line.Trim();
+            if (fence is not null)
+            {
+                // A fence closes on a line of its own character alone, at least as long as the one that opened it.
+                if (code.Length >= fence.Length && code.All(c => c == fence[0])) fence = null;
+            }
+            else if (CodeFenceOpening().Match(code) is { Success: true } opening)
+                fence = opening.Value;
+            else if (AtxHeading().Match(line) is { Success: true } heading)
+                yield return (number, heading.Groups["text"].Value);
+        }
+    }
+
+    /// <summary>A markdown heading, capturing its text without the closing run of <c>#</c> it may end on.</summary>
+    [GeneratedRegex(@"^ {0,3}#{1,6}(?:[ \t]+(?<text>.*?))?(?:[ \t]+#+)?[ \t]*$")]
+    private static partial Regex AtxHeading();
+
+    /// <summary>The run of backticks or tildes a fenced code block opens with.</summary>
+    [GeneratedRegex(@"^(?:`{3,}|~{3,})")]
+    private static partial Regex CodeFenceOpening();
+
+    /// <summary>
+    /// A link, an image, inline HTML or emphasis written with underscores: GitHub builds a heading's anchor from its
+    /// rendered text, and for these that is not the source <see cref="Slug"/> reads.
+    /// </summary>
+    [GeneratedRegex(@"\]\(|\]\[|<|(?:^|\s)_|_(?:\s|$)")]
+    private static partial Regex HeadingMarkupTheSlugCannotRead();
 
     /// <summary>An in-page markdown link, capturing the anchor.</summary>
     [GeneratedRegex(@"\]\(#([^)]+)\)", RegexOptions.Compiled)]
@@ -10060,8 +10180,8 @@ public partial class ArchitectureTests
     [GeneratedRegex(@"<!--.*?-->", RegexOptions.Compiled | RegexOptions.Singleline)]
     private static partial Regex XmlComment();
 
-    /// <summary>Characters GitHub strips when building an anchor.</summary>
-    [GeneratedRegex(@"[^\w\s-]", RegexOptions.Compiled)]
+    /// <summary>Characters GitHub strips when building an anchor: all but word characters, hyphens and spaces.</summary>
+    [GeneratedRegex(@"[^\w\- ]", RegexOptions.Compiled)]
     private static partial Regex NonAnchorCharacter();
 
     /// <summary>
@@ -17560,7 +17680,7 @@ public partial class ArchitectureTests
     /// The first line of a member: modifiers, then a name and its opening parenthesis. A generated hook is declared
     /// <c>partial void</c>, with no access modifier, so <c>partial</c> starts one too.
     /// </summary>
-    [GeneratedRegex(@"^\s*(?:(?:private|internal|public|protected|partial|static|async|override|virtual)\s+)+\S.*?\b\w+\s*\(",
+    [GeneratedRegex(@"^\s*(?:(?:private|internal|public|protected|partial|static|async|override|virtual)\s+)+\S.*?\b(?<name>\w+)\s*\(",
                     RegexOptions.CultureInvariant)]
     private static partial Regex MemberDeclaration();
 
@@ -19537,6 +19657,19 @@ public partial class ArchitectureTests
     /// <c>SystemHealthViewModelTests</c>, whose factories use target-typed <c>new(...)</c> and never write
     /// the type name after <c>new</c> — this guard reported both as uncovered on its first run while both
     /// pin elevation correctly. Comments are stripped first, so a mention is a mention in code.</para>
+    /// <para>A view model is read for every decision it makes on the answer, not only a bare <c>if</c> (#2742). The
+    /// two patterns this used saw only <c>if (IsElevated)</c> and <c>if (AdminHelper.IsElevated())</c>, in either
+    /// polarity, so a compound condition, a ternary, a switch arm, a <c>CanExecute</c> expression, the answer passed
+    /// on to a method, the base's <c>RequireElevation</c> gate and an injected probe were never counted: thirteen view
+    /// models were seen to branch out of the 26 that do. Environment Variables branches only inside compound
+    /// conditions, refusing a System-variable change and choosing Restore's prompt, and none of its tests decided the
+    /// answer. Literals and comments are blanked first, so a log template naming the property is not a read.</para>
+    /// <para>A test pins a view model when one MEMBER of a test class names it and decides the answer, in its code,
+    /// itself or through a helper of the same class it calls, as <c>NewVm(elevated: false)</c> does (#2742). Read by
+    /// file, with literals kept, this file pinned every view model its other guards name, nineteen of them, because this
+    /// guard's own messages hold both markers. And a file was enough when the marker belonged to another view model:
+    /// two test classes that force elevation for their own tab and also name the shell counted as pinning it, and no
+    /// test decided its title and badge.</para>
     /// </remarks>
     [Fact]
     public void EveryViewModelThatBranchesOnElevation_HasATestThatPinsIt()
@@ -19554,11 +19687,14 @@ public partial class ArchitectureTests
         var testsDir = Path.Combine(
             Directory.GetParent(TestPaths.AppProject())!.FullName, "SysManager.Tests");
 
-        var testSources = Directory.GetFiles(testsDir, "*.cs")
-            .ToDictionary(p => Path.GetFileName(p)!, p => WithoutComments(File.ReadAllText(p)),
-                          StringComparer.Ordinal);
-        Assert.True(testSources.Count >= 100,
-            $"only {testSources.Count} test files were read — this guard is looking at the wrong folder");
+        // Each test class's members, literals and comments blanked: 404 classes and 8,643 members when measured.
+        var testClasses = Directory.GetFiles(testsDir, "*.cs")
+            .SelectMany(p => TopLevelClasses(SourceBraces.CodeOnly(File.ReadAllText(p))))
+            .Select(c => (c.Name, Members: ClassMembers(c.Body)))
+            .ToList();
+        Assert.True(testClasses.Count >= 300 && testClasses.Sum(c => c.Members.Count) >= 6000,
+            $"only {testClasses.Count} test classes and {testClasses.Sum(c => c.Members.Count)} members were read — "
+            + "this guard is looking at the wrong folder");
 
         var branching = 0;
         var offenders = new List<string>();
@@ -19567,51 +19703,65 @@ public partial class ArchitectureTests
                      .OrderBy(p => p, StringComparer.Ordinal))
         {
             var name = Path.GetFileNameWithoutExtension(path);
-            var source = WithoutComments(File.ReadAllText(path));
-
-            var cached = CachedElevationBranch().Matches(source).Count;
-            var callTime = CallTimeElevationBranch().Matches(source).Count;
-            if (cached + callTime == 0) continue;
+            var (cached, callTime, probe) = ElevationReads(SourceBraces.CodeOnly(File.ReadAllText(path)));
+            if (cached + callTime + probe == 0) continue;
             branching++;
 
             if (cannotBePinnedYet.ContainsKey(name)) continue;
 
-            // Files that NAME this view model, not files that write `new <Name>(`. Matching the
+            // Members that NAME this view model, not members that write `new <Name>(`. Matching the
             // construction misses every factory using target-typed `new(...)`, which is how both
             // StandbyMemoryTests and SystemHealthViewModelTests build theirs — and this guard reported
-            // exactly those two as uncovered on its first run, while both do pin elevation. Comments are
-            // already stripped, so a mention here is a mention in code.
-            var covering = testSources
-                .Where(kv => kv.Value.Contains(name, StringComparison.Ordinal))
-                .ToList();
+            // exactly those two as uncovered on its first run, while both do pin elevation. Literals and
+            // comments are already blanked, so a mention here is a mention in code.
+            var mention = new Regex($@"\b{name}\b", RegexOptions.CultureInvariant);
 
-            var pinned = covering.Any(kv =>
-                kv.Value.Contains("ForceElevation", StringComparison.Ordinal)
-                || kv.Value.Contains("isElevated:", StringComparison.Ordinal)
-                || (callTime == 0 && ElevationAssignment().IsMatch(kv.Value)));
+            // Assigning the property reaches only a cached read: not Windows' answer read at call time, nor a probe.
+            bool Decides(string text) =>
+                text.Contains("ForceElevation", StringComparison.Ordinal)
+                || text.Contains("isElevated:", StringComparison.Ordinal)
+                || (callTime == 0 && probe == 0 && ElevationAssignment().IsMatch(text));
+
+            var covering = new List<string>();
+            var pinned = false;
+            foreach (var (className, members) in testClasses)
+            {
+                var naming = members.Where(m => m.Text.Contains(name, StringComparison.Ordinal) && mention.IsMatch(m.Text))
+                    .Select(m => m.Name).ToHashSet(StringComparer.Ordinal);
+                if (naming.Count == 0) continue;
+                var deciding = members.Where(m => Decides(m.Text)).Select(m => m.Name).ToHashSet(StringComparer.Ordinal);
+
+                foreach (var member in members)
+                {
+                    var helpers = member.Calls.Where(c => c != member.Name).ToList();
+                    if (!naming.Contains(member.Name) && !helpers.Any(naming.Contains)) continue;
+                    covering.Add($"{className}.{member.Name}");
+                    pinned |= deciding.Contains(member.Name) || helpers.Any(deciding.Contains);
+                }
+            }
 
             if (!pinned)
             {
                 var where = covering.Count == 0
-                    ? "no test file mentions it"
-                    : string.Join(", ", covering.Select(kv => kv.Key));
-                offenders.Add($"{name} ({cached} cached + {callTime} call-time branch(es)) — {where}");
+                    ? "no test names it"
+                    : string.Join(", ", covering.Distinct().Take(6)) + (covering.Count > 6 ? ", …" : "");
+                offenders.Add($"{name} ({cached} cached + {callTime} call-time + {probe} probe read(s)) — {where}");
             }
         }
 
-        // Ten when measured. A collapse means the branch patterns stopped matching and a clean result
-        // would prove nothing at all.
-        Assert.True(branching >= 8,
+        // 26 when measured, against the 13 a bare `if` showed. A collapse means the read patterns stopped matching and
+        // a clean result would prove nothing at all.
+        Assert.True(branching >= 22,
             $"only {branching} view models were seen to branch on elevation — the patterns are out of "
             + "date, so this guard is checking almost nothing.");
 
         Assert.True(offenders.Count == 0,
             "These view models behave differently when elevated and no test decides which branch runs, so "
             + "each one asserts whatever the host happens to be: the elevated path on CI, the other one on "
-            + "a developer machine, and neither verified on both. Pin it with "
-            + "AdminHelper.ForceElevation(bool) — or, for a cached IsElevated, by assigning the property — "
-            + "or name the view model in the exception list in this test WITH the reason it cannot be "
-            + "pinned yet:\n  "
+            + "a developer machine, and neither verified on both. Pin it in the test that names the view "
+            + "model, or in a helper of the same class that the test calls: with AdminHelper.ForceElevation(bool), "
+            + "by passing the probe as isElevated:, or, for a cached IsElevated, by assigning the property. Or name "
+            + "the view model in the exception list in this test WITH the reason it cannot be pinned yet:\n  "
             + string.Join("\n  ", offenders)
             + $"\n({branching} view models branch on elevation)");
 
@@ -19622,13 +19772,88 @@ public partial class ArchitectureTests
         Assert.Empty(stale);
     }
 
-    /// <summary>A branch on the cached <c>IsElevated</c> property, in either polarity.</summary>
-    [GeneratedRegex(@"if\s*\(\s*!?\s*IsElevated\s*\)", RegexOptions.CultureInvariant)]
-    private static partial Regex CachedElevationBranch();
+    /// <summary>
+    /// The members of a class body in order: each one's name, its text up to the next member, and the names it calls.
+    /// </summary>
+    private static List<(string Name, string Text, HashSet<string> Calls)> ClassMembers(string body)
+    {
+        var lines = body.Split('\n');
+        var starts = Enumerable.Range(0, lines.Length).Where(i => MemberDeclaration().IsMatch(lines[i])).ToList();
+        return
+        [
+            .. starts.Select((at, k) =>
+            {
+                var text = string.Join('\n', lines[at..(k + 1 < starts.Count ? starts[k + 1] : lines.Length)]);
+                return (MemberDeclaration().Match(lines[at]).Groups["name"].Value, text,
+                    CallTarget().Matches(text).Select(m => m.Groups["callee"].Value).ToHashSet(StringComparer.Ordinal));
+            }),
+        ];
+    }
 
-    /// <summary>A branch on <c>AdminHelper.IsElevated()</c>, read at call time, in either polarity.</summary>
-    [GeneratedRegex(@"if\s*\(\s*!?\s*AdminHelper\.IsElevated\(\)\s*\)", RegexOptions.CultureInvariant)]
-    private static partial Regex CallTimeElevationBranch();
+    /// <summary>
+    /// How often a view model's code reads its elevation answer to decide something: through the property it caches,
+    /// or the base's gate on it; through <c>AdminHelper.IsElevated()</c> at call time; or through a probe it was
+    /// handed. A declaration, a <c>nameof</c> and the assignment that fills the property are not decisions, and are
+    /// taken out before counting.
+    /// </summary>
+    /// <param name="code">The view model's source with literals and comments blanked.</param>
+    private static (int Cached, int CallTime, int Probe) ElevationReads(string code)
+    {
+        var reads = ElevationNonRead().Replace(code, " ");
+        return (CachedElevationRead().Matches(reads).Count,
+                CallTimeElevationRead().Matches(reads).Count,
+                ProbeElevationRead().Matches(reads).Count);
+    }
+
+    /// <summary>
+    /// <see cref="ElevationReads"/> counts every decision on the answer, whatever its shape, and none of what only
+    /// names it or fills the property (#2742).
+    /// </summary>
+    [Theory]
+    [InlineData("if (!IsElevated) return;", 1, 0, 0)]
+    [InlineData("if (touchesMachine && !IsElevated) { }", 1, 0, 0)]
+    [InlineData("if (!IsElevated && _service.HasMachineBackup) { }", 1, 0, 0)]
+    [InlineData("private bool CanCreate => !IsBusy && IsElevated;", 1, 0, 0)]
+    [InlineData("StatusMessage = IsElevated ? a : b;", 1, 0, 0)]
+    [InlineData("false when !IsElevated => a,", 1, 0, 0)]
+    [InlineData("var x = (ListWasRefused, IsElevated) switch { _ => a };", 1, 0, 0)]
+    [InlineData("StatusMessage = Describe(changes, IsElevated);", 1, 0, 0)]
+    [InlineData("if (!RequireElevation(\"Adding an exclusion\")) return;", 1, 0, 0)]
+    [InlineData("if (!AdminHelper.IsElevated()) return;", 0, 1, 0)]
+    [InlineData("OpenUrl(Build(version, Helpers.AdminHelper.IsElevated()));", 0, 1, 0)]
+    [InlineData("var elevated = _isElevatedProbe();", 0, 0, 1)]
+    [InlineData("if (!_isElevatedProbe()) return;", 0, 0, 1)]
+    [InlineData("IsElevated = AdminHelper.IsElevated();", 0, 0, 0)]
+    [InlineData("IsElevated = SysManager.Helpers.AdminHelper.IsElevated();", 0, 0, 0)]
+    [InlineData("IsElevated = _isElevatedProbe();", 0, 0, 0)]
+    [InlineData("IsElevated = (isElevated ?? throw new ArgumentNullException(nameof(isElevated)))();", 0, 0, 0)]
+    [InlineData(": this(service, leftovers, AdminHelper.IsElevated) { }", 0, 0, 0)]
+    [InlineData("[ObservableProperty] private bool _isElevated;", 0, 0, 0)]
+    [InlineData("public bool IsElevated => _probe();", 0, 0, 0)]
+    [InlineData("OnPropertyChanged(nameof(IsElevated));", 0, 0, 0)]
+    [InlineData("partial void OnIsElevatedChanged(bool value) { }", 0, 0, 0)]
+    public void TheElevationReads_AreEveryDecisionOnTheAnswer(string code, int cached, int callTime, int probe) =>
+        Assert.Equal((cached, callTime, probe), ElevationReads(code));
+
+    /// <summary>
+    /// What names the elevation answer without deciding on it: a declaration, a <c>nameof</c>, and the assignment that
+    /// fills the cached property, from Windows or from a probe.
+    /// </summary>
+    [GeneratedRegex(@"\bbool\s+IsElevated\b|nameof\(\s*IsElevated\s*\)|(?<![.\w])IsElevated\s*=(?![=>])[^;]*;",
+                    RegexOptions.CultureInvariant)]
+    private static partial Regex ElevationNonRead();
+
+    /// <summary>A read of the cached <c>IsElevated</c> property, or of the base's gate on it.</summary>
+    [GeneratedRegex(@"(?<![.\w])IsElevated\b|\bRequireElevation\s*\(", RegexOptions.CultureInvariant)]
+    private static partial Regex CachedElevationRead();
+
+    /// <summary>A call to <c>AdminHelper.IsElevated()</c>, which asks Windows when it runs.</summary>
+    [GeneratedRegex(@"\bAdminHelper\.IsElevated\s*\(\s*\)", RegexOptions.CultureInvariant)]
+    private static partial Regex CallTimeElevationRead();
+
+    /// <summary>A call to an elevation probe the view model was handed, such as <c>_isElevatedProbe()</c>.</summary>
+    [GeneratedRegex(@"\b_?isElevated\w*\s*\(\s*\)", RegexOptions.CultureInvariant)]
+    private static partial Regex ProbeElevationRead();
 
     /// <summary>A test pinning a cached answer per instance, as <c>vm.IsElevated = false</c> or in an initializer.</summary>
     [GeneratedRegex(@"\bIsElevated\s*=\s*(?:true|false)\b", RegexOptions.CultureInvariant)]

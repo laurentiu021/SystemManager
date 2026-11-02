@@ -31,7 +31,7 @@ public class StartupViewModelTests
     private static StartupViewModel NewVm(bool elevated = false,
                                           Func<Task<IReadOnlyList<BootDegradation>>>? readDegradations = null,
                                           Func<Task<StartupScan>>? scan = null)
-        => new(scan ?? (() => new StartupService().ScanAsync()), () => elevated,
+        => new(scan ?? (() => new StartupService().ScanAsync()), isElevated: () => elevated,
                readDegradations ?? (() => Task.FromResult<IReadOnlyList<BootDegradation>>([])));
 
     [Fact]

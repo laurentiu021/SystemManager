@@ -87,28 +87,20 @@ public class MainWindowViewModelTests(NavSurfaceFixture fixture) : IClassFixture
     }
 
     [Fact]
-    public void ElevationBadge_IsOneOfTwoValues()
-    {
-        var vm = _nav;
-        Assert.True(vm.ElevationBadge == "Administrator" || vm.ElevationBadge == "Standard user",
-            $"Unexpected badge: {vm.ElevationBadge}");
-    }
-
-    [Fact]
     public void Title_NotEmpty()
     {
         var vm = _nav;
         Assert.False(string.IsNullOrWhiteSpace(vm.Title));
     }
 
+    // The text for each answer is decided in the unit suite (MainWindowViewModelElevationTests). This checks the shell
+    // shows the text for the answer it read, which is what a test that cannot choose that answer can prove. It used to
+    // assert the elevated title on an elevated host and the other one elsewhere, so neither was checked on both (#2742).
     [Fact]
-    public void Title_ReflectsElevation()
+    public void TheBadgeAndTitle_AreTheOnesItsElevationGives()
     {
         var vm = _nav;
-        if (vm.IsElevated)
-            Assert.Contains("Admin", vm.Title);
-        else
-            Assert.Equal("SysManager", vm.Title);
+        Assert.Equal(MainWindowViewModel.DescribeElevation(vm.IsElevated), (vm.ElevationBadge, vm.Title));
     }
 
     [Fact]

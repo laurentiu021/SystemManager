@@ -5,6 +5,7 @@
 using System.Collections.Concurrent;
 using System.IO;
 using CommunityToolkit.Mvvm.Input;
+using Microsoft.Win32;
 using SysManager.Helpers;
 using SysManager.Models;
 using SysManager.Services;
@@ -427,5 +428,56 @@ public class EnvironmentVariablesViewModelTests : IDisposable
 
         Assert.Equal(0, dialog.Calls);
         Assert.Equal("changed since", ValueOf(vm, "SAFE_USER"));
+    }
+
+    // ---------- what only an administrator can change (#2742) ----------
+    // Both decide on the elevation answer inside a compound condition, and no test decided that answer, so each test
+    // that reached them asserted whichever side the PC running it was on. Over throwaway registry keys, and each one
+    // declines before anything is written.
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task ApplyingASystemVariable_IsRefusedBeforeAnyQuestion_UnlessElevated(bool elevated)
+    {
+        using var env = new RedirectedEnvironment();
+        using var elevation = AdminHelper.ForceElevation(elevated);
+        var vm = new EnvironmentVariablesViewModel(env.Service);
+        await vm.InitializationComplete;
+        vm.NewName = "SAFE_SYSTEM";
+        vm.NewValue = "added";
+        vm.NewScope = "System";
+        vm.AddVariableCommand.Execute(null);
+        Assert.Equal(1, vm.PendingChangeCount);
+        using var dialog = new DialogAnswer(confirm: false);
+
+        await vm.ApplyChangesCommand.ExecuteAsync(null);
+
+        Assert.Equal(elevated ? 1 : 0, dialog.Calls);
+        Assert.Equal(elevated ? "Apply cancelled." : "Some changes affect System variables — relaunch as administrator first.",
+            vm.StatusMessage);
+        Assert.Null(env.GetMachine("SAFE_SYSTEM"));
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task RestoringACopyWithSystemVariables_SaysTheyAreSkipped_UnlessElevated(bool elevated)
+    {
+        using var env = new RedirectedEnvironment();
+        env.SetMachine("SAFE_MACHINE", "changed");
+        env.WriteMachineBackup("""{"Machine":{"SAFE_MACHINE":"original"}}""", RegistryValueKind.String);
+        using var elevation = AdminHelper.ForceElevation(elevated);
+        var vm = new EnvironmentVariablesViewModel(env.Service);
+        await vm.InitializationComplete;
+        using var dialog = new DialogAnswer(confirm: false);
+
+        await vm.RestoreBackupCommand.ExecuteAsync(null);
+
+        var shown = Assert.Single(dialog.Messages);
+        Assert.Equal(!elevated,
+            shown.Contains("System variables can only be restored when running as administrator", StringComparison.Ordinal));
+        Assert.Equal("Restore cancelled.", vm.StatusMessage);
+        Assert.Equal("changed", env.GetMachine("SAFE_MACHINE"));
     }
 }

@@ -63,11 +63,12 @@ public sealed class FilteredOutListViewUiTests
             },
         ];
 
-        public bool DisableEntry(ContextMenuEntry entry) => throw new NotSupportedException("nothing here changes");
+        public Task<bool> DisableEntryAsync(ContextMenuEntry entry) => throw new NotSupportedException("nothing here changes");
 
-        public bool EnableEntry(ContextMenuEntry entry) => throw new NotSupportedException("nothing here changes");
+        public Task<bool> EnableEntryAsync(ContextMenuEntry entry) => throw new NotSupportedException("nothing here changes");
 
-        public bool WriteState(ContextMenuEntry entry, bool enabled) => throw new NotSupportedException("nothing here changes");
+        public Task<bool> WriteStateAsync(ContextMenuEntry entry, bool enabled) =>
+            throw new NotSupportedException("nothing here changes");
 
         public bool IsClassicMenuEnabled() => false;
 

@@ -2,7 +2,10 @@
 // Author: laurentiu021 · https://github.com/laurentiu021/SystemManager
 // License: MIT
 
+using System.IO;
+using System.Text;
 using Microsoft.Win32;
+using NSubstitute;
 using SysManager.Models;
 using SysManager.Services;
 
@@ -44,12 +47,21 @@ public sealed class ContextMenuServiceVerbTests : IDisposable
         _user.Dispose();
         try { Registry.CurrentUser.DeleteSubKeyTree(_treeName, throwOnMissingSubKey: false); }
         catch (Exception ex) when (ex is UnauthorizedAccessException or System.Security.SecurityException) { /* best-effort cleanup */ }
+        if (Directory.Exists(_backups)) Directory.Delete(_backups, recursive: true);
     }
 
     private const string Verb = @"*\shell\TestExample";
     private const string Override = @"Software\Classes\" + Verb;
 
-    private ContextMenuService Service() => new(_root, _machine, _user);
+    private ContextMenuService Service() => new(_runner, _root, _machine, _user, _backups, _clock);
+
+    // reg.exe runs through the runner, so an export is a call on this substitute and nothing is exported for real.
+    private readonly IPowerShellRunner _runner = Substitute.For<IPowerShellRunner>();
+
+    // The exports' own folder. The real backups folder took one for every verb a test hid (#2766).
+    private readonly string _backups = Path.Combine(Path.GetTempPath(), "SysManagerCtxExports", Guid.NewGuid().ToString("N"));
+
+    private readonly HeldTimers _clock = new(new DateTimeOffset(2026, 11, 2, 12, 0, 0, TimeSpan.Zero));
 
     /// <summary>Registers a verb with a command, the way a program's installer does.</summary>
     private void GivenVerb(string path = Verb, string? muiVerb = null, bool hidden = false)
@@ -77,13 +89,64 @@ public sealed class ContextMenuServiceVerbTests : IDisposable
         IsEnabled = enabled,
     };
 
+    /// <summary>
+    /// Hiding a verb first exports its key through the runner, as reg.exe in the OEM code page, into the service's
+    /// backup folder (#2766).
+    /// </summary>
+    /// <remarks>
+    /// The export started reg.exe itself, so every test that hid a verb ran reg.exe against the real registry, into
+    /// the real backups folder.
+    /// </remarks>
     [Fact]
-    public void DisableEntry_HidesAVerbThroughItsOwnKey_AndWritesNoPerUserKey()
+    public async Task HidingAVerb_ExportsItsKeyThroughTheRunner_IntoTheBackupFolder()
+    {
+        GivenVerb();
+
+        Assert.True(await Service().DisableEntryAsync(VerbRow(enabled: true)));
+
+        var stamp = _clock.GetLocalNow().ToString("yyyyMMdd_HHmmss", System.Globalization.CultureInfo.InvariantCulture);
+        var file = Path.Combine(_backups, $"HKCR___shell_TestExample_{stamp}.reg");
+        await _runner.Received(1).RunProcessAsync("reg.exe",
+            $"export \"HKEY_CLASSES_ROOT\\{Verb}\" \"{file}\" /y", Arg.Any<CancellationToken>(), PowerShellRunner.OemEncoding);
+    }
+
+    /// <summary>
+    /// An export that does not finish is cancelled when its time runs out, which is what makes the runner stop reg.exe,
+    /// and the verb is hidden all the same (#2766).
+    /// </summary>
+    /// <remarks>It waited five seconds for reg.exe and left it running.</remarks>
+    [Fact]
+    public async Task AnExportThatHangs_IsCancelledAtItsTimeout_AndTheVerbIsHiddenAnyway()
+    {
+        GivenVerb();
+        CancellationToken given = default;
+        _runner.RunProcessAsync("reg.exe", Arg.Any<string>(), Arg.Any<CancellationToken>(), Arg.Any<Encoding?>())
+            .Returns(call =>
+            {
+                given = call.Arg<CancellationToken>();
+                var hung = new TaskCompletionSource<int>(TaskCreationOptions.RunContinuationsAsynchronously);
+                given.Register(() => hung.TrySetCanceled(given));
+                return hung.Task;
+            });
+
+        var hiding = Service().DisableEntryAsync(VerbRow(enabled: true));
+        Assert.False(hiding.IsCompleted);
+        Assert.Equal(ContextMenuService.BackupTimeout, _clock.OnlyDue);
+        _clock.FireAll();
+
+        Assert.True(await hiding.WaitAsync(TimeSpan.FromSeconds(10)));
+        Assert.True(given.IsCancellationRequested);
+        using var key = _root.OpenSubKey(Verb);
+        Assert.NotNull(key!.GetValue("LegacyDisable"));
+    }
+
+    [Fact]
+    public async Task DisableEntry_HidesAVerbThroughItsOwnKey_AndWritesNoPerUserKey()
     {
         GivenVerb();
         var entry = VerbRow(enabled: true);
 
-        Assert.True(Service().DisableEntry(entry));
+        Assert.True(await Service().DisableEntryAsync(entry));
 
         Assert.False(entry.IsEnabled);
         using var key = _root.OpenSubKey(Verb);
@@ -100,11 +163,11 @@ public sealed class ContextMenuServiceVerbTests : IDisposable
     /// reached.
     /// </remarks>
     [Fact]
-    public void DisableEntry_OnAVerbWhoseKeyIsGone_FailsAndCreatesNothing()
+    public async Task DisableEntry_OnAVerbWhoseKeyIsGone_FailsAndCreatesNothing()
     {
         var entry = VerbRow(enabled: true);
 
-        Assert.False(Service().DisableEntry(entry));
+        Assert.False(await Service().DisableEntryAsync(entry));
 
         Assert.True(entry.IsEnabled);
         Assert.Null(_user.OpenSubKey(Override));
@@ -119,13 +182,13 @@ public sealed class ContextMenuServiceVerbTests : IDisposable
     /// was uninstalled, the empty per-user key was a verb with no command.
     /// </remarks>
     [Fact]
-    public void EnableEntry_ShowsTheVerb_AndRemovesTheEmptyPerUserKeyOverIt()
+    public async Task EnableEntry_ShowsTheVerb_AndRemovesTheEmptyPerUserKeyOverIt()
     {
         GivenVerb(hidden: true);
         GivenOverride(("LegacyDisable", ""));
         var entry = VerbRow(enabled: false);
 
-        Assert.True(Service().EnableEntry(entry));
+        Assert.True(await Service().EnableEntryAsync(entry));
 
         Assert.True(entry.IsEnabled);
         using var key = _root.OpenSubKey(Verb);
@@ -135,12 +198,12 @@ public sealed class ContextMenuServiceVerbTests : IDisposable
 
     /// <summary>A per-user key that holds something else is kept; only LegacyDisable comes off it.</summary>
     [Fact]
-    public void EnableEntry_KeepsAPerUserKeyThatHoldsSomethingElse()
+    public async Task EnableEntry_KeepsAPerUserKeyThatHoldsSomethingElse()
     {
         GivenVerb();
         GivenOverride(("LegacyDisable", ""), ("Icon", "app.exe,0"));
 
-        Assert.True(Service().EnableEntry(VerbRow(enabled: false)));
+        Assert.True(await Service().EnableEntryAsync(VerbRow(enabled: false)));
 
         using var key = _user.OpenSubKey(Override);
         Assert.NotNull(key);
@@ -153,12 +216,12 @@ public sealed class ContextMenuServiceVerbTests : IDisposable
     /// </summary>
     /// <remarks>Nothing hides a verb with no key, and run elevated the old failure blamed TrustedInstaller.</remarks>
     [Fact]
-    public void EnableEntry_OnAVerbThatIsGone_SucceedsAndClearsItsPerUserKey()
+    public async Task EnableEntry_OnAVerbThatIsGone_SucceedsAndClearsItsPerUserKey()
     {
         GivenOverride(("LegacyDisable", ""));
         var entry = VerbRow(enabled: false);
 
-        Assert.True(Service().EnableEntry(entry));
+        Assert.True(await Service().EnableEntryAsync(entry));
 
         Assert.True(entry.IsEnabled);
         Assert.Null(_user.OpenSubKey(Override));

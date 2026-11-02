@@ -83,16 +83,40 @@ public sealed partial class ContextMenuService : IContextMenuService
     /// <summary>Where the menu style is kept: HKEY_CURRENT_USER, or a test's stand-in for it.</summary>
     private readonly RegistryKey _currentUser;
 
+    /// <summary>Runs reg.exe for the export made before each change.</summary>
+    private readonly IPowerShellRunner _runner;
+
+    /// <summary>Where the exports go: <c>Backups\ContextMenu</c> in SysManager's folder, or a test's own.</summary>
+    private readonly string _backupDir;
+
+    /// <summary>The clock an export is named by and timed out on.</summary>
+    private readonly TimeProvider _time;
+
+    /// <summary>How long reg.exe gets to export a key before the change goes ahead without it.</summary>
+    internal static readonly TimeSpan BackupTimeout = TimeSpan.FromSeconds(5);
+
     /// <summary>
     /// Reads from <c>HKEY_CLASSES_ROOT</c>, <c>HKEY_LOCAL_MACHINE</c> and <c>HKEY_CURRENT_USER</c> unless handed
-    /// somewhere else.
+    /// somewhere else, and exports a key through <paramref name="runner"/> before it changes it.
     /// </summary>
-    public ContextMenuService(RegistryKey? classesRoot = null, RegistryKey? localMachine = null,
-                              RegistryKey? currentUser = null)
+    /// <param name="runner">The one way this app runs a program (#2766).</param>
+    /// <param name="classesRoot">Stands in for <c>HKEY_CLASSES_ROOT</c>.</param>
+    /// <param name="localMachine">Stands in for <c>HKEY_LOCAL_MACHINE</c>.</param>
+    /// <param name="currentUser">Stands in for <c>HKEY_CURRENT_USER</c>.</param>
+    /// <param name="backupDir">
+    /// Where the exports go. A test's own folder: every run of the suite exported the real Blocked list into the
+    /// user's backups, and pruned what was there (#2766).
+    /// </param>
+    /// <param name="time">The clock; the system's when not given.</param>
+    public ContextMenuService(IPowerShellRunner runner, RegistryKey? classesRoot = null, RegistryKey? localMachine = null,
+                              RegistryKey? currentUser = null, string? backupDir = null, TimeProvider? time = null)
     {
+        _runner = runner ?? throw new ArgumentNullException(nameof(runner));
         _classesRoot = classesRoot ?? Registry.ClassesRoot;
         _localMachine = localMachine ?? Registry.LocalMachine;
         _currentUser = currentUser ?? Registry.CurrentUser;
+        _backupDir = backupDir ?? Path.Combine(AppDataFolders.Backups, "ContextMenu");
+        _time = time ?? TimeProvider.System;
     }
 
     /// <summary>
@@ -422,7 +446,7 @@ public sealed partial class ContextMenuService : IContextMenuService
     /// <para>Takes effect when Explorer next loads the handler, which in practice means after a restart of
     /// Explorer — hence the button for it rather than leaving the user to conclude nothing happened.</para>
     /// </remarks>
-    private bool SetHandlerBlocked(ContextMenuEntry entry, bool blocked)
+    private async Task<bool> SetHandlerBlockedAsync(ContextMenuEntry entry, bool blocked)
     {
         if (!ClsidPattern().IsMatch(entry.Clsid))
         {
@@ -430,7 +454,7 @@ public sealed partial class ContextMenuService : IContextMenuService
             return false;
         }
 
-        BackupRegistry($@"HKLM\{BlockedListPath}");
+        await BackupAsync($@"HKLM\{BlockedListPath}").ConfigureAwait(false);
 
         if (blocked)
         {
@@ -456,7 +480,7 @@ public sealed partial class ContextMenuService : IContextMenuService
             blockedForUser = user?.GetValue(entry.Clsid) is not null;
         if (blockedForUser)
         {
-            BackupRegistry($@"HKCU\{BlockedListPath}");
+            await BackupAsync($@"HKCU\{BlockedListPath}").ConfigureAwait(false);
             using var userList = _currentUser.OpenSubKey(BlockedListPath, writable: true);
             userList?.DeleteValue(entry.Clsid, throwOnMissingValue: false);
             Log.Information("Shell extension unblocked for this user: {Name} ({Clsid})", entry.Name, entry.Clsid);
@@ -489,11 +513,11 @@ public sealed partial class ContextMenuService : IContextMenuService
     /// put the switch back and offer to restart elevated, which is the same thing it already does for a
     /// verb owned by TrustedInstaller.
     /// </remarks>
-    private bool TryBlock(ContextMenuEntry entry, bool blocked)
+    private async Task<bool> TryBlockAsync(ContextMenuEntry entry, bool blocked)
     {
         try
         {
-            return SetHandlerBlocked(entry, blocked);
+            return await SetHandlerBlockedAsync(entry, blocked).ConfigureAwait(false);
         }
         catch (SecurityException ex)
         {
@@ -518,10 +542,12 @@ public sealed partial class ContextMenuService : IContextMenuService
     /// without deleting any data. Falls back to HKCU override if HKCR
     /// is not writable (system-owned entries protected by TrustedInstaller).
     /// </summary>
-    public bool DisableEntry(ContextMenuEntry entry) => Applied(entry, WriteDisabled(entry), enabled: false);
+    public async Task<bool> DisableEntryAsync(ContextMenuEntry entry)
+        => Applied(entry, await WriteDisabledAsync(entry).ConfigureAwait(false), enabled: false);
 
     /// <inheritdoc/>
-    public bool WriteState(ContextMenuEntry entry, bool enabled) => enabled ? WriteEnabled(entry) : WriteDisabled(entry);
+    public Task<bool> WriteStateAsync(ContextMenuEntry entry, bool enabled)
+        => enabled ? WriteEnabledAsync(entry) : WriteDisabledAsync(entry);
 
     // The row follows a write Windows accepted, and only then.
     private static bool Applied(ContextMenuEntry entry, bool written, bool enabled)
@@ -530,15 +556,15 @@ public sealed partial class ContextMenuService : IContextMenuService
         return written;
     }
 
-    /// <summary>The registry half of <see cref="DisableEntry"/>: the entry itself is left alone.</summary>
-    private bool WriteDisabled(ContextMenuEntry entry)
+    /// <summary>The registry half of <see cref="DisableEntryAsync"/>: the entry itself is left alone.</summary>
+    private async Task<bool> WriteDisabledAsync(ContextMenuEntry entry)
     {
         if (entry.Kind == ContextMenuEntryKind.Handler)
-            return TryBlock(entry, blocked: true);
+            return await TryBlockAsync(entry, blocked: true).ConfigureAwait(false);
 
         try
         {
-            BackupRegistry(entry.RegistryPath);
+            await BackupAsync(entry.RegistryPath).ConfigureAwait(false);
 
             var relativePath = entry.RegistryPath.Replace(@"HKCR\", "", StringComparison.OrdinalIgnoreCase);
 
@@ -573,17 +599,18 @@ public sealed partial class ContextMenuService : IContextMenuService
     /// value from the shell subkey and from any HKCU override over it, and
     /// removing that override once it holds nothing else.
     /// </summary>
-    public bool EnableEntry(ContextMenuEntry entry) => Applied(entry, WriteEnabled(entry), enabled: true);
+    public async Task<bool> EnableEntryAsync(ContextMenuEntry entry)
+        => Applied(entry, await WriteEnabledAsync(entry).ConfigureAwait(false), enabled: true);
 
-    /// <summary>The registry half of <see cref="EnableEntry"/>: the entry itself is left alone.</summary>
-    private bool WriteEnabled(ContextMenuEntry entry)
+    /// <summary>The registry half of <see cref="EnableEntryAsync"/>: the entry itself is left alone.</summary>
+    private async Task<bool> WriteEnabledAsync(ContextMenuEntry entry)
     {
         if (entry.Kind == ContextMenuEntryKind.Handler)
-            return TryBlock(entry, blocked: false);
+            return await TryBlockAsync(entry, blocked: false).ConfigureAwait(false);
 
         try
         {
-            BackupRegistry(entry.RegistryPath);
+            await BackupAsync(entry.RegistryPath).ConfigureAwait(false);
 
             var relativePath = entry.RegistryPath.Replace(@"HKCR\", "", StringComparison.OrdinalIgnoreCase);
 
@@ -778,8 +805,10 @@ public sealed partial class ContextMenuService : IContextMenuService
     /// restore button — importing a stale export rewrites the key wholesale, including re-creating entries the
     /// user has since removed, which would be a larger mutation than anything else on that tab to reach a
     /// state the enable/disable toggle already reaches (#2369).
+    /// <para>reg.exe runs through the runner, which stops it when <see cref="BackupTimeout"/> runs out. It was
+    /// started here, waited for five seconds and left running (#2766).</para>
     /// </remarks>
-    public static void BackupRegistry(string registryPath)
+    internal async Task BackupAsync(string registryPath)
     {
         // Refuse before anything is built: a path that cannot be passed safely cannot be backed up
         // safely either, and the backup is best-effort — skipping one is strictly better than handing
@@ -796,40 +825,34 @@ public sealed partial class ContextMenuService : IContextMenuService
 
         try
         {
-            var backupDir = Path.Combine(AppDataFolders.Backups, "ContextMenu");
-            Directory.CreateDirectory(backupDir);
+            Directory.CreateDirectory(_backupDir);
 
-            var timestamp = DateTime.Now.ToString("yyyyMMdd_HHmmss", CultureInfo.InvariantCulture);
+            var timestamp = _time.GetLocalNow().ToString("yyyyMMdd_HHmmss", CultureInfo.InvariantCulture);
             var safeName = string.Join("_", registryPath.Split(Path.GetInvalidFileNameChars()));
-            var backupFile = Path.Combine(backupDir, $"{safeName}_{timestamp}.reg");
+            var backupFile = Path.Combine(_backupDir, $"{safeName}_{timestamp}.reg");
 
             // Convert HKCR path to full form for reg.exe
             var fullPath = registryPath.Replace("HKCR", "HKEY_CLASSES_ROOT", StringComparison.OrdinalIgnoreCase);
 
-            var psi = new ProcessStartInfo
-            {
-                FileName = SysManager.Helpers.SystemPaths.ResolveSystemTool("reg.exe"),
-                Arguments = $"export \"{fullPath}\" \"{backupFile}\" /y",
-                UseShellExecute = false,
-                CreateNoWindow = true,
-                RedirectStandardOutput = true,
-                RedirectStandardError = true,
-                StandardOutputEncoding = PowerShellRunner.OemEncoding,
-                StandardErrorEncoding = PowerShellRunner.OemEncoding,
-            };
+            using var timeout = new CancellationTokenSource(BackupTimeout, _time);
+            // reg.exe writes the OEM code page.
+            var exitCode = await _runner.RunProcessAsync("reg.exe", $"export \"{fullPath}\" \"{backupFile}\" /y",
+                timeout.Token, PowerShellRunner.OemEncoding).ConfigureAwait(false);
 
-            using var proc = Process.Start(psi);
-            proc?.WaitForExit(5000);
-
-            if (proc is { ExitCode: 0 })
+            if (exitCode == 0)
             {
                 Log.Debug("Registry backup created: {File}", backupFile);
-                PruneBackups(backupDir, safeName);
+                PruneBackups(_backupDir, safeName);
             }
             else
             {
                 Log.Debug("Registry backup skipped (reg export returned non-zero)");
             }
+        }
+        catch (OperationCanceledException)
+        {
+            // The runner has stopped reg.exe. Best-effort, like the rest: the change goes ahead without the export.
+            Log.Debug("Registry backup skipped (reg export did not finish in {Seconds} s)", BackupTimeout.TotalSeconds);
         }
         catch (Exception ex) when (ex is IOException or InvalidOperationException or System.ComponentModel.Win32Exception)
         {

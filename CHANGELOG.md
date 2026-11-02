@@ -10,6 +10,16 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.136.87] - 2026-11-02
+
+**Right-click Menu's export before a change goes through the shared runner, which stops reg.exe when it hangs.**
+
+### Fixed
+- Right-click Menu's export of a key before each change started reg.exe itself, waited five seconds for it and left it
+  running when it took longer. It now goes through the app's shared runner, which stops reg.exe once the five seconds
+  are up; the change goes ahead without the export in that case, as it did. This was there since the tab was added in
+  1.7.0.
+
 ## [1.136.86] - 2026-11-02
 
 **Startup Manager switches a scheduled task through the app's shared runner, one run at a time.**

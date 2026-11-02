@@ -24,7 +24,7 @@ public class ContextMenuViewModelTests
 {
     private static ContextMenuViewModel NewVm()
     {
-        var vm = new ContextMenuViewModel(new ContextMenuService());
+        var vm = new ContextMenuViewModel(new ContextMenuService(Substitute.For<IPowerShellRunner>()));
         vm.InitializationComplete.GetAwaiter().GetResult();
         return vm;
     }
@@ -140,7 +140,7 @@ public class ContextMenuViewModelTests
     {
         service = Substitute.For<IContextMenuService>();
         service.ScanEntries().Returns([]);
-        service.WriteState(Arg.Any<ContextMenuEntry>(), Arg.Any<bool>()).Returns(toggleSucceeds);
+        service.WriteStateAsync(Arg.Any<ContextMenuEntry>(), Arg.Any<bool>()).Returns(toggleSucceeds);
 
         var vm = new ContextMenuViewModel(service);
         vm.InitializationComplete.GetAwaiter().GetResult();
@@ -216,7 +216,7 @@ public class ContextMenuViewModelTests
 
         // The direction matters: the command reads the switch's NEW position and asks the service to
         // match it, so an inverted call would disable what the user just turned on.
-        service.Received(1).WriteState(entry, desiredState);
+        await service.Received(1).WriteStateAsync(entry, desiredState);
     }
 
     /// <summary>
@@ -250,7 +250,7 @@ public class ContextMenuViewModelTests
 
         var service = Substitute.For<IContextMenuService>();
         service.ScanEntries().Returns([files, folders, other]);
-        service.WriteState(Arg.Any<ContextMenuEntry>(), Arg.Any<bool>()).Returns(true);
+        service.WriteStateAsync(Arg.Any<ContextMenuEntry>(), Arg.Any<bool>()).Returns(true);
         var vm = new ContextMenuViewModel(service);
         await vm.InitializationComplete;
 
@@ -262,7 +262,7 @@ public class ContextMenuViewModelTests
         Assert.Equal(!desiredState, other.IsEnabled);
         Assert.Equal(desiredState ? 2 : 1, vm.EnabledCount);
         Assert.Equal(desiredState ? 1 : 2, vm.DisabledCount);
-        service.Received(1).WriteState(files, desiredState);
+        await service.Received(1).WriteStateAsync(files, desiredState);
     }
 
     [Fact]
@@ -274,7 +274,7 @@ public class ContextMenuViewModelTests
         await vm.ToggleEntryCommand.ExecuteAsync("not an entry");
 
         Assert.Equal(0, dialog.Calls);
-        service.DidNotReceive().WriteState(Arg.Any<ContextMenuEntry>(), Arg.Any<bool>());
+        await service.DidNotReceive().WriteStateAsync(Arg.Any<ContextMenuEntry>(), Arg.Any<bool>());
     }
 
     // ── filters that hide every entry are not "run a scan" (#2811) ─────────
@@ -345,7 +345,7 @@ public class ContextMenuViewModelTests
     {
         service = Substitute.For<IContextMenuService>();
         service.ScanEntries().Returns([NewEntry(enabled: true)]);
-        service.WriteState(Arg.Any<ContextMenuEntry>(), Arg.Any<bool>()).Returns(true);
+        service.WriteStateAsync(Arg.Any<ContextMenuEntry>(), Arg.Any<bool>()).Returns(true);
         service.IsClassicMenuEnabled().Returns(classicMenu);
 
         var vm = new ContextMenuViewModel(service);
@@ -377,7 +377,7 @@ public class ContextMenuViewModelTests
         Assert.False(vm.IsClassicMenuEnabled);
         Assert.Equal("win11", vm.ActivePresetId);
         service.Received(1).EnableClassicMenu();
-        service.DidNotReceive().WriteState(Arg.Any<ContextMenuEntry>(), Arg.Any<bool>());
+        await service.DidNotReceive().WriteStateAsync(Arg.Any<ContextMenuEntry>(), Arg.Any<bool>());
     }
 
     [Fact]
@@ -390,7 +390,7 @@ public class ContextMenuViewModelTests
 
         service.DidNotReceive().EnableClassicMenu();
         service.DidNotReceive().DisableClassicMenu();
-        service.Received(1).WriteState(Arg.Any<ContextMenuEntry>(), false);
+        await service.Received(1).WriteStateAsync(Arg.Any<ContextMenuEntry>(), false);
         Assert.StartsWith("\"" + ContextMenuPreset.All["win11"].Name + "\" applied", vm.StatusMessage,
             StringComparison.Ordinal);
     }
@@ -409,10 +409,10 @@ public class ContextMenuViewModelTests
         var vm = WithThirdPartyEntry(classicMenu: false, out var service);
         var entry = Assert.Single(vm.Entries);
         var shownWhileWriting = new List<bool>();
-        service.WriteState(Arg.Any<ContextMenuEntry>(), Arg.Any<bool>()).Returns(call =>
+        service.WriteStateAsync(Arg.Any<ContextMenuEntry>(), Arg.Any<bool>()).Returns(call =>
         {
             lock (shownWhileWriting) shownWhileWriting.Add(call.Arg<ContextMenuEntry>().IsEnabled);
-            return true;
+            return Task.FromResult(true);
         });
         using var dialog = new DialogAnswer(confirm: true);
 

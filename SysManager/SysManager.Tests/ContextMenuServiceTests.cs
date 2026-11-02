@@ -3,6 +3,8 @@
 // License: MIT
 
 using System.Globalization;
+using System.IO;
+using NSubstitute;
 using SysManager.Services;
 
 namespace SysManager.Tests;
@@ -97,18 +99,22 @@ public class ContextMenuServiceTests
             $"a legitimate key name must not be refused: {path}");
 
     [Fact]
-    public void BackupRegistry_WithAHostilePath_ReturnsWithoutRunningRegExe()
+    public async Task ABackupOfAHostilePath_ReturnsWithoutRunningRegExe()
     {
         // End-to-end on the real method: refusing must not become an exception either, because the
         // backup is best-effort and a throw here would block the enable/disable the user asked for.
         //
-        // Asserts only that the call returns. It deliberately does NOT count files in the real
-        // %LOCALAPPDATA%\SysManager\Backups: BackupRegistry has no injectable directory, so reading that
-        // folder would make the test depend on the developer's own data — the failure mode this repo has
-        // already had to fix twice (#1758, #1772). The refusal itself is proven by the IsSafeRegistryPath
-        // theories above; what this adds is that the guard short-circuits instead of throwing.
-        Assert.Null(Record.Exception(() =>
-            ContextMenuService.BackupRegistry(@"HKCR\*\shell\evil"" ""C:\Windows\System32\pwned.reg"" /y")));
+        // reg.exe runs through the runner and the folder is the test's own, so the refusal shows directly: reg.exe is
+        // never asked to run and the folder is never made (#2766). It used to be asserted only by the call returning,
+        // because the real folder could not be read without depending on the developer's own data (#1758, #1772).
+        var runner = Substitute.For<IPowerShellRunner>();
+        var folder = Path.Combine(Path.GetTempPath(), "SysManagerCtxExports", Guid.NewGuid().ToString("N"));
+        var service = new ContextMenuService(runner, backupDir: folder);
+
+        await service.BackupAsync(@"HKCR\*\shell\evil"" ""C:\Windows\System32\pwned.reg"" /y");
+
+        await runner.DidNotReceiveWithAnyArgs().RunProcessAsync(default!, default!, default, default);
+        Assert.False(Directory.Exists(folder));
     }
 
     // ---------- the menu style, over a stand-in for HKEY_CURRENT_USER (#2804) ----------
@@ -120,7 +126,7 @@ public class ContextMenuServiceTests
         using var user = Microsoft.Win32.Registry.CurrentUser.CreateSubKey(name, writable: true);
         try
         {
-            var service = new ContextMenuService(currentUser: user);
+            var service = new ContextMenuService(Substitute.For<IPowerShellRunner>(), currentUser: user);
             Assert.False(service.IsClassicMenuEnabled());
 
             Assert.True(service.EnableClassicMenu());

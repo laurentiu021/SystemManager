@@ -2,6 +2,7 @@
 // Author: laurentiu021 · https://github.com/laurentiu021/SystemManager
 // License: MIT
 
+using System.Collections.Concurrent;
 using System.Runtime.InteropServices;
 using Microsoft.Win32;
 using Serilog;
@@ -18,8 +19,52 @@ namespace SysManager.Services;
 /// This mirrors the approach used by Task Manager's Startup tab and
 /// Autoruns — no data is ever deleted.
 /// </summary>
-public sealed class StartupService
+public sealed class StartupService : IDisposable
 {
+    private readonly IPowerShellRunner _runner;
+    private readonly TimeProvider _time;
+
+    // One schtasks run at a time: what it prints arrives through the runner's one event, so two at once could hand a
+    // row the other run's error.
+    private readonly SemaphoreSlim _taskGate = new(1, 1);
+
+    // Idempotent, and paired with the guarded release below, as in DnsService: a DI singleton disposed at exit.
+    private bool _disposed;
+
+    /// <summary>How long schtasks gets to change a task before it is stopped and the row says it timed out.</summary>
+    internal static readonly TimeSpan TaskChangeTimeout = TimeSpan.FromSeconds(10);
+
+    /// <summary>
+    /// Reads the startup lists, and changes a scheduled task by running schtasks through <paramref name="runner"/>.
+    /// </summary>
+    /// <param name="runner">The one way this app runs a program and reads what it prints (#2766).</param>
+    /// <param name="time">The clock the schtasks timeout runs on; the system's when not given.</param>
+    public StartupService(IPowerShellRunner runner, TimeProvider? time = null)
+    {
+        _runner = runner ?? throw new ArgumentNullException(nameof(runner));
+        _time = time ?? TimeProvider.System;
+    }
+
+    /// <summary>
+    /// Releases the gate unless <see cref="Dispose"/> has already claimed it. Releasing a disposed
+    /// <see cref="SemaphoreSlim"/> throws, and the call site is a <c>finally</c> block, where that would replace a clean
+    /// shutdown with an unhandled exception.
+    /// </summary>
+    private void ReleaseGate()
+    {
+        if (_disposed) return;
+        try { _taskGate.Release(); }
+        catch (ObjectDisposedException) { /* disposed mid-request at shutdown */ }
+    }
+
+    /// <inheritdoc/>
+    public void Dispose()
+    {
+        if (_disposed) return;
+        _disposed = true;
+        _taskGate.Dispose();
+    }
+
     // Standard Run keys
     private static readonly (string Key, StartupSource Source)[] RunKeys =
     {
@@ -612,7 +657,7 @@ public sealed class StartupService
     /// registry key. This is the same mechanism Task Manager uses.
     /// Non-destructive — the Run key value is never deleted.
     /// </summary>
-    public static Task<bool> SetEnabledAsync(StartupEntry entry, bool enabled)
+    public Task<bool> SetEnabledAsync(StartupEntry entry, bool enabled)
         => SetEnabledAsync(entry, enabled, Registry.CurrentUser, Registry.LocalMachine);
 
     /// <summary>
@@ -620,7 +665,7 @@ public sealed class StartupService
     /// <paramref name="currentUser"/> and <paramref name="localMachine"/>, so a test writes a throwaway key: on the
     /// real hive, every run of the suite left one more value in the user's own StartupApproved list (#2740).
     /// </summary>
-    internal static async Task<bool> SetEnabledAsync(
+    internal async Task<bool> SetEnabledAsync(
         StartupEntry entry, bool enabled, RegistryKey currentUser, RegistryKey localMachine)
     {
         try
@@ -732,93 +777,61 @@ public sealed class StartupService
     }
 
     /// <summary>
-    /// Enable or disable a Task Scheduler logon task via schtasks.exe.
+    /// Enable or disable a Task Scheduler logon task by running schtasks.exe through the runner.
     /// </summary>
-    private static async Task<bool> SetTaskSchedulerEnabledAsync(StartupEntry entry, bool enabled)
+    /// <remarks>
+    /// It started schtasks itself, with its own output draining, timeout and kill, so this branch could not be tested
+    /// without changing a real task (#2766). The runner stops schtasks when the timeout cancels it. The awaits resume
+    /// where the switch was flipped, so the window's own thread sets the row when the window asks.
+    /// </remarks>
+    private async Task<bool> SetTaskSchedulerEnabledAsync(StartupEntry entry, bool enabled)
     {
+        var taskPath = entry.TaskPath;
+        if (string.IsNullOrWhiteSpace(taskPath))
+        {
+            entry.StatusText = "Error — task path unknown";
+            return false;
+        }
+
+        // Reject task paths containing characters that could break argument parsing
+        if (taskPath.Contains('"') || taskPath.Contains('\0'))
+        {
+            entry.StatusText = "Error — invalid task path";
+            return false;
+        }
+
+        var args = enabled
+            ? $"/Change /TN \"{taskPath}\" /Enable"
+            : $"/Change /TN \"{taskPath}\" /Disable";
+
+        // A ConcurrentQueue, because the runner raises lines from the output reader's thread and the error reader's.
+        ConcurrentQueue<string> errors = new();
+        void OnLine(PowerShellLine line)
+        {
+            if (line.Kind == OutputKind.Error) errors.Enqueue(line.Text);
+        }
+
+        int exitCode;
+        await _taskGate.WaitAsync().ConfigureAwait(true);
+        _runner.LineReceived += OnLine;
+        // Started once the gate is held, so the time is schtasks' own and not the wait for another run.
+        using var timeout = new CancellationTokenSource(TaskChangeTimeout, _time);
         try
         {
-            var taskPath = entry.TaskPath;
-            if (string.IsNullOrWhiteSpace(taskPath))
-            {
-                entry.StatusText = "Error — task path unknown";
-                return false;
-            }
-
-            // Reject task paths containing characters that could break argument parsing
-            if (taskPath.Contains('"') || taskPath.Contains('\0'))
-            {
-                entry.StatusText = "Error — invalid task path";
-                return false;
-            }
-
-            var args = enabled
-                ? $"/Change /TN \"{taskPath}\" /Enable"
-                : $"/Change /TN \"{taskPath}\" /Disable";
-
-            var psi = new System.Diagnostics.ProcessStartInfo
-            {
-                FileName = SysManager.Helpers.SystemPaths.ResolveSystemTool("schtasks.exe"),
-                Arguments = args,
-                UseShellExecute = false,
-                CreateNoWindow = true,
-                RedirectStandardOutput = true,
-                RedirectStandardError = true,
-                // schtasks writes the OEM code page. Unset, a process with no console, as SysManager is, reads it in
-                // the ANSI code page, and the error shown on the row lost its accented letters (#2844).
-                StandardOutputEncoding = PowerShellRunner.OemEncoding,
-                StandardErrorEncoding = PowerShellRunner.OemEncoding,
-            };
-
-            using var proc = System.Diagnostics.Process.Start(psi);
-            if (proc is null)
-            {
-                entry.StatusText = "Error — could not start schtasks";
-                return false;
-            }
-
-            // Read streams BEFORE WaitForExitAsync to avoid deadlock when the
-            // pipe buffer fills up and the child process blocks on write.
-            var stderrTask = proc.StandardError.ReadToEndAsync();
-            _ = proc.StandardOutput.ReadToEndAsync(); // drain stdout to prevent deadlock
-
-            using var timeoutCts = new CancellationTokenSource(TimeSpan.FromSeconds(10));
-            try
-            {
-                await proc.WaitForExitAsync(timeoutCts.Token).ConfigureAwait(false);
-            }
-            catch (OperationCanceledException)
-            {
-                // Kill() can also throw Win32Exception (access denied / terminating) —
-                // previously that escaped to the outer Win32Exception catch, which
-                // mislabeled the timeout as "schtasks not available". Swallow the same
-                // kill-failure set PowerShellRunner's cancel-kill uses so the truthful
-                // "timed out" status is always reported.
-                try { proc.Kill(); }
-                catch (Exception ex) when (ex is InvalidOperationException or System.ComponentModel.Win32Exception or AggregateException)
-                { Log.Debug(ex, "Could not kill schtasks after timeout"); }
-                entry.StatusText = "Error — schtasks timed out";
-                return false;
-            }
-
-            string stderr;
-            try
-            {
-                stderr = (await stderrTask.WaitAsync(TimeSpan.FromSeconds(5)).ConfigureAwait(false)).Trim();
-            }
-            catch (TimeoutException)
-            {
-                stderr = string.Empty;
-            }
-
-            if (proc.ExitCode == 0)
-            {
-                entry.IsEnabled = enabled;
-                entry.StatusText = TaskStatus(enabled, entry.StartsWithWindows);
-                return true;
-            }
-
-            entry.StatusText = $"Error — {(stderr.Length > 0 ? stderr : "schtasks failed")}";
+            // schtasks writes the OEM code page. Read in the ANSI one, as a process with no console reads it unless
+            // told, the error shown on the row lost its accented letters (#2844).
+            exitCode = await _runner.RunProcessAsync("schtasks.exe", args, timeout.Token, PowerShellRunner.OemEncoding)
+                .ConfigureAwait(true);
+        }
+        catch (OperationCanceledException)
+        {
+            entry.StatusText = "Error — schtasks timed out";
+            return false;
+        }
+        catch (InvalidOperationException) when (timeout.IsCancellationRequested)
+        {
+            // The time ran out and the runner could not stop schtasks: still a timeout, as far as the row is concerned.
+            entry.StatusText = "Error — schtasks timed out";
             return false;
         }
         catch (System.ComponentModel.Win32Exception)
@@ -831,6 +844,22 @@ public sealed class StartupService
             entry.StatusText = $"Error — {ex.Message}";
             return false;
         }
+        finally
+        {
+            _runner.LineReceived -= OnLine;
+            ReleaseGate();
+        }
+
+        if (exitCode == 0)
+        {
+            entry.IsEnabled = enabled;
+            entry.StatusText = TaskStatus(enabled, entry.StartsWithWindows);
+            return true;
+        }
+
+        var stderr = string.Join(" ", errors).Trim();
+        entry.StatusText = $"Error — {(stderr.Length > 0 ? stderr : "schtasks failed")}";
+        return false;
     }
 
     /// <summary>

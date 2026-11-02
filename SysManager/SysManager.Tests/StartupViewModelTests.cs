@@ -27,12 +27,17 @@ public class StartupViewModelTests
     /// boot-delay events only when elevated, so a suite run from an administrator console would have every
     /// one of these tests open an event log and depend on what that machine last measured. The probe is
     /// injected so the test decides, not the console it was started from.
+    /// <para>The switch refuses unless a test supplies one, so nothing here writes a real startup list or runs
+    /// schtasks.</para>
     /// </remarks>
     private static StartupViewModel NewVm(bool elevated = false,
                                           Func<Task<IReadOnlyList<BootDegradation>>>? readDegradations = null,
-                                          Func<Task<StartupScan>>? scan = null)
-        => new(scan ?? (() => new StartupService().ScanAsync()), isElevated: () => elevated,
-               readDegradations ?? (() => Task.FromResult<IReadOnlyList<BootDegradation>>([])));
+                                          Func<Task<StartupScan>>? scan = null,
+                                          Func<StartupEntry, bool, Task<bool>>? setEnabled = null)
+        => new(scan ?? (() => new StartupService(Substitute.For<IPowerShellRunner>()).ScanAsync()),
+               isElevated: () => elevated,
+               readDegradations ?? (() => Task.FromResult<IReadOnlyList<BootDegradation>>([])),
+               setEnabled ?? ((_, _) => Task.FromResult(false)));
 
     [Fact]
     public void Constructor_EntriesCollectionNotNull()
@@ -132,6 +137,40 @@ public class StartupViewModelTests
         // Simulates WPF DataGrid virtualization passing a non-StartupEntry object
         var ex = Record.Exception(() => vm.OpenFileLocationCommand.Execute(42));
         Assert.Null(ex);
+    }
+
+    /// <summary>
+    /// A switch goes through the one the view model was given, and a refusal puts the row back and says why (#2766).
+    /// </summary>
+    /// <remarks>
+    /// The view model called the service's switch statically, so a test of it ran schtasks for a scheduled task.
+    /// </remarks>
+    [Fact]
+    public async Task ToggleEntry_UsesTheSwitchItWasGiven_AndPutsTheRowBackWhenWindowsRefuses()
+    {
+        var entry = new StartupEntry
+        {
+            Name = "Updater",
+            Command = "updater.exe",
+            Source = StartupSource.TaskScheduler,
+            IsEnabled = false,   // the box was just cleared
+            StatusText = "Enabled",
+        };
+        (StartupEntry Entry, bool Enabled)? asked = null;
+        var vm = NewVm(scan: () => Task.FromResult(new StartupScan([], ScheduledTasksListed: true)),
+            setEnabled: (row, enabled) =>
+            {
+                asked = (row, enabled);
+                row.StatusText = "Error — ERROR: Access is denied.";
+                return Task.FromResult(false);
+            });
+        await vm.InitializationComplete;
+
+        await vm.ToggleEntryCommand.ExecuteAsync(entry);
+
+        Assert.Equal((entry, false), asked);
+        Assert.True(entry.IsEnabled);
+        Assert.Equal("Could not toggle Updater — Error — ERROR: Access is denied.", vm.StatusMessage);
     }
 
     // ── re-entrancy guard (regression: overlapping registry writes) ──

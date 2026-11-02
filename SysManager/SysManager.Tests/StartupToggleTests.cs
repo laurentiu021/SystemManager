@@ -2,7 +2,10 @@
 // Author: laurentiu021 · https://github.com/laurentiu021/SystemManager
 // License: MIT
 
+using System.ComponentModel;
+using System.Text;
 using Microsoft.Win32;
+using NSubstitute;
 using SysManager.Models;
 using SysManager.Services;
 
@@ -21,21 +24,49 @@ public sealed class StartupToggleTests : IDisposable
     private readonly RegistryKey _currentUser;
     private readonly RegistryKey _localMachine;
 
+    // schtasks runs through the runner, so a scheduled task is switched against a substitute rather than a real task.
+    private readonly IPowerShellRunner _runner = Substitute.For<IPowerShellRunner>();
+    private readonly HeldTimers _clock = new();
+    private readonly StartupService _service;
+
     public StartupToggleTests()
     {
         _currentUser = Registry.CurrentUser.CreateSubKey(_rootName + @"\HKCU", writable: true);
         _localMachine = Registry.CurrentUser.CreateSubKey(_rootName + @"\HKLM", writable: true);
+        _service = new StartupService(_runner, _clock);
     }
 
     public void Dispose()
     {
+        _service.Dispose();
         _currentUser.Dispose();
         _localMachine.Dispose();
         Registry.CurrentUser.DeleteSubKeyTree(_rootName, throwOnMissingSubKey: false);
     }
 
     private Task<bool> SetEnabledAsync(StartupEntry entry, bool enabled)
-        => StartupService.SetEnabledAsync(entry, enabled, _currentUser, _localMachine);
+        => _service.SetEnabledAsync(entry, enabled, _currentUser, _localMachine);
+
+    /// <summary>What schtasks answers through the runner: the lines it prints on its error stream, and its exit code.</summary>
+    private void Schtasks(int exitCode, params string[] errors)
+        => _runner.RunProcessAsync("schtasks.exe", Arg.Any<string>(), Arg.Any<CancellationToken>(), Arg.Any<Encoding?>())
+            .Returns(_ =>
+            {
+                foreach (var line in errors)
+                    _runner.LineReceived += Raise.Event<Action<PowerShellLine>>(PowerShellLine.Err(line));
+                return Task.FromResult(exitCode);
+            });
+
+    /// <summary>A scheduled-task row under a folder no real task uses.</summary>
+    private static StartupEntry ATask(string name = "Updater") => new()
+    {
+        Name = name,
+        Command = "updater.exe",
+        Source = StartupSource.TaskScheduler,
+        TaskPath = @"\SysManagerTests\" + name,
+        IsEnabled = true,
+        StatusText = "Enabled",
+    };
 
     [Fact]
     public async Task SetEnabledAsync_TaskScheduler_EmptyPath_ReturnsFalseWithMessage()
@@ -104,6 +135,8 @@ public sealed class StartupToggleTests : IDisposable
     [Fact]
     public async Task SetEnabledAsync_TaskScheduler_WithBogusPath_ReturnsFalseWithSpecificError()
     {
+        // What schtasks prints for a task that does not exist. It ran the real one with this path.
+        Schtasks(exitCode: 1, "ERROR: The system cannot find the file specified.");
         var entry = new StartupEntry
         {
             Name = "BogusTask",
@@ -137,6 +170,106 @@ public sealed class StartupToggleTests : IDisposable
         await SetEnabledAsync(entry, false);
 
         Assert.True(entry.IsEnabled);
+    }
+
+    // ---------- a scheduled task, switched by schtasks through the runner (#2766) ----------
+
+    /// <summary>
+    /// Turning a scheduled task off runs schtasks through the runner, read in the OEM code page, and the row follows
+    /// what it answered (#2766).
+    /// </summary>
+    /// <remarks>
+    /// The service started schtasks itself, so no test could flip this switch without changing a real task.
+    /// </remarks>
+    [Fact]
+    public async Task ATaskSwitch_RunsSchtasksThroughTheRunner_AndTheRowFollowsIt()
+    {
+        Schtasks(exitCode: 0);
+        var entry = ATask();
+
+        Assert.True(await SetEnabledAsync(entry, false));
+
+        await _runner.Received(1).RunProcessAsync("schtasks.exe", "/Change /TN \"\\SysManagerTests\\Updater\" /Disable",
+            Arg.Any<CancellationToken>(), PowerShellRunner.OemEncoding);
+        Assert.False(entry.IsEnabled);
+        Assert.Equal(StartupService.TaskStatus(false, entry.StartsWithWindows), entry.StatusText);
+    }
+
+    /// <summary>Where schtasks refuses, the row says what it printed and keeps its state (#2766).</summary>
+    [Fact]
+    public async Task ATaskSwitchThatSchtasksRefuses_SaysWhatItPrinted_AndKeepsTheRow()
+    {
+        Schtasks(exitCode: 1, "ERROR: Access is denied.");
+        var entry = ATask();
+
+        Assert.False(await SetEnabledAsync(entry, false));
+
+        Assert.Equal("Error — ERROR: Access is denied.", entry.StatusText);
+        Assert.True(entry.IsEnabled);
+    }
+
+    /// <summary>
+    /// A schtasks run that does not finish is cancelled when the timeout runs out, which is what makes the runner stop
+    /// it, and the row says it timed out (#2766).
+    /// </summary>
+    [Fact]
+    public async Task ATaskSwitchThatHangs_IsCancelledAtTheTimeout_AndSaysSo()
+    {
+        CancellationToken given = default;
+        _runner.RunProcessAsync("schtasks.exe", Arg.Any<string>(), Arg.Any<CancellationToken>(), Arg.Any<Encoding?>())
+            .Returns(call =>
+            {
+                given = call.Arg<CancellationToken>();
+                var hung = new TaskCompletionSource<int>(TaskCreationOptions.RunContinuationsAsynchronously);
+                given.Register(() => hung.TrySetCanceled(given));
+                return hung.Task;
+            });
+        var entry = ATask();
+
+        var switching = SetEnabledAsync(entry, false);
+        Assert.False(switching.IsCompleted);
+        Assert.Equal(StartupService.TaskChangeTimeout, _clock.OnlyDue);
+        _clock.FireAll();
+
+        Assert.False(await switching.WaitAsync(TimeSpan.FromSeconds(10)));
+        Assert.True(given.IsCancellationRequested);
+        Assert.Equal("Error — schtasks timed out", entry.StatusText);
+        Assert.True(entry.IsEnabled);
+    }
+
+    /// <summary>Where schtasks cannot be started at all, the row says it is not available (#2766).</summary>
+    [Fact]
+    public async Task ATaskSwitchWhoseSchtasksCannotStart_SaysItIsNotAvailable()
+    {
+        _runner.RunProcessAsync("schtasks.exe", Arg.Any<string>(), Arg.Any<CancellationToken>(), Arg.Any<Encoding?>())
+            .Returns(Task.FromException<int>(new Win32Exception(2)));
+        var entry = ATask();
+
+        Assert.False(await SetEnabledAsync(entry, false));
+
+        Assert.Equal("Error — schtasks not available", entry.StatusText);
+    }
+
+    /// <summary>
+    /// Two switches at once run schtasks one after the other: what one run prints reaches the service through the
+    /// runner's one event, so two at once could give a row the other's error (#2766).
+    /// </summary>
+    [Fact]
+    public async Task TwoTaskSwitchesAtOnce_RunSchtasksOneAfterTheOther()
+    {
+        var first = new TaskCompletionSource<int>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var calls = 0;
+        _runner.RunProcessAsync("schtasks.exe", Arg.Any<string>(), Arg.Any<CancellationToken>(), Arg.Any<Encoding?>())
+            .Returns(_ => Interlocked.Increment(ref calls) == 1 ? first.Task : Task.FromResult(0));
+
+        var one = SetEnabledAsync(ATask("One"), false);
+        var two = SetEnabledAsync(ATask("Two"), false);
+
+        Assert.Equal(1, Volatile.Read(ref calls));
+        first.SetResult(0);
+        Assert.True(await one.WaitAsync(TimeSpan.FromSeconds(10)));
+        Assert.True(await two.WaitAsync(TimeSpan.FromSeconds(10)));
+        Assert.Equal(2, Volatile.Read(ref calls));
     }
 
     // ---------- RunOnce entries can't be toggled via StartupApproved (#1428) ----------

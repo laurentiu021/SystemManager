@@ -12701,7 +12701,7 @@ public partial class ArchitectureTests
         // both exist.
         var readAt = source.IndexOf("private static void ApplyApprovedState", StringComparison.Ordinal);
         Assert.True(readAt > 0, "ApplyApprovedState was not found — fix this guard, do not delete it.");
-        var writeAt = source.IndexOf("internal static async Task<bool> SetEnabledAsync", StringComparison.Ordinal);
+        var writeAt = source.IndexOf("internal async Task<bool> SetEnabledAsync", StringComparison.Ordinal);
         Assert.True(writeAt > readAt,
             "SetEnabledAsync is expected after ApplyApprovedState; the slices below assume that order.");
 
@@ -12765,7 +12765,7 @@ public partial class ArchitectureTests
                 source, StringComparison.Ordinal);
         }
 
-        var writeAt = source.IndexOf("internal static async Task<bool> SetEnabledAsync", StringComparison.Ordinal);
+        var writeAt = source.IndexOf("internal async Task<bool> SetEnabledAsync", StringComparison.Ordinal);
         Assert.True(writeAt > 0, "SetEnabledAsync was not found — fix this guard, do not delete it.");
 
         // The read path must not map the policy source to an approved dictionary either. Matched as the
@@ -18924,7 +18924,8 @@ public partial class ArchitectureTests
         }
 
         // Measured at 14 constructions when this was written, 3 of them redirecting: PowerShellRunner.RunProcessAsync,
-        // Startup Manager's schtasks and Right-Click Menu's reg export.
+        // Startup Manager's schtasks and Right-Click Menu's reg export. Startup Manager's schtasks has gone through the
+        // runner since #2766, which leaves 13 and 2.
         Assert.True(judged >= 10 && redirecting >= 2,
             $"only {judged} ProcessStartInfo constructions start a Windows tool and {redirecting} redirect a "
             + "stream, so the scan is no longer finding them — fix the pattern rather than trusting the pass");

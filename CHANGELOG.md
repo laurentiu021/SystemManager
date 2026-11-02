@@ -10,6 +10,16 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.136.86] - 2026-11-02
+
+**Startup Manager switches a scheduled task through the app's shared runner, one run at a time.**
+
+### Fixed
+- Startup Manager's switch for a scheduled task started schtasks itself, with its own timeout and kill, and set the
+  row from a background thread once schtasks had finished. It now runs schtasks through the runner the app's other
+  tools go through, one run at a time so that a row cannot show another run's error, and the window's own thread sets
+  the row. Nothing else changes on screen. This was there since the tab began switching scheduled tasks in 0.13.8.
+
 ## [1.136.85] - 2026-11-02
 
 **The Signature columns release each certificate they read instead of leaving it for the garbage collector.**

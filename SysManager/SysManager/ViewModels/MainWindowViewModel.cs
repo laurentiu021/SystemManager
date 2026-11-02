@@ -815,7 +815,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable,
         // One of each, as under DI: the Dashboard's "Why is it slow?" check reads the processes and the startup programs
         // through the services Process Manager and Startup Manager use (#1529).
         var processes = new ProcessManagerService();
-        var startup = new StartupService();
+        var startup = new StartupService(new PowerShellRunner());
         // One reader for the three that read NVIDIA's API, as the container gives the app (#2829). This is the
         // no-container path, so it is built here rather than resolved. NVIDIA is the TEMPERATURE reader now;
         // load and VRAM come from the vendor-neutral counters beside it (#2857).

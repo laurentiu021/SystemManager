@@ -792,7 +792,8 @@ Key services:
   `Policies\Explorer\Run` key (no approved-state at all — shown, never toggled), and
   third-party scheduled tasks read from the `TaskCache` registry (`\Microsoft\` and
   `\Windows\` excluded; toggled through `schtasks /Change`, so the same task the
-  Task Scheduler tab owns). `TaskCache` has no enabled flag, so a task's state comes from
+  Task Scheduler tab owns, run by the `IPowerShellRunner` the service takes by constructor, one run at a
+  time (#2766)). `TaskCache` has no enabled flag, so a task's state comes from
   its definition under `System32\Tasks` (`Settings/Enabled`), read without DTDs and only
   inside that folder. The same read, `ReadTaskDefinition`, sets `StartsWithWindows` when an
   enabled `LogonTrigger` or `BootTrigger` runs the task, which its status says ("Enabled (at

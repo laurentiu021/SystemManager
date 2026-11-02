@@ -4,7 +4,6 @@
 
 using System.Collections.Frozen;
 using System.Collections.ObjectModel;
-using System.Globalization;
 using System.Management.Automation;
 using Serilog;
 using SysManager.Models;
@@ -107,7 +106,12 @@ public sealed class TaskSchedulerService
             var parameters = new Dictionary<string, object?> { ["Name"] = task.Name, ["Path"] = task.Path };
             Collection<PSObject> results = await _ps.RunAsync(InfoScript, parameters, ct).ConfigureAwait(false);
             var row = results.Count > 0 ? results[0] : null;
-            return task with { LastRun = Date(row, "LastRunTime"), NextRun = Date(row, "NextRunTime") };
+            return task with
+            {
+                LastRun = Helpers.TaskRunTime.Read(row, "LastRunTime"),
+                NextRun = Helpers.TaskRunTime.Read(row, "NextRunTime"),
+                HasNeverRun = Helpers.TaskRunTime.IsNever(row, "LastRunTime"),
+            };
         }
         catch (System.Management.Automation.RuntimeException ex)
         {
@@ -188,10 +192,4 @@ public sealed class TaskSchedulerService
 
     private static string? Str(PSObject? obj, string property) => obj?.Properties[property]?.Value?.ToString();
 
-    private static DateTime? Date(PSObject? obj, string property) => obj?.Properties[property]?.Value switch
-    {
-        DateTime dt => dt,
-        string s when DateTime.TryParse(s, CultureInfo.InvariantCulture, DateTimeStyles.None, out var p) => p,
-        _ => null,
-    };
 }

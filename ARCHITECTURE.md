@@ -893,6 +893,9 @@ Key services:
   creation and last write, as an unpacked file keeps its archive time, and a folder's creation alone, as its last
   write moves when the clean-up empties it. The temp sweep, the size Quick Cleanup shows and every Deep Cleanup
   bucket with an age use it (#2890).
+- `Helpers/TaskRunTime` — a run time read from a `Get-ScheduledTaskInfo` row, for Scheduled Maintenance and Task
+  Scheduler alike. Task Scheduler reports 30 November 1999 for a task that has never run; a time before 2000 is
+  that "never", shown as Never, and not a time (#2748).
 - `Helpers/Csv` — builds and writes every Export CSV file, defined once. `AppendRow` and `Field` take the
   culture of the sheet that opens the file: fields are split on its list separator, a semicolon wherever
   decimals are written with a comma, and a field is quoted when it holds that separator, a quote, CR or LF.

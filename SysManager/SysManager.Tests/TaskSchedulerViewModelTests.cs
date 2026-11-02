@@ -397,6 +397,24 @@ public class TaskSchedulerViewModelTests
         Assert.Same(shown, vm.SelectedTask);
     }
 
+    /// <summary>A task that has never run says Never on selection, not Task Scheduler's date for it (#2748).</summary>
+    /// <remarks>
+    /// Task Scheduler reports 30 November 1999 for a task that has never run, and many of Windows' own have not, so
+    /// selecting one showed "1999-11-30 00:00".
+    /// </remarks>
+    [Fact]
+    public async Task SelectingATaskThatHasNeverRun_SaysNever()
+    {
+        var vm = new TaskSchedulerViewModel(new TaskSchedulerService(
+            PopulatedRunner(new DateTime(1999, 11, 30), new DateTime(2026, 11, 8, 3, 0, 0))));
+        await vm.InitializationComplete;
+
+        vm.SelectedTask = vm.Tasks.Single(t => t.Name == "Defrag");
+
+        Assert.Null(vm.SelectedTask!.LastRun);
+        Assert.Equal(("Never", "2026-11-08 03:00"), (vm.SelectedTask.LastRunDisplay, vm.SelectedTask.NextRunDisplay));
+    }
+
     /// <summary>
     /// The same loss through the other filter, because <c>HideSystemTasks</c> and <c>Filter</c> are two
     /// entry points to one rebuild — fixing only the one a bug report happened to name would leave the

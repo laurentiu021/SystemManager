@@ -1416,7 +1416,7 @@ Answers "what is actually using my space?" by listing the biggest files in one p
   automatically while SysManager runs as administrator. A purge schedule saved by an earlier
   version is flagged on the page, which says every run of it fails and how to replace or remove it
 - See the **last run, next run, and last result** of the task at a glance, with a failed run
-  described in words
+  described in words, and Never for a schedule that has not run yet
 - **"Not scheduled" means Windows said so.** If the schedule cannot be read, the page says that
   instead of "No maintenance is scheduled yet", and Save warns that it replaces any schedule
   SysManager has already set. Its last run and result are read the same way, so a read that

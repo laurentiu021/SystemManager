@@ -2,7 +2,6 @@
 // Author: laurentiu021 · https://github.com/laurentiu021/SystemManager
 // License: MIT
 
-using System.Globalization;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Serilog;
@@ -190,8 +189,8 @@ public sealed partial class ScheduledMaintenanceViewModel : ViewModelBase
         else if (status.Exists)
         {
             CurrentSummary = $"Maintenance is scheduled (state: {status.State}).";
-            LastRun = status.LastRun is { } lr ? lr.ToString("yyyy-MM-dd HH:mm", CultureInfo.InvariantCulture) : "—";
-            NextRun = status.NextRun is { } nr ? nr.ToString("yyyy-MM-dd HH:mm", CultureInfo.InvariantCulture) : "—";
+            LastRun = Helpers.TaskRunTime.Display(status.LastRun, status.NeverRun);
+            NextRun = Helpers.TaskRunTime.Display(status.NextRun, never: false);
             LastResult = status.LastResultDescription ?? "";
             MissedRunsWarning = status.MissedRunsWarning ?? "";
             StandbyPurgeWarning = status.StandbyPurgeWarning ?? "";

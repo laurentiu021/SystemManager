@@ -252,7 +252,8 @@ to scroll.
 - `SystemHealthViewModel` — SMART, memory diagnostic, multi-drive chkdsk, and the BIOS and board details with
   a link to the maker's support site. The tab is busy while a read or chkdsk runs, so a read that ends beside a
   chkdsk leaves it busy, and chkdsk takes the `Disk` lock, so it never runs beside a clean-up and closing
-  SysManager asks first (#2876).
+  SysManager asks first (#2876). chkdsk runs as `/scan /forceofflinefix`, so it repairs nothing, and writes each
+  drive's status to the row on screen, which a refresh keeps (#2753).
 - `CleanupViewModel` — TEMP, Recycle Bin, component store (background-aware). Escape stops everything but a component
   store cleanup, which only the Cancel button stops (#2942).
 - `DeepCleanupViewModel` — scan-first deep cleanup over the safe-to-remove category list. Clean is off while a

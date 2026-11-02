@@ -65,7 +65,8 @@ What the app can and cannot do by design:
 ### By design — allowed
 
 - Read system information (WMI, CIM, registry).
-- Run read-only disk checks (`chkdsk` without `/f`).
+- Run read-only disk checks (`chkdsk /scan /forceofflinefix`, which reports problems and leaves every
+  repair to Windows for when the drive is not in use).
 - Run PowerShell scripts that are part of the app (DNS & Hosts, Preinstalled Apps,
   Defender Tweaks, Edge/OneDrive Remover, Restore Points, Scheduled Maintenance, Task
   Scheduler, Drivers, System Fixes, Windows Features, the Windows Update history, and Deep

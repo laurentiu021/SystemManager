@@ -201,6 +201,9 @@ public sealed partial class SystemHealthViewModel : ElevatedViewModelBase
             }).ToList();
 
             Helpers.SelectionCarry.Apply(ChkdskDrives, fresh, d => d.Letter, StringComparer.OrdinalIgnoreCase);
+            // And its status: a check running on it, or the verdict of the last one, is still that drive's (#2753).
+            foreach (var row in fresh)
+                if (Row(row.Letter) is { } shown) row.Status = shown.Status;
             ChkdskDrives.ReplaceWith(fresh);
         }
         catch (IOException ex) { StatusMessage = $"Drive enumeration failed: {ex.Message}"; }
@@ -289,15 +292,17 @@ public sealed partial class SystemHealthViewModel : ElevatedViewModelBase
             return;
         }
 
-        var target = ChkdskDrives.FirstOrDefault(d => string.Equals(d.Letter, driveLetter, StringComparison.OrdinalIgnoreCase));
         using var opLock = TryLockForChkdsk();
         if (opLock is null) return;
         IsChkdskRunning = true;
+        // The header said what the last "Scan selected" did, in the running colour, for the whole of this run (#2753).
+        ChkdskStatus = $"Scanning {driveLetter}…";
         _cts?.Dispose();
         _cts = new CancellationTokenSource();
         try
         {
-            await RunChkdskCoreAsync(driveLetter, target, _cts.Token);
+            var verdict = await RunChkdskCoreAsync(driveLetter, _cts.Token);
+            ChkdskStatus = $"{driveLetter} — {verdict}";
         }
         finally { IsChkdskRunning = false; }
     }
@@ -332,7 +337,7 @@ public sealed partial class SystemHealthViewModel : ElevatedViewModelBase
                 if (_cts.Token.IsCancellationRequested) break;
                 var d = selected[i];
                 ChkdskStatus = $"[{i + 1}/{selected.Count}] Scanning {d.Letter} — {d.Label}";
-                await RunChkdskCoreAsync(d.Letter, d, _cts.Token);
+                await RunChkdskCoreAsync(d.Letter, _cts.Token);
             }
             ChkdskStatus = _cts.Token.IsCancellationRequested ? "Cancelled." : "All scans finished.";
         }
@@ -355,7 +360,22 @@ public sealed partial class SystemHealthViewModel : ElevatedViewModelBase
         return opLock;
     }
 
-    private async Task RunChkdskCoreAsync(string driveLetter, DriveTarget? target, CancellationToken ct)
+    /// <summary>The drive's row now on screen, if it has one: a refresh replaces every row.</summary>
+    private DriveTarget? Row(string driveLetter) =>
+        ChkdskDrives.FirstOrDefault(d => string.Equals(d.Letter, driveLetter, StringComparison.OrdinalIgnoreCase));
+
+    /// <summary>Shows <paramref name="status"/> on the drive's row now on screen.</summary>
+    /// <remarks>
+    /// Looked up at each write rather than held from the start, so a refresh during the check does not leave its
+    /// verdict on a row that is no longer shown (#2753).
+    /// </remarks>
+    private void ShowStatus(string driveLetter, string status)
+    {
+        if (Row(driveLetter) is { } row) row.Status = status;
+    }
+
+    /// <summary>Runs chkdsk on one drive and returns what its row says when it ends.</summary>
+    private async Task<string> RunChkdskCoreAsync(string driveLetter, CancellationToken ct)
     {
         // chkdsk /scan requires admin privileges — fail fast with a clear
         // message instead of running and reporting a cryptic exit code.
@@ -363,12 +383,12 @@ public sealed partial class SystemHealthViewModel : ElevatedViewModelBase
         {
             var msg = $"chkdsk {driveLetter} requires admin privileges. Use \"Run as administrator\" above to elevate.";
             StatusMessage = msg;
-            if (target is not null) target.Status = "Needs admin";
-            return;
+            ShowStatus(driveLetter, "Needs admin");
+            return "Needs admin";
         }
 
         StatusMessage = $"Running chkdsk {driveLetter} (read-only)...";
-        if (target is not null) target.Status = "Running...";
+        ShowStatus(driveLetter, "Running...");
         try
         {
             // Capture chkdsk output lines so we can parse the verdict from
@@ -385,29 +405,39 @@ public sealed partial class SystemHealthViewModel : ElevatedViewModelBase
             int exit;
             try
             {
-                exit = await _runner.RunProcessAsync("chkdsk.exe", $"{driveLetter} /scan", ct, PowerShellRunner.OemEncoding);
+                // /forceofflinefix: /scan alone repairs what it can online, and the card promises a scan that reports
+                // problems without fixing them. With it, every repair is left for when the drive is not in use (#2753).
+                exit = await _runner.RunProcessAsync("chkdsk.exe", $"{driveLetter} /scan /forceofflinefix", ct,
+                                                     PowerShellRunner.OemEncoding);
             }
             finally { _runner.LineReceived -= OnLine; }
 
             var verdict = ParseChkdskVerdict(captured.ToArray(), exit);
-            if (target is not null) target.Status = verdict;
-            StatusMessage = $"chkdsk {driveLetter} done — {verdict}.";
+            ShowStatus(driveLetter, verdict);
+            StatusMessage = verdict.StartsWith("Problems found", StringComparison.Ordinal)
+                ? $"chkdsk {driveLetter} found problems. Windows repairs them while the drive is not in use: in File "
+                  + "Explorer, open the drive's Properties, then Tools, then Check."
+                : $"chkdsk {driveLetter} done — {verdict}.";
             Log.Information("chkdsk completed on {Drive}: exit {ExitCode}, verdict {Verdict}", driveLetter, exit, verdict);
+            return verdict;
         }
         catch (OperationCanceledException)
         {
-            if (target is not null) target.Status = "Cancelled";
+            ShowStatus(driveLetter, "Cancelled");
             StatusMessage = $"chkdsk {driveLetter} cancelled.";
+            return "Cancelled";
         }
         catch (InvalidOperationException ex)
         {
-            if (target is not null) target.Status = "Error";
+            ShowStatus(driveLetter, "Error");
             StatusMessage = $"Error on {driveLetter}: {ex.Message}";
+            return "Error";
         }
         catch (System.ComponentModel.Win32Exception ex)
         {
-            if (target is not null) target.Status = "Error";
+            ShowStatus(driveLetter, "Error");
             StatusMessage = $"Error on {driveLetter}: {ex.Message}";
+            return "Error";
         }
     }
 
@@ -416,36 +446,45 @@ public sealed partial class SystemHealthViewModel : ElevatedViewModelBase
     /// alone is unreliable — chkdsk may return non-zero on healthy volumes
     /// when the volume is in use or /scan is not supported.
     /// </summary>
+    /// <remarks>
+    /// The sentences are chkdsk's own, from its message table, and they share words, so the order matters (#2753).
+    /// "Windows has made corrections to the file system." is followed by "No further action is required.", which a
+    /// healthy scan ends with too, so a repair read Healthy while the healthy phrases came first; and "found problems
+    /// and they were all fixed online" is a repair, not problems left. A sentence none of these knows, in another
+    /// language for one, falls back to what the exit code means.
+    /// </remarks>
     internal static string ParseChkdskVerdict(IReadOnlyList<string> outputLines, int exitCode)
     {
         var combined = string.Join('\n', outputLines);
+        bool Says(params string[] phrases) =>
+            phrases.Any(phrase => combined.Contains(phrase, StringComparison.OrdinalIgnoreCase));
 
-        // Healthy patterns (English + common localized variants)
-        if (combined.Contains("found no problems", StringComparison.OrdinalIgnoreCase)
-            || combined.Contains("no further action is required", StringComparison.OrdinalIgnoreCase)
-            || combined.Contains("no errors", StringComparison.OrdinalIgnoreCase)
-            || combined.Contains("appears to be healthy", StringComparison.OrdinalIgnoreCase)
-            || combined.Contains("no problems were found", StringComparison.OrdinalIgnoreCase))
-        {
-            return "Healthy";
-        }
-
-        // Errors found but corrected
-        if (combined.Contains("made corrections", StringComparison.OrdinalIgnoreCase)
-            || combined.Contains("corrected errors", StringComparison.OrdinalIgnoreCase))
-        {
+        if (Says("were all fixed online", "made corrections", "fixed all previously identified", "corrected errors"))
             return "Repaired";
-        }
 
-        // /scan not supported (FAT32, exFAT)
-        if (combined.Contains("not supported", StringComparison.OrdinalIgnoreCase)
-            || combined.Contains("cannot run", StringComparison.OrdinalIgnoreCase))
-        {
+        if (Says("found problems", "could not be corrected", "must be fixed offline", "/spotfix", "repair failure"))
+            return "Problems found";
+
+        if (Says("found no problems", "no problems were found", "no errors", "appears to be healthy",
+                 "no further action is required"))
+            return "Healthy";
+
+        // /scan on FAT32 or exFAT, or a volume chkdsk does not check.
+        if (Says("not supported", "cannot run", "not available"))
             return "Not supported";
-        }
 
-        // Fall back to exit code
-        return exitCode == 0 ? "Healthy" : $"Exit {exitCode}";
+        if (Says("snapshot creation failed", "already running", "cannot perform"))
+            return "Could not check";
+
+        // chkdsk's exit codes: 0 found nothing, 1 found and fixed problems, 2 only tidied up, 3 could not check the
+        // drive or left problems unfixed.
+        return exitCode switch
+        {
+            0 or 2 => "Healthy",
+            1 => "Repaired",
+            3 => "Problems found or not checked",
+            _ => $"Unexpected result (code {exitCode})",
+        };
     }
 
 

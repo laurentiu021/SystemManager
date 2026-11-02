@@ -361,9 +361,15 @@ unconditional, so the graph the test builds is the graph the app builds, and ena
 `App.OnStartup` would turn a broken tab into a refusal to start. Two negative tests assert the
 validation is actually armed — one adds a type whose dependency is unregistered, one makes a singleton
 capture a scoped service — because a passing graph test proves nothing if validation is silently off.
-The five factory-lambda registrations (`SystemReportService`, `ISpeedTestService`, `ISessionRestorePoint`,
-`IGamingProfileService` and `INavigationService`) are opaque to validation — two of them only forward to
-a type registered on its own, which is validated — and every other registration is covered.
+Validation cannot see two things. A factory registration is code it never runs, and an optional
+parameter it fills with its default passes as readily as one it fills with a service.
+`EveryOptionalServiceAConstructorTakes_IsRegistered` covers both. For each type the container builds, it
+reads the constructor the container calls, which is the widest one whose every parameter the container can
+fill rather than simply the widest, and requires each optional service that constructor takes to be
+registered. Each factory is run over stand-ins, objects of the types it asks for whose constructors never
+run: every service it asks for must be registered, and each optional service the type it builds takes
+must reach that object. A factory that hands over another registration's object, as `ISpeedTestService`
+and `INavigationService` do, is left to that registration.
 
 ### Conventions
 

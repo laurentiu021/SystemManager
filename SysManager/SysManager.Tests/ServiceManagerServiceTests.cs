@@ -2,6 +2,7 @@
 // Author: laurentiu021 · https://github.com/laurentiu021/SystemManager
 // License: MIT
 
+using System.ServiceProcess;
 using NSubstitute;
 using SysManager.Models;
 using SysManager.Services;
@@ -349,5 +350,170 @@ public class ServiceManagerServiceTests
         ServiceManagerService.ResolveDescription(reference, source => { seen = source; return "text"; });
 
         Assert.Equal(reference, seen);
+    }
+
+    // ── Start and Stop off the thread that asks, and a start that stops at once (#2752) ──
+
+    /// <summary>
+    /// Starting a service runs off the thread that asked for it: Windows returns from Start only once the service's
+    /// process has connected, which a slow service makes long, and the Services tab asked from the window's thread.
+    /// </summary>
+    [Fact]
+    public async Task StartServiceAsync_StartsTheServiceOffTheThreadThatAsked()
+    {
+        var service = new FakeSwitch(ServiceControllerStatus.Stopped, ServiceControllerStatus.Running) { HoldsTheCall = true };
+        Task starting;
+
+        try
+        {
+            starting = ServiceManagerService.StartServiceAsync("Fake", _ => service, TimeProvider.System, _ => { });
+
+            Assert.False(service.CallReturned, "Start held the thread that asked for it until Windows had started the service");
+        }
+        finally
+        {
+            service.Release();
+        }
+
+        await starting;
+        Assert.Equal(1, service.Starts);
+    }
+
+    /// <summary>
+    /// Stopping one runs off that thread too: Windows' controller stops every running dependent inside the call, and
+    /// waits for each of them.
+    /// </summary>
+    [Fact]
+    public async Task StopServiceAsync_StopsTheServiceOffTheThreadThatAsked()
+    {
+        var service = new FakeSwitch(ServiceControllerStatus.Running, ServiceControllerStatus.Stopped) { HoldsTheCall = true };
+        Task stopping;
+
+        try
+        {
+            stopping = ServiceManagerService.StopServiceAsync("Fake", _ => service);
+
+            Assert.False(service.CallReturned, "Stop held the thread that asked for it until Windows had stopped the service");
+        }
+        finally
+        {
+            service.Release();
+        }
+
+        await stopping;
+        Assert.Equal(1, service.Stops);
+    }
+
+    /// <summary>
+    /// A service that stops as soon as it starts is a failed start, and is said to be at once. The wait was for Running
+    /// alone, so it ran out the full 30 seconds and then said the service might still be starting.
+    /// </summary>
+    [Fact]
+    public async Task StartServiceAsync_ForAServiceThatStopsAsSoonAsItStarts_SaysSo_WithoutWaitingOutTheTimeout()
+    {
+        var service = new FakeSwitch(
+            ServiceControllerStatus.Stopped, ServiceControllerStatus.StartPending, ServiceControllerStatus.Stopped);
+        var clock = new SteppingClock();
+
+        var ex = await Assert.ThrowsAsync<InvalidOperationException>(
+            () => ServiceManagerService.StartServiceAsync("Fake", _ => service, clock, clock.Advance));
+
+        Assert.Equal(
+            "Service 'Fake' started and then stopped. Some services stop on their own when nothing needs them.",
+            ex.Message);
+        Assert.True(clock.Elapsed < TimeSpan.FromSeconds(1), $"the start waited {clock.Elapsed} for a service that had stopped");
+    }
+
+    /// <summary>A service still starting when the 30 seconds run out is said to be maybe still starting, as before.</summary>
+    [Fact]
+    public async Task StartServiceAsync_ForAServiceStillStartingAfter30Seconds_SaysItMayStillBeStarting()
+    {
+        var service = new FakeSwitch(ServiceControllerStatus.Stopped, ServiceControllerStatus.StartPending);
+        var clock = new SteppingClock();
+
+        var ex = await Assert.ThrowsAsync<InvalidOperationException>(
+            () => ServiceManagerService.StartServiceAsync("Fake", _ => service, clock, clock.Advance));
+
+        Assert.Equal(
+            "Service 'Fake' did not start within 30 seconds. It may still be starting — check Services again in a moment.",
+            ex.Message);
+    }
+
+    /// <summary>
+    /// A service whose states are <c>statuses</c>, read in turn, the last one for good. Its Start or Stop can hold until
+    /// the test lets it go, as Windows holds them, and it says whether that call has returned.
+    /// </summary>
+    /// <remarks>
+    /// Only the test releases a held call, and only once the thread that made it is free again, so code that makes the
+    /// call on that thread would wait forever: the wait is bounded, and that code fails the test instead.
+    /// </remarks>
+    private sealed class FakeSwitch(params ServiceControllerStatus[] statuses) : ServiceManagerService.IServiceSwitch
+    {
+        private readonly Queue<ServiceControllerStatus> _statuses = new(statuses);
+        private readonly TaskCompletionSource _released = new();
+        private readonly TaskCompletionSource _returned = new();
+
+        /// <summary>Whether Start and Stop wait for <see cref="Release"/>.</summary>
+        public bool HoldsTheCall { get; init; }
+
+        /// <summary>Whether the held Start or Stop has returned.</summary>
+        public bool CallReturned => _returned.Task.IsCompleted;
+
+        public int Starts { get; private set; }
+
+        public int Stops { get; private set; }
+
+        public ServiceControllerStatus Status => _statuses.Count > 1 ? _statuses.Dequeue() : _statuses.Peek();
+
+        public bool CanStop => true;
+
+        public void Release() => _released.TrySetResult();
+
+        public void Start()
+        {
+            Starts++;
+            Hold();
+        }
+
+        public void Stop()
+        {
+            Stops++;
+            Hold();
+        }
+
+        /// <summary>
+        /// As Windows' controller does: reads the state until it is <paramref name="status"/>, and gives up at the
+        /// timeout, which reaching the last state stands for.
+        /// </summary>
+        public void WaitForStatus(ServiceControllerStatus status, TimeSpan timeout)
+        {
+            while (Status != status)
+            {
+                if (_statuses.Count == 1)
+                    throw new System.ServiceProcess.TimeoutException("Time out has expired and the operation has not been completed.");
+            }
+        }
+
+        public void Dispose() { }
+
+        private void Hold()
+        {
+            if (HoldsTheCall) _released.Task.Wait(TimeSpan.FromSeconds(10));
+            _returned.TrySetResult();
+        }
+    }
+
+    /// <summary>A clock that moves only when the code under test pauses, by as long as it pauses.</summary>
+    private sealed class SteppingClock : TimeProvider
+    {
+        private long _ticks;
+
+        public TimeSpan Elapsed => TimeSpan.FromTicks(_ticks);
+
+        public override long TimestampFrequency => TimeSpan.TicksPerSecond;
+
+        public override long GetTimestamp() => _ticks;
+
+        public void Advance(TimeSpan by) => _ticks += by.Ticks;
     }
 }

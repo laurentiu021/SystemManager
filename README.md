@@ -2200,7 +2200,9 @@ offers, "rate us" prompts:
   The names are on the safety pill's tooltip too, which needs no admin rights to read.
   For a Caution service the confirmation also carries its note, for example that turning off
   Windows Update stops security patches
-- Start, stop, disable, or enable services with confirmation dialogs
+- Start, stop, disable, or enable services with confirmation dialogs. SysManager keeps responding
+  while Windows starts or stops a service, a service that stops as soon as it starts is reported as
+  a failed start straight away, and the filter chips' counts follow every change
 - **Stops and disables only services it knows** — SysManager rates 48 services by name (21
   safe, 12 caution, 15 critical). Every other service is **Not rated**: a grey pill, because
   SysManager has not checked it, rather than the red one that means "this breaks Windows" — so

@@ -1154,7 +1154,10 @@ Key services:
   substitute, because a per-user service instance has none of its own. That
   flag is what lets Disable and Enable round-trip "Automatic (Delayed Start)".
   `StopServiceAsync` refuses a service that accepts no stop request instead of
-  returning as if it had stopped, and `IsSafeForScExe` is the one name check
+  returning as if it had stopped. `StartServiceAsync` and `StopServiceAsync` run wholly on a
+  worker thread, as `ServiceController.Start` waits for the service's process and `Stop` for
+  each running dependent, and a start waits for Running or Stopped, whichever comes first.
+  Their tests stand in for Windows through `IServiceSwitch` (#2752). `IsSafeForScExe` is the one name check
   that the Services commands (before they prompt), `SetStartupTypeAsync`
   (before it builds the sc.exe command line) and Undo Changes' scan (which skips a
   ledger record whose name would fail it) apply. `PutBackStartupTypeAsync` is the

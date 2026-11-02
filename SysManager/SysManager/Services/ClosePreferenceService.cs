@@ -167,10 +167,11 @@ public sealed class ClosePreferenceService
         {
             var stored = JsonSerializer.Deserialize<Stored>(json);
             if (stored?.Behavior is null) return CloseBehavior.Ask;
-            return Enum.TryParse<CloseBehavior>(stored.Behavior, ignoreCase: true, out var parsed)
-                && parsed != CloseBehavior.Ask
-                ? parsed
-                : CloseBehavior.Ask;
+            // A name only, as Save writes it. Enum.TryParse also took a number and a comma-separated list, which gave
+            // a value CloseBehavior does not have: the close was neither asked about nor done, so X did nothing (#2772).
+            var name = Array.Find(Enum.GetNames<CloseBehavior>(),
+                n => string.Equals(n, stored.Behavior.Trim(), StringComparison.OrdinalIgnoreCase));
+            return name is null ? CloseBehavior.Ask : Enum.Parse<CloseBehavior>(name);
         }
         catch (JsonException ex) { Log.Debug("Close preference parse failed: {Error}", ex.Message); return CloseBehavior.Ask; }
     }

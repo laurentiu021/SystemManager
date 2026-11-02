@@ -726,7 +726,9 @@ Key services:
   with a `TimeProvider` for the wait between the samples, so every threshold and sentence is tested without
   reading the PC.
 - `TrayIconService` — system tray icon with background monitoring (60s),
-  tooltip updates, context menu, and Windows toast notifications. The menu's status header
+  tooltip updates, context menu, and Windows toast notifications. `ShowWindow`, which the tray
+  icon, its menu and a second launch call, restores only a minimized window, through the
+  system's own restore, so a maximized window comes back maximized (#2772). The menu's status header
   is refreshed from the 60s poll on `Opened` rather than rebuilt per tick, so a menu nobody
   opens costs nothing. Its shortcuts come from one `QuickJumps` table and route through a
   caller-supplied `Action<string>` — the View layer knows the shell view-model, this service
@@ -1719,7 +1721,8 @@ Key services:
   silently afterwards. Same shape as `VolumePresetService`: injectable config directory, pure
   unit-tested `Serialize`/`Parse`, file IO that never throws. Every untrusted or unrecognized
   value degrades to `Ask` rather than to a concrete action, so a damaged file can never exit an
-  app the user wanted kept in the tray.
+  app the user wanted kept in the tray. Only a name counts: `Enum.TryParse` also took a number
+  or a comma-separated list, which gave a value the enum does not have, and X did nothing (#2772).
 - `FirstRunService` (`IFirstRunService`) — whether the Welcome screen has been seen on this PC (#1635), as
   `%LocalAppData%\SysManager\welcome.json`, holding when it was first closed. The file being there is the record:
   only the app writes it, when the screen goes, so one that does not parse still means "seen", and reading it as

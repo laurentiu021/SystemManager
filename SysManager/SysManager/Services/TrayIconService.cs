@@ -164,14 +164,23 @@ public sealed class TrayIconService : INotificationArea, IDisposable
     }
 
     /// <summary>
-    /// Shows the main window and brings it to front.
+    /// Shows the main window and brings it to front, the way it was left.
     /// </summary>
+    /// <remarks>
+    /// It set the window to Normal every time, so a maximized window hidden to the notification area came back at its
+    /// restored size from the tray icon, the tray menu and a second launch, and a click on the icon un-maximized a
+    /// window that was already open (#2772). Only a minimized window is restored now, through the system's own restore,
+    /// which brings back a maximized one maximized, as the second launch's window-handle path does with SW_RESTORE.
+    /// </remarks>
     public static void ShowWindow(Window window)
     {
         window.Show();
-        window.WindowState = WindowState.Normal;
+        if (NeedsRestoring(window.WindowState)) SystemCommands.RestoreWindow(window);
         window.Activate();
     }
+
+    /// <summary>Whether a window has to be restored to be seen: only a minimized one.</summary>
+    internal static bool NeedsRestoring(WindowState state) => state == WindowState.Minimized;
 
     /// <summary>
     /// Hides the main window to tray.

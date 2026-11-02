@@ -2408,7 +2408,8 @@ offers, "rate us" prompts:
   window went so it doesn't look like it vanished. Right-click the tray icon to
   reopen or exit at any time.
 - **One copy per account** — starting SysManager again brings the running copy's window
-  back, from the notification area too. Each Windows account gets its own copy, including
+  back, from the notification area too, and as it was left: a maximized window comes back
+  maximized, from the tray icon as well. Each Windows account gets its own copy, including
   the one "Run as administrator" switches to, so a copy someone else left running never
   stops yours from opening
 - **Nothing is cut off by closing** — if SysManager is still in the middle of a disk check

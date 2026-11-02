@@ -674,7 +674,7 @@ public sealed class WindowsUpdateViewModelTests : IDisposable
         }
     }
 
-    // ---------- select-all header checkbox (audit #66) ----------
+    // ---------- select-all header checkbox (#843) ----------
 
     private WindowsUpdateViewModel VmWithUpdates(int count)
     {

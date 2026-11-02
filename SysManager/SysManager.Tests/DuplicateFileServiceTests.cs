@@ -371,7 +371,7 @@ public class DuplicateFileServiceTests : IDisposable
         Assert.Equal(0, group.WastedBytes);
     }
 
-    // ── Partial hash pre-filter (issue #80 performance) ──
+    // ── Partial hash pre-filter (performance, #116) ──
 
     [Fact]
     public void ComputePartialHash_Exists()

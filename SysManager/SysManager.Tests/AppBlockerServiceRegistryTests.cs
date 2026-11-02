@@ -11,7 +11,7 @@ namespace SysManager.Tests;
 
 /// <summary>
 /// Round-trip tests for <see cref="AppBlockerService"/>'s IFEO registry writes
-/// (audit finding tests #12). The service takes an injectable registry root; here
+/// (#827). The service takes an injectable registry root; here
 /// we point it at a disposable subkey under HKCU so block/unblock can be verified
 /// against a real registry hive without administrator rights and without touching
 /// the machine's actual HKLM IFEO configuration.

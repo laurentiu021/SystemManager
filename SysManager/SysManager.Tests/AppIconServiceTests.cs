@@ -11,7 +11,7 @@ using SysManager.Services;
 namespace SysManager.Tests;
 
 /// <summary>
-/// Tests for <see cref="AppIconService"/> (audit finding tests #11). The HTTP
+/// Tests for <see cref="AppIconService"/> (#829). The HTTP
 /// transport is injected as a stubbed <see cref="HttpMessageHandler"/> so the
 /// download path is exercised without touching the live internet, and the
 /// failure paths (network error, cancellation) are verified to return null

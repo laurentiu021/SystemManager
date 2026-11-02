@@ -145,8 +145,8 @@ public class HealthAnalyzerEdgeCaseTests
             new TargetMetric("game", TargetRole.GameServer, 80.0, JitterWarnMs + 5, 0, 10),
         };
         var result = HealthAnalyzer.Analyze(metrics);
-        // FUNC-M2: When dns AND game are bad, return Mixed — not GameServer,
-        // because saying "DNS is clean" would be incorrect.
+        // When dns AND game are bad, return Mixed — not GameServer,
+        // because saying "DNS is clean" would be incorrect (#405).
         Assert.Equal(HealthVerdict.Mixed, result.Verdict);
     }
 

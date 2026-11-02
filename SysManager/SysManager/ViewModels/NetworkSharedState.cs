@@ -473,7 +473,7 @@ public sealed partial class NetworkSharedState : ObservableObject, IDisposable
         }
         Targets.Remove(target);
 
-        // CQ-M1: Dispose SkiaSharp paint objects attached to the series being removed.
+        // Dispose SkiaSharp paint objects attached to the series being removed (#409).
         // Without this, SolidColorPaint instances (and their unmanaged SKPaint handles)
         // leak every time a target is removed.
         var idx = LatencySeries.ToList().FindIndex(s => s.Name?.Contains($"({target.Host})") == true);
@@ -614,7 +614,7 @@ public sealed partial class NetworkSharedState : ObservableObject, IDisposable
             double? shown = sample.LatencyMs;
             if (shown.HasValue)
             {
-                // CQ-M2: Stable offset (same fix as RecomputeStats).
+                // Stable offset, the same fix as RecomputeStats (#409).
                 shown = shown.Value + StableOffset(target.Host);
             }
 
@@ -655,12 +655,12 @@ public sealed partial class NetworkSharedState : ObservableObject, IDisposable
             return;
         }
 
-        // CQ-M2: Use a stable offset derived from the target's host hash instead
+        // Use a stable offset derived from the target's host hash instead
         // of Targets.IndexOf. IndexOf shifts after target removal, causing all
-        // remaining targets to jump visually on the chart.
+        // remaining targets to jump visually on the chart (#409).
         var offset = StableOffset(target.Host);
 
-        // PERF-M2: Avoid LINQ allocations (this runs 32x/sec per target).
+        // Avoid LINQ allocations: this runs 32x/sec per target (#406).
         // Single pass over buffer to compute sum and count.
         int successful = 0;
         double sum = 0;
@@ -745,10 +745,10 @@ public sealed partial class NetworkSharedState : ObservableObject, IDisposable
 
         if (removeCount == 0) return;
 
-        // PERF-M3: When removing many items from the front, repeated RemoveAt(0)
+        // When removing many items from the front, repeated RemoveAt(0)
         // is O(n*removeCount) because each removal shifts all remaining elements.
         // If we're removing more than 25% of the buffer, it's cheaper to snapshot
-        // the items we want to keep, clear, and re-add them (O(n) total).
+        // the items we want to keep, clear, and re-add them (O(n) total, #414).
         if (removeCount > buffer.Count / 4)
         {
             var keep = new DateTimePoint[buffer.Count - removeCount];

@@ -21,7 +21,7 @@ public class TracerouteServiceTests
     [InlineData("2001:db8::1")]
     public async Task ResolveDestinationAsync_IpLiteral_ReturnsSameAddress_NoDns(string literal)
     {
-        // Regression (P2 #39): the destination is resolved ONCE up front and every
+        // Regression (#1404): the destination is resolved ONCE up front and every
         // probe targets that fixed IP, instead of re-resolving the hostname per probe
         // (which, for a round-robin/CDN host, could point consecutive TTLs at different
         // servers). An IP literal must be used verbatim with no DNS lookup — so this

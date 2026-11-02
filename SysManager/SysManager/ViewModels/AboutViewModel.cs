@@ -738,10 +738,10 @@ public sealed partial class AboutViewModel : ViewModelBase
     private void OpenDiscussions() => OpenUrl(QuestionsUrl);
 
     /// <summary>
-    /// The Q&amp;A category, not the Discussions root. Every release auto-posts an announcement, so the
-    /// root is a wall of changelogs — a user who pressed "Ask a question" landed there and had to work
-    /// out that Q&amp;A was a separate category further down the page. Deep-linking opens the right
-    /// category directly.
+    /// The Q&amp;A category, not the Discussions root. The root is a wall of release announcements, one for
+    /// every feature release now and one for every release before that, so a user who pressed "Ask a
+    /// question" landed there and had to work out that Q&amp;A was a separate category further down the page.
+    /// Deep-linking opens the right category directly.
     /// </summary>
     /// <remarks>
     /// <c>q-a</c> is GitHub's slug for the "Q&amp;A" category. The four support routes (this button,

@@ -149,7 +149,7 @@ public class SystemInfoServiceTests
     [Fact]
     public async Task CaptureAsync_ReQueriesStaticInfo_AfterCacheCleared()
     {
-        // Regression (P2 #40): the static-hardware cache used ??= with a NON-NULL fallback
+        // Regression (#1416): the static-hardware cache used ??= with a NON-NULL fallback
         // returned on a WMI fault, so a transient first-call fault poisoned the cache for the
         // whole process — permanently showing "Unknown CPU" / "Windows" / no disks / no RAM.
         // The fix makes each Query* return null on a fault so ??= caches ONLY a successful

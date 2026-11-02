@@ -9,7 +9,7 @@ using SysManager.Services;
 namespace SysManager.IntegrationTests;
 
 /// <summary>
-/// Regression (P2 #14): the Dashboard's 2s temperature poll called
+/// Regression (#1426): the Dashboard's 2s temperature poll called
 /// <c>ReadAllAsync(includeStorage: true)</c>, which re-resolved static disk friendly-names on
 /// every tick — a Win32_DiskDrive WMI query plus a DiskHealthService SMART-association walk (the
 /// heaviest part of a read). Disk names are static hardware identity, so <see cref="TemperatureService"/>

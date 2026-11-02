@@ -83,7 +83,7 @@ public sealed class FixedDriveService
                 }
             }
 
-            // FUNC-M5: Map drive letters to physical disks via MSFT_Partition.
+            // Map drive letters to physical disks via MSFT_Partition (#405).
             // This works for multi-disk systems (not just single-disk).
             var letterToDisk = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
             try

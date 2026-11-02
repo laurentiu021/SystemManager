@@ -118,7 +118,7 @@ public static partial class MarkdownTextBlock
         => trimmed.Length >= 3
            && (trimmed.All(c => c == '-') || trimmed.All(c => c == '*') || trimmed.All(c => c == '_'));
 
-    // PERF-007: Cache FontFamily to avoid allocating a new instance per code span render.
+    // Cached so that rendering a code span does not allocate a new FontFamily (#298).
     private static readonly FontFamily CodeFontFamily = new("Consolas");
 
     /// <summary>

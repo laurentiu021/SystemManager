@@ -220,7 +220,7 @@ public sealed class AppBlockerService : IAppBlockerService
         if (!exeName.EndsWith(".exe", StringComparison.OrdinalIgnoreCase))
             exeName += ".exe";
 
-        // SEC-004: reject path separators and invalid chars to prevent registry path injection
+        // Reject path separators and invalid chars to prevent registry path injection (#249)
         if (CheckName(exeName).Fault is not NameFault.None)
         {
             Log.Warning("Rejected invalid exeName: {ExeName}", exeName);
@@ -298,7 +298,7 @@ public sealed class AppBlockerService : IAppBlockerService
         if (!exeName.EndsWith(".exe", StringComparison.OrdinalIgnoreCase))
             exeName += ".exe";
 
-        // SEC-004: apply same validation as BlockApp to prevent registry path injection
+        // The same validation as BlockApp, to prevent registry path injection (#249)
         if (CheckName(exeName).Fault is not NameFault.None)
         {
             Log.Warning("Rejected invalid exeName for unblock: {ExeName}", exeName);

@@ -1378,8 +1378,8 @@ public sealed class DashboardViewModelTests : IDisposable
     [Fact]
     public void ClassifySmartHealth_Unavailable_SaysSoInsteadOfClaimingHealth()
     {
-        // The P1, from the user's side. An unreadable Storage namespace scored 100 and landed in the green
-        // branch, so "All SMART indicators healthy" appeared for a machine whose disks were never read.
+        // The defect #2043 fixed, from the user's side. An unreadable Storage namespace scored 100 and landed in
+        // the green branch, so "All SMART indicators healthy" appeared for a machine whose disks were never read.
         // Unknown is also not "degrading" — nothing is degrading, nothing was measured — so it gets its own
         // wording rather than borrowing the middle branch's.
         var (title, severity) = DashboardViewModel.ClassifySmartHealth(

@@ -251,8 +251,9 @@ runner, which allows 10 s, then forced it out with exit code 1 although every te
   run under it — a pumping dispatcher schedules real layout, which reaches DirectWrite and dies on a
   headless runner. The unit project has no view-instantiating test and so needs no copy of this.
 - `RunningChild` — **`SysManager.IntegrationTests` only.** A Windows PowerShell the test starts and
-  owns, for tests that end or change a real process: File Lock Detector's End process and CPU Core
-  Affinity's pin (#2514). It can hold a file open, and it echoes a line back, so `AnswersAsync` shows the
+  owns, for tests that end or change a real process: File Lock Detector's End process, CPU Core
+  Affinity's pin (#2514), and Gaming Profile's auto-revert when the game exits (#2745). It can hold
+  a file open, and it echoes a line back, so `AnswersAsync` shows the
   child is alive without a sleep. The test holds the child's handle until dispose, and Windows does not
   give the ID of a process with an open handle to another, so the clean-up cannot end a stranger.
   `ProcessManagerKillTests` keeps its own harness because its subject is a parent and its child.

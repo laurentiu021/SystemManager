@@ -1743,7 +1743,7 @@ public class AudioMixerViewModelTests
 
     // ── Mid-adjust guard: drag OR keyboard-focus (regression: drag-then-arrow-key) ─
 
-    // dragging=false + focused=true is the Audit #3 regression case: a mouse drag has ENDED but
+    // dragging=false + focused=true is the case #1299 fixed: a mouse drag has ENDED but
     // the slider still holds keyboard focus (drag-then-arrow-key fine-tune), so it must STILL read
     // as adjusting — a reconcile tick must not clobber the value. DragCompleted clearing the flag
     // unconditionally (the old bug) would make this false.
@@ -1761,7 +1761,7 @@ public class AudioMixerViewModelTests
     public void ApplyAdjustingState_DragEndsWhileStillFocused_StaysAdjusting()
     {
         // Drives the actual guard WIRING (not just the terminal OR) through the exact event
-        // sequence that held the Audit-3 bug: GotKeyboardFocus → DragStarted → DragCompleted,
+        // sequence that held the bug #1299 fixed: GotKeyboardFocus → DragStarted → DragCompleted,
         // with focus never lost. The row must remain adjusting after the drag ends, so a reconcile
         // cannot clobber a subsequent arrow-key nudge. Unconditionally clearing on DragCompleted
         // (the old bug) would flip this to false.

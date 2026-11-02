@@ -1164,9 +1164,9 @@ public sealed partial class PerformanceViewModel : ElevatedViewModelBase
     }
 
 
-    // CQ-M4: Override Dispose to clean up the PerformanceService's PowerShellRunner
+    // Override Dispose to clean up the PerformanceService's PowerShellRunner
     // event subscriptions and prevent the fire-and-forget InitAsync from running
-    // against a disposed ViewModel if navigation happens quickly.
+    // against a disposed ViewModel if navigation happens quickly (#409).
     protected override void Dispose(bool disposing)
     {
         if (disposing)

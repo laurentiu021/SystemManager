@@ -172,7 +172,7 @@ public abstract partial class ViewModelBase : ObservableObject, IDisposable
     /// <summary>
     /// Safely launches an async task from a constructor or non-async context.
     /// Exceptions are caught and logged instead of becoming unobserved task
-    /// exceptions that could crash the application (CQ-M3). The running task is exposed
+    /// exceptions that could crash the application (#416). The running task is exposed
     /// via <see cref="InitializationComplete"/> for deterministic test observation, and whatever ended it
     /// via <see cref="InitializationFault"/>.
     /// </summary>

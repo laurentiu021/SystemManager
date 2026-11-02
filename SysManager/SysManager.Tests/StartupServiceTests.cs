@@ -172,12 +172,12 @@ public class StartupServiceTests
         Assert.Equal("OneDrive.lnk", entry.ValueName);
     }
 
-    // ── Common (all-users) vs per-user startup folder source (P2 #38) ──
+    // ── Common (all-users) vs per-user startup folder source (#1430) ──
 
     [Fact]
     public void BuildStartupFolderEntry_Common_TaggedCommonStartupFolder()
     {
-        // Regression (P2 #38): all-users folder items store their enabled/disabled state under
+        // Regression (#1430): all-users folder items store their enabled/disabled state under
         // HKLM, not HKCU. They must carry a distinct source so ApplyApprovedState/SetEnabledAsync
         // target the right hive — otherwise a disable is written to HKCU (where Windows never
         // looks) and silently does nothing while the UI claims "Disabled".

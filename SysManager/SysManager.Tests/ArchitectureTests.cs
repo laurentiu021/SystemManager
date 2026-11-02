@@ -4045,10 +4045,10 @@ public partial class ArchitectureTests
 
     /// <summary>
     /// Every place that sends a user somewhere to ask a question must deep-link the Q&amp;A category,
-    /// never the Discussions root. Each release auto-posts an announcement, so the root is a wall of
-    /// changelogs; four separate surfaces (the in-app button, SUPPORT.md, README.md and the issue
-    /// chooser) all pointed there, and each was written independently — exactly the drift a fitness
-    /// function catches better than review does.
+    /// never the Discussions root. The root is a wall of release announcements, one for every feature
+    /// release now and one for every release before that; four separate surfaces (the in-app button,
+    /// SUPPORT.md, README.md and the issue chooser) all pointed there, and each was written
+    /// independently — exactly the drift a fitness function catches better than review does.
     /// </summary>
     [Fact]
     public void EverySupportRoute_DeepLinksTheQuestionCategory_NotTheDiscussionsRoot()

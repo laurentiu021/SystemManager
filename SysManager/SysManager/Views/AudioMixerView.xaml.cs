@@ -27,7 +27,7 @@ public partial class AudioMixerView : UserControl
 
     // Applies the combined guard to a row from the two independent sources. Extracted (internal)
     // so a test can drive the exact event orderings the four handlers produce — in particular the
-    // Audit-3 regression: drag ends (dragging=false) while the slider still holds keyboard focus,
+    // case #1299 fixed: drag ends (dragging=false) while the slider still holds keyboard focus,
     // which must leave the row STILL adjusting. This is the wiring that actually held the bug, so
     // it is what needs coverage — not just the terminal OR. Typed on IAdjustableVolume so the This
     // PC card's slider (#1588) goes through the same handlers as the rows'.

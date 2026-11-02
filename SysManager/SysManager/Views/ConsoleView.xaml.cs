@@ -22,7 +22,7 @@ public partial class ConsoleView : UserControl
 
         DataContextChanged += (_, args) =>
         {
-            // MEM-003: unsubscribe from previous DataContext to prevent leak
+            // Unsubscribe from the previous DataContext to prevent a leak (#294)
             if (args.OldValue is ConsoleViewModel oldVm)
                 oldVm.Lines.CollectionChanged -= OnLinesChanged;
 
@@ -40,7 +40,7 @@ public partial class ConsoleView : UserControl
         {
             // Scroll the internal ScrollViewer directly instead of using
             // ScrollIntoView, which fires RequestBringIntoView and causes
-            // the parent page ScrollViewer to jump to the bottom (#93).
+            // the parent page ScrollViewer to jump to the bottom (#102).
             var sv = FindVisualChild<ScrollViewer>(ListBox_Output);
             sv?.ScrollToEnd();
         }));

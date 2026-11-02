@@ -283,8 +283,8 @@ public sealed partial class UninstallerService
         // through the Windows shell.
         const bool runningElevated = false;
 
-        // SEC-002: Validate the executable exists and is a real file (not a
-        // script or arbitrary command). HKCU uninstall keys can be modified
+        // Validate the executable exists and is a real file, not a
+        // script or arbitrary command (#294). HKCU uninstall keys can be modified
         // without admin, so we must not blindly execute whatever is there.
         // Use exact filename match for system binaries to prevent bypass via
         // similarly-named executables (e.g. "MsiExecEvil.exe").
@@ -304,7 +304,7 @@ public sealed partial class UninstallerService
                 ? exeFileName : exeFileName + ".exe";
             exe = System.IO.Path.Join(systemDir, resolvedName);
 
-            // SEC-LPE: resolving the binary to System32 is NOT enough — rundll32 and
+            // Resolving the binary to System32 is NOT enough (#906) — rundll32 and
             // MsiExec take their payload from the (HKCU-writable) arguments. rundll32
             // will load ANY DLL at ANY entry point, and MsiExec will run an arbitrary
             // package. Validate the payload before handing the command to the shell.
@@ -331,7 +331,7 @@ public sealed partial class UninstallerService
                 throw new InvalidOperationException(
                     $"Uninstall target is not an executable (.exe): '{exe}'. Refusing to run for security.");
 
-            // SEC-H2 / SEC-LPE: Validate the executable resides under a trusted directory.
+            // Validate the executable resides under a trusted directory (#401, #906).
             // Registry uninstall keys (especially HKCU) can be modified without admin,
             // so we must not execute arbitrary paths. Windows installation roots are always
             // trusted; shared and per-user application-data roots are accepted only while
@@ -410,7 +410,7 @@ public sealed partial class UninstallerService
     {
         command = command.Trim();
 
-        // SEC-M7: Reject obviously malicious patterns before parsing.
+        // Reject obviously malicious patterns before parsing (#403).
         // Commands containing shell metacharacters that could chain commands.
         if (command.Contains('|') || command.Contains('&') ||
             command.Contains(';') || command.Contains('`') ||
@@ -457,7 +457,7 @@ public sealed partial class UninstallerService
         }
 
         // Case 4: Unquoted path with spaces — find first .exe boundary.
-        // SEC-M7: Only match ".exe" followed by end-of-string, whitespace, or a
+        // Since #403, only match ".exe" followed by end-of-string, whitespace, or a
         // switch character (/,-). This prevents misparsing paths like
         // "C:\dir\app.executable\tool.exe" where an earlier ".exe" substring
         // would incorrectly split the path.
@@ -481,7 +481,7 @@ public sealed partial class UninstallerService
             searchStart = exeEnd;
         }
 
-        // SEC-M7: No fallback — if we can't parse it safely, reject it.
+        // No fallback — if we can't parse it safely, reject it (#403).
         // The old fallback treated the entire string as an executable, which
         // could execute arbitrary commands if the string was crafted.
         throw new InvalidOperationException(
@@ -525,9 +525,9 @@ public sealed partial class UninstallerService
     }
 
     /// <summary>
-    /// SEC-LPE: validates the arguments passed to a trusted system binary (rundll32 /
+    /// Validates the arguments passed to a trusted system binary (rundll32 /
     /// MsiExec) before launch, because those arguments come from the HKCU-writable
-    /// registry UninstallString and can select an arbitrary executable payload.
+    /// registry UninstallString and can select an arbitrary executable payload (#906).
     /// </summary>
     /// <remarks>
     /// rundll32: the leading token (before the first comma) is the DLL path; it must
@@ -574,7 +574,7 @@ public sealed partial class UninstallerService
                 throw new InvalidOperationException(
                     $"rundll32 DLL was not found: '{dllFullPath}'. Refusing to run for security.");
 
-            // Same SEC-LPE rule as the executable check: a user-writable DLL path is only
+            // The same rule as the executable check (#906): a user-writable DLL path is only
             // trusted when not elevated, so rundll32 can't load attacker-planted DLLs with
             // our elevation.
             if (!IsUnderTrustedDirectory(dllFullPath, isElevated))

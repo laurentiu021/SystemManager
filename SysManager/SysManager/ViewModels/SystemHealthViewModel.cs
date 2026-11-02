@@ -282,7 +282,7 @@ public sealed partial class SystemHealthViewModel : ElevatedViewModelBase
             return;
         }
 
-        // SEC-003: validate drive letter format to prevent argument injection
+        // Validate drive letter format to prevent argument injection (#249)
         if (!DriveLetterPattern().IsMatch(driveLetter))
         {
             StatusMessage = "Invalid drive letter format.";

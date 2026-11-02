@@ -128,7 +128,7 @@ public sealed class SpeedTestService : ISpeedTestService
         IProgress<(int, string)>? progress, CancellationToken ct)
     {
         // Use multiple parallel connections to saturate the link, similar to
-        // how Ookla and fast.com measure throughput (#152).
+        // how Ookla and fast.com measure throughput (#212).
         var perStream = PayloadBytes / DownloadConnections;
         long totalBytes = 0;
         var sw = Stopwatch.StartNew();
@@ -449,7 +449,7 @@ public sealed class SpeedTestService : ISpeedTestService
 
         // Start the process on a thread-pool thread so Process.Start()
         // never blocks the UI thread. Link a 5-minute timeout to prevent
-        // indefinite hangs if the Ookla CLI freezes (CQ-003).
+        // indefinite hangs if the Ookla CLI freezes (#370).
         using var timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
         timeoutCts.CancelAfter(TimeSpan.FromMinutes(5));
         var linked = timeoutCts.Token;
@@ -594,7 +594,7 @@ public sealed class SpeedTestService : ISpeedTestService
         progress?.Report((15, "Extracting…"));
         await Task.Run(() =>
         {
-            // SEC-M3: Manual extraction with Zip Slip protection.
+            // Manual extraction with Zip Slip protection (#403).
             // ZipFile.ExtractToDirectory does not validate that entry paths
             // stay within the target directory — a crafted zip with "../"
             // entries could write files outside toolsDir.

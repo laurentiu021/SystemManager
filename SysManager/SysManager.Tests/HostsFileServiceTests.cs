@@ -457,12 +457,12 @@ public class HostsFileServiceTests
         }
     }
 
-    // ---------- P2 #29/#30/#31: LooksLikeIpStart heuristic fix (IsDisabledEntryLine) ----------
+    // ---------- LooksLikeIpStart heuristic fix (IsDisabledEntryLine, #1392) ----------
 
     [Fact]
     public async Task ReadHostsAsync_DisabledIPv6HexStart_ParsedAsDisabledEntry()
     {
-        // Regression (P2 #29): IPv6 addresses starting with a hex letter (a-f, e.g. "fe80::")
+        // Regression (#1392): IPv6 addresses starting with a hex letter (a-f, e.g. "fe80::")
         // were invisible because the old LooksLikeIpStart only checked for a digit or ':'.
         // After the fix, "# fe80::1 myserver" must be parsed as a disabled HostsEntry.
         const string content = "# fe80::1 myserver\n127.0.0.1 localhost\n";
@@ -504,7 +504,7 @@ public class HostsFileServiceTests
     [InlineData("# :) just a smiley comment")]
     public async Task SaveHosts_DigitOrColonLeadingComments_PreservedNotDeleted(string commentLine)
     {
-        // Regression (P2 #30/#31): standalone comments starting with a digit or colon
+        // Regression (#1392): standalone comments starting with a digit or colon
         // (e.g. "# 5G adapter notes", "# 1. Block ads") passed the old LooksLikeIpStart
         // heuristic but failed IPAddress.TryParse — causing them to be skipped from both
         // the entry list AND the preserved comments, silently deleting them on save.

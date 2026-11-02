@@ -12,8 +12,8 @@ namespace SysManager.Services;
 
 /// <summary>
 /// Collects system information via WMI / CIM (no PowerShell spawn needed).
-/// PERF-M1: Static data (OS caption, CPU name, disk models) is cached on first
-/// query and reused — only dynamic data (CPU load, RAM, uptime) is refreshed.
+/// Static data (OS caption, CPU name, disk models) is cached on first
+/// query and reused — only dynamic data (CPU load, RAM, uptime) is refreshed (#406).
 /// </summary>
 /// <remarks>
 /// The three DYNAMIC values are syscalls, not WMI. The Landing tab polls this every 300 ms, and each pass

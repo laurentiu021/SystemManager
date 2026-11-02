@@ -97,9 +97,13 @@ public interface IGamingProfileService
     Task<GamingRevertResult> RecoverPendingAsync(CancellationToken ct = default);
 
     /// <summary>
-    /// Raised (on the captured context) when the bound game exits and the session auto-reverts,
-    /// carrying what that revert could not restore.
+    /// Raised when the bound game exits and the session auto-reverts, carrying what that revert could not restore.
     /// </summary>
+    /// <remarks>
+    /// Raised on a thread-pool thread, from the game's <c>Process.Exited</c> callback, and not on the context that
+    /// started game mode: nothing captures one. A subscriber that changes bound state marshals to the UI thread
+    /// itself, as <c>GamingProfileViewModel</c> does (#2745).
+    /// </remarks>
     event EventHandler<GamingRevertResult>? SessionAutoReverted;
 }
 

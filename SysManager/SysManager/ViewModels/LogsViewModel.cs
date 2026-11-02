@@ -168,8 +168,8 @@ public sealed partial class LogsViewModel : ElevatedViewModelBase, IArrivalDesti
 
     private void UpdateVisibleCount()
     {
-        // PERF-002: Use CollectionView.Count directly instead of iterating
-        // the entire filtered collection via Cast<object>().Count().
+        // Use CollectionView.Count directly instead of iterating
+        // the entire filtered collection via Cast<object>().Count() (#296).
         VisibleCount = (EntriesView as CollectionView)?.Count ?? EntriesView.Cast<object>().Count();
         HasNoResults = Entries.Count > 0 && VisibleCount == 0;
     }

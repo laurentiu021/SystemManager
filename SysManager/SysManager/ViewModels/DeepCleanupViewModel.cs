@@ -205,8 +205,8 @@ public sealed partial class DeepCleanupViewModel : ElevatedViewModelBase
             // and before ReplaceWith, which is what makes the previous ticks readable at all.
             CarryForwardSelection(Categories, catList);
 
-            // MEM-006: Unsubscribe from old categories before clearing to prevent
-            // PropertyChanged lambda leaks across rescans.
+            // Unsubscribe from old categories before clearing to prevent
+            // PropertyChanged lambda leaks across rescans (#296).
             foreach (var old in Categories)
                 old.PropertyChanged -= OnCategoryPropertyChanged;
             foreach (var c in catList)

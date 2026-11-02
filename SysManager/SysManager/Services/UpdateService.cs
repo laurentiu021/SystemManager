@@ -332,7 +332,7 @@ public sealed class UpdateService : IUpdateService
         var dir = _downloadDir ?? AppDataFolders.Updates;
         var target = Path.Join(dir, $"SysManager-{rel.Version}.exe");
 
-        // SEC-M2: Skip re-download only if we have a cached hash that matches.
+        // Skip re-download only if we have a cached hash that matches (#403).
         // File size alone is insufficient — an attacker could replace the binary
         // with a same-size payload. We store a companion .sha256 file after each
         // successful download to enable fast cache validation without re-downloading
@@ -425,7 +425,7 @@ public sealed class UpdateService : IUpdateService
             // Atomic move: temp → final target.
             File.Move(tempFile, target, overwrite: true);
 
-            // SEC-M2: Store SHA-256 hash of the downloaded binary for cache validation.
+            // Store SHA-256 hash of the downloaded binary for cache validation (#403).
             try
             {
                 await File.WriteAllTextAsync(hashFile, downloadedHash, ct).ConfigureAwait(false);
@@ -500,7 +500,7 @@ public sealed class UpdateService : IUpdateService
     /// Downloads the .sha256 file for a release and verifies the file on <paramref name="fileStream"/> matches.
     /// Returns true only when the hash matches. A mismatch, a .sha256 file that cannot be
     /// downloaded or parsed, a file that cannot be read and a cancellation all return
-    /// false: verification failed, and the update must not be installed (SEC-001).
+    /// false: verification failed, and the update must not be installed (#294).
     /// </summary>
     /// <remarks>
     /// The caller opens the file and holds the handle across <c>Process.Start</c>, so nothing can change the bytes

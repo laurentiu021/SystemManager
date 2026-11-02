@@ -542,7 +542,7 @@ public sealed class ThemeService
 
         // Card depth (the revamp's signature "glass depth"): a subtle top sheen + a top-lit rim.
         // Both are theme-DERIVED so they survive all 12 presets + custom + shade, and both are pure
-        // gradient fills (no DropShadowEffect) so they stay PERF-008-safe on the many repeated cards.
+        // gradient fills (no DropShadowEffect, #300) so they stay cheap on the many repeated cards.
         //  - Sheen: a vertical gradient whose top is a hair lifted off the surface, fading to the flat
         //    surface by 55% — reads as "lit from above". Lifted on dark, tinted-down on light, matching
         //    the approved mockup's cardgrad (white-alpha on dark / dark-alpha on light).

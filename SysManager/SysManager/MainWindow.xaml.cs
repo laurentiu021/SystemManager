@@ -111,8 +111,7 @@ public partial class MainWindow : Window
     /// <summary>
     /// Prevents the non-client area (title bar, borders) from visually
     /// dimming when the window loses focus.  This stops ModernWPF's
-    /// chrome from graying-out buttons and other controls.
-    /// Fixes #252, #251, #248, #245.
+    /// chrome from graying-out buttons and other controls (#275).
     /// </summary>
     protected override void OnSourceInitialized(EventArgs e)
     {

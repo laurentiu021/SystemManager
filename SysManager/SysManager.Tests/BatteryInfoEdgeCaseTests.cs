@@ -32,7 +32,7 @@ public class BatteryInfoEdgeCaseTests
     public void HealthPercent_NewBatteryOverDesign_ClampedTo100()
     {
         var info = new BatteryInfo { DesignCapacityMWh = 40000, FullChargeCapacityMWh = 44000 };
-        // QA-005 fix: clamped to 100 max
+        // Clamped to 100 at most (#252)
         Assert.Equal(100, info.HealthPercent);
     }
 
@@ -61,7 +61,7 @@ public class BatteryInfoEdgeCaseTests
     public void WearPercent_NewBatteryOverDesign_ClampedToZero()
     {
         var info = new BatteryInfo { DesignCapacityMWh = 40000, FullChargeCapacityMWh = 44000 };
-        // QA-005 fix: clamped to 0 min
+        // Clamped to 0 at least (#252)
         Assert.Equal(0, info.WearPercent);
     }
 

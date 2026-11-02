@@ -15,7 +15,7 @@ namespace SysManager.Tests;
 /// Tests for <see cref="FileShredderViewModel"/>. Verifies initial state,
 /// item management, default configuration, and that the irreversible
 /// ShredAll command routes through <see cref="DialogService.Instance"/>.Confirm
-/// (audit finding tests #2 — the "every destructive op needs Confirm" contract).
+/// (#822: the "every destructive op needs Confirm" contract).
 /// </summary>
 [Collection("ProcessWideStatics")]
 public class FileShredderViewModelTests
@@ -169,7 +169,7 @@ public class FileShredderViewModelTests
         Assert.Equal(3, vm.Items.Count);
     }
 
-    // ---------- irreversible-shred confirmation gate (audit tests #2) ----------
+    // ---------- irreversible-shred confirmation gate ----------
 
     [Fact]
     public async Task ShredAll_WhenUserDeclinesConfirm_ShredsNothing()

@@ -95,8 +95,8 @@ public class GamingProfileServiceTests
     {
         var log = new List<string>();
         var applied = new List<IGamingTweak>();
-        // NoChange = "already in the desired state" → reported SkippedNoChange (NOT Failed — the
-        // audit-1 fix) and NOT queued for revert (there's nothing to undo).
+        // NoChange = "already in the desired state" → reported SkippedNoChange (NOT Failed, since
+        // #1301) and NOT queued for revert (there's nothing to undo).
         var steps = new IGamingTweak[] { new FakeTweak("noop", log, applyResult: GamingTweakResult.NoChange) };
 
         var outcomes = await GamingProfileService.RunApplyAsync(steps, isElevated: true, applied, default);
@@ -752,7 +752,7 @@ public class GamingProfileServiceTests
         finally { DeleteStore(path); }
     }
 
-    // ── Audit-1 fix: crash-recovery replays ONLY what actually applied ─────
+    // ── Crash recovery replays ONLY what actually applied (#1301) ─────
 
     [Fact]
     public void EffectiveMachineWideProfile_OnlyIncludesAppliedMachineWideSteps()
@@ -760,7 +760,7 @@ public class GamingProfileServiceTests
         // Requested everything, but only visual-effects + timer-resolution actually applied
         // (e.g. the admin-only WSearch + standby steps were skipped when unelevated). The
         // recovery profile must reflect ONLY what applied, so the next-launch sweep never
-        // restarts a WSearch this run never stopped (the Audit-1 over-revert defect).
+        // restarts a WSearch this run never stopped (the over-revert #1301 fixed).
         var requested = new GamingProfile
         {
             UltimatePerformancePlan = true,
@@ -805,7 +805,7 @@ public class GamingProfileServiceTests
         Assert.False(effective.HasAnyEnabled);
     }
 
-    // ── Audit-1 fix: no-op is not counted as a failure in the result summary ─
+    // ── A no-op is not counted as a failure in the result summary (#1301) ─
 
     [Fact]
     public void GamingApplyResult_Counts_SeparateNoChangeFromFailed()
@@ -823,8 +823,8 @@ public class GamingProfileServiceTests
         Assert.Equal(1, result.FailedCount); // the no-op is NOT counted as failed
     }
 
-    // ── Audit-2 fix: RevertAsync must not pin its gate-release continuation to the caller's
-    //    SynchronizationContext (the shutdown UI-thread deadlock the SemaphoreSlim fix introduced) ─
+    // ── RevertAsync must not pin its gate-release continuation to the caller's
+    //    SynchronizationContext (the shutdown UI-thread deadlock the SemaphoreSlim fix introduced, #1301) ─
 
     // A SynchronizationContext that queues posted callbacks but NEVER runs them — it stands in
     // for a UI Dispatcher thread that is blocked (as it is when Dispose does _gate.Wait() at
@@ -874,7 +874,7 @@ public class GamingProfileServiceTests
     [Fact]
     public async Task RevertAsync_GateReleaseContinuation_DoesNotDependOnCallerSyncContext()
     {
-        // Reproduces the Audit-2 deadlock scenario deterministically: RevertAsync runs on a thread
+        // Reproduces the shutdown deadlock deterministically: RevertAsync runs on a thread
         // whose SynchronizationContext is never pumped (a stand-in for the shutdown-blocked UI
         // thread). With the ConfigureAwait(true) regression the gate-release continuation is posted
         // to that context — PostCount rises and the revert Task never completes; with the
@@ -912,7 +912,7 @@ public class GamingProfileServiceTests
             // ctx, so the Task hangs and this wait fails; the fix completes it in milliseconds.
             Assert.True(await CompletesWithinAsync(revert!),
                 "RevertAsync did not complete without pumping the caller's SynchronizationContext — " +
-                "its gate-release continuation is pinned to the (blockable) caller thread (the Audit-2 deadlock).");
+                "its gate-release continuation is pinned to the (blockable) caller thread (the shutdown deadlock).");
             // And prove it directly: nothing was ever posted back to the caller's context.
             Assert.Equal(0, ctx.PostCount);
         }

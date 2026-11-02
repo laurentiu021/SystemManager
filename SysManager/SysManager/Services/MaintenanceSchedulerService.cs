@@ -136,11 +136,12 @@ public sealed class MaintenanceSchedulerService
             return new MaintenanceStatus(
                 Exists: true,
                 State: Str(row, "State"),
-                LastRun: Date(row, "LastRunTime"),
-                NextRun: Date(row, "NextRunTime"),
+                LastRun: TaskRunTime.Read(row, "LastRunTime"),
+                NextRun: TaskRunTime.Read(row, "NextRunTime"),
                 LastResultDescription: DescribeResult(row),
                 MissedRuns: Count(row, "MissedRunsCount"),
-                PurgesStandby: IsStandbyPurge(Str(row, "Arguments")));
+                PurgesStandby: IsStandbyPurge(Str(row, "Arguments")),
+                NeverRun: TaskRunTime.IsNever(row, "LastRunTime"));
         }
         catch (RuntimeException ex)
         {
@@ -369,13 +370,6 @@ public sealed class MaintenanceSchedulerService
         long value => (int)Math.Clamp(value, 0, int.MaxValue),
         string text when int.TryParse(text, NumberStyles.Integer, CultureInfo.InvariantCulture, out var parsed)
             => parsed,
-        _ => null,
-    };
-
-    private static DateTime? Date(PSObject? obj, string property) => obj?.Properties[property]?.Value switch
-    {
-        DateTime dt => dt,
-        string s when DateTime.TryParse(s, CultureInfo.InvariantCulture, DateTimeStyles.None, out var p) => p,
         _ => null,
     };
 }

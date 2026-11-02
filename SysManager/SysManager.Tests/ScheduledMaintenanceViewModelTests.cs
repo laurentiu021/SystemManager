@@ -485,4 +485,23 @@ public class ScheduledMaintenanceViewModelTests
         // Three different questions, so the three cases were each reached rather than one of them three times.
         Assert.Equal(3, questions.Distinct().Count());
     }
+
+    [Fact]
+    public async Task ASavedScheduleThatHasNotRunYet_SaysLastRunNever_NotADateIn1999()
+    {
+        // Task Scheduler's "never" is 30 November 1999, and the tab printed it (#2748).
+        var row = new PSObject();
+        row.Properties.Add(new PSNoteProperty("State", "Ready"));
+        row.Properties.Add(new PSNoteProperty("LastRunTime", new DateTime(1999, 11, 30)));
+        row.Properties.Add(new PSNoteProperty("NextRunTime", new DateTime(2026, 11, 8, 3, 0, 0)));
+        row.Properties.Add(new PSNoteProperty("LastTaskResult", 267011));
+        row.Properties.Add(new PSNoteProperty("Arguments", "--cleanup --silent"));
+        var ps = Substitute.For<IPowerShellRunner>();
+        ps.RunAsync(Arg.Any<string>(), Arg.Any<IDictionary<string, object?>?>(), Arg.Any<CancellationToken>())
+          .Returns(new Collection<PSObject> { row });
+        var vm = new ScheduledMaintenanceViewModel(new MaintenanceSchedulerService(ps));
+        await vm.InitializationComplete;
+
+        Assert.Equal(("Never", "2026-11-08 03:00"), (vm.LastRun, vm.NextRun));
+    }
 }

@@ -405,4 +405,24 @@ public class MaintenanceSchedulerServiceTests
 
         Assert.Equal(MaintenanceSchedulerService.TaskNamePrefix + identity.User!.Value, svc.TaskName);
     }
+
+    [Fact]
+    public async Task ATaskThatHasNeverRun_HasNoLastRun_AndSaysSo()
+    {
+        // Task Scheduler reports 30 November 1999 for a task that has never run, with 267011, and the tab showed
+        // "Last run: 1999-11-30 00:00" next to "Not run yet" until the first run (#2748).
+        var row = new PSObject();
+        row.Properties.Add(new PSNoteProperty("State", "Ready"));
+        row.Properties.Add(new PSNoteProperty("LastRunTime", new DateTime(1999, 11, 30)));
+        row.Properties.Add(new PSNoteProperty("NextRunTime", new DateTime(2026, 11, 8, 3, 0, 0)));
+        row.Properties.Add(new PSNoteProperty("LastTaskResult", 267011));
+        var (svc, _) = NewService(row);
+
+        var status = await svc.GetStatusAsync();
+
+        Assert.NotNull(status);
+        Assert.Null(status.LastRun);
+        Assert.True(status.NeverRun);
+        Assert.Equal(new DateTime(2026, 11, 8, 3, 0, 0), status.NextRun);
+    }
 }

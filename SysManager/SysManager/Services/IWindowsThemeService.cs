@@ -27,6 +27,10 @@ public interface IWindowsThemeService
     /// Set the Windows theme. When <paramref name="includeSystem"/>, also flips the
     /// taskbar/Start. Returns false if the registry write was denied.
     /// </summary>
+    /// <remarks>
+    /// Returns once every open window has been told of the change, and Windows gives each window up to five seconds
+    /// to answer, so it is called off the window's thread (#2750).
+    /// </remarks>
     bool SetTheme(bool dark, bool includeSystem);
 
     /// <summary>Load the saved schedule, or defaults if none exists / it's unreadable.</summary>

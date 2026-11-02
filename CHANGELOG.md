@@ -10,6 +10,19 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.136.69] - 2026-11-02
+
+**Switching the Windows theme on Dark Mode Scheduler no longer freezes SysManager while other programs catch up.**
+
+### Fixed
+- Switching the theme ends with Windows telling every open window about it, and each window has up to five seconds to
+  answer. SysManager waited for that on the thread that draws its window, so one busy program, like a large game or an
+  IDE, froze SysManager until it answered, and several added up; even with every program answering, telling them all
+  took two seconds on my PC. Dark, Light and the schedule all waited this way: at its set times, when it is turned on
+  or its times change, and when SysManager starts. The switch now runs in the background, so the window keeps
+  responding; Dark and Light are off until it is done, and the schedule does not start a second switch meanwhile. This
+  was there since the tab was added in 1.41.0.
+
 ## [1.136.68] - 2026-11-02
 
 **A scheduled task that has never run says Never on Scheduled Maintenance and Task Scheduler, not "1999-11-30 00:00".**

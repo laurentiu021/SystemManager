@@ -2272,7 +2272,8 @@ offers, "rate us" prompts:
 - **After a crash** — when SysManager closed unexpectedly last time, a notice says so as it next starts,
   and where the details are
 - **Real-time vitals** — CPU, RAM, and GPU usage refreshed at 300 ms while
-  the tab is visible (polling pauses automatically when it isn't), with live
+  the tab is visible (polling pauses automatically when it isn't, also when you leave it
+  while SysManager is still starting), with live
   indicator dots. GPU usage and video memory are read for every vendor — NVIDIA, AMD and Intel —
   from the counters Windows publishes and Task Manager draws, for the busiest card in the machine.
   A machine whose GPU cannot be measured at all shows "N/A" rather than 0%.

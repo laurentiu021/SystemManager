@@ -50,7 +50,7 @@
                             AutomationProperties.Name="Quick Tune-Up"
                             Style="{StaticResource PrimaryButton}" Padding="16,8">
                         <StackPanel Orientation="Horizontal">
-                            <TextBlock Text="&#xE945;" FontFamily="Segoe Fluent Icons" FontSize="14"
+                            <TextBlock Text="&#xE945;" FontFamily="Segoe Fluent Icons,Segoe MDL2 Assets" FontSize="14"
                                        VerticalAlignment="Center" Margin="0,0,6,0"/>
                             <TextBlock Text="Quick Tune-Up" VerticalAlignment="Center"/>
                         </StackPanel>
@@ -244,7 +244,7 @@
                                 AutomationProperties.Name="Dismiss Tune-Up results"
                                 Style="{StaticResource GhostButton}" Padding="10,2" Margin="12,0,0,0"/>
                         <StackPanel Orientation="Horizontal">
-                            <TextBlock Text="&#xE945;" FontFamily="Segoe Fluent Icons" FontSize="15"
+                            <TextBlock Text="&#xE945;" FontFamily="Segoe Fluent Icons,Segoe MDL2 Assets" FontSize="15"
                                        VerticalAlignment="Center" Margin="0,0,8,0"
                                        helpers:ThemeBrush.Foreground="{Binding TuneUpResult.OverallColorHex}"/>
                             <TextBlock Text="Tune-Up complete" Style="{StaticResource SectionTitle}" VerticalAlignment="Center"/>
@@ -373,7 +373,7 @@
                             <ItemsControl.ItemTemplate>
                                 <DataTemplate>
                                     <StackPanel Orientation="Horizontal" Margin="0,2,0,0">
-                                        <TextBlock Text="{Binding IconGlyph}" FontFamily="Segoe Fluent Icons"
+                                        <TextBlock Text="{Binding IconGlyph}" FontFamily="Segoe Fluent Icons,Segoe MDL2 Assets"
                                                    FontSize="12" Margin="0,0,6,0" VerticalAlignment="Center"
                                                    helpers:ThemeBrush.Foreground="{Binding ColorHex}"/>
                                         <TextBlock Text="{Binding Message}" Style="{StaticResource Subtle}" VerticalAlignment="Center"
@@ -625,7 +625,7 @@
                                 Style="{StaticResource SecondaryButton}" FontSize="12" Padding="10,8" Margin="0,0,0,6"
                                 HorizontalContentAlignment="Left" HorizontalAlignment="Stretch">
                             <StackPanel Orientation="Horizontal">
-                                <TextBlock Text="&#xE74D;" FontFamily="Segoe Fluent Icons" FontSize="13" Margin="0,0,8,0" VerticalAlignment="Center"/>
+                                <TextBlock Text="&#xE74D;" FontFamily="Segoe Fluent Icons,Segoe MDL2 Assets" FontSize="13" Margin="0,0,8,0" VerticalAlignment="Center"/>
                                 <TextBlock Text="Run Quick Cleanup" VerticalAlignment="Center"/>
                             </StackPanel>
                         </Button>
@@ -634,7 +634,7 @@
                                 Style="{StaticResource SecondaryButton}" FontSize="12" Padding="10,8" Margin="0,0,0,6"
                                 HorizontalContentAlignment="Left" HorizontalAlignment="Stretch">
                             <StackPanel Orientation="Horizontal">
-                                <TextBlock Text="&#xE896;" FontFamily="Segoe Fluent Icons" FontSize="13" Margin="0,0,8,0" VerticalAlignment="Center"/>
+                                <TextBlock Text="&#xE896;" FontFamily="Segoe Fluent Icons,Segoe MDL2 Assets" FontSize="13" Margin="0,0,8,0" VerticalAlignment="Center"/>
                                 <TextBlock Text="Update All Apps" VerticalAlignment="Center"/>
                             </StackPanel>
                         </Button>
@@ -643,7 +643,7 @@
                                 Style="{StaticResource SecondaryButton}" FontSize="12" Padding="10,8" Margin="0,0,0,6"
                                 HorizontalContentAlignment="Left" HorizontalAlignment="Stretch">
                             <StackPanel Orientation="Horizontal">
-                                <TextBlock Text="&#xE777;" FontFamily="Segoe Fluent Icons" FontSize="13" Margin="0,0,8,0" VerticalAlignment="Center"/>
+                                <TextBlock Text="&#xE777;" FontFamily="Segoe Fluent Icons,Segoe MDL2 Assets" FontSize="13" Margin="0,0,8,0" VerticalAlignment="Center"/>
                                 <TextBlock Text="Check Windows Updates" VerticalAlignment="Center"/>
                             </StackPanel>
                         </Button>
@@ -652,7 +652,7 @@
                                 Style="{StaticResource SecondaryButton}" FontSize="12" Padding="10,8"
                                 HorizontalContentAlignment="Left" HorizontalAlignment="Stretch">
                             <StackPanel Orientation="Horizontal">
-                                <TextBlock Text="&#xEC05;" FontFamily="Segoe Fluent Icons" FontSize="13" Margin="0,0,8,0" VerticalAlignment="Center"/>
+                                <TextBlock Text="&#xEC05;" FontFamily="Segoe Fluent Icons,Segoe MDL2 Assets" FontSize="13" Margin="0,0,8,0" VerticalAlignment="Center"/>
                                 <TextBlock Text="Run Speed Test" VerticalAlignment="Center"/>
                             </StackPanel>
                         </Button>

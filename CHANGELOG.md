@@ -10,6 +10,19 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.136.74] - 2026-11-02
+
+**The Dashboard polls only while you are looking at it, from the start, and all of its icons draw on Windows 10.**
+
+### Fixed
+- The Dashboard's first load reads the system, the drives and the recent activity, and then started the live vitals,
+  the temperatures and the activity timer without asking whether the tab was still shown. Leaving the tab during that
+  load, minimizing the window or closing it to the tray left them running hidden until the Dashboard was shown and
+  left again. They now start only while it is shown. This was there since the Dashboard got live vitals in 1.17.0.
+- Seven Dashboard icons named Segoe Fluent Icons alone, a font Windows 10 does not have, so they drew empty boxes
+  there. They fall back to Segoe MDL2 Assets now, as every other icon in the app does, and a check keeps it so. Some
+  were there since 0.36.0.
+
 ## [1.136.73] - 2026-11-02
 
 **Cancelling a task that runs PowerShell no longer leaves a background thread waiting, or an error in the log.**

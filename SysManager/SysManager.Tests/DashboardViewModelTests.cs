@@ -584,6 +584,27 @@ public sealed class DashboardViewModelTests : IDisposable
         Assert.DoesNotContain(vm.RecentActivity, entry => entry.Action == "Uninstall");
     }
 
+    /// <summary>
+    /// A first load that ends after the user has left the tab starts no polling; showing the tab starts it (#2756).
+    /// </summary>
+    /// <remarks>
+    /// The load started the vitals, sensor and activity loops when it ended, without asking whether the tab was still
+    /// shown. Hiding the tab before then had nothing to cancel yet, so the loops ran hidden until the user came back
+    /// and left again. The activity loop's timer is the one the clock here sees.
+    /// </remarks>
+    [Fact]
+    public async Task AFirstLoadThatEndsWhileTheTabIsHidden_StartsNoPolling()
+    {
+        var clock = new HeldTimers();
+        var vm = NewVm(QuietWinget(), clock: clock);
+
+        await vm.InitializationComplete;
+
+        Assert.Equal(0, clock.Asked);
+        vm.IsActive = true;
+        Assert.Equal(TimeSpan.FromMinutes(1), clock.OnlyDue);
+    }
+
     [Fact]
     public void RecentActivity_InitializesEmpty()
     {

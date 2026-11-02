@@ -301,11 +301,18 @@ public class DeepCleanupViewModelTests : IDisposable
     public async Task Clean_WhenAlreadyCleaning_ReturnsImmediately()
     {
         var vm = NewVm();
+        // A ticked category, or the same line returns on "nothing selected" first and the guard is never what returns;
+        // over a folder that is never created. Without the guard the confirmation is next, which answers no when there
+        // is no WPF application, so it is the count that fails (#2742). Declined, so nothing is cleaned even then.
+        vm.Categories.Add(Bucket("Listed", Path.Combine(Path.GetTempPath(), "smtest_never_" + Guid.NewGuid().ToString("N")),
+                                 size: 1, ticked: true));
         vm.IsCleaning = true;
         vm.CleanSummary = "marker";
+        using var dialog = new DialogAnswer(confirm: false);
 
         await vm.CleanCommand.ExecuteAsync(null);
 
+        Assert.Equal(0, dialog.Calls);
         Assert.Equal("marker", vm.CleanSummary);
     }
 

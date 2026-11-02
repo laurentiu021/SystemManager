@@ -234,7 +234,8 @@ public sealed partial class AboutViewModel : ViewModelBase
     /// (or come to depend on) whatever is in the developer's real profile.</para>
     /// <para><paramref name="launch"/> and <paramref name="shutdown"/> are what installing and going back end in:
     /// starting another build and closing this one. A test replaces both, so it can drive the confirmed path
-    /// without starting a file or closing anything (#2499).</para>
+    /// without starting a file or closing anything (#2499). Every link on the tab opens through
+    /// <paramref name="launch"/> too, so a test sees the address it asks for (#2742).</para>
     /// <para><paramref name="processPath"/> decides <see cref="IsManagedByWinGet"/>: the default reads
     /// <see cref="Environment.ProcessPath"/>, the real running executable, and a test must be able to
     /// answer with a path under a fake winget folder instead (#2889).</para>
@@ -256,7 +257,7 @@ public sealed partial class AboutViewModel : ViewModelBase
         _preferences = preferences ?? new UpdateCheckPreferenceService();
         _updatesDir = updatesDir;
         _processPath = processPath ?? (static () => Environment.ProcessPath);
-        _launch = launch ?? (static startInfo => Process.Start(startInfo)?.Dispose());
+        _launch = launch ?? StartOnlyInTheApp;
         _shutdown = shutdown ?? App.RequestShutdown;
         _dialog = dialog ?? DialogService.Instance;
         // Overridable for the same reason as `preferences` and `updatesDir`: the default reads the real log
@@ -706,8 +707,7 @@ public sealed partial class AboutViewModel : ViewModelBase
     /// selection — each card carries its own.
     /// <para>Guarded on the value through <c>CanExecute</c> rather than an early return inside the body: an
     /// entry whose <c>HtmlUrl</c> came back empty greys its link out instead of accepting a click that does
-    /// nothing, and the decision becomes observable to a test (<c>OpenUrl</c> is a no-op without a WPF
-    /// <c>Application</c>, so a guard inside the body would assert nothing).</para>
+    /// nothing, and the decision is one a test can see without opening anything.</para>
     /// </remarks>
     [RelayCommand(CanExecute = nameof(CanOpenRelease))]
     private void OpenRelease(string? url) => OpenUrl(url!);
@@ -1440,12 +1440,22 @@ public sealed partial class AboutViewModel : ViewModelBase
         }
     }
 
-    private static void OpenUrl(string url)
+    private void OpenUrl(string url)
     {
-        if (System.Windows.Application.Current == null) return;
-        try { Process.Start(new ProcessStartInfo(url) { UseShellExecute = true })?.Dispose(); }
+        try { _launch(new ProcessStartInfo(url) { UseShellExecute = true }); }
         catch (InvalidOperationException) { /* best-effort */ }
         catch (System.ComponentModel.Win32Exception) { /* best-effort */ }
+    }
+
+    /// <summary>
+    /// How the tab starts a file or opens an address when it is not handed a launcher: not at all without a WPF
+    /// application, so a test that builds the tab without a launcher of its own cannot open a browser or start an
+    /// installer on the PC running it.
+    /// </summary>
+    internal static void StartOnlyInTheApp(ProcessStartInfo startInfo)
+    {
+        if (System.Windows.Application.Current is null) return;
+        Process.Start(startInfo)?.Dispose();
     }
 
     /// <summary>

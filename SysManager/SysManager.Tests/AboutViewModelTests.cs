@@ -179,32 +179,6 @@ public class AboutViewModelTests
     }
 
     [Fact]
-    public void OpenRepoCommand_DoesNotThrow()
-    {
-        var vm = NewVmNoAutoCheck();
-        // Shell execute is wrapped in try/catch; even if no browser is
-        // associated, it must not throw.
-        var ex = Record.Exception(() => vm.OpenRepoCommand.Execute(null));
-        Assert.Null(ex);
-    }
-
-    [Fact]
-    public void OpenLicenseCommand_DoesNotThrow()
-    {
-        var vm = NewVmNoAutoCheck();
-        var ex = Record.Exception(() => vm.OpenLicenseCommand.Execute(null));
-        Assert.Null(ex);
-    }
-
-    [Fact]
-    public void OpenManualDownloadCommand_DoesNotThrow()
-    {
-        var vm = NewVmNoAutoCheck();
-        var ex = Record.Exception(() => vm.OpenManualDownloadCommand.Execute(null));
-        Assert.Null(ex);
-    }
-
-    [Fact]
     public void OpenDownloadFolderCommand_NoPath_DoesNotThrow()
     {
         var vm = NewVmNoAutoCheck();

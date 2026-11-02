@@ -2,6 +2,10 @@
 // Author: laurentiu021 · https://github.com/laurentiu021/SystemManager
 // License: MIT
 
+using System.Net;
+using System.Net.NetworkInformation;
+using SysManager.Models;
+using SysManager.Services;
 using SysManager.ViewModels;
 
 namespace SysManager.Tests;
@@ -163,5 +167,148 @@ public class TracerouteViewModelTests
         vm.IsTracing = true;
 
         Assert.Same(vm.CancelTraceCommand, vm.EscapeCancel);
+    }
+
+    // ---------- a finished trace's status and where its route is kept (#2751) ----------
+    // The tracer's probe is the test's, three hops to 192.0.2.10, so nothing is sent.
+
+    private static TracerouteService ThreeHops(Func<Task>? beforeEachProbe = null)
+    {
+        return new TracerouteService(async (destination, ttl, _, ct) =>
+        {
+            if (beforeEachProbe is not null) await beforeEachProbe().WaitAsync(ct).ConfigureAwait(false);
+            // On the pool, as a real probe's answer arrives: a hop is then reported from a thread that is not the UI's.
+            await Task.Run(() => { }, ct).ConfigureAwait(false);
+            return ttl < 3
+                ? new TracerouteService.ProbeReply(IPStatus.TtlExpired, IPAddress.Parse($"198.51.100.{ttl}"))
+                : new TracerouteService.ProbeReply(IPStatus.Success, destination);
+        });
+    }
+
+    private static NetworkSharedState SharedWith(TracerouteService tracer, Action<Action>? postToUi = null) => new(
+        new PingMonitorService(), tracer, new TracerouteMonitorService(), new SpeedTestService(),
+        new NetworkRepairService(new PowerShellRunner()), () => null, postToUi);
+
+    [Fact]
+    public void AFinishedTrace_SaysDone_AfterAnyHopsUpdateThatWasStillQueued()
+    {
+        // A hop's update reaches the UI at background priority, behind the UI's own work, and the code after the trace
+        // runs ahead of it. The last hop's "Tracing … hop 3" then ran after "Done" and stayed on screen.
+        var ui = new BusyUiThread();
+        using var shared = SharedWith(ThreeHops(), ui.PostAtBackgroundPriority);
+        using var vm = new TracerouteViewModel(shared) { TraceHost = "192.0.2.10" };
+
+        ui.Run(() => vm.TraceCommand.ExecuteAsync(null));
+
+        Assert.Equal("Done — 3 hops", vm.TraceStatus);
+    }
+
+    [Fact]
+    public async Task ATrace_IsKeptUnderTheHostItTraced_NotWhatTheBoxSaysWhenItEnds()
+    {
+        var typed = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        using var shared = SharedWith(ThreeHops(() => typed.Task));
+        using var vm = new TracerouteViewModel(shared) { TraceHost = "192.0.2.10" };
+
+        var tracing = vm.TraceCommand.ExecuteAsync(null);
+        vm.TraceHost = "example.org";   // typed while the trace runs
+        typed.SetResult();
+        await tracing.WaitAsync(TimeSpan.FromSeconds(30));
+
+        Assert.Equal(["192.0.2.10"], shared.LatestRoutes.Keys);
+        Assert.Equal("Done — 3 hops", vm.TraceStatus);
+    }
+
+    [Theory]
+    [InlineData("198.51.100.2", "Done — 2 hops. 198.51.100.2 answered that it has no route to the destination's network.")]
+    [InlineData("*", "Done — 2 hops. A router answered that it has no route to the destination's network.")]
+    public void ATraceARouterEnded_SaysWhichRouter_AndWhatItAnswered(string address, string expected)
+    {
+        IReadOnlyList<TracerouteHop> hops =
+        [
+            new() { HopNumber = 1, Address = "198.51.100.1", LatencyMs = 4, Status = "TtlExpired" },
+            new() { HopNumber = 2, Address = address, LatencyMs = 9, Status = "DestinationNetworkUnreachable" },
+        ];
+
+        Assert.Equal(expected, TracerouteViewModel.Finished(hops));
+    }
+
+    [Fact]
+    public void ATraceThatReachedItsHost_SaysDone_WithNothingAfterIt()
+    {
+        IReadOnlyList<TracerouteHop> hops =
+            [new() { HopNumber = 1, Address = "192.0.2.10", LatencyMs = 4, Status = "Success" }];
+
+        Assert.Equal("Done — 1 hops", TracerouteViewModel.Finished(hops));
+    }
+
+    /// <summary>
+    /// The UI thread as WPF runs it while it is busy: what an await hands back to it runs first, and what was queued at
+    /// background priority waits until that work is done, then runs in the order it was queued.
+    /// </summary>
+    private sealed class BusyUiThread : SynchronizationContext
+    {
+        private readonly object _gate = new();
+        private readonly Queue<Action> _normal = new();
+        private readonly Queue<Action> _background = new();
+        private readonly SemaphoreSlim _normalQueued = new(0);
+        private int _thread;
+
+        public override void Post(SendOrPostCallback d, object? state)
+        {
+            lock (_gate) _normal.Enqueue(() => d(state));
+            _normalQueued.Release();
+        }
+
+        public override SynchronizationContext CreateCopy() => this;
+
+        /// <summary>InvokeOnUi's way in: at once on the UI thread, and behind everything else from any other.</summary>
+        public void PostAtBackgroundPriority(Action action)
+        {
+            if (Environment.CurrentManagedThreadId == _thread)
+            {
+                action();
+                return;
+            }
+            lock (_gate) _background.Enqueue(action);
+        }
+
+        /// <summary>
+        /// Starts <paramref name="start"/> on this thread and runs the queues until it has ended and both are empty.
+        /// </summary>
+        public void Run(Func<Task> start)
+        {
+            _thread = Environment.CurrentManagedThreadId;
+            var previous = Current;
+            SetSynchronizationContext(this);
+            try
+            {
+                var running = start();
+                while (!running.IsCompleted)
+                {
+                    Assert.True(_normalQueued.Wait(TimeSpan.FromSeconds(30)), "the trace never handed anything back");
+                    Action next;
+                    lock (_gate) next = _normal.Dequeue();
+                    next();
+                }
+
+                while (true)
+                {
+                    Action next;
+                    lock (_gate)
+                    {
+                        if (_normal.Count > 0) next = _normal.Dequeue();
+                        else if (_background.Count > 0) next = _background.Dequeue();
+                        else break;
+                    }
+                    next();
+                }
+                running.GetAwaiter().GetResult();
+            }
+            finally
+            {
+                SetSynchronizationContext(previous);
+            }
+        }
     }
 }

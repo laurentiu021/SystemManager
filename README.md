@@ -1547,6 +1547,12 @@ Answers "what is actually using my space?" by listing the biggest files in one p
   stopping auto-trace, here or on Ping, takes it off the loop again
 - An address that names no host, such as `0.0.0.0`, or a name too long to look up gets a message
   saying it cannot be traced, and leaves the loop's other targets alone
+- **A router that answers that the destination cannot be reached ends the trace**, listed with its own
+  address, and the status line says which router answered and what: no route to the destination's
+  network, the destination cannot be reached, or it refused the trace. A hop that does not answer is a
+  gap in the chart, not a point at 0 ms
+- The host box cannot be changed while a trace runs, and a trace is always listed under the host it
+  traced
 - Shares its targets and its start/stop state with the Ping tab, because it is the same
   monitor answering a different question
 

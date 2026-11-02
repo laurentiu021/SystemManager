@@ -326,6 +326,21 @@ public class NetworkSharedStateTests
         state.TraceSeries.Count(s => s.Name?.Contains($"({host})") == true);
 
     [Fact]
+    public void AHopThatDidNotAnswer_IsAGapInTheChart_NotAPointAtZero()
+    {
+        // It was drawn at 0 ms, on the floor of the axis as if it were the fastest hop (#2751). The ping chart keeps a
+        // lost sample as a gap, and so does this one now.
+        using var state = NewState();
+        var route = Route("192.0.2.1", "*", "203.0.113.9");
+        route[1].LatencyMs = null;
+        route[1].Status = "Timeout";
+
+        state.ApplyRoute("bbc.co.uk", route);
+
+        Assert.Equal([10d, null, 12d], state.TraceBuffers["bbc.co.uk"].Select(p => p.Y));
+    }
+
+    [Fact]
     public void ARouteToAHostThatIsNotAPingTarget_IsListedAndDrawn()
     {
         using var state = NewState();

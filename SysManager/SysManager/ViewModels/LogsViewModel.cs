@@ -194,6 +194,9 @@ public sealed partial class LogsViewModel : ElevatedViewModelBase, IArrivalDesti
     /// </remarks>
     private HashSet<EventSeverity>? _loadedSeverities;
 
+    /// <summary>The log the list was last loaded from, or null before the first load.</summary>
+    private string? _loadedLog;
+
     private void OnSeverityChanged(EventSeverity severity, bool shown)
     {
         EntriesView.Refresh();
@@ -363,6 +366,7 @@ public sealed partial class LogsViewModel : ElevatedViewModelBase, IArrivalDesti
             Severities = BuildSeverityFilter()
         };
         _loadedSeverities = [.. opt.Severities];
+        _loadedLog = opt.LogName;
 
         try
         {
@@ -401,7 +405,9 @@ public sealed partial class LogsViewModel : ElevatedViewModelBase, IArrivalDesti
                 });
             }
 
-            StatusMessage = DescribeLoad(Entries.Count, _eventLogs.LastOutcome, SelectedLog);
+            // The log read, not the one in the box: the box stays open during a load and changing it loads nothing
+            // (#2764).
+            StatusMessage = DescribeLoad(Entries.Count, _eventLogs.LastOutcome, opt.LogName);
             LoadWasRefused = Entries.Count == 0 && _eventLogs.LastOutcome != EventLogService.ReadOutcome.Ok;
             UpdateVisibleCount();
             return true;
@@ -513,7 +519,8 @@ public sealed partial class LogsViewModel : ElevatedViewModelBase, IArrivalDesti
     [RelayCommand]
     private void ExportCsv()
     {
-        var fileName = $"sysmanager-{SelectedLog}-{DateTime.Now.ToString("yyyyMMdd-HHmmss", CultureInfo.InvariantCulture)}.csv";
+        // Named for the log the list came from, which the box no longer shows once it has been changed (#2764).
+        var fileName = $"sysmanager-{_loadedLog ?? SelectedLog}-{DateTime.Now.ToString("yyyyMMdd-HHmmss", CultureInfo.InvariantCulture)}.csv";
         var path = _dialog.PickSaveFile(fileName, "CSV (*.csv)|*.csv|All files (*.*)|*.*");
         if (path is null) return;
 

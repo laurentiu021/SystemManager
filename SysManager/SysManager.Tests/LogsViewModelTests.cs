@@ -474,6 +474,53 @@ public class LogsViewModelTests
         }
     }
 
+    /// <summary>
+    /// The line after a load names the log that was read, though the box was changed while it read (#2764).
+    /// </summary>
+    /// <remarks>
+    /// The load read the log chosen when it started, and the line, which the "could not be read" overlay shows too, named
+    /// the one chosen when it ended: switching to Security during a System load reported System's events as Security's.
+    /// </remarks>
+    [Fact]
+    public void TheLineAfterALoad_NamesTheLogItRead_ThoughTheBoxChangedWhileItRead()
+    {
+        var gate = new TaskCompletionSource();
+        var log = new FakeLog { Events = [(EventSeverity.Error, 1, 1)], Gate = gate };
+        OnADispatcher(queue =>
+        {
+            var vm = new LogsViewModel(new EventLogService(), log.ReadAsync);
+            var refresh = vm.RefreshCommand.ExecuteAsync(null);
+
+            vm.SelectedLog = "Security";
+            gate.SetResult();
+            PumpUntilDone(queue, refresh);
+
+            Assert.Equal("System", Assert.Single(log.Queries).LogName);
+            Assert.Equal("Loaded 1 events from System", vm.StatusMessage);
+        });
+    }
+
+    /// <summary>An export is named for the log its list came from, not the one the box shows now (#2764).</summary>
+    [Fact]
+    public void AnExport_IsNamedForTheLogItsListCameFrom()
+    {
+        var log = new FakeLog { Events = [(EventSeverity.Error, 1, 1)] };
+        var dialog = Substitute.For<IDialogService>();
+        // Null, which is the Cancel of the save box: a substitute's own default for a string is "", a path.
+        dialog.PickSaveFile(Arg.Any<string>(), Arg.Any<string>()).Returns((string?)null);
+        OnADispatcher(queue =>
+        {
+            var vm = new LogsViewModel(new EventLogService(), log.ReadAsync, dialog);
+            PumpUntilDone(queue, vm.RefreshCommand.ExecuteAsync(null));
+            vm.SelectedLog = "Security";
+
+            vm.ExportCsvCommand.Execute(null);
+
+            dialog.Received(1).PickSaveFile(
+                Arg.Is<string>(name => name.StartsWith("sysmanager-System-", StringComparison.Ordinal)), Arg.Any<string>());
+        });
+    }
+
     [Fact]
     public void SwitchingOnASeverityTheLoadDidNotAskFor_LoadsTheListAgainWithIt()
     {

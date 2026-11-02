@@ -65,12 +65,22 @@ internal static class Authenticode
     /// it), and the HResult behind an <see cref="SignerState.Unreadable"/> result for logging.
     /// </returns>
     internal static (SignerState State, X509Certificate2? Certificate, int HResult) ReadSigner(string filePath)
+#pragma warning disable SYSLIB0057 // CreateFromSignedFile is obsolete — no direct replacement for Authenticode verification
+        => ReadSigner(filePath, X509Certificate.CreateFromSignedFile);
+#pragma warning restore SYSLIB0057
+
+    /// <summary>
+    /// The same, with <paramref name="readSignedFile"/> in place of <see cref="X509Certificate.CreateFromSignedFile"/>,
+    /// so a test can see what becomes of the certificate it reads.
+    /// </summary>
+    internal static (SignerState State, X509Certificate2? Certificate, int HResult) ReadSigner(
+        string filePath, Func<string, X509Certificate> readSignedFile)
     {
         try
         {
-#pragma warning disable SYSLIB0057 // CreateFromSignedFile is obsolete — no direct replacement for Authenticode verification
-            var signer = X509Certificate.CreateFromSignedFile(filePath);
-#pragma warning restore SYSLIB0057
+            // The copy duplicates the certificate's context, so the one read is released here. It was left to the
+            // finalizer, and the signature store behind it with it (#2766).
+            using var signer = readSignedFile(filePath);
             return (SignerState.Signed, new X509Certificate2(signer), 0);
         }
         catch (CryptographicException ex) when (ex.HResult == CryptENoMatch)

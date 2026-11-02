@@ -10,6 +10,17 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.136.85] - 2026-11-02
+
+**The Signature columns release each certificate they read instead of leaving it for the garbage collector.**
+
+### Fixed
+- Process Manager's and Startup Manager's Signature columns, and the updater's signature check, copied each signer
+  certificate they read and never released the original, so every signed file left a certificate and the signature
+  store behind it in memory until a garbage collection finalized them. The original is released as soon as the copy is
+  made. This was there since the first signature check, in 0.35.12, and reached both columns when they were added in
+  1.88.0.
+
 ## [1.136.84] - 2026-11-02
 
 **Standby List Cleaner's auto-purge watches free memory instead of purging every 2 seconds under pressure, and the command line reports what a purge released.**

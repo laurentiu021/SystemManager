@@ -3,6 +3,7 @@
 // License: MIT
 
 using System.IO;
+using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
 using SysManager.Helpers;
 
@@ -18,7 +19,7 @@ namespace SysManager.Tests;
 /// stays green, because nothing compares them. The Ookla CLI carries no signature, and is now checked against
 /// pinned SHA-256s instead (#2701).
 /// <para>What can be asserted by execution here is the three-way split
-/// <see cref="SysManager.Helpers.Authenticode.ReadSigner"/> returns, which is the part its callers depend on and
+/// <see cref="SysManager.Helpers.Authenticode.ReadSigner(string)"/> returns, which is the part its callers depend on and
 /// disagree about. Chain validation itself needs a genuinely signed file with a controllable publisher — a test
 /// certificate and signtool, which this project does not have — so that half is pinned against the source,
 /// with the limitation stated rather than papered over.</para>
@@ -96,6 +97,34 @@ public class AuthenticodeTests
 
         Assert.Equal(SignerState.Unreadable, state);
         Assert.Null(cert);
+    }
+
+    /// <summary>
+    /// The certificate read from the file is released as soon as the copy the caller owns is made, and the copy still
+    /// reads (#2766).
+    /// </summary>
+    /// <remarks>
+    /// <c>new X509Certificate2(signer)</c> duplicates the certificate's context, and the certificate it was made from
+    /// was never disposed, so it and the signature store behind it stayed alive until a collection finalized them.
+    /// </remarks>
+    [Fact]
+    public void ReadSigner_ReleasesTheCertificateItRead_AndHandsBackACopyThatStillReads()
+    {
+        using var key = RSA.Create(2048);
+        var request = new CertificateRequest("CN=SysManager test signer", key, HashAlgorithmName.SHA256,
+            RSASignaturePadding.Pkcs1);
+        using var issued = request.CreateSelfSigned(
+            new DateTimeOffset(2026, 1, 1, 0, 0, 0, TimeSpan.Zero), new DateTimeOffset(2027, 1, 1, 0, 0, 0, TimeSpan.Zero));
+        using var read = new X509Certificate(issued);
+
+        var (state, copy, _) = Authenticode.ReadSigner("signed.exe", _ => read);
+        using (copy)
+        {
+            Assert.Equal(SignerState.Signed, state);
+            Assert.Equal(IntPtr.Zero, read.Handle);
+            Assert.NotNull(copy);
+            Assert.Equal("CN=SysManager test signer", copy.Subject);
+        }
     }
 
     // ── ValidateChain: the policy, pinned against the source ──

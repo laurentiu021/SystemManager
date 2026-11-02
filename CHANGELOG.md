@@ -10,6 +10,17 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.136.80] - 2026-11-02
+
+**Gaming Profile's Start waits until a ticked optimization can run, and a start that changed nothing no longer says game mode is on.**
+
+### Fixed
+- Gaming Profile's Start was on when none of the ticked optimizations could run: the two for the game, ticked from the
+  last time, counted with no game picked, and freeing standby memory and pausing indexing counted without
+  administrator. Such a start changed nothing, yet the tab said "Game mode on — 0 optimization(s) applied", Recent
+  activity recorded game mode as started, and Stop was off. Start now counts only what can run, and a start that
+  changed nothing says why and records nothing. This was there since the tab was added in 1.52.38.
+
 ## [1.136.79] - 2026-11-02
 
 **On Dark Mode Scheduler, a switch you make holds until the schedule's next change, and a time it cannot read is refused instead of quietly replaced.**

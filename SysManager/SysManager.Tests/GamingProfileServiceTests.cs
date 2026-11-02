@@ -882,6 +882,44 @@ public class GamingProfileServiceTests
         Assert.False(effective.SilenceNotifications);
     }
 
+    /// <summary>
+    /// The steps Start treats as needing administrator are the ones the service skips without it (#2762): each step's own
+    /// <see cref="IGamingTweak.RequiresAdmin"/>, read back to its tick through the mapping crash recovery uses.
+    /// </summary>
+    [Fact]
+    public void TheStepsStartTreatsAsNeedingAdministrator_AreTheOnesTheServiceSkips()
+    {
+        var everything = new GamingProfile
+        {
+            UltimatePerformancePlan = true,
+            DisableVisualEffects = true,
+            FinestTimerResolution = true,
+            PurgeStandbyMemory = true,
+            PauseSearchIndexing = true,
+            SilenceNotifications = true,
+        };
+        IGamingTweak[] machineWide =
+        [
+            new PowerPlanTweak(PerformanceOverNothing(), "8c5e7fda-e8bf-4a96-9a85-a6e23a8c635c"),
+            new VisualEffectsTweak(PerformanceOverNothing(), true),
+            new TimerResolutionTweak(Substitute.For<ITimerResolutionService>()),
+            new StandbyPurgeTweak(new StandbyMemoryService()),
+            new SearchIndexingTweak(wasRunning: true),
+            // A folder never written: only the step's RequiresAdmin is read.
+            new NotificationsTweak(originalToastEnabled: null,
+                configDir: Path.Combine(Path.GetTempPath(), "SysManagerTests", Guid.NewGuid().ToString("N"))),
+        ];
+
+        foreach (var step in machineWide)
+        {
+            var only = GamingProfileService.EffectiveMachineWideProfile(everything, [step]);
+            Assert.True(only.HasAnyEnabled, $"{step.Label} maps to no tick, so this cannot check it");
+            Assert.True(only.HasAnyThatCanRun(withGame: false, elevated: true), $"{step.Label} cannot run even elevated");
+            Assert.True(only.HasAnyThatCanRun(withGame: false, elevated: false) == !step.RequiresAdmin,
+                $"Start and the service disagree on whether {step.Label} needs administrator");
+        }
+    }
+
     [Fact]
     public void EffectiveMachineWideProfile_NeverIncludesPerGameSteps()
     {

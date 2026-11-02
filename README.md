@@ -2023,6 +2023,10 @@ offers, "rate us" prompts:
   effects, finest (~0.5 ms) timer resolution (for games that ask Windows for a fine timer,
   see Timer Resolution), freeing standby memory, pausing Windows Search indexing, and
   silencing notifications — each ticked individually
+- **Start only when something can change** — the two game ticks count only with a game picked,
+  and freeing standby memory and pausing indexing only when SysManager runs as administrator, so
+  Start stays off while none of the ticked optimizations could run. A start that still changed
+  nothing, because everything was already set or a step failed, says so, and game mode stays off
 - **Fully reversible & snapshot-based** — the original state (power plan, visual
   effects, indexing, notifications) is captured before any change and restored exactly;
   SysManager also tries a System Restore point first (best-effort, needs administrator)

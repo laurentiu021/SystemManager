@@ -131,8 +131,11 @@ public sealed partial class GamingProfileViewModel : ElevatedViewModelBase
                 p => p.ProcessId == current.ProcessId && p.StartTime == current.StartTime && p.Name == current.Name);
     }
 
-    /// <summary>True when nothing is applied yet and at least one optimization is ticked.</summary>
-    public bool CanApply => !IsSessionActive && BuildProfile().HasAnyEnabled;
+    /// <summary>
+    /// True when nothing is applied yet and a ticked optimization can run: one for the game only with a game picked, and
+    /// one that needs administrator only when SysManager runs as administrator (#2762).
+    /// </summary>
+    public bool CanApply => !IsSessionActive && BuildProfile().HasAnyThatCanRun(HasSelectedGame, _service.IsElevated);
 
     private GamingProfile BuildProfile() => new()
     {
@@ -168,6 +171,9 @@ public sealed partial class GamingProfileViewModel : ElevatedViewModelBase
     partial void OnPauseSearchIndexingChanged(bool value) => OnAnyToggleChanged();
     partial void OnSilenceNotificationsChanged(bool value) => OnAnyToggleChanged();
 
+    // A game picked or let go turns its two steps on or off as well.
+    partial void OnSelectedGameChanged(RunningProcess? value) => OnAnyToggleChanged();
+
     private void OnAnyToggleChanged()
     {
         OnPropertyChanged(nameof(CanApply));
@@ -180,9 +186,12 @@ public sealed partial class GamingProfileViewModel : ElevatedViewModelBase
     private async Task StartAsync()
     {
         var profile = BuildProfile();
-        if (!profile.HasAnyEnabled)
+        if (!profile.HasAnyThatCanRun(HasSelectedGame, _service.IsElevated))
         {
-            StatusMessage = "Tick at least one optimization first.";
+            StatusMessage = profile.HasAnyEnabled
+                ? "None of the ticked optimizations can run: the two for the game need a game picked, and freeing "
+                  + "standby memory and pausing indexing need SysManager to run as administrator."
+                : "Tick at least one optimization first.";
             return;
         }
 
@@ -271,6 +280,16 @@ public sealed partial class GamingProfileViewModel : ElevatedViewModelBase
             }
 
             IsSessionActive = _service.IsActive;
+            if (result.AppliedCount == 0)
+            {
+                // Nothing changed, so no session is on and there is nothing for Stop to undo: the line says why, and
+                // Recent activity records no game mode. It said "Game mode on — 0 optimization(s) applied" (#2762).
+                StatusMessage = DescribeNothingApplied(result);
+                Log.Information("Gaming Profile changed nothing: {Admin} need admin, {Failed} failed",
+                    result.SkippedForAdminCount, result.FailedCount);
+                return;
+            }
+
             StatusMessage = DescribeResult(result, game);
             ActivityLogService.Instance.Log("Gaming Profile",
                 $"Started game mode ({result.AppliedCount} optimization(s))");
@@ -379,6 +398,27 @@ public sealed partial class GamingProfileViewModel : ElevatedViewModelBase
     /// <inheritdoc cref="GamingRevertResult.Describe"/>
     internal static string DescribeRevert(GamingRevertResult result, string fullyRestored, string partialLead) =>
         result.Describe(fullyRestored, partialLead);
+
+    /// <summary>
+    /// The status line after a start that changed nothing: game mode did not start, and why (#2762).
+    /// </summary>
+    internal static string DescribeNothingApplied(GamingApplyResult result)
+    {
+        var parts = new List<string>();
+        var noChange = result.Steps.Count(s => s.Status == GamingStepStatus.SkippedNoChange);
+        if (noChange > 0)
+            parts.Add($"{noChange} needed no change");
+        if (result.SkippedForAdminCount > 0)
+            parts.Add($"{result.SkippedForAdminCount} {(result.SkippedForAdminCount == 1 ? "needs" : "need")} "
+                      + "administrator (run as admin and retry)");
+        if (result.FailedCount > 0)
+            parts.Add($"{result.FailedCount} could not be applied");
+        if (parts.Count == 0)
+            parts.Add("none of the ticked optimizations could run");
+        if (result.RestorePointCreated)
+            parts.Add("restore point created");
+        return $"Game mode did not start: nothing was changed — {string.Join(" · ", parts)}.";
+    }
 
     /// <summary>Builds an honest, plain-language summary of an apply batch (pure, testable).</summary>
     internal static string DescribeResult(GamingApplyResult result, GameTarget? game)

@@ -84,6 +84,9 @@ public sealed class GamingProfileService : IGamingProfileService, IDisposable
     }
 
     public bool IsActive => _appliedSteps.Count > 0 || _starting;
+
+    /// <inheritdoc />
+    public bool IsElevated => _isElevated;
     public int? BoundGamePid { get; private set; }
     /// <inheritdoc />
     public PendingRecovery ReadPendingRecovery()

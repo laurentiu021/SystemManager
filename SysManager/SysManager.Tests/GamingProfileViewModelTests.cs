@@ -112,6 +112,76 @@ public class GamingProfileViewModelTests
         Assert.False(vm.CanApply); // can't start a second session over an active one
     }
 
+    // ── Start only when a ticked step can run (#2762) ──────────────────────
+
+    /// <summary>
+    /// The two steps for the game run only on a game, so with only those ticked and no game picked, Start is off until
+    /// one is (#2762).
+    /// </summary>
+    /// <remarks>
+    /// They stay ticked from the last configuration under the panel that is off without a game, and Start counted them,
+    /// so it ran a start that changed nothing and then said "Game mode on" with Stop off.
+    /// </remarks>
+    [Fact]
+    public void Start_IsOff_WithOnlyTheGameStepsTicked_UntilAGameIsPicked()
+    {
+        var vm = NewVm(ServiceWith(new GamingProfile { HighGameCpuPriority = true, PinGameToPerformanceCores = true }),
+            CpuWith(new RunningProcess(4242, "doom.exe", 0, Started)));
+
+        Assert.False(vm.CanApply);
+        Assert.False(vm.StartCommand.CanExecute(null));
+
+        vm.SelectedGame = vm.Processes.Single();
+
+        Assert.True(vm.CanApply);
+        Assert.True(vm.StartCommand.CanExecute(null));
+    }
+
+    /// <summary>
+    /// Freeing standby memory and pausing indexing are skipped without administrator, so with only those ticked Start is
+    /// on only when SysManager runs as administrator (#2762).
+    /// </summary>
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void Start_WithOnlyTheStepsThatNeedAdministratorTicked_IsOnOnlyWhenElevated(bool elevated)
+    {
+        var service = ServiceWith(new GamingProfile { PurgeStandbyMemory = true, PauseSearchIndexing = true });
+        service.IsElevated.Returns(elevated);
+        var vm = NewVm(service);
+
+        Assert.Equal(elevated, vm.CanApply);
+        Assert.Equal(elevated, vm.StartCommand.CanExecute(null));
+    }
+
+    /// <summary>
+    /// A start that changed nothing says so and why, leaves game mode off, and records no game mode in Recent activity
+    /// (#2762).
+    /// </summary>
+    /// <remarks>
+    /// It said "Game mode on — 0 optimization(s) applied", wrote "Started game mode (0 optimization(s))", and left Stop
+    /// off, since no session was on.
+    /// </remarks>
+    [Fact]
+    public async Task AStartThatChangedNothing_SaysSo_AndRecordsNoGameMode()
+    {
+        using var log = new ActivityLogScope();
+        var service = ServiceWith(new GamingProfile { SilenceNotifications = true, PauseSearchIndexing = true });
+        service.ApplyAsync(Arg.Any<GamingProfile>(), Arg.Any<GameTarget?>())
+               .Returns(new GamingApplyResult(
+                   [new GamingStepOutcome("Pause search indexing", GamingStepStatus.SkippedNeedsAdmin),
+                    new GamingStepOutcome("Silence notifications", GamingStepStatus.SkippedNoChange)],
+                   RestorePointCreated: false));
+        var vm = NewVm(service);
+
+        await WithConfirm(true, () => vm.StartCommand.ExecuteAsync(null));
+
+        Assert.Equal("Game mode did not start: nothing was changed — 1 needed no change · 1 needs administrator "
+                     + "(run as admin and retry).", vm.StatusMessage);
+        Assert.False(vm.IsSessionActive);
+        Assert.Empty(ActivityLogService.Instance.GetRecent(10));
+    }
+
     // ── Start forwards the built profile + selected game ───────────────────
 
     private static readonly DateTime Started = new(2026, 9, 30, 8, 15, 42, DateTimeKind.Local);

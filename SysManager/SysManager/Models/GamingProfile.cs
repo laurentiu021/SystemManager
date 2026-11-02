@@ -58,6 +58,22 @@ public sealed record GamingProfile
         UltimatePerformancePlan || DisableVisualEffects || FinestTimerResolution ||
         HighGameCpuPriority || PinGameToPerformanceCores || PurgeStandbyMemory ||
         PauseSearchIndexing || SilenceNotifications;
+
+    /// <summary>
+    /// True if a ticked optimization can run: one for the game only when a game is picked, and one that needs
+    /// administrator only when SysManager runs as administrator (#2762).
+    /// </summary>
+    /// <remarks>
+    /// The two for the game stay ticked under the panel that is off without one, and the two that need administrator
+    /// are skipped without it, so counting every tick let Start run a start that could change nothing. Which steps need
+    /// administrator is each step's own <c>RequiresAdmin</c>; a test holds this to it.
+    /// </remarks>
+    /// <param name="withGame">Whether a game is picked.</param>
+    /// <param name="elevated">Whether SysManager runs as administrator.</param>
+    public bool HasAnyThatCanRun(bool withGame, bool elevated) =>
+        UltimatePerformancePlan || DisableVisualEffects || FinestTimerResolution || SilenceNotifications
+        || (withGame && (HighGameCpuPriority || PinGameToPerformanceCores))
+        || (elevated && (PurgeStandbyMemory || PauseSearchIndexing));
 }
 
 /// <summary>

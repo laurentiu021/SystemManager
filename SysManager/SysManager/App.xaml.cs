@@ -254,7 +254,18 @@ public partial class App : Application
     /// </summary>
     private void RunCliAndExit(string[] args)
     {
+        // Logged as the window logs: a scripted or scheduled run has no window and often no console, so the log is what
+        // it leaves, and a fault nothing caught is recorded as in the window (#2767). A window open meanwhile holds
+        // today's file, and Serilog then writes this run to the next file of the day.
+        LogService.Init();
+        AppDomain.CurrentDomain.UnhandledException += OnDomain;
+        TaskScheduler.UnobservedTaskException += OnTask;
+
         var request = CliRunner.Parse(args);
+        if (request.UnknownArg is { } unknown)
+            LogService.Logger?.Warning("Command line: an option SysManager does not know, {Option}", unknown);
+        else
+            LogService.Logger?.Information("Command line: {Command}", request.Command);
         bool attached = AttachConsole(AttachParentProcess);
         // Default to the error code (1), not the usage code (2): ExecuteAsync sets the
         // real code for every known command, so the only way we keep this default is an
@@ -281,7 +292,9 @@ public partial class App : Application
         }
         finally
         {
+            LogService.Logger?.Information("Command line finished with exit code {ExitCode}", exitCode);
             if (attached) FreeConsole();
+            Serilog.Log.CloseAndFlush();
             Shutdown(exitCode);
             Environment.Exit(exitCode);
         }

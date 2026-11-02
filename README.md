@@ -2580,6 +2580,9 @@ offers, "rate us" prompts:
   away is visible next time you open SysManager, instead of leaving no trace. `--health`
   deliberately records nothing: it changes nothing, and a script polling it would push
   the real entries out of a history that only keeps the last 200
+- **A run logs as the window does**, to the same log folder with your user name removed: the command, its
+  exit code, and anything a cleanup could not read or a check could not answer. A run from Task Scheduler
+  has no console, so the log is where a failed or partial scheduled cleanup says why
 - The in-app **CLI Interface** tab is a reference: it lists every command with a
   one-click copy button. Each command is copied with the full path of the file you are running,
   since the download is named `SysManager-v<version>.exe`, for example

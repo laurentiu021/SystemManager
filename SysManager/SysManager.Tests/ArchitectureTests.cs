@@ -5807,6 +5807,40 @@ public partial class ArchitectureTests
     private static partial Regex StartupShutdown();
 
     /// <summary>
+    /// A command-line run logs as the window does: the log is set up before the command runs, the handlers for a fault
+    /// nothing caught are wired, and what was written is flushed before the process ends (#2767).
+    /// </summary>
+    /// <remarks>
+    /// <c>OnStartup</c> handed a command line to <c>RunCliAndExit</c> before it reached <c>LogService.Init()</c>, which
+    /// <c>RunCliAndExit</c> never called either, so a scripted or scheduled <c>--cleanup</c> wrote nothing: not a folder it
+    /// could not read, not the fault its own catch logs, and the handlers that record a crash were never wired. A run
+    /// from Task Scheduler has no console, so the log is all such a run can leave. Read from the source because the suite
+    /// never builds the real sink (see <c>LogServiceLogDirTests</c>), with comments and literals blanked first.
+    /// </remarks>
+    [Fact]
+    public void ACommandLineRun_LogsAsTheWindowDoes()
+    {
+        var body = SourceBraces.CodeOnly(MethodBody(File.ReadAllText(TestPaths.AppFile("App.xaml.cs")), "RunCliAndExit"));
+        var run = body.IndexOf(".ExecuteAsync(", StringComparison.Ordinal);
+        Assert.True(run >= 0, "RunCliAndExit no longer runs the command, so this guard reads the wrong method.");
+
+        var init = body.IndexOf("LogService.Init()", StringComparison.Ordinal);
+        Assert.True(init >= 0 && init < run,
+            "RunCliAndExit runs the command before the log is set up, so nothing the command logs is written.");
+        foreach (var wiring in (string[])["AppDomain.CurrentDomain.UnhandledException += OnDomain",
+                                          "TaskScheduler.UnobservedTaskException += OnTask"])
+        {
+            var at = body.IndexOf(wiring, StringComparison.Ordinal);
+            Assert.True(at >= 0 && at < run, $"RunCliAndExit does not wire '{wiring}' before the command runs.");
+        }
+
+        var flush = body.IndexOf("Log.CloseAndFlush()", StringComparison.Ordinal);
+        var exit = body.IndexOf("Environment.Exit(", StringComparison.Ordinal);
+        Assert.True(exit >= 0, "RunCliAndExit no longer ends the process, so this guard reads the wrong method.");
+        Assert.True(flush >= 0 && flush < exit, "RunCliAndExit ends the process without flushing the log.");
+    }
+
+    /// <summary>
     /// The text of a method from its signature to its closing brace, by brace matching.
     /// </summary>
     /// <remarks>

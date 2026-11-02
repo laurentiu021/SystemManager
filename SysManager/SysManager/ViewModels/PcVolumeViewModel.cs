@@ -186,7 +186,7 @@ public sealed partial class PcVolumeViewModel : ObservableObject, IAdjustableVol
             _outputId = device.Id;
             OutputName = device.FriendlyName;
             _report($"Sound now plays through {device.FriendlyName}.");
-            ActivityLogService.Instance.Log("Volume", $"Sound now plays through {device.FriendlyName}");
+            ActivityLogService.Instance.Log("Volume Control", $"Sound now plays through {device.FriendlyName}");
         }
         else
         {

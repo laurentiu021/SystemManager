@@ -214,7 +214,7 @@ public sealed partial class StandbyMemoryViewModel : ElevatedViewModelBase
             if (ok)
             {
                 Log.Information("User purged standby list");
-                ActivityLogService.Instance.Log("Standby cleaner", "Purged the standby memory list");
+                ActivityLogService.Instance.Log("Standby List Cleaner", "Purged the standby memory list");
                 StatusMessage = "Standby list purged — cached memory released to the free list.";
                 Refresh();
             }

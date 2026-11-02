@@ -400,7 +400,7 @@ public sealed partial class AudioMixerViewModel : ViewModelBase
         Presets.ReplaceWith(saved);
         NewPresetName = "";
         StatusMessage = $"Saved preset \"{name}\" with {entries.Count} app{(entries.Count == 1 ? "" : "s")}.";
-        ActivityLogService.Instance.Log("Volume", $"Saved preset '{name}'");
+        ActivityLogService.Instance.Log("Volume Control", $"Saved preset '{name}'");
     }
 
     /// <summary>Apply the selected preset's volumes/mutes to the matching live sessions.</summary>

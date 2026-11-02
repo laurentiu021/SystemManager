@@ -356,10 +356,10 @@ public class CliRunnerTests
         // Dashboard shows the action.
         using var scope = new ActivityLogScope();
 
-        CliRunner.RecordHeadlessRun("Standby cleaner", "Purged the standby memory list");
+        CliRunner.RecordHeadlessRun("Standby List Cleaner", "Purged the standby memory list");
 
         var entry = Assert.Single(ActivityLogService.Instance.GetRecent(10));
-        Assert.Equal("Standby cleaner", entry.Action);
+        Assert.Equal("Standby List Cleaner", entry.Action);
         Assert.DoesNotContain("command line", entry.Action, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("run from the command line", entry.Detail, StringComparison.Ordinal);
     }

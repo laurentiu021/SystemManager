@@ -808,7 +808,7 @@ Key services:
   the certificate can never describe different files.
 - `Helpers/SelectionCarry` — keeps the user's ticks when a bound list is rebuilt, defined once for
   the ten tabs that rebuild one from a fresh scan: System Health drives, Deep Cleanup categories,
-  Shortcut Cleaner, Browser Cleaner, App Updates, Profile Export, App Blocker, Debloater,
+  Shortcut Cleaner, Browser Cleaner, App Updates, Profile Export / Import, App Blocker, Preinstalled Apps,
   Uninstaller and Windows Update, whose rows are keyed by update id and kept apart from the grid so
   a look at the History view does not lose them (#2874). The six it started with used to re-derive the tick from a default, and in four the
   fresh rows arrive pre-selected — so a refresh did not forget the choice but REVERSED it, and the

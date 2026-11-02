@@ -506,8 +506,8 @@ Edit Windows environment variables without the cramped built-in dialog:
 - **A source that could not be read is named** rather than shown as nothing changed, and an empty period
   says what was checked: "Nothing was installed or updated, SysManager changed nothing, and your saved
   settings still match"
-- Rows lead to the tab that can do something about them — **Open Uninstaller** for a program, **Open App
-  Alerts** for one New App Alerts noticed, **Review** for a changed setting — and the Dashboard's Recent
+- Rows lead to the tab that can do something about them — **Open Uninstaller** for a program, **Open New App
+  Alerts** for a program that tab noticed, **Review** for a changed setting — and the Dashboard's Recent
   activity card leads here with **See all changes**
 - **Export CSV** saves what is shown to a file you choose. Nothing on this tab changes anything on the PC,
   and nothing leaves it: the list of programs and when each setting was noticed are kept in your

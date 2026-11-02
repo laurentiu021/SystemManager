@@ -466,7 +466,7 @@ public sealed partial class ChangeRow : ObservableObject
     public string LinkText => Link switch
     {
         ChangeLink.Uninstaller => "Open Uninstaller",
-        ChangeLink.AppAlerts => "Open App Alerts",
+        ChangeLink.AppAlerts => "Open New App Alerts",
         ChangeLink.SettingsWatchdog => "Review",
         _ => "",
     };

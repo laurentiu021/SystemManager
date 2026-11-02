@@ -390,7 +390,7 @@ public sealed partial class PrivacyViewModel : ElevatedViewModelBase, ISearchDes
         // would record which privacy settings this user cares about.
         if (applied.Count > 0)
         {
-            ActivityLogService.Instance.Log("Privacy",
+            ActivityLogService.Instance.Log("Privacy & Telemetry",
                 failed.Count == 0
                     ? $"Applied {applied.Count} change{(applied.Count == 1 ? "" : "s")}"
                     : $"Applied {applied.Count} of {applied.Count + failed.Count} changes ({failed.Count} needed administrator)");

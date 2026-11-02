@@ -10253,6 +10253,132 @@ public partial class ArchitectureTests
     private static partial Regex LockAcquisition();
 
     /// <summary>
+    /// What SysManager writes in its activity history, and in a restore point's description, names a tab as the
+    /// sidebar does (#2745).
+    /// </summary>
+    /// <remarks>
+    /// Preinstalled Apps' restore points were still "SysManager Debloater" and its history entries "Debloater", the
+    /// name the tab dropped in 1.109.2, so a user who read either looked for a tab that was not there. Four other
+    /// history titles were short forms of their tab's name, and Edge/OneDrive Remover's restore point too. A title that
+    /// names no tab is one of the operations listed here, none of which is a tab. A title that is not written out where
+    /// the call is made cannot be checked, so the one call that hands its title on, the command line's, is named.
+    /// </remarks>
+    [Fact]
+    public void EveryActivityTitleAndRestorePoint_NamesTheTabAsTheSidebarDoes()
+    {
+        var labels = SidebarTabLabels();
+        Assert.True(labels.Count >= 55,
+            $"only {labels.Count} tabs were read from MainWindowViewModel, so this checks almost nothing.");
+        string[] operations = ["Component store cleanup", "Quick Tune-Up", "Restore point", "Shell", "Update"];
+
+        var titles = 0;
+        var points = 0;
+        var offenders = new List<string>();
+        foreach (var file in SourceFilesUnder(TestPaths.AppProject(), ".cs"))
+        {
+            var source = File.ReadAllText(file);
+            var code = SourceBraces.CodeOnly(source);
+            var name = Path.GetFileName(file);
+
+            foreach (Match call in ActivityCall().Matches(code))
+            {
+                var after = call.Index + call.Length;
+                var title = LeadingLiteral().Match(source, after);
+                if (!title.Success)
+                {
+                    // RecordHeadlessRun hands its own parameter on, and every call to it is read here.
+                    if (name != "CliRunner.cs" || !ForwardedTitle().Match(source, after).Success)
+                        offenders.Add($"{name}: {call.Value} has a title that is not written out, "
+                            + "so it cannot be checked");
+                    continue;
+                }
+
+                titles++;
+                var text = title.Groups["text"].Value;
+                if (!labels.Contains(text) && !operations.Contains(text))
+                    offenders.Add($"{name}: the activity title \"{text}\" is not a tab's name in the sidebar");
+            }
+
+            foreach (Match call in RestorePointCall().Matches(code))
+            {
+                var after = call.Index + call.Length;
+                var description = LeadingLiteral().Match(source, after);
+                if (!description.Success)
+                {
+                    if (!Declaration().Match(source, after).Success)
+                        offenders.Add($"{name}: a restore point's description is not written out, "
+                            + "so it cannot be checked");
+                    continue;
+                }
+
+                points++;
+                var text = description.Groups["text"].Value;
+                const string Prefix = "SysManager ";
+                if (!text.StartsWith(Prefix, StringComparison.Ordinal) || !labels.Contains(text[Prefix.Length..]))
+                    offenders.Add($"{name}: the restore point \"{text}\" is not SysManager and "
+                        + "a tab's name in the sidebar");
+            }
+        }
+
+        // 35 titles and 7 restore points when this was written.
+        Assert.True(titles >= 30, $"only {titles} activity titles were read, so this checks almost nothing.");
+        Assert.True(points >= 6, $"only {points} restore point descriptions were read, so this checks almost nothing.");
+        Assert.True(offenders.Count == 0, string.Join("\n", offenders));
+    }
+
+    /// <summary>A Recent Changes row's Open button names the tab it opens as the sidebar does (#2745).</summary>
+    /// <remarks>
+    /// The button on a program New App Alerts noticed said "Open App Alerts", the tab's name before 1.66.4. A row is
+    /// built for every kind of change, and each Open button is held to the label of the tab its nav id opens.
+    /// </remarks>
+    [Fact]
+    public void EveryRecentChangesOpenButton_NamesTheTabItOpens()
+    {
+        var shell = File.ReadAllText(Path.Combine(TestPaths.AppProject(), "ViewModels", "MainWindowViewModel.cs"));
+        var tabs = NavEntry().Matches(shell)
+            .ToDictionary(m => m.Groups[1].Value, m => m.Groups[2].Value, StringComparer.Ordinal);
+        var when = new DateTime(2026, 11, 2, 12, 0, 0, DateTimeKind.Local);
+
+        var opens = 0;
+        foreach (var kind in Enum.GetValues<SysManager.Models.ChangeKind>())
+        {
+            var row = SysManager.ViewModels.ChangeRow.For(
+                new SysManager.Models.ChangeEvent(when, null, kind, "Contoso Notes", "Who", ""));
+            if (!row.LinkText.StartsWith("Open ", StringComparison.Ordinal)) continue;
+
+            opens++;
+            Assert.True(tabs.TryGetValue(row.LinkNavId, out var label),
+                $"{kind}'s button opens {row.LinkNavId}, which is no tab");
+            Assert.Equal("Open " + label, row.LinkText);
+        }
+
+        // Four kinds of change open a tab this way when this was written: three the Uninstaller, one New App Alerts.
+        Assert.True(opens >= 4, $"only {opens} rows had an Open button, so this checks almost nothing.");
+    }
+
+    /// <summary>
+    /// A call that writes an entry to the activity history, by the instance or by the command line's helper.
+    /// </summary>
+    [GeneratedRegex(@"(?:\.Log|\bRecordHeadlessRun)\(", RegexOptions.CultureInvariant)]
+    private static partial Regex ActivityCall();
+
+    /// <summary>A call that tries the session's restore point.</summary>
+    [GeneratedRegex(@"\bEnsureAsync\(", RegexOptions.CultureInvariant)]
+    private static partial Regex RestorePointCall();
+
+    /// <summary>The plain string literal a call starts with, matched where the call's parenthesis ends.</summary>
+    [GeneratedRegex(@"\G\s*""(?<text>[^""\\]*)""", RegexOptions.CultureInvariant)]
+    private static partial Regex LeadingLiteral();
+
+    /// <summary>The command line's helper: its declaration, and the call that hands its parameter on.</summary>
+    [GeneratedRegex(@"\G\s*(?:string\s+)?action\b", RegexOptions.CultureInvariant)]
+    private static partial Regex ForwardedTitle();
+
+    /// <summary>A method declaration's first parameter, where a call would have its first argument.</summary>
+    [GeneratedRegex(@"\G\s*string\s+\w+", RegexOptions.CultureInvariant)]
+    private static partial Regex Declaration();
+
+    /// <summary>
     /// The manual smoke script reads its tabs from the UI suite's table, and reads every row of it (#2744).
     /// </summary>
     /// <remarks>

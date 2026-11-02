@@ -18924,9 +18924,9 @@ public partial class ArchitectureTests
         }
 
         // Measured at 14 constructions when this was written, 3 of them redirecting: PowerShellRunner.RunProcessAsync,
-        // Startup Manager's schtasks and Right-Click Menu's reg export. Startup Manager's schtasks has gone through the
-        // runner since #2766, which leaves 13 and 2.
-        Assert.True(judged >= 10 && redirecting >= 2,
+        // Startup Manager's schtasks and Right-Click Menu's reg export. The other two have gone through the runner
+        // since #2766, which leaves 12 and the runner's own.
+        Assert.True(judged >= 10 && redirecting >= 1,
             $"only {judged} ProcessStartInfo constructions start a Windows tool and {redirecting} redirect a "
             + "stream, so the scan is no longer finding them — fix the pattern rather than trusting the pass");
         Assert.True(offenders.Count == 0,

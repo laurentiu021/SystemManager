@@ -158,7 +158,7 @@ public sealed partial class ContextMenuViewModel : ElevatedViewModelBase
 
         // Only the registry write leaves this thread: the row already shows the state asked for, and is put back on
         // this thread below when Windows refuses it (#2765).
-        var success = await Task.Run(() => _service.WriteState(entry, desiredState));
+        var success = await Task.Run(() => _service.WriteStateAsync(entry, desiredState));
 
         if (success)
         {
@@ -267,7 +267,7 @@ public sealed partial class ContextMenuViewModel : ElevatedViewModelBase
             // (Explorer restart especially) — run them off the UI thread so the window
             // stays responsive. No UI state is touched inside the Task.Run body: the rows written are collected, and
             // their state is set below, on this thread (#2765).
-            var (styleSet, disabled, enabled) = await Task.Run(() =>
+            var (styleSet, disabled, enabled) = await Task.Run(async () =>
             {
                 // The style first, and nothing else when Windows refuses it. Its result was dropped, so a refused
                 // write still restarted Explorer, closing every File Explorer window, and the tab said the preset
@@ -278,11 +278,20 @@ public sealed partial class ContextMenuViewModel : ElevatedViewModelBase
                     return (false, new List<ContextMenuEntry>(), new List<ContextMenuEntry>());
                 }
 
-                // Disable all third-party entries to restore clean default
-                var dis = _allEntries.Where(IsPresetTarget).Where(entry => _service.WriteState(entry, enabled: false)).ToList();
+                // Disable all third-party entries to restore clean default. Each list is taken before the first write,
+                // as it was by the query it replaces.
+                List<ContextMenuEntry> dis = [];
+                foreach (var entry in _allEntries.Where(IsPresetTarget).ToList())
+                {
+                    if (await _service.WriteStateAsync(entry, enabled: false).ConfigureAwait(false)) dis.Add(entry);
+                }
 
                 // Enable any default Windows entries that were previously disabled
-                var en = _allEntries.Where(IsPresetRestorable).Where(entry => _service.WriteState(entry, enabled: true)).ToList();
+                List<ContextMenuEntry> en = [];
+                foreach (var entry in _allEntries.Where(IsPresetRestorable).ToList())
+                {
+                    if (await _service.WriteStateAsync(entry, enabled: true).ConfigureAwait(false)) en.Add(entry);
+                }
 
                 if (needsRestart)
                     ExplorerShell.Restart();

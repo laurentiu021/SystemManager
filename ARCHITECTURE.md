@@ -1397,8 +1397,10 @@ Key services:
   hive. The menu style
   (`IsClassicMenuEnabled`, `EnableClassicMenu`, `DisableClassicMenu`) is on `IContextMenuService`, and
   a preset whose style write Windows refuses changes nothing and restarts no Explorer (#2804).
-- `BackupRegistry` exports the affected key to `%LocalAppData%\SysManager\Backups\ContextMenu`
-  before each change, and `PruneBackups` keeps only `BackupsKeptPerKey` (3) per key. Ordered by
+- `BackupAsync` exports the affected key to `%LocalAppData%\SysManager\Backups\ContextMenu`, or the
+  folder a test passes, before each change, running reg.exe through the `IPowerShellRunner` the service
+  takes by constructor, which stops it after `BackupTimeout` (5 s) (#2766). So the write methods on
+  `IContextMenuService` are asynchronous. `PruneBackups` keeps only `BackupsKeptPerKey` (3) per key. Ordered by
   FILE NAME, whose `yyyyMMdd_HHmmss` tail sorts chronologically and cannot be rewritten by a copy
   the way `CreationTime` can — same reasoning as `DiagnosticsBundleService.NewestLogs`. The
   timestamp shape is re-checked in code rather than trusted to the glob, because one key's

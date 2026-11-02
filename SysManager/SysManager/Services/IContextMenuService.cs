@@ -31,23 +31,24 @@ public interface IContextMenuService
     /// Returns false when the key is missing or not writable — a TrustedInstaller-owned entry
     /// fails here even when elevated.
     /// </summary>
-    bool DisableEntry(ContextMenuEntry entry);
+    Task<bool> DisableEntryAsync(ContextMenuEntry entry);
 
     /// <summary>
     /// Restores an entry by removing <c>LegacyDisable</c>. Returns false on the same conditions
-    /// as <see cref="DisableEntry"/>.
+    /// as <see cref="DisableEntryAsync"/>.
     /// </summary>
-    bool EnableEntry(ContextMenuEntry entry);
+    Task<bool> EnableEntryAsync(ContextMenuEntry entry);
 
     /// <summary>
-    /// Writes what <see cref="DisableEntry"/> or <see cref="EnableEntry"/> writes, and leaves the entry itself alone. True
-    /// when Windows accepted the change.
+    /// Writes what <see cref="DisableEntryAsync"/> or <see cref="EnableEntryAsync"/> writes, and leaves the entry itself
+    /// alone. True when Windows accepted the change.
     /// </summary>
     /// <remarks>
     /// For a caller on a worker thread: the entry is a row the window shows, so its state is set back on the window's
-    /// thread once the write has been made, rather than by the write (#2765).
+    /// thread once the write has been made, rather than by the write (#2765). Asynchronous because the key is exported
+    /// through the runner first (#2766).
     /// </remarks>
-    bool WriteState(ContextMenuEntry entry, bool enabled);
+    Task<bool> WriteStateAsync(ContextMenuEntry entry, bool enabled);
 
     /// <summary>Whether the classic, Windows 10 style, full menu is forced; false when it cannot be read.</summary>
     bool IsClassicMenuEnabled();

@@ -70,6 +70,7 @@ public sealed class ContextMenuServiceShellExTests : IDisposable
         _user.Dispose();
         try { Registry.CurrentUser.DeleteSubKeyTree(_treeName, throwOnMissingSubKey: false); } catch { /* best-effort cleanup */ }
         try { Registry.CurrentUser.DeleteSubKeyTree(@"Software\Classes\" + _refusalClass, throwOnMissingSubKey: false); } catch { /* best-effort cleanup */ }
+        if (Directory.Exists(_backups)) Directory.Delete(_backups, recursive: true);
     }
 
     /// <summary>Puts a CLSID on the fake machine's Blocked list, the way blocking one does.</summary>
@@ -128,7 +129,15 @@ public sealed class ContextMenuServiceShellExTests : IDisposable
 
     // Every hive is a fake, so a scan asserts what the test set up and nothing the developer's machine
     // happens to have blocked, for itself or for the user running the suite.
-    private ContextMenuService Service() => new(_root, _machine, _user);
+    private ContextMenuService Service() => new(_runner, _root, _machine, _user, _backups, _clock);
+
+    // reg.exe runs through the runner, so an export is a call on this substitute and nothing is exported for real.
+    private readonly IPowerShellRunner _runner = Substitute.For<IPowerShellRunner>();
+
+    // The exports' own folder. The real backups folder took one for every handler a test blocked (#2766).
+    private readonly string _backups = Path.Combine(Path.GetTempPath(), "SysManagerCtxExports", Guid.NewGuid().ToString("N"));
+
+    private readonly HeldTimers _clock = new(new DateTimeOffset(2026, 11, 2, 12, 0, 0, TimeSpan.Zero));
 
     private List<ContextMenuEntry> Scan() => Service().ScanEntries();
 
@@ -404,7 +413,7 @@ public sealed class ContextMenuServiceShellExTests : IDisposable
         GivenComClass(Archiver, "Both Servers", inprocDll: @"C:\in\proc.dll", localServer: @"C:\out\proc.exe");
         GivenComClass(Sync, "Out Of Process Only", localServer: @"C:\out\only.exe");
 
-        var svc = new ContextMenuService(_root);
+        var svc = new ContextMenuService(_runner, _root);
 
         Assert.Equal(@"C:\in\proc.dll", svc.ResolveClsid(Archiver).Dll);
         Assert.Equal(@"C:\out\only.exe", svc.ResolveClsid(Sync).Dll);
@@ -416,7 +425,7 @@ public sealed class ContextMenuServiceShellExTests : IDisposable
     {
         GivenComClass(Archiver, "Quoted", inprocDll: @"""C:\Program Files\TestArchiver\ext.dll""");
 
-        Assert.Equal(@"C:\Program Files\TestArchiver\ext.dll", new ContextMenuService(_root).ResolveClsid(Archiver).Dll);
+        Assert.Equal(@"C:\Program Files\TestArchiver\ext.dll", new ContextMenuService(_runner, _root).ResolveClsid(Archiver).Dll);
     }
 
     // ---- The write side: a handler is hidden through the Blocked list, never through LegacyDisable ----
@@ -433,46 +442,65 @@ public sealed class ContextMenuServiceShellExTests : IDisposable
     };
 
     [Fact]
-    public void DisableEntry_BlocksAHandlerByClsid_AndNeverWritesLegacyDisable()
+    public async Task DisableEntry_BlocksAHandlerByClsid_AndNeverWritesLegacyDisable()
     {
         // LegacyDisable on a shellex key SUCCEEDS and does nothing: Explorer only honours it on a verb.
         // So the disable path has to go somewhere else entirely, and the two halves of that are asserted
         // together — the CLSID reaches the Blocked list, and no value is left on the handler's own key.
         var entry = AHandlerRow();
 
-        Assert.True(Service().DisableEntry(entry));
+        Assert.True(await Service().DisableEntryAsync(entry));
         Assert.False(entry.IsEnabled);
         Assert.Equal("Test Archiver Shell Extension", BlockedValue(Archiver));
         AssertNoFallbackKeyWasCreated();
     }
 
+    /// <summary>
+    /// Blocking a handler first exports the Blocked list through the runner into the service's backup folder, so a
+    /// test blocks one without exporting the machine's real list (#2766).
+    /// </summary>
+    /// <remarks>
+    /// The export ran reg.exe on the real <c>HKLM\…\Shell Extensions\Blocked</c> whatever hive the service was given,
+    /// into the real backups folder, and pruned what was already there.
+    /// </remarks>
     [Fact]
-    public void DisableEntry_CreatesTheBlockedList_WhenNothingHasEverBeenBlocked()
+    public async Task BlockingAHandler_ExportsTheBlockedListThroughTheRunner_IntoTheBackupFolder()
+    {
+        Assert.True(await Service().DisableEntryAsync(AHandlerRow()));
+
+        await _runner.Received(1).RunProcessAsync("reg.exe",
+            Arg.Is<string>(a => a.StartsWith($"export \"HKLM\\{BlockedListPath}\" \"{_backups}\\", StringComparison.Ordinal)
+                                && a.EndsWith(".reg\" /y", StringComparison.Ordinal)),
+            Arg.Any<CancellationToken>(), PowerShellRunner.OemEncoding);
+    }
+
+    [Fact]
+    public async Task DisableEntry_CreatesTheBlockedList_WhenNothingHasEverBeenBlocked()
     {
         // The common case on a real machine: the key does not exist at all. A disable that quietly did
         // nothing here would be the whole feature failing on exactly the machines that need it.
         Assert.Null(_machine.OpenSubKey(BlockedListPath));
 
-        Assert.True(Service().DisableEntry(AHandlerRow()));
+        Assert.True(await Service().DisableEntryAsync(AHandlerRow()));
 
         Assert.NotNull(BlockedValue(Archiver));
     }
 
     [Fact]
-    public void EnableEntry_RemovesTheClsidFromTheBlockedList()
+    public async Task EnableEntry_RemovesTheClsidFromTheBlockedList()
     {
         GivenBlocked(Archiver);
         var entry = AHandlerRow();
         entry.IsEnabled = false;
 
-        Assert.True(Service().EnableEntry(entry));
+        Assert.True(await Service().EnableEntryAsync(entry));
 
         Assert.True(entry.IsEnabled);
         Assert.Null(BlockedValue(Archiver));
     }
 
     [Fact]
-    public void EnableEntry_LeavesOtherBlockedHandlersAlone()
+    public async Task EnableEntry_LeavesOtherBlockedHandlersAlone()
     {
         // Deleting one value, not clearing the list. Worth pinning because the list is machine-wide and
         // shared with anything else that blocks handlers, so over-deleting would silently re-enable an
@@ -480,26 +508,26 @@ public sealed class ContextMenuServiceShellExTests : IDisposable
         GivenBlocked(Archiver);
         GivenBlocked(Sync, "Someone else's choice");
 
-        Assert.True(Service().EnableEntry(AHandlerRow()));
+        Assert.True(await Service().EnableEntryAsync(AHandlerRow()));
 
         Assert.Null(BlockedValue(Archiver));
         Assert.Equal("Someone else's choice", BlockedValue(Sync));
     }
 
     [Fact]
-    public void EnableEntry_SucceedsWhenTheHandlerWasNotBlocked()
+    public async Task EnableEntry_SucceedsWhenTheHandlerWasNotBlocked()
     {
         // Asking for a state that is already true is not a failure — reporting one would put the switch
         // back and tell the user something went wrong when the add-on is exactly as they asked.
         var entry = AHandlerRow();
         entry.IsEnabled = false;
 
-        Assert.True(Service().EnableEntry(entry));
+        Assert.True(await Service().EnableEntryAsync(entry));
         Assert.True(entry.IsEnabled);
     }
 
     [Fact]
-    public void EnableEntry_DoesNotDeleteLegacyDisableFromAHandlersOwnKey()
+    public async Task EnableEntry_DoesNotDeleteLegacyDisableFromAHandlersOwnKey()
     {
         // The mirror of the disable assertion. The verb path DELETES a value, so against a key that does
         // not exist it does nothing whether or not the routing is right — an assertion on a missing key
@@ -512,7 +540,7 @@ public sealed class ContextMenuServiceShellExTests : IDisposable
         var entry = AHandlerRow();
         entry.IsEnabled = false;
 
-        Assert.True(Service().EnableEntry(entry));
+        Assert.True(await Service().EnableEntryAsync(entry));
 
         using var after = _user.OpenSubKey(handlerKeyPath);
         Assert.NotNull(after);
@@ -545,14 +573,14 @@ public sealed class ContextMenuServiceShellExTests : IDisposable
     /// HKLM is not written, which is why no machine list exists after this one.
     /// </remarks>
     [Fact]
-    public void EnableEntry_AllowsAHandlerBlockedForThisUser_FromThatList()
+    public async Task EnableEntry_AllowsAHandlerBlockedForThisUser_FromThatList()
     {
         GivenBlockedForUser(Archiver);
         GivenBlockedForUser(Sync, "Someone else's choice");
         var entry = AHandlerRow();
         entry.IsEnabled = false;
 
-        Assert.True(Service().EnableEntry(entry));
+        Assert.True(await Service().EnableEntryAsync(entry));
 
         Assert.True(entry.IsEnabled);
         Assert.Null(UserBlockedValue(Archiver));
@@ -562,12 +590,12 @@ public sealed class ContextMenuServiceShellExTests : IDisposable
 
     /// <summary>An add-on blocked on both lists comes off both.</summary>
     [Fact]
-    public void EnableEntry_AllowsAHandlerBlockedOnBothLists_FromBoth()
+    public async Task EnableEntry_AllowsAHandlerBlockedOnBothLists_FromBoth()
     {
         GivenBlocked(Archiver);
         GivenBlockedForUser(Archiver);
 
-        Assert.True(Service().EnableEntry(AHandlerRow()));
+        Assert.True(await Service().EnableEntryAsync(AHandlerRow()));
 
         Assert.Null(BlockedValue(Archiver));
         Assert.Null(UserBlockedValue(Archiver));
@@ -578,14 +606,14 @@ public sealed class ContextMenuServiceShellExTests : IDisposable
     [InlineData("NotAGuidAtAll")]
     [InlineData("11111111-2222-3333-4444-555555555555")]
     [InlineData(@"{11111111-2222-3333-4444-555555555555}\..\..\Run")]
-    public void DisableEntry_RefusesAHandlerWhoseClsidIsNotOne_AndWritesNothing(string junk)
+    public async Task DisableEntry_RefusesAHandlerWhoseClsidIsNotOne_AndWritesNothing(string junk)
     {
         // SEC: the CLSID becomes a registry VALUE NAME under HKLM, and it was enumerated out of HKCR,
         // which merges the user-writable HKCU\Software\Classes. The scan drops non-CLSIDs already; this is
         // the check standing next to the write, which is the one that usually runs elevated.
         var entry = AHandlerRow(junk);
 
-        Assert.False(Service().DisableEntry(entry));
+        Assert.False(await Service().DisableEntryAsync(entry));
         Assert.True(entry.IsEnabled, "A refused disable must leave the row's state alone.");
         Assert.Null(_machine.OpenSubKey(BlockedListPath));
     }

@@ -357,13 +357,88 @@ public sealed class InstalledProgramsHistoryTests : IDisposable
     }
 
     [Theory]
-    [InlineData("Python 3.12.1 (64-bit)", "Python (64-bit)")]
-    [InlineData("7-Zip 23.01 (x64)", "7-Zip (x64)")]
-    [InlineData("Contoso Notes v2.4", "Contoso Notes")]
-    [InlineData("Contoso Notes 2015-2022", "Contoso Notes")]
-    [InlineData("Contoso Notes", "Contoso Notes")]
-    public void WithoutVersion_TakesOutOnlyTheVersionNumbers(string name, string expected)
+    [InlineData("Python 3.12.1 (64-bit)", "Python # (64-bit)", "3.12.1")]
+    [InlineData("7-Zip 23.01 (x64)", "7-Zip # (x64)", "23.01")]
+    [InlineData("Contoso Notes v2.4", "Contoso Notes #", "v2.4")]
+    [InlineData("Contoso Notes 2015-2022", "Contoso Notes #", "2015-2022")]
+    [InlineData("Left 4 Dead 2", "Left # Dead #", "4 2")]
+    [InlineData("Contoso Notes", "Contoso Notes", "")]
+    public void AName_IsItsWordsWithTheVersionNumbersMarked_AndThoseNumbers(string name, string shape, string versions)
     {
-        Assert.Equal(expected, InstalledProgramsHistory.WithoutVersion(name));
+        Assert.Equal(shape, InstalledProgramsHistory.Shape(name));
+        Assert.Equal(versions, InstalledProgramsHistory.Versions(name));
+    }
+
+    // ── Which program an update replaced (#2779) ──────────────────────────
+
+    private static readonly DateTime Since = new(2026, 11, 1, 9, 0, 0);
+    private static readonly DateTime Until = new(2026, 11, 2, 9, 0, 0);
+
+    private const string Psf = "Python Software Foundation";
+
+    private static ProgramName Named(string name, string publisher = Psf) => new(name, publisher);
+
+    private static (string Name, string Before)[] Updates(IEnumerable<ProgramChange> changes) =>
+        [.. changes.Where(c => c.Kind == ChangeKind.ProgramUpdated)
+            .Select(c => (c.Name, c.Before))
+            .OrderBy(u => u.Name)];
+
+    /// <summary>
+    /// Two lines of one product updated together, as one "Update all" does: each keeps its own line, whatever order the
+    /// uninstall keys list them in. Both read "Python (64-bit)" once every number is taken out, and the first one found
+    /// was taken.
+    /// </summary>
+    [Fact]
+    public void TwoLinesOfOneProductUpdatedTogether_EachReplaceTheirOwn_InEitherOrder()
+    {
+        (string, string)[] expected =
+        [
+            ("Python 3.12.7 (64-bit)", "Python 3.12.6 (64-bit)"),
+            ("Python 3.13.1 (64-bit)", "Python 3.13.0 (64-bit)"),
+        ];
+
+        Assert.Equal(expected, Updates(InstalledProgramsHistory.Compare(
+            [Named("Python 3.12.6 (64-bit)"), Named("Python 3.13.0 (64-bit)")],
+            [Named("Python 3.12.7 (64-bit)"), Named("Python 3.13.1 (64-bit)")], Since, Until)));
+        // The new names listed the other way round from the old ones: the first old name found was the other line's.
+        Assert.Equal(expected, Updates(InstalledProgramsHistory.Compare(
+            [Named("Python 3.12.6 (64-bit)"), Named("Python 3.13.0 (64-bit)")],
+            [Named("Python 3.13.1 (64-bit)"), Named("Python 3.12.7 (64-bit)")], Since, Until)));
+    }
+
+    /// <summary>
+    /// Two products whose names differ by a number are two products: "Left 4 Dead" and "Left 4 Dead 2" both read
+    /// "Left Dead" once every number is taken out, and removing one and installing the other was an update.
+    /// </summary>
+    [Fact]
+    public void TwoProductsWhoseNamesDifferByANumber_AreAnInstallAndARemoval_NotAnUpdate()
+    {
+        var changes = InstalledProgramsHistory.Compare(
+            [Named("Left 4 Dead", "Valve")], [Named("Left 4 Dead 2", "Valve")], Since, Until);
+
+        Assert.Equal([ChangeKind.ProgramAppeared, ChangeKind.ProgramDisappeared], changes.Select(c => c.Kind));
+    }
+
+    [Fact]
+    public void AProductWithOneLine_IsStillAnUpdate_WhateverItsVersionsShare()
+    {
+        var change = Assert.Single(InstalledProgramsHistory.Compare(
+            [Named("7-Zip 23.01 (x64)", "Igor Pavlov")], [Named("7-Zip 24.08 (x64)", "Igor Pavlov")], Since, Until));
+
+        Assert.Equal((ChangeKind.ProgramUpdated, "7-Zip 23.01 (x64)"), (change.Kind, change.Before));
+    }
+
+    /// <summary>
+    /// Two old names the new one could have replaced, sharing as much with it: a guess either way, so neither.
+    /// </summary>
+    [Fact]
+    public void ATieBetweenTwoOldNames_IsAnInstallAndRemovals_NotAGuess()
+    {
+        var changes = InstalledProgramsHistory.Compare(
+            [Named("Contoso Tool 1.0", "Contoso"), Named("Contoso Tool 2.0", "Contoso")],
+            [Named("Contoso Tool 3.0", "Contoso")], Since, Until);
+
+        Assert.Equal([ChangeKind.ProgramAppeared, ChangeKind.ProgramDisappeared, ChangeKind.ProgramDisappeared],
+            changes.Select(c => c.Kind));
     }
 }

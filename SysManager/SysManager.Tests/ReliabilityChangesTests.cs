@@ -11,8 +11,9 @@ namespace SysManager.Tests;
 /// How Windows' reliability records become rows on Recent Changes (#1507).
 /// </summary>
 /// <remarks>
-/// Each record is written the way Windows writes it, message text included, because names and statuses are read out
-/// of that text. The products are made up; the shapes are copied from a real history.
+/// Each record is written the way Windows writes it, message text and insertion strings included, because names are
+/// read out of the text and Windows Installer's statuses out of the strings. The products are made up; the shapes are
+/// copied from a real history.
 /// </remarks>
 public class ReliabilityChangesTests
 {
@@ -30,12 +31,26 @@ public class ReliabilityChangesTests
     private static ReliabilityRecord MsiInstalled(string product, int status = 0, DateTime? when = null) => new(
         when ?? Evening, "MsiInstaller", 1033, product,
         $"Windows Installer installed the product. Product Name: {product}. Product Version: 4.2.1. Product Language: 1033. "
-        + $"Manufacturer: Contoso. Installation success or error status: {status}.");
+        + $"Manufacturer: Contoso. Installation success or error status: {status}.",
+        InstallerStrings(product, status));
 
     private static ReliabilityRecord MsiRemoved(string product, int status = 0, DateTime? when = null) => new(
         when ?? Evening, "MsiInstaller", 1034, product,
         $"Windows Installer removed the product. Product Name: {product}. Product Version: 4.2.1. Product Language: 1033. "
-        + $"Manufacturer: Contoso. Removal success or error status: {status}.");
+        + $"Manufacturer: Contoso. Removal success or error status: {status}.",
+        InstallerStrings(product, status));
+
+    /// <summary>A 1033 or 1034 record's insertion strings, in the order a real one holds them.</summary>
+    private static string[] InstallerStrings(string product, int status, string language = "1033") =>
+        [product, "4.2.1", language, status.ToString(System.Globalization.CultureInfo.InvariantCulture), "Contoso",
+         "(NULL)", ""];
+
+    /// <summary>A 1033 record from Windows in German: the message is German, the insertion strings are not.</summary>
+    private static ReliabilityRecord MsiInstalledInGerman(string product, int status) => new(
+        Evening, "MsiInstaller", 1033, product,
+        $"Windows Installer hat das Produkt installiert. Produktname: {product}. Produktversion: 4.2.1. "
+        + $"Produktsprache: 1031. Hersteller: Contoso. Erfolgs- bzw. Fehlerstatus der Installation: {status}.",
+        InstallerStrings(product, status, language: "1031"));
 
     private static IReadOnlyList<ChangeEvent> Changes(params ReliabilityRecord[] records) => ReliabilityChanges.Parse(records).Changes;
 
@@ -154,6 +169,29 @@ public class ReliabilityChangesTests
     public void AnInstallOrRemovalThatFailed_IsNotAChange(int status)
     {
         Assert.Empty(Changes(MsiInstalled("Contoso Photo Editor", status), MsiRemoved("Contoso Photo Editor", status)));
+    }
+
+    /// <summary>
+    /// On Windows in another language the status is not where the English message has it, and every install read as a
+    /// success, a failed one included (#2779). It is read from the insertion strings, the same in every language.
+    /// </summary>
+    [Fact]
+    public void OnWindowsInAnotherLanguage_AFailedInstallIsNotAChange_AndASuccessfulOneIs()
+    {
+        Assert.Empty(Changes(MsiInstalledInGerman("Contoso Photo Editor", status: 1603)));
+        Assert.Equal("Contoso Photo Editor",
+            Assert.Single(Changes(MsiInstalledInGerman("Contoso Photo Editor", status: 0))).Subject);
+    }
+
+    [Fact]
+    public void AnInstallWhoseStatusCannotBeRead_IsNotTakenForASuccess()
+    {
+        var noStrings = new ReliabilityRecord(Evening, "MsiInstaller", 1033, "Contoso Photo Editor",
+            "Windows Installer hat das Produkt installiert.");
+        string[] noStatus = ["Contoso Photo Editor", "4.2.1", "1033", "(NULL)", "Contoso"];
+        var notANumber = MsiInstalled("Contoso Photo Editor") with { InsertionStrings = noStatus };
+
+        Assert.Empty(Changes(noStrings, notANumber));
     }
 
     [Fact]

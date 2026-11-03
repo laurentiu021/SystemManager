@@ -10,6 +10,22 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.136.103] - 2026-11-03
+
+**Recent Changes leaves out a failed install on Windows in any language, and keeps updates with their own program.**
+
+### Fixed
+- On Windows in any display language but English, Recent Changes listed a Windows Installer install or removal that
+  failed as a program installed or removed. It read the status from the record's message, which is in the display
+  language, and took a message it could not read for a success. It now reads the status from the values Windows puts
+  into the message, the same in every language, and leaves out a record whose status cannot be read.
+- Recent Changes paired an updated program with the first removed one of the same publisher and the same name once
+  every number was taken out. Two versions of one program side by side, updated together, could each be listed as an
+  update of the other, and two programs whose names differ by a number, a game and its sequel, were one program
+  updated. An update now replaces an old name with its version numbers in the same places, the closest version among
+  several, and a tie is listed as an install and a removal rather than guessed. Both were there since the tab first
+  shipped, in 1.125.0.
+
 ## [1.136.102] - 2026-11-03
 
 **Task Scheduler classes the Autochk Proxy task as telemetry.**

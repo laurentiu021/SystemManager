@@ -17,8 +17,13 @@ namespace SysManager.Services;
 /// <param name="Source">The SourceName: <c>Microsoft-Windows-WindowsUpdateClient</c>, <c>MsiInstaller</c>, …</param>
 /// <param name="EventId">The EventIdentifier.</param>
 /// <param name="Product">The ProductName Windows filled in, or empty.</param>
-/// <param name="Message">The record's message.</param>
-public sealed record ReliabilityRecord(DateTime When, string Source, int EventId, string Product, string Message);
+/// <param name="Message">The record's message, in the display language of Windows.</param>
+/// <param name="InsertionStrings">
+/// The values Windows put into the message, the same in every language: for Windows Installer's 1033 and 1034 the
+/// product, its version, its language, the status and the manufacturer, in that order. Null when none were read.
+/// </param>
+public sealed record ReliabilityRecord(DateTime When, string Source, int EventId, string Product, string Message,
+                                       IReadOnlyList<string>? InsertionStrings = null);
 
 /// <summary>The records read, or that the history could not be read at all.</summary>
 public sealed record ReliabilityRead(IReadOnlyList<ReliabilityRecord> Records, bool Readable)
@@ -49,7 +54,8 @@ public sealed class WmiReliabilityHistory : IReliabilityHistory
     private static ReliabilityRead Read(DateTime since, CancellationToken ct)
     {
         // Filtered by Windows rather than here: the history keeps a year, and only the period is wanted.
-        var query = "SELECT TimeGenerated, SourceName, EventIdentifier, ProductName, Message FROM Win32_ReliabilityRecords "
+        var query = "SELECT TimeGenerated, SourceName, EventIdentifier, ProductName, Message, InsertionStrings "
+                    + "FROM Win32_ReliabilityRecords "
                     + $"WHERE TimeGenerated >= '{ManagementDateTimeConverter.ToDmtfDateTime(since)}'";
         var records = new List<ReliabilityRecord>();
         try
@@ -69,7 +75,8 @@ public sealed class WmiReliabilityHistory : IReliabilityHistory
                         mo["SourceName"]?.ToString() ?? "",
                         mo["EventIdentifier"] is { } id ? Convert.ToInt32(id, CultureInfo.InvariantCulture) : 0,
                         mo["ProductName"]?.ToString()?.Trim() ?? "",
-                        mo["Message"]?.ToString() ?? ""));
+                        mo["Message"]?.ToString() ?? "",
+                        mo["InsertionStrings"] as string[]));
                 }
             }
             return new ReliabilityRead(records, Readable: true);
@@ -94,7 +101,8 @@ public static partial class ReliabilityChanges
     /// <remarks>
     /// Windows can write the same record several times over, to the second, and Windows Installer writes two records
     /// for one install; each is listed once. A Windows Installer record with a non-zero status is a failed install, not
-    /// a change, and is left out. Other kinds of record are not changes and are not listed.
+    /// a change, and is left out, and so is one whose status cannot be read. Other kinds of record are not changes and
+    /// are not listed.
     /// </remarks>
     public static (IReadOnlyList<ChangeEvent> Changes, IReadOnlyList<ProblemEvent> Problems) Parse(IEnumerable<ReliabilityRecord> records)
     {
@@ -171,8 +179,21 @@ public static partial class ReliabilityChanges
     private static string? StoreName(string title) =>
         StorePattern().Match(title) is { Success: true } m ? m.Groups["app"].Value : null;
 
+    /// <summary>
+    /// True when Windows Installer says the install or removal succeeded. 11707 and 11724 are written only for one that
+    /// did. For 1033 and 1034 the status is the fourth insertion string, the same in every language: it was read out of
+    /// the English message, so on Windows in any other language the pattern never matched and every install read as a
+    /// success, a failed one included (#2779). A status that cannot be read is not taken for a success.
+    /// </summary>
     private static bool Succeeded(ReliabilityRecord record) =>
-        StatusPattern().Match(record.Message) is not { Success: true } status || status.Groups["code"].Value == "0";
+        record.EventId is 11707 or 11724
+        || (record.InsertionStrings is { Count: > InstallerStatusIndex } strings
+            && int.TryParse(strings[InstallerStatusIndex], NumberStyles.Integer, CultureInfo.InvariantCulture,
+                out var status)
+            && status == 0);
+
+    /// <summary>Where 1033 and 1034 keep the status among their insertion strings.</summary>
+    private const int InstallerStatusIndex = 3;
 
     private static string? ProductOf(ReliabilityRecord record)
     {
@@ -187,9 +208,6 @@ public static partial class ReliabilityChanges
     /// <summary>A driver as Windows Update names one: "Vendor - Device - 1.2.3.4".</summary>
     [GeneratedRegex(@"^(?<vendor>[^-]+?) - (?<device>.+?) - (?<version>\d+(?:\.\d+)+)$", RegexOptions.CultureInvariant)]
     private static partial Regex DriverPattern();
-
-    [GeneratedRegex(@"(?:success or error status|Error status): (?<code>-?\d+)", RegexOptions.CultureInvariant | RegexOptions.IgnoreCase)]
-    private static partial Regex StatusPattern();
 
     [GeneratedRegex(@"(?:Product Name: (?<name>[^\r\n]+?)\. Product Version|Product: (?<name>[^\r\n]+?) --)", RegexOptions.CultureInvariant)]
     private static partial Regex ProductNamePattern();

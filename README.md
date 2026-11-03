@@ -1134,6 +1134,8 @@ Answers "what is actually using my space?" by listing the biggest files in one p
   names the location and size the scan read, even if you change them while it runs
 - Click Size or Modified to sort by the size or the date itself: 800 MB before 1.2 GB, and
   by year and month rather than by the day of the month
+- Two files whose names differ only in capitals, which a case-sensitive folder can hold, are
+  listed as two files, each with its own size
 - **Read-only** — the only actions are "Show" (reveals the file in Explorer) and "Copy" (copies its
   path).
   Deletion is disabled by design, even with administrator rights, so a mis-click here can

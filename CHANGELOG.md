@@ -10,6 +10,19 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.136.97] - 2026-11-03
+
+**Large Files lists two files whose names differ only in capitals as two files.**
+
+### Fixed
+- Large Files listed one file twice, or stopped with the app's error dialog, when two of the largest files had names
+  that differ only in capitals. A case-sensitive folder, which WSL creates and `fsutil file setCaseSensitiveInfo`
+  turns on, can hold `a.bin` and `A.bin` side by side. The scanner ordered the largest files by their exact path but
+  kept their details by a path that ignores case, so the two shared one entry: the list showed one of them twice
+  with the same size, and when a larger file pushed one of them out, the other's details went with it and the scan
+  ended in the error dialog. Each file is now kept by its own path and listed once, with its own size. This was
+  there since Large Files first shipped, in 0.5.0.
+
 ## [1.136.96] - 2026-11-03
 
 **System Logs and the System Report explain an event only for its own source, and a blue screen is explained as one.**

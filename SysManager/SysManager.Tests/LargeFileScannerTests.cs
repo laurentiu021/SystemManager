@@ -46,6 +46,59 @@ public class LargeFileScannerTests : IDisposable
 
     // ---------- basic scan ----------
 
+    // ---------- two paths that differ only in letter case (#2777) ----------
+
+    private static LargeFileEntry Entry(string path, long size) => new()
+    {
+        Path = path,
+        Name = System.IO.Path.GetFileName(path),
+        SizeBytes = size,
+        LastModified = new DateTime(2026, 11, 3, 8, 0, 0, DateTimeKind.Local),
+    };
+
+    /// <summary>
+    /// Two files whose paths differ only in case are two files, each with its own size (#2777). A folder can be
+    /// case-sensitive, and the details were kept case-insensitively, so the second overwrote the first and the list
+    /// showed one file twice.
+    /// </summary>
+    [Fact]
+    public void TwoPathsDifferingOnlyInCase_AreListedOnceEach_WithTheirOwnSizes()
+    {
+        var biggest = new LargeFileScanner.Biggest(top: 5);
+        biggest.Offer(Entry(@"C:\Data\a.bin", 10));
+        biggest.Offer(Entry(@"C:\Data\A.bin", 20));
+
+        Assert.Equal([(@"C:\Data\A.bin", 20L), (@"C:\Data\a.bin", 10L)],
+            biggest.Largest().Select(f => (f.Path, f.SizeBytes)));
+    }
+
+    /// <summary>
+    /// Pushing one of them out keeps the other (#2777). Their one shared entry went with the first, and reading the
+    /// second's threw, which ended the scan in the app's error handler.
+    /// </summary>
+    [Fact]
+    public void PushingOutOneOfTwoPathsDifferingOnlyInCase_KeepsTheOther()
+    {
+        var biggest = new LargeFileScanner.Biggest(top: 2);
+        biggest.Offer(Entry(@"C:\Data\a.bin", 10));
+        biggest.Offer(Entry(@"C:\Data\A.bin", 20));
+        biggest.Offer(Entry(@"C:\Data\big.bin", 30));
+
+        Assert.Equal([(@"C:\Data\big.bin", 30L), (@"C:\Data\A.bin", 20L)],
+            biggest.Largest().Select(f => (f.Path, f.SizeBytes)));
+    }
+
+    [Fact]
+    public void Biggest_KeepsTheLargest_AndLeavesASmallerOneOut()
+    {
+        var biggest = new LargeFileScanner.Biggest(top: 2);
+        biggest.Offer(Entry(@"C:\Data\one.bin", 30));
+        biggest.Offer(Entry(@"C:\Data\two.bin", 20));
+        biggest.Offer(Entry(@"C:\Data\small.bin", 5));
+
+        Assert.Equal([@"C:\Data\one.bin", @"C:\Data\two.bin"], biggest.Largest().Select(f => f.Path));
+    }
+
     [Fact]
     public async Task Scan_EmptyDir_ReturnsEmpty()
     {

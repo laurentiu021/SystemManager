@@ -778,6 +778,9 @@ Key services:
   `Windows\WinSxS`, `Windows\System32\config` and `Windows\CSC` as subtrees, and pagefile/hiberfil/swapfile by
   exact file name. The two are separate lists because the subtree one is only ever
   asked about a directory, which is why the three file names sat in it unread.
+  `Biggest` keeps the largest files, its order and its details both by the path as
+  Windows returns it, ordinally, so two files in a case-sensitive folder whose paths
+  differ only in case stay two files (#2777).
 - `UpdateService` (`IUpdateService`) — GitHub Releases API client with explicit
   `SocketsHttpHandler`, retry, and surfaced error messages. The seam carries every
   instance member so a consumer never has to hold both it and the concrete class;

@@ -58,7 +58,7 @@ public interface IInstalledProgramsHistory
 /// reported with the time between the two looks, which is all that can be known.</para>
 /// <para>Only what Windows' own list shows is kept: hidden components and updates come and go with the programs they
 /// belong to. A name replaced by another of the same program and publisher, "Python 3.12.1" by "Python 3.12.2", is an
-/// update, not one program removed and another installed.</para>
+/// update, not one program removed and another installed; <c>Predecessor</c> says which of several it replaced.</para>
 /// <para>Reads the file before it writes, under <see cref="_lock"/>, and writes nothing when the file is there but
 /// could not be read; one that does not parse is set aside first, as the activity log does.</para>
 /// <para>Nor when Windows' list could not be read whole. Compared, every program missing from it would be reported
@@ -130,10 +130,7 @@ public sealed class InstalledProgramsHistory : IInstalledProgramsHistory
 
         foreach (var program in appeared)
         {
-            // The same program under a new name: same publisher, same name once the version numbers are taken out.
-            var replaced = left.FirstOrDefault(l => program.Publisher.Length > 0
-                && string.Equals(l.Publisher, program.Publisher, StringComparison.OrdinalIgnoreCase)
-                && string.Equals(WithoutVersion(l.Name), WithoutVersion(program.Name), StringComparison.OrdinalIgnoreCase));
+            var replaced = Predecessor(program, left);
             if (replaced is not null)
             {
                 left.Remove(replaced);
@@ -152,10 +149,66 @@ public sealed class InstalledProgramsHistory : IInstalledProgramsHistory
             && string.Equals(a.Publisher, b.Publisher, StringComparison.OrdinalIgnoreCase);
     }
 
-    /// <summary>A name with its version numbers taken out: "Python 3.12.1 (64-bit)" is "Python (64-bit)".</summary>
-    internal static string WithoutVersion(string name) =>
-        string.Join(' ', name.Split(' ', StringSplitOptions.RemoveEmptyEntries)
-            .Where(word => !IsVersion(word.Trim('(', ')', ','))));
+    /// <summary>
+    /// The program <paramref name="program"/> replaced, among those that left: the same publisher, and the same name
+    /// with its version numbers in the same places. Among several, the one whose version shares the longest start with
+    /// the new one, so two lines of one product updated together, Python 3.12 and 3.13, each keep their own; a tie is
+    /// none, reported as an install and a removal rather than guessed. Null when no program was replaced.
+    /// </summary>
+    /// <remarks>
+    /// The first program with the same name once every number was taken out was taken: which old name each Python line
+    /// was paired with depended on the order of the uninstall keys, and "Left 4 Dead" and "Left 4 Dead 2" both read
+    /// "Left Dead", so removing one and installing the other was reported as an update (#2779).
+    /// </remarks>
+    private static ProgramName? Predecessor(ProgramName program, IReadOnlyList<ProgramName> left)
+    {
+        if (program.Publisher.Length == 0) return null;
+        var shape = Shape(program.Name);
+        var versions = Versions(program.Name);
+
+        ProgramName? best = null;
+        var bestShared = -1;
+        var tied = false;
+        foreach (var candidate in left)
+        {
+            if (!string.Equals(candidate.Publisher, program.Publisher, StringComparison.OrdinalIgnoreCase)
+                || !string.Equals(Shape(candidate.Name), shape, StringComparison.OrdinalIgnoreCase))
+                continue;
+            var shared = SharedStart(Versions(candidate.Name), versions);
+            if (shared > bestShared)
+            {
+                (best, bestShared, tied) = (candidate, shared, false);
+            }
+            else if (shared == bestShared)
+            {
+                tied = true;
+            }
+        }
+        return tied ? null : best;
+    }
+
+    /// <summary>
+    /// A name with each version number replaced by <c>#</c>: "Python 3.12.1 (64-bit)" is "Python # (64-bit)", and
+    /// "Left 4 Dead 2" is "Left # Dead #", where "Left 4 Dead" is "Left # Dead".
+    /// </summary>
+    internal static string Shape(string name) =>
+        string.Join(' ', Words(name).Select(word => IsVersion(word.Trim('(', ')', ',')) ? "#" : word));
+
+    /// <summary>A name's version numbers, in order: "3.12.1" for "Python 3.12.1 (64-bit)".</summary>
+    internal static string Versions(string name) =>
+        string.Join(' ', Words(name).Select(word => word.Trim('(', ')', ',')).Where(IsVersion));
+
+    private static string[] Words(string name) => name.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+
+    /// <summary>How many characters <paramref name="a"/> and <paramref name="b"/> start with in common.</summary>
+    private static int SharedStart(string a, string b)
+    {
+        var length = 0;
+        while (length < a.Length && length < b.Length
+               && char.ToUpperInvariant(a[length]) == char.ToUpperInvariant(b[length]))
+            length++;
+        return length;
+    }
 
     private static bool IsVersion(string word) =>
         word.Length > 0 && word.Any(char.IsDigit) && word.All(c => char.IsDigit(c) || c is '.' or 'v' or 'V' or '-');

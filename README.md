@@ -496,12 +496,15 @@ Edit Windows environment variables without the cramped built-in dialog:
 - **Windows' own record, including what happened while SysManager was closed.** Windows updates, Microsoft
   Store app updates, Defender definitions and drivers that were installed or could not be, and programs
   installed or removed with Windows Installer, come from the history behind Windows' Reliability Monitor,
-  which needs no administrator rights. A change Windows recorded twice is listed once
+  which needs no administrator rights. A change Windows recorded twice is listed once. An install or
+  removal that failed is not listed, on Windows in any display language
 - **Programs Windows keeps no record of.** Each time the tab is shown it keeps the list of installed
   programs, so a program that appears, goes away or changes version between two looks is listed with the
   time between them — "some time between your look on Fri 2 Oct and 15:20" — which is all that can be
   known. The first look only starts the list, and the page says so. A new version of a program, from the
-  same publisher, is one update rather than one program removed and another installed
+  same publisher, is one update rather than one program removed and another installed. Two versions of one
+  program side by side, updated together, each keep their own line, and two programs whose names differ
+  by a number, such as a game and its sequel, stay two programs
 - **What New App Alerts noticed**, at the time it noticed. A program that Windows Installer and New App
   Alerts both saw within ten minutes is listed once, from Windows' record, and so is a new folder and the
   program found in it within ten minutes, under the program's name

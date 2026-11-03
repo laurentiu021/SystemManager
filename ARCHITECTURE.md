@@ -1218,10 +1218,16 @@ Key services:
   which needs no administrator rights, with a 30-second timeout. `ReliabilityChanges.Parse` turns the records into
   changes and problem counts without touching the PC: Windows Update installs and failures (a Store app by its
   twelve-character id, Defender definitions, a driver as "Vendor - Device - Version"), Windows Installer installs
-  and removals whose status is 0, and crashes and hangs as problems. A change recorded twice is listed once.
+  and removals whose status is 0, and crashes and hangs as problems. A change recorded twice is listed once. The
+  status of a 1033 or 1034 is the fourth of its `InsertionStrings`, which the query reads: the message is in the
+  display language of Windows, and the English pattern it was read with took every install elsewhere for a
+  success (#2779). A status that cannot be read is not a success.
 - `InstalledProgramsHistory` (`IInstalledProgramsHistory`) — the list of installed programs, kept in
   `installed-programs.json` from one look to the next, and the differences: appeared, gone, or a new version of
-  the same program from the same publisher, each with the window between the two looks. Compares and writes
+  the same program from the same publisher, each with the window between the two looks. An update replaced the
+  old name with the same publisher and the same `Shape`, its words with the version numbers in the same places;
+  among several, the one whose `Versions` share the longest start with the new one, and a tie is an install and a
+  removal (#2779). Compares and writes
   nothing when Windows' list could not be read whole (`UninstallList.Complete`): every program missing from a
   partial list would read as removed, and as installed again at the next look.
 - `UninstallEntries` — the one reader of every uninstall entry, both machine views and then the user's, shared by

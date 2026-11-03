@@ -1490,6 +1490,13 @@ Key services:
   read just now — another program had it open, say. The two registry copies and
   the legacy file are opened through two constructor seams, so a test makes each
   read fail with each of the three failures Windows can give (#2618).
+  `RestoreFromBackup` makes exactly the changes `PreviewRestore` lists, so a variable
+  that already matches is not rewritten or counted, and a name it cannot write is
+  left alone and returned in `RestoreResult.Skipped`; `FailedMachine` counts the
+  machine-wide refusals, which are the ones that need an administrator. Variables
+  the snapshot cannot keep as they are (a value that is not text, too many, too long)
+  refuse `EnsureBackup` with `BackupRefusedException`, whose message names the
+  variable, apart from the damaged-copy `InvalidDataException` (#2775).
 - `RestorePointService` — lists (`Get-ComputerRestorePoint`), creates
   (`Checkpoint-Computer`), and restores (`Restore-Computer`) System Restore points
   through the `IPowerShellRunner` seam; the output parser is a pure, unit-tested

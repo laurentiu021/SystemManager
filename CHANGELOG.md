@@ -10,6 +10,24 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.136.95] - 2026-11-03
+
+**Restore backup on Environment Variables says what it will change and counts what it did, and Apply names what blocks a backup.**
+
+### Fixed
+- Restore backup asked only whether to restore "the original environment", though a backup kept since your first
+  Apply also takes out the folders installers have added to PATH since, and removes their variables. It now lists
+  each variable it would change, as Undo Changes does, and says when there is nothing to restore. It rewrote every
+  variable in the backup and counted each, so a restore that changed one could say it restored dozens; it now
+  changes and counts only what differs.
+- After a restore, a variable with a space in its name, which Windows allows, was counted as one that "needs
+  administrator rights", even running as administrator, and without administrator so was every machine-wide variable
+  in the backup, changed or not. Such a name is now left as it is and named, and "administrator" is said only for a
+  machine-wide change while SysManager is not running as one. This was there since 1.56.3.
+- A value among your variables that is not text, such as a number an installer stored there, stopped every Apply
+  with "The existing safety backup is invalid", with no backup there and nothing on the tab to change it. Apply now
+  says which variable stops the backup and why. This was there since 1.56.3.
+
 ## [1.136.94] - 2026-11-03
 
 **The diagnostics bundle says exactly what is in it, and About's report buttons cope when Windows' management service fails.**

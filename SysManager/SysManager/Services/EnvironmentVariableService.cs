@@ -2,6 +2,7 @@
 // Author: laurentiu021 · https://github.com/laurentiu021/SystemManager
 // License: MIT
 
+using System.Globalization;
 using System.IO;
 using System.Runtime.InteropServices;
 using System.Security.AccessControl;
@@ -204,15 +205,11 @@ public sealed partial class EnvironmentVariableService
                 var raw = key.GetValue(name, "", RegistryValueOptions.DoNotExpandEnvironmentNames);
                 var kind = key.GetValueKind(name);
                 if (requireSupportedKinds &&
-                    kind is not RegistryValueKind.String and not RegistryValueKind.ExpandString)
+                    (kind is not RegistryValueKind.String and not RegistryValueKind.ExpandString || raw is not string))
                 {
-                    throw new InvalidDataException(
-                        $"The {scope} environment contains an unsupported registry value kind.");
-                }
-                if (requireSupportedKinds && raw is not string)
-                {
-                    throw new InvalidDataException(
-                        $"The {scope} environment contains a non-string registry value.");
+                    throw new BackupRefusedException(
+                        $"{name}, one of {Whose(scope)}, holds {DescribeKind(kind)} rather than text, and the copy "
+                        + "keeps text only");
                 }
                 result.Add(new EnvVariable
                 {
@@ -645,6 +642,13 @@ public sealed partial class EnvironmentVariableService
         principal.IsWellKnown(WellKnownSidType.LocalSystemSid) ||
         principal.IsWellKnown(WellKnownSidType.BuiltinAdministratorsSid);
 
+    /// <summary>The variables of <paramref name="scope"/> as the safety copy keeps them.</summary>
+    /// <remarks>
+    /// Throws <see cref="BackupRefusedException"/>, saying which variable, when the variables as they are now cannot be
+    /// kept. These went out as <see cref="InvalidDataException"/>, which the tab reads as a damaged copy, so one number
+    /// value among the user's variables blocked every Apply in that scope as "The existing safety backup is invalid",
+    /// with no copy there and nothing on the tab that could clear the cause (#2775).
+    /// </remarks>
     private ScopeBackup CaptureScope(EnvVarScope scope)
     {
         var variables = ReadCore(
@@ -652,20 +656,23 @@ public sealed partial class EnvironmentVariableService
             requireKey: true,
             requireSupportedKinds: true);
         if (scope == EnvVarScope.Machine && variables.Count == 0)
-            throw new InvalidDataException("The Machine environment is empty and cannot be backed up safely.");
+            throw new BackupRefusedException(
+                "Windows lists no machine-wide variables, so there is nothing safe to keep");
         if (variables.Count > MaxVariableCount)
-            throw new InvalidDataException($"The {scope} environment contains too many variables to back up safely.");
+            throw new BackupRefusedException(string.Create(CultureInfo.InvariantCulture,
+                $"there are more than {MaxVariableCount} of {Whose(scope)}, more than the copy keeps"));
 
         Dictionary<string, string> values = new(StringComparer.OrdinalIgnoreCase);
         Dictionary<string, RegistryValueKind> kinds = new(StringComparer.OrdinalIgnoreCase);
         foreach (var variable in variables)
         {
             if (!TryValidateBackupName(variable.Name, out var name))
-                throw new InvalidDataException($"The {scope} environment contains an unsupported variable name.");
+                throw new BackupRefusedException($"one of {Whose(scope)} has a name the copy cannot keep");
             if (variable.Value.Length > MaxVariableValueLength)
-                throw new InvalidDataException($"The {scope} environment contains an oversized variable value.");
+                throw new BackupRefusedException(string.Create(CultureInfo.InvariantCulture,
+                    $"{name}'s value is longer than the {MaxVariableValueLength:N0} characters the copy keeps"));
             if (!values.TryAdd(name, variable.Value))
-                throw new InvalidDataException($"The {scope} environment contains duplicate variable names.");
+                throw new BackupRefusedException($"{name} is there twice among {Whose(scope)}");
 
             kinds.Add(
                 name,
@@ -678,8 +685,9 @@ public sealed partial class EnvironmentVariableService
     private static string SerializeBounded<T>(T snapshot)
     {
         var json = JsonSerializer.Serialize(snapshot, JsonOptions);
+        // The variables as they are, too large together to keep: not a damaged copy (#2775).
         if (Encoding.UTF8.GetByteCount(json) > MaxBackupFileBytes)
-            throw new InvalidDataException("The environment backup exceeds the supported size.");
+            throw new BackupRefusedException("the variables together are larger than the copy keeps");
         return json;
     }
 
@@ -705,12 +713,15 @@ public sealed partial class EnvironmentVariableService
         Dictionary<string, string> Values,
         Dictionary<string, RegistryValueKind>? Kinds);
 
-    private readonly record struct ScopeRestoreCounts(int Restored, int Removed, int Failed)
+    private readonly record struct ScopeRestoreCounts(
+        int Restored, int Removed, int Failed, int FailedMachine, IReadOnlyList<string> Skipped)
     {
         public ScopeRestoreCounts Add(ScopeRestoreCounts other) => new(
             Restored + other.Restored,
             Removed + other.Removed,
-            Failed + other.Failed);
+            Failed + other.Failed,
+            FailedMachine + other.FailedMachine,
+            [.. Skipped ?? [], .. other.Skipped ?? []]);
     }
 
     private readonly record struct BackupRead<T>(bool Exists, T? Snapshot, bool Unread = false)
@@ -1032,6 +1043,31 @@ public sealed partial class EnvironmentVariableService
     }
 
     /// <summary>
+    /// The variables as they are now cannot be kept in the safety copy, so nothing was changed; the message says which
+    /// variable and why, in words the tab shows (#2775).
+    /// </summary>
+    /// <remarks>
+    /// Apart from <see cref="InvalidDataException"/>, which says the copy already there is damaged: here there may be
+    /// no copy at all, and what blocks it is a variable the user can see and change.
+    /// </remarks>
+    public sealed class BackupRefusedException(string reason) : Exception(reason);
+
+    /// <summary>
+    /// "your variables" or "the machine-wide variables", for a sentence about <paramref name="scope"/>.
+    /// </summary>
+    private static string Whose(EnvVarScope scope) =>
+        scope == EnvVarScope.Machine ? "the machine-wide variables" : "your variables";
+
+    /// <summary>What a registry value of <paramref name="kind"/> holds, in words.</summary>
+    internal static string DescribeKind(RegistryValueKind kind) => kind switch
+    {
+        RegistryValueKind.DWord or RegistryValueKind.QWord => "a number",
+        RegistryValueKind.MultiString => "a list of text values",
+        RegistryValueKind.Binary => "binary data",
+        _ => "a value of another kind",
+    };
+
+    /// <summary>
     /// A kept copy of the variables is there and could not be read just now — another program had it open, say — so
     /// trying again may work, as it would not for a damaged copy (#1525).
     /// </summary>
@@ -1138,12 +1174,25 @@ public sealed partial class EnvironmentVariableService
     }
 
     /// <summary>The outcome of a <see cref="RestoreFromBackup"/> call.</summary>
+    /// <param name="HadBackup">A copy was there to restore.</param>
+    /// <param name="Restored">Variables written back, each one that differed from the copy.</param>
+    /// <param name="Removed">Variables added since the copy, removed.</param>
+    /// <param name="Failed">Changes Windows refused.</param>
     public readonly record struct RestoreResult(
         bool HadBackup,
         int Restored,
         int Removed,
         int Failed)
     {
+        /// <summary>Of <see cref="Failed"/>, the machine-wide ones, which need an administrator (#2775).</summary>
+        public int FailedMachine { get; init; }
+
+        /// <summary>
+        /// Variables left as they are because their name is one the restore can neither write nor remove, such as one
+        /// with a space, which Windows allows (#2775). The preview leaves them out on the same rule.
+        /// </summary>
+        public IReadOnlyList<string> Skipped { get; init; } = [];
+
         /// <summary>True when a copy was there and could not be used, so nothing was written.</summary>
         public bool InvalidBackup { get; init; }
 
@@ -1192,35 +1241,51 @@ public sealed partial class EnvironmentVariableService
                 machineSnapshot.MachineKinds));
 
         Log.Information(
-            "Environment: restored {Restored}, removed {Removed}, failed {Failed} from backup",
+            "Environment: restored {Restored}, removed {Removed}, failed {Failed}, skipped {Skipped} from backup",
             counts.Restored,
             counts.Removed,
-            counts.Failed);
-        return new RestoreResult(true, counts.Restored, counts.Removed, counts.Failed);
+            counts.Failed,
+            counts.Skipped.Count);
+        return new RestoreResult(true, counts.Restored, counts.Removed, counts.Failed)
+        {
+            FailedMachine = counts.FailedMachine,
+            Skipped = counts.Skipped ?? [],
+        };
     }
 
+    /// <summary>Puts one scope back to its copy: exactly the differences <see cref="PreviewRestore"/> lists.</summary>
+    /// <remarks>
+    /// It wrote every value the copy held and deleted every variable it lacked, a name it cannot write among them, and
+    /// counted each refusal. So a name with a space, which the preview leaves out, came back as a failure that "needs
+    /// administrator rights", elevated or not; a variable that already matched was rewritten and counted as restored;
+    /// and without administrator every machine-wide variable in the copy, changed or not, was a failure (#2775).
+    /// </remarks>
     private ScopeRestoreCounts RestoreScope(
         EnvVarScope scope,
         Dictionary<string, string> saved,
         Dictionary<string, RegistryValueKind>? kinds)
     {
         int restored = 0, removed = 0, failed = 0;
-        foreach (var (name, value) in saved)
+        foreach (var difference in CompareScope(scope, saved, kinds))
         {
-            RegistryValueKind? explicitKind = kinds is not null && kinds.TryGetValue(name, out var savedKind)
+            if (difference.Kind == DifferenceKind.Removed)
+            {
+                if (DeleteVariable(difference.Name, scope)) removed++;
+                else failed++;
+                continue;
+            }
+
+            RegistryValueKind? explicitKind = kinds is not null && kinds.TryGetValue(difference.Name, out var savedKind)
                 ? savedKind
                 : null;
-            if (SetVariable(name, value, scope, explicitKind)) restored++;
+            if (SetVariable(difference.Name, saved[difference.Name], scope, explicitKind)) restored++;
             else failed++;
         }
 
-        foreach (var current in Read(scope))
-        {
-            if (saved.ContainsKey(current.Name)) continue;
-            if (DeleteVariable(current.Name, scope)) removed++;
-            else failed++;
-        }
-
-        return new ScopeRestoreCounts(restored, removed, failed);
+        List<string> skipped = [.. saved.Keys.Concat(Read(scope).Select(v => v.Name))
+            .Where(name => !TryValidateName(name, out _))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .Order(StringComparer.OrdinalIgnoreCase)];
+        return new ScopeRestoreCounts(restored, removed, failed, scope == EnvVarScope.Machine ? failed : 0, skipped);
     }
 }

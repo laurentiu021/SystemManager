@@ -93,6 +93,46 @@ public sealed class LeftoverServiceTests : IDisposable
         Assert.Same(item, Assert.Single(result.Removed));
         Assert.Equal(10, result.BytesFreed);
         Assert.Empty(result.Errors);
+        Assert.False(result.Stopped);
+    }
+
+    // ── Stopping part-way (#2783) ─────────────────────────────────────────
+
+    [Fact]
+    public async Task Cancelling_StopsBeforeTheNextItem_AndSaysWhatWasRemovedBeforeIt()
+    {
+        // A removal that threw on the cancel lost what it had already sent to the Recycle Bin.
+        var first = TempLeftoverEnvironment.Folder(Path.Combine(_env.RoamingAppData, "Acme Notes"), bytes: 10);
+        var second = TempLeftoverEnvironment.Folder(Path.Combine(_env.RoamingAppData, "Acme Draw"), bytes: 20);
+        using var cts = new CancellationTokenSource();
+        var service = new LeftoverService(_runner, _env, recycle: path =>
+        {
+            _recycled.Add(path);
+            cts.Cancel();
+            return true;
+        });
+
+        var result = await service.RemoveAsync([Folder(first, size: 10), Folder(second, size: 20)], cts.Token);
+
+        Assert.Equal([first], _recycled);
+        Assert.Equal(first, Assert.Single(result.Removed).Location);
+        Assert.Equal(10, result.BytesFreed);
+        Assert.Empty(result.Errors);
+        Assert.True(result.Stopped);
+    }
+
+    [Fact]
+    public async Task ARemovalCancelledBeforeItStarts_RemovesNothing_AndSaysItStopped()
+    {
+        var path = TempLeftoverEnvironment.Folder(Path.Combine(_env.RoamingAppData, "Acme Notes"), bytes: 10);
+        using var cts = new CancellationTokenSource();
+        await cts.CancelAsync();
+
+        var result = await Service().RemoveAsync([Folder(path)], cts.Token);
+
+        Assert.Empty(_recycled);
+        Assert.Empty(result.Removed);
+        Assert.True(result.Stopped);
     }
 
     [Fact]

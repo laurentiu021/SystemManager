@@ -172,9 +172,94 @@ public class UninstallerServiceTests
         var exception = await Assert.ThrowsAsync<InvalidOperationException>(
             () => service.UninstallLocalAsync(app));
 
-        Assert.Contains("not absolute", exception.Message, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("full path", exception.Message, StringComparison.Ordinal);
         await runner.DidNotReceiveWithAnyArgs()
             .RunProcessWithShellAsync(default!, default!, default);
+    }
+
+    // ── An uninstaller anywhere on this PC's drives (#2783) ──
+    // It had to be under Program Files, the Windows folder, ProgramData or Local AppData, so an app installed on
+    // another drive, or for one user under Roaming AppData, could not be removed here. Uninstalling runs only without
+    // administrator rights, where the folder decides nothing.
+
+    [Fact]
+    public async Task UninstallLocalAsync_AnUninstallerOutsideTheFoldersItUsedToNeed_IsStarted()
+    {
+        // The test runner itself: a real program, in a checkout's build folder, which is none of those folders.
+        var executable = Environment.ProcessPath;
+        Assert.NotNull(executable);
+        Assert.False(UninstallerService.IsUnderTrustedDirectory(executable, isElevated: false),
+            $"{executable} is under a folder the old rule accepted, so this test proves nothing on this PC");
+        var runner = Substitute.For<IPowerShellRunner>();
+        runner.RunProcessWithShellAsync(Arg.Any<string>(), Arg.Any<string>(), Arg.Any<CancellationToken>()).Returns(0);
+        var service = new UninstallerService(runner, () => false);
+        var app = new InstalledApp { Name = "A game on another drive", UninstallString = $"\"{executable}\" /S" };
+
+        Assert.Equal(0, await service.UninstallLocalAsync(app));
+
+        await runner.Received(1).RunProcessWithShellAsync(executable, "/S", Arg.Any<CancellationToken>());
+    }
+
+    [Theory]
+    [InlineData(@"D:\Games\Contoso Racing\unins000.exe")]
+    [InlineData(@"E:\Program Files\Contoso\uninstall.exe")]
+    public void LocalExecutable_OnAnotherDrive_IsAccepted(string exe)
+        => Assert.Equal(exe, UninstallerService.LocalExecutable(exe, _ => true));
+
+    [Fact]
+    public void LocalExecutable_UnderRoamingAppData_IsAccepted()
+    {
+        var exe = System.IO.Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "Contoso", "Update.exe");
+
+        Assert.Equal(exe, UninstallerService.LocalExecutable(exe, _ => true));
+    }
+
+    [Theory]
+    [InlineData(@"\\fileserver\apps\Contoso\uninstall.exe", "not on one of this PC's drives")]
+    [InlineData(@"\\?\C:\Contoso\uninstall.exe", "not on one of this PC's drives")]
+    [InlineData(@"C:\Contoso\uninstall.bat", "not a program (.exe)")]
+    [InlineData(@"Contoso\uninstall.exe", "full path")]
+    [InlineData(@"C:Contoso\uninstall.exe", "full path")]
+    public void LocalExecutable_RefusesWhatIsNotAProgramOnThisPC(string exe, string why)
+    {
+        var lookedUp = false;
+        var refusal = Assert.Throws<InvalidOperationException>(
+            () => UninstallerService.LocalExecutable(exe, _ => lookedUp = true));
+
+        Assert.Contains(why, refusal.Message, StringComparison.Ordinal);
+        Assert.False(lookedUp, "a refused path is not looked up, so a network one is never reached");
+    }
+
+    [Fact]
+    public void LocalExecutable_ThatIsNotThere_SaysTheAppMayBeGone()
+    {
+        var refusal = Assert.Throws<InvalidOperationException>(
+            () => UninstallerService.LocalExecutable(@"D:\Games\Contoso\unins000.exe", _ => false));
+
+        Assert.Contains("may have been removed already", refusal.Message, StringComparison.Ordinal);
+    }
+
+    [Theory]
+    [InlineData(@".\uninstall.exe /S")]
+    [InlineData(@"""\\fileserver\apps\Contoso\uninstall.exe"" /S")]
+    [InlineData(@"""C:\Windows\System32\cmd.exe"" /c del x & del y")]
+    [InlineData(@"MsiExec.exe /I C:\Temp\contoso.msi")]
+    [InlineData(@"rundll32.exe C:\Temp\contoso.dll,Uninstall")]
+    [InlineData("contoso-uninstall --all")]
+    public async Task UninstallLocalAsync_ARefusal_SaysWhereTheAppCanBeRemovedInstead(string command)
+    {
+        // Each ended "Refusing to run for security.", which gave the user nothing to do and reads as a warning about
+        // the app.
+        var runner = Substitute.For<IPowerShellRunner>();
+        var service = new UninstallerService(runner, () => false);
+
+        var refusal = await Assert.ThrowsAsync<InvalidOperationException>(
+            () => service.UninstallLocalAsync(new InstalledApp { Name = "Contoso", UninstallString = command }));
+
+        Assert.StartsWith("Remove it from Windows Settings ▸ Apps.", refusal.Message, StringComparison.Ordinal);
+        Assert.DoesNotContain("refusing", refusal.Message, StringComparison.OrdinalIgnoreCase);
+        await runner.DidNotReceiveWithAnyArgs().RunProcessWithShellAsync(default!, default!, default);
     }
 
     // ── An MSI uninstall can ask for administrator rights (#2724) ──
@@ -390,7 +475,7 @@ public class UninstallerServiceTests
             UninstallerService.ValidateTrustedBinaryArgs(
                 "rundll32.exe", @"C:shell32.dll,Control_RunDLL", isElevated: false));
 
-        Assert.Contains("not absolute", exception.Message, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("full path", exception.Message, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -685,6 +770,24 @@ public class UninstallerServiceTests
         Assert.Throws<InvalidOperationException>(
             () => UninstallerService.ParseUninstallCommand(command));
     }
+
+    [Theory]
+    [InlineData(@"""C:\Program Files\Smith & Sons\unins000.exe"" /SILENT",
+                @"C:\Program Files\Smith & Sons\unins000.exe", "/SILENT")]
+    [InlineData(@"""D:\Games\Contoso; Classic\uninstall.exe""", @"D:\Games\Contoso; Classic\uninstall.exe", "")]
+    public void ParseUninstallCommand_AQuotedPathWithAnAmpersandOrASemicolon_IsParsed(string command, string exe,
+        string args)
+    {
+        // Both are legal in a folder name, and the shell starts the file the quotes name: no command interpreter reads
+        // the path (#2783).
+        Assert.Equal((exe, args), UninstallerService.ParseUninstallCommand(command));
+    }
+
+    [Theory]
+    [InlineData(@"""C:\Program Files\Contoso\unins000.exe"" /S & del /q *")]
+    [InlineData(@"""C:\Windows\System32\cmd.exe"" /c calc.exe | evil.exe")]
+    public void ParseUninstallCommand_ChainingInTheArgumentsOfAQuotedPath_IsStillRefused(string command)
+        => Assert.Throws<InvalidOperationException>(() => UninstallerService.ParseUninstallCommand(command));
 
     [Fact]
     public void ParseUninstallCommand_ExeInMiddleOfPath_FindsCorrectBoundary()

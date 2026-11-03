@@ -10,6 +10,26 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.136.105] - 2026-11-03
+
+**Uninstaller removes apps installed on another drive or for one user in Roaming AppData, and Cancel stops the search for what an uninstall left behind.**
+
+### Fixed
+- Uninstaller started an app's own uninstaller only from Program Files, the Windows folder, ProgramData or Local
+  AppData, so an app installed on another drive, or for one user under Roaming AppData, as some apps install, could
+  not be removed: the row said "outside trusted directories". Uninstalling runs only while SysManager is not running
+  as administrator, with your own rights, the same as Windows Settings, so the folder protected nothing. An
+  uninstaller anywhere on the PC's drives is started now; a script, or one on a network folder, still is not. The
+  folder list was there since 0.48.28.
+- An uninstall command with an "&" or a ";" anywhere was refused, a folder name such as "Smith & Sons" included,
+  since 0.48.24. The characters are checked only where a command interpreter could read them, in the arguments; the
+  uninstaller's own path is started as a file.
+- An uninstaller SysManager does not start says to remove the app from Windows Settings ▸ Apps, and why, instead of
+  ending "Refusing to run for security."
+- Cancel showed while Uninstaller looked for what an uninstall left behind, and while it removed what you ticked,
+  but stopped neither, since the Left behind card first shipped, in 1.124.0. It stops both now. The card shows what
+  the search found before it stopped, and a stopped removal says what went, with the rest still on the list.
+
 ## [1.136.104] - 2026-11-03
 
 **The Dashboard names the drives on its temperature card again after a disk read fails, and System Health says when it could not read the drives.**

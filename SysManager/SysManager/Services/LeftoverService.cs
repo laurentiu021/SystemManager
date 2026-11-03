@@ -21,7 +21,11 @@ namespace SysManager.Services;
 /// another counted once.
 /// </param>
 /// <param name="Errors">One sentence per item that was not removed, naming it and why.</param>
-public sealed record LeftoverRemoval(IReadOnlyList<LeftoverItem> Removed, long BytesFreed, IReadOnlyList<string> Errors);
+/// <param name="Stopped">
+/// The removal was cancelled before every item was tried. The items it did not try are in neither list.
+/// </param>
+public sealed record LeftoverRemoval(IReadOnlyList<LeftoverItem> Removed, long BytesFreed, IReadOnlyList<string> Errors,
+                                     bool Stopped = false);
 
 /// <summary>Finds what an uninstall left behind, and removes the items the user ticks (#1527).</summary>
 public interface ILeftoverService
@@ -33,6 +37,7 @@ public interface ILeftoverService
     /// <summary>
     /// Sends the folders to the Recycle Bin and deletes the keys after exporting each to a <c>.reg</c> file. Every
     /// folder is checked again first, so one that turned into a link, or gained one, since it was found is refused.
+    /// Cancelled, it stops before the next item and returns what it removed, marked <c>Stopped</c>.
     /// </summary>
     Task<LeftoverRemoval> RemoveAsync(IReadOnlyList<LeftoverItem> items, CancellationToken ct = default);
 
@@ -153,32 +158,53 @@ public sealed class LeftoverService : ILeftoverService
             };
         }, ct);
 
+    /// <inheritdoc/>
+    /// <remarks>
+    /// A cancelled removal returns what it did rather than throwing: what it had sent to the Recycle Bin was gone
+    /// all the same, and the card would have kept it ticked (#2783). Cancelling is noticed between items, and while
+    /// a folder is measured again or a key exported, both before anything of that item is removed. The token is
+    /// not given to <c>Task.Run</c> for the same reason: a removal cancelled before it starts still says so.
+    /// </remarks>
     public Task<LeftoverRemoval> RemoveAsync(IReadOnlyList<LeftoverItem> items, CancellationToken ct = default)
         => Task.Run(async () =>
         {
             var removed = new List<LeftoverItem>();
             var recycled = new List<LeftoverItem>();
             var errors = new List<string>();
+            var stopped = false;
 
             foreach (var item in items)
             {
-                ct.ThrowIfCancellationRequested();
-                if (item.Kind == LeftoverKind.Folder)
+                if (ct.IsCancellationRequested)
                 {
-                    switch (RemoveFolder(item, errors, ct))
+                    stopped = true;
+                    break;
+                }
+
+                try
+                {
+                    if (item.Kind == LeftoverKind.Folder)
                     {
-                        case FolderOutcome.Recycled: removed.Add(item); recycled.Add(item); break;
-                        case FolderOutcome.AlreadyGone: removed.Add(item); break;
+                        switch (RemoveFolder(item, errors, ct))
+                        {
+                            case FolderOutcome.Recycled: removed.Add(item); recycled.Add(item); break;
+                            case FolderOutcome.AlreadyGone: removed.Add(item); break;
+                        }
+                    }
+                    else if (await RemoveKeyAsync(item, errors, ct).ConfigureAwait(false))
+                    {
+                        removed.Add(item);
                     }
                 }
-                else if (await RemoveKeyAsync(item, errors, ct).ConfigureAwait(false))
+                catch (OperationCanceledException) when (ct.IsCancellationRequested)
                 {
-                    removed.Add(item);
+                    stopped = true;
+                    break;
                 }
             }
 
-            return new LeftoverRemoval(removed, LeftoverFinder.DistinctBytes(recycled), errors);
-        }, ct);
+            return new LeftoverRemoval(removed, LeftoverFinder.DistinctBytes(recycled), errors, stopped);
+        });
 
     private enum FolderOutcome { Recycled, AlreadyGone, Kept }
 

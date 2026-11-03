@@ -82,7 +82,7 @@
 
         <!-- Elevation banner -->
         <v:AdminBanner Grid.Row="1" Margin="0,0,0,12"
-                       NotElevatedMessage="Some privacy settings write to system-wide registry keys and require administrator privileges."
+                       NotElevatedMessage="The privacy settings that change Windows for everyone on this PC, and those Windows keeps as policies for your account, require administrator privileges. The rest work without it."
                        ElevatedMessage="Running as administrator — all privacy toggles are available."/>
 
         <!-- Toolbar -->

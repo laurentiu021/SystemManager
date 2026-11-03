@@ -1474,7 +1474,9 @@ Answers "what is actually using my space?" by listing the biggest files in one p
 
 ### Privacy & Telemetry
 - 12 registry-based toggles across 3 categories (Telemetry, UI Declutter, Features)
-- **Telemetry**: disable diagnostic data, activity history, advertising ID, feedback prompts
+- **Telemetry**: limit diagnostic data (off on Enterprise and Education; on Home and Pro, which
+  cannot turn it off, the required level, and the switch says which your edition gets), and
+  disable activity history, advertising ID, feedback prompts
 - **UI Declutter**: disable Start suggestions, tips, lock screen tips, Spotlight ads
 - **Features**: disable Copilot, Cortana, web search in Start, widgets
 - Explicit apply — flip toggles to stage changes, press **Apply** to write to the
@@ -1482,9 +1484,10 @@ Answers "what is actually using my space?" by listing the biggest files in one p
   it will make ("Apply 2 changes") and each switch you moved says "changes when you
   apply", so accidental clicks never modify the system silently.
 - **Group the switches by topic or by reach** — "Just you" for the ones that change only
-  your account (no administrator needed) and "Everyone on this PC" for the ones that
-  change Windows for every account. Searching the sidebar for "tweaks" opens the tab
-  grouped this way
+  your account (no administrator needed), "Just you, with administrator" for the ones
+  Windows keeps as policies for your account, which only an administrator can set, and
+  "Everyone on this PC" for the ones that change Windows for every account. Searching the
+  sidebar for "tweaks" opens the tab grouped this way
 - **Privacy choices from another PC** — import a profile in Profile Export / Import and
   it opens here with the profile's choices already on the switches, as pending changes.
   Nothing is written until you press **Apply**, and **Discard** keeps this PC as it is.
@@ -1494,7 +1497,8 @@ Answers "what is actually using my space?" by listing the biggest files in one p
   so with a change not applied yet, including one an imported profile staged, they ask first,
   and No keeps it
 - Category filter
-- Requires admin for HKLM-backed toggles
+- Requires admin for the switches that change Windows for everyone on the PC, and for the
+  policies Windows keeps for your account, which it lets your account read but not change
 - Fully reversible — switch a toggle back and press **Apply**. Turning one off removes the
   value SysManager wrote, so Windows goes back to its own default
 - **A Windows restore point is attempted before the first Apply of the session**, shared with the

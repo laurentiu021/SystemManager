@@ -500,6 +500,26 @@ public sealed class PrivacyViewModelTests : IDisposable
         Assert.Equal(flagged, vm.StatusMessage.Contains("administrator", StringComparison.Ordinal));
     }
 
+    /// <summary>
+    /// A policy Windows keeps for your account changes only your account, and Apply still cannot write it without
+    /// administrator, so an import says so before Apply. It was counted as needing nothing (#2778).
+    /// </summary>
+    [Fact]
+    public async Task AnImportedChangeToAPolicyForYourAccount_IsSaidToNeedAdministrator()
+    {
+        using var probe = AdminHelper.ForceElevation(false);
+        var handoff = new PrivacyChoicesHandoff();
+        handoff.Offer(Choices(("web-search", true)));
+
+        var vm = await StagingVmAsync(FakePrivacy.Returning(
+            FakePrivacy.Toggle("tips", on: false),
+            FakePrivacy.Toggle("web-search", on: false, category: "Features", policy: true)), handoff);
+
+        Assert.Equal(1, vm.PendingChangeCount);
+        Assert.Equal(PrivacyViewModel.DescribeImportedChoices(changes: 1, needAdmin: 1, elevated: false),
+            vm.StatusMessage);
+    }
+
     [Theory]
     [InlineData(1, 0, false, "The imported profile changes 1 privacy setting on this PC. Nothing has changed yet: "
         + "check the switches, then press Apply, or Discard to keep this PC as it is.")]
@@ -667,23 +687,50 @@ public sealed class PrivacyViewModelTests : IDisposable
 
     // ---------- by reach: the grouping Tweaks Hub added, now here (#1517) ----------
 
+    /// <summary>
+    /// A switch's reach is read from its hive, and under HKCU from whether its key is one of the policies Windows keeps
+    /// for the account, which the account may read and not write (#2778).
+    /// </summary>
     [Theory]
     [InlineData(@"HKLM\SOFTWARE\Policies\Microsoft\Windows\DataCollection", PrivacyReach.EveryoneOnThisPc)]
     [InlineData(@"HKEY_LOCAL_MACHINE\SOFTWARE\Foo", PrivacyReach.EveryoneOnThisPc)]
     [InlineData(@"hklm\software\foo", PrivacyReach.EveryoneOnThisPc)]
     [InlineData(@"HKCU\Software\Microsoft\Windows\CurrentVersion\AdvertisingInfo", PrivacyReach.JustYou)]
     [InlineData(@"HKEY_CURRENT_USER\Software\Foo", PrivacyReach.JustYou)]
-    public void ASwitchesReach_IsReadFromItsRegistryHive(string path, PrivacyReach expected)
+    [InlineData(@"HKCU\Software\Policies\Microsoft\Windows\Explorer", PrivacyReach.JustYouByPolicy)]
+    [InlineData(@"HKEY_CURRENT_USER\SOFTWARE\POLICIES\Microsoft", PrivacyReach.JustYouByPolicy)]
+    [InlineData(@"HKCU\Software\Policies", PrivacyReach.JustYouByPolicy)]
+    [InlineData(@"HKCU\Software\PoliciesBackup\Foo", PrivacyReach.JustYou)]
+    [InlineData(@"HKCU\Software\Microsoft\Policies\Foo", PrivacyReach.JustYou)]
+    public void ASwitchesReach_IsReadFromItsHive_AndWhetherItIsAPolicyForYourAccount(string path, PrivacyReach expected)
         => Assert.Equal(expected, PrivacyToggle.ReachOf(path));
 
+    [Theory]
+    [InlineData(@"HKCU\Software\SysManagerTests\Reach", false)]
+    [InlineData(@"HKCU\Software\Policies\SysManagerTests\Reach", true)]
+    [InlineData(@"HKLM\SOFTWARE\SysManagerTests\Reach", true)]
+    public void OnlyASwitchThatChangesJustYourOwnSettings_NeedsNoAdministrator(string path, bool needs)
+        => Assert.Equal(needs, new PrivacyToggle
+        {
+            Key = "tips",
+            Name = "tips",
+            Description = "a privacy toggle no test writes",
+            Category = "Telemetry",
+            RegistryPath = path,
+            ValueName = "tips",
+            EnabledValue = 1,
+            DisabledValue = 0,
+        }.NeedsAdministrator);
+
     /// <summary>
-    /// The real switches fill both reaches, so "By reach" never shows a single section by construction.
+    /// The real switches fill every reach, so "By reach" never shows a single section by construction, and the two
+    /// that write a policy Windows keeps for the account are the ones listed as needing administrator for it (#2778).
     /// </summary>
     /// <remarks>
     /// Against the real definitions rather than a substitute, because a substitute would be asserting the fixture.
     /// </remarks>
     [Fact]
-    public void TheRealSwitches_FillBothReaches()
+    public void TheRealSwitches_FillEveryReach()
     {
         var toggles = new PrivacyService().LoadToggles();
         Assert.True(toggles.Count >= 10,
@@ -691,9 +738,13 @@ public sealed class PrivacyViewModelTests : IDisposable
 
         var reaches = toggles.Select(t => t.Reach).ToList();
 
-        // Eight of the twelve change only your account and four the whole PC, as the tab and the changelog say.
-        Assert.Equal(8, reaches.Count(r => r == PrivacyReach.JustYou));
+        // Six of the twelve change only your account, two are policies for your account, and four change the whole PC.
+        Assert.Equal(6, reaches.Count(r => r == PrivacyReach.JustYou));
+        Assert.Equal(2, reaches.Count(r => r == PrivacyReach.JustYouByPolicy));
         Assert.Equal(4, reaches.Count(r => r == PrivacyReach.EveryoneOnThisPc));
+        Assert.Equal(["ai-assistant", "web-search"],
+            toggles.Where(t => t.Reach == PrivacyReach.JustYouByPolicy).Select(t => t.Key));
+        Assert.Equal(6, toggles.Count(t => t.NeedsAdministrator));
     }
 
     [Fact]
@@ -713,6 +764,28 @@ public sealed class PrivacyViewModelTests : IDisposable
         Assert.Equal("Everyone on this PC — 1 switch", groups[1].Title);
         Assert.Equal("Change Windows for every account on this PC, so they need administrator. Still fully reversible.",
             groups[1].Description);
+    }
+
+    /// <summary>
+    /// A policy Windows keeps for your account is listed apart from the switches that need nothing, between them and
+    /// the ones for the whole PC, and says that it needs administrator (#2778).
+    /// </summary>
+    [Fact]
+    public void ByReach_ListsAPolicyForYourAccount_BetweenJustYouAndEveryone_AsNeedingAdministrator()
+    {
+        var groups = PrivacyViewModel.GroupByReach([
+            FakePrivacy.Toggle("widgets", on: false, hive: "HKLM"),
+            FakePrivacy.Toggle("web-search", on: false, policy: true),
+            FakePrivacy.Toggle("tips", on: false),
+        ]);
+
+        Assert.Equal([PrivacyReach.JustYou, PrivacyReach.JustYouByPolicy, PrivacyReach.EveryoneOnThisPc],
+            groups.Select(g => g.Reach));
+        Assert.Equal("Just you, with administrator — 1 switch", groups[1].Title);
+        Assert.Equal("Change only your own account, but Windows keeps them as policies, which only an administrator "
+            + "can set. Still fully reversible.", groups[1].Description);
+        Assert.Equal("web-search", Assert.Single(groups[1].Toggles).Key);
+        Assert.Equal("tips", Assert.Single(groups[0].Toggles).Key);
     }
 
     [Fact]

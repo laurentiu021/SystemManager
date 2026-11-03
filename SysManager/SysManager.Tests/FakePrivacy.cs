@@ -15,21 +15,28 @@ namespace SysManager.Tests;
 internal static class FakePrivacy
 {
     /// <summary>
-    /// A toggle with this key and state. Its path names the hive, which is what decides whether a write needs
-    /// administrator rights, under a key no test writes: the service it comes from is a substitute.
+    /// A toggle with this key and state. Its path names the hive, and with <paramref name="policy"/> the policies
+    /// Windows keeps for the account, which is what decides whether a write needs administrator rights, under a key
+    /// no test writes: the service it comes from is a substitute.
     /// </summary>
-    public static PrivacyToggle Toggle(string key, bool on, string hive = "HKCU", string category = "Telemetry") => new()
+    public static PrivacyToggle Toggle(string key, bool on, string hive = "HKCU", string category = "Telemetry",
+                                       bool policy = false)
     {
-        Key = key,
-        Name = key,
-        Description = "a privacy toggle no test writes",
-        Category = category,
-        RegistryPath = $@"{hive}\Software\SysManagerTests\FakePrivacy",
-        ValueName = key,
-        EnabledValue = 1,
-        DisabledValue = 0,
-        IsEnabled = on,
-    };
+        return new()
+        {
+            Key = key,
+            Name = key,
+            Description = "a privacy toggle no test writes",
+            Category = category,
+            RegistryPath = policy
+                ? $@"{hive}\Software\Policies\SysManagerTests\FakePrivacy"
+                : $@"{hive}\Software\SysManagerTests\FakePrivacy",
+            ValueName = key,
+            EnabledValue = 1,
+            DisabledValue = 0,
+            IsEnabled = on,
+        };
+    }
 
     /// <summary>
     /// A service whose every <see cref="IPrivacyService.LoadToggles"/> returns new toggles in these states, as

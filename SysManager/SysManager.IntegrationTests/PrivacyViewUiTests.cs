@@ -67,9 +67,12 @@ public sealed class PrivacyViewUiTests : IDisposable
             var view = Laid(vm);
             var shown = ShownTexts(view);
 
-            var justYou = shown.IndexOf("Just you — 8 switches");
+            // The two policies Windows keeps for your account sit between them, as needing administrator (#2778).
+            var justYou = shown.IndexOf("Just you — 6 switches");
+            var byPolicy = shown.IndexOf("Just you, with administrator — 2 switches");
             var everyone = shown.IndexOf("Everyone on this PC — 4 switches");
-            Assert.True(justYou >= 0 && everyone > justYou, $"sections shown: {string.Join(" | ", shown)}");
+            Assert.True(justYou >= 0 && byPolicy > justYou && everyone > byPolicy,
+                $"sections shown: {string.Join(" | ", shown)}");
             Assert.Contains("Change only your own account. No administrator needed.", shown);
             Assert.False(Shown(ItemsNamed(view, "Privacy switches")));
             Assert.Equal(12, Descendants<ToggleButton>(ItemsNamed(view, "Privacy switches by reach")).Count(t => t is not RadioButton));
@@ -87,7 +90,7 @@ public sealed class PrivacyViewUiTests : IDisposable
 
             Assert.True(Shown(ItemsNamed(view, "Privacy switches")));
             Assert.False(Shown(ItemsNamed(view, "Privacy switches by reach")));
-            Assert.DoesNotContain("Just you — 8 switches", ShownTexts(view));
+            Assert.DoesNotContain("Just you — 6 switches", ShownTexts(view));
         });
     }
 

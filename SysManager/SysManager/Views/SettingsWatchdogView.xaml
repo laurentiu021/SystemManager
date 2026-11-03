@@ -55,10 +55,10 @@
             </StackPanel>
         </DockPanel>
 
-        <!-- Elevation banner (restoring HKLM-backed settings needs admin) -->
+        <!-- Elevation banner (restoring a machine-wide setting, or a policy Windows keeps for the account, needs admin) -->
         <v:AdminBanner Grid.Row="2" Margin="28,12,28,0"
-                       NotElevatedMessage="Some watched settings are machine-wide and need administrator to restore."
-                       ElevatedMessage="Running as administrator — machine-wide watched settings can be restored, not just per-user ones."/>
+                       NotElevatedMessage="Some watched settings are machine-wide or Windows policies, and need administrator to restore."
+                       ElevatedMessage="Running as administrator — every watched setting can be restored."/>
 
         <!-- Baseline status banner -->
         <Border Grid.Row="3" Style="{StaticResource Card}" Margin="28,12,28,0" Padding="14,10"

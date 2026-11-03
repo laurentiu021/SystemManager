@@ -160,7 +160,8 @@ public sealed class CliRunner
                 ? new CliResult(CliResult.Ok, Json(new { score = r.Score, label = r.Label, disk = r.DiskScore, freeSpace = r.FreeSpaceScore, ram = r.RamScore, uptime = r.UptimeScore }))
                 : new CliResult(CliResult.Ok, $"Health score: {r.Score}/100 ({r.Label})");
         }
-        catch (Exception ex) when (ex is System.Management.ManagementException or InvalidOperationException)
+        catch (Exception ex) when (ex is System.Management.ManagementException
+                                       or System.Runtime.InteropServices.COMException or InvalidOperationException)
         {
             return new CliResult(CliResult.Error, request.Json ? Json(new { error = ex.Message }) : $"Health check failed: {ex.Message}");
         }

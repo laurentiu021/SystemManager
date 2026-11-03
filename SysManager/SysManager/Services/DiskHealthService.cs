@@ -71,9 +71,11 @@ public sealed class DiskHealthService
                 }
             }
         }
-        catch (ManagementException)
+        catch (Exception ex) when (ex is ManagementException or System.Runtime.InteropServices.COMException)
         {
-            // Storage scope might not exist on some Windows SKUs.
+            // Storage scope might not exist on some Windows SKUs, and a WMI service that is off or not answering is a
+            // COM error, not a management one (#2774).
+            Log.Debug("DiskHealth: the storage provider could not be read: {Error}", ex.Message);
         }
         catch (UnauthorizedAccessException)
         {

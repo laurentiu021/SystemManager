@@ -154,7 +154,8 @@ public sealed class ResourceHistoryService : IDisposable
                 .Where(r => r.Component.StartsWith("GPU", StringComparison.Ordinal) && r.TemperatureC.HasValue)
                 .Select(r => r.TemperatureC).DefaultIfEmpty(null).Max();
         }
-        catch (Exception ex) when (ex is System.Management.ManagementException or InvalidOperationException)
+        catch (Exception ex) when (ex is System.Management.ManagementException
+                                       or System.Runtime.InteropServices.COMException or InvalidOperationException)
         {
             Log.Debug("Resource history temperature read failed: {Error}", ex.Message);
         }

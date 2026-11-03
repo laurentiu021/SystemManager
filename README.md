@@ -2444,7 +2444,9 @@ offers, "rate us" prompts:
   which were finding a hidden `AppData` folder and working out which day's log covered the
   problem. **Nothing is sent anywhere** — you
   choose where the file goes and whether to attach it, and a `README.txt` inside names every
-  file and says what was deliberately left out. Your network adapters' hardware addresses are
+  file, describes the environment info line by line, and says what was deliberately left out.
+  A log that could not be read is named as left out, and the message after saving counts only
+  the logs that are in the zip. Your network adapters' hardware addresses are
   not included and the last two parts of each local IP address are masked, because a hardware
   address is permanent and cannot be withdrawn once it is posted in public. The user-name folder in
   every path in the logs already reads `[user]` before it reaches disk. An oversized log is cut to its

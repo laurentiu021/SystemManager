@@ -472,6 +472,24 @@ public class AboutViewModelTests
         Assert.Contains(Path.GetFileName(path), vm.ReportStatus, StringComparison.Ordinal);
     }
 
+    /// <summary>
+    /// The status line counts the logs that are in the bundle, and says how many could not be read (#2774). It counted
+    /// the newest logs whether or not they were in it.
+    /// </summary>
+    [Theory]
+    [InlineData(2, 0, "and 2 log files. Nothing was sent anywhere.")]
+    [InlineData(2, 1, "and 2 log files (1 more could not be read). Nothing was sent anywhere.")]
+    [InlineData(1, 0, "and 1 log file. Nothing was sent anywhere.")]
+    [InlineData(0, 0, "and no log files were found. Nothing was sent anywhere.")]
+    [InlineData(0, 3, "and no log files, as 3 could not be read. Nothing was sent anywhere.")]
+    public void TheSavedBundle_SaysWhichLogsAreInIt(int included, int unreadable, string ending)
+    {
+        var said = AboutViewModel.DiagnosticsBundleSaved(
+            "bundle.zip", new DiagnosticsBundleService.BundleContents(included, 1024, unreadable));
+
+        Assert.Equal("Saved bundle.zip — report, environment info " + ending, said);
+    }
+
     [Fact]
     public async Task SaveDiagnosticsBundleAsync_WhenCancelled_WritesNothing()
     {

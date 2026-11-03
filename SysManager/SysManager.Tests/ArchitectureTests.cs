@@ -6025,6 +6025,92 @@ public partial class ArchitectureTests
     }
 
     /// <summary>
+    /// Every try that catches a WMI fault as a <c>ManagementException</c> catches it as a <c>COMException</c> too
+    /// (#2774).
+    /// </summary>
+    /// <remarks>
+    /// System.Management reports many WMI failures as COM errors: the service disabled, the RPC server not there, an
+    /// object disconnected. The About tab's environment info caught only the management one, so on such a machine its
+    /// two buttons for reporting a problem raised the app's error dialog, and System Health, Battery Health and the
+    /// drive list had the same gap. This reads every app file, its comments and literals blanked, follows each try's
+    /// catch clauses, and fails a chain that names <c>ManagementException</c> and nothing that takes a COM fault.
+    /// </remarks>
+    [Fact]
+    public void EveryCatchOfAWmiFault_CatchesItsComFaultToo()
+    {
+        var sourceDir = Path.Combine(TestPaths.RepoRoot(), "SysManager", "SysManager");
+        var files = Directory.GetFiles(sourceDir, "*.cs", SearchOption.AllDirectories)
+            .Where(f => !f.Contains($"{Path.DirectorySeparatorChar}obj{Path.DirectorySeparatorChar}")
+                        && !f.Contains($"{Path.DirectorySeparatorChar}bin{Path.DirectorySeparatorChar}"))
+            .ToArray();
+        Assert.NotEmpty(files);
+
+        List<string> offenders = [];
+        var chains = 0;
+        foreach (var file in files)
+        {
+            var source = File.ReadAllText(file);
+            var code = SourceBraces.CodeOnly(source);
+            foreach (Match start in TryBlockStart().Matches(code))
+            {
+                var heads = CatchHeads(source, code, start.Index + start.Length - 1);
+                if (!heads.Any(h => Names(h, "ManagementException"))) continue;
+
+                chains++;
+                if (heads.Any(h => Names(h, "COMException") || CatchesAnything(h))) continue;
+                var line = source.AsSpan(0, start.Index).Count('\n') + 1;
+                offenders.Add($"{Path.GetFileName(file)}:{line}");
+            }
+        }
+
+        // 44 when this was written.
+        Assert.True(chains >= 40,
+            $"only {chains} try statements catching ManagementException were found, so the scan no longer finds "
+            + "them — fix the pattern rather than trusting the pass");
+        Assert.True(offenders.Count == 0,
+            "these catch a WMI fault as a ManagementException but let the same fault through as a COMException. Catch "
+            + "both, as `catch (Exception ex) when (ex is ManagementException or COMException)`:\n  "
+            + string.Join("\n  ", offenders));
+
+        static bool Names(Match head, string type) =>
+            head.Groups["declaration"].Value.Contains(type, StringComparison.Ordinal)
+            || head.Groups["filter"].Value.Contains(type, StringComparison.Ordinal);
+
+        // Broad as CatchClauses reads it: no filter, and no type or Exception itself.
+        static bool CatchesAnything(Match head)
+        {
+            var declaration = head.Groups["declaration"];
+            return !head.Groups["filter"].Success
+                   && (!declaration.Success || CatchesEverything().IsMatch(declaration.Value.Trim()));
+        }
+    }
+
+    /// <summary>
+    /// The head of each catch clause after the try block whose brace opens at <paramref name="open"/>, read with
+    /// <see cref="CatchClauseHead"/> as <see cref="CatchClauses"/> reads them.
+    /// </summary>
+    private static List<Match> CatchHeads(string source, string code, int open)
+    {
+        List<Match> heads = [];
+        var close = SourceBraces.MatchingBrace(source, open);
+        while (close > 0)
+        {
+            var next = close + 1;
+            while (next < code.Length && char.IsWhiteSpace(code[next])) next++;
+            var head = CatchClauseHead().Match(code, next);
+            if (!head.Success || head.Index != next) break;
+
+            heads.Add(head);
+            close = SourceBraces.MatchingBrace(source, head.Index + head.Length - 1);
+        }
+        return heads;
+    }
+
+    /// <summary>A try statement's opening, up to its block's brace.</summary>
+    [GeneratedRegex(@"(?<![@\w])try\s*\{")]
+    private static partial Regex TryBlockStart();
+
+    /// <summary>
     /// The text of a method from its signature to its closing brace, by brace matching.
     /// </summary>
     /// <remarks>

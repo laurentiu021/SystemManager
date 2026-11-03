@@ -5,6 +5,7 @@
 using System.Diagnostics;
 using System.Globalization;
 using System.IO;
+using System.Management;
 using System.Net.Http;
 using System.Reflection;
 using System.Runtime.InteropServices;
@@ -787,7 +788,9 @@ public sealed partial class AboutViewModel : ViewModelBase
                 ? "Environment info copied to clipboard."
                 : Helpers.ClipboardFeedback.Busy;
         }
-        catch (System.Management.ManagementException ex)
+        // WMI reports many of its faults as COM errors, a disabled service or an RPC server that is not there, and they
+        // reached the app's error dialog from the one button meant for when something is already wrong (#2774).
+        catch (Exception ex) when (ex is ManagementException or System.Runtime.InteropServices.COMException)
         {
             ReportStatus = $"Couldn't collect environment info: {ex.Message}";
         }
@@ -834,7 +837,10 @@ public sealed partial class AboutViewModel : ViewModelBase
                         break;
                     }
             }
-            catch (System.Management.ManagementException ex) { Log.Debug("CPU info unavailable: {Error}", ex.Message); }
+            catch (Exception ex) when (ex is ManagementException or System.Runtime.InteropServices.COMException)
+            {
+                Log.Debug("CPU info unavailable: {Error}", ex.Message);
+            }
 
             // RAM
             try
@@ -852,7 +858,10 @@ public sealed partial class AboutViewModel : ViewModelBase
                         break;
                     }
             }
-            catch (System.Management.ManagementException ex) { Log.Debug("RAM info unavailable: {Error}", ex.Message); }
+            catch (Exception ex) when (ex is ManagementException or System.Runtime.InteropServices.COMException)
+            {
+                Log.Debug("RAM info unavailable: {Error}", ex.Message);
+            }
 
             // GPU
             try
@@ -876,7 +885,10 @@ public sealed partial class AboutViewModel : ViewModelBase
                         sb.AppendLine();
                     }
             }
-            catch (System.Management.ManagementException ex) { Log.Debug("GPU info unavailable: {Error}", ex.Message); }
+            catch (Exception ex) when (ex is ManagementException or System.Runtime.InteropServices.COMException)
+            {
+                Log.Debug("GPU info unavailable: {Error}", ex.Message);
+            }
 
             // Storage
             try
@@ -908,12 +920,15 @@ public sealed partial class AboutViewModel : ViewModelBase
                         }
                     }
             }
-            catch (System.Management.ManagementException ex) { Log.Debug("Display info unavailable: {Error}", ex.Message); }
+            catch (Exception ex) when (ex is ManagementException or System.Runtime.InteropServices.COMException)
+            {
+                Log.Debug("Display info unavailable: {Error}", ex.Message);
+            }
 
             var text = sb.ToString();
             return text;
         }
-        catch (System.Management.ManagementException ex)
+        catch (Exception ex) when (ex is ManagementException or System.Runtime.InteropServices.COMException)
         {
             return $"Couldn't collect environment info: {ex.Message}";
         }
@@ -948,7 +963,10 @@ public sealed partial class AboutViewModel : ViewModelBase
                         return $"{caption} (build {build})";
                 }
         }
-        catch (System.Management.ManagementException ex) { Log.Debug("WMI OS info unavailable: {Error}", ex.Message); }
+        catch (Exception ex) when (ex is ManagementException or System.Runtime.InteropServices.COMException)
+        {
+            Log.Debug("WMI OS info unavailable: {Error}", ex.Message);
+        }
 
         // Fallback to Environment.OSVersion
         try
@@ -1034,14 +1052,7 @@ public sealed partial class AboutViewModel : ViewModelBase
             var environment = await Task.Run(CollectEnvironmentInfo).ConfigureAwait(true);
             var contents = await _bundle.WriteAsync(path, environment).ConfigureAwait(true);
 
-            var logs = contents.LogFilesIncluded switch
-            {
-                0 => "no log files were found",
-                1 => "1 log file",
-                var n => string.Create(CultureInfo.InvariantCulture, $"{n} log files"),
-            };
-            ReportStatus = string.Create(CultureInfo.InvariantCulture,
-                $"Saved {Path.GetFileName(path)} — report, environment info and {logs}. Nothing was sent anywhere.");
+            ReportStatus = DiagnosticsBundleSaved(Path.GetFileName(path), contents);
             LastDiagnosticsBundlePath = path;
             ToastService.Instance.Show("Diagnostics bundle saved", Path.GetFileName(path));
         }
@@ -1058,6 +1069,32 @@ public sealed partial class AboutViewModel : ViewModelBase
             ReportStatus = $"Failed to collect diagnostics: {ex.Message}";
         }
         finally { IsGeneratingReport = false; }
+    }
+
+    /// <summary>
+    /// What the status line says once a bundle is saved: the logs that are in it, and any that are not.
+    /// </summary>
+    /// <remarks>
+    /// It counted the newest logs whether or not they could be read, so it said "3 log files" over a zip that held two
+    /// (#2774).
+    /// </remarks>
+    internal static string DiagnosticsBundleSaved(string fileName, DiagnosticsBundleService.BundleContents contents)
+    {
+        var included = contents.LogFilesIncluded switch
+        {
+            0 => contents.LogFilesUnreadable == 0 ? "no log files were found" : "no log files",
+            1 => "1 log file",
+            var n => string.Create(CultureInfo.InvariantCulture, $"{n} log files"),
+        };
+        var unread = contents.LogFilesUnreadable switch
+        {
+            0 => "",
+            var u when contents.LogFilesIncluded == 0 => string.Create(CultureInfo.InvariantCulture,
+                $", as {u} could not be read"),
+            var u => string.Create(CultureInfo.InvariantCulture, $" ({u} more could not be read)"),
+        };
+        return string.Create(CultureInfo.InvariantCulture,
+            $"Saved {fileName} — report, environment info and {included}{unread}. Nothing was sent anywhere.");
     }
 
     [RelayCommand]

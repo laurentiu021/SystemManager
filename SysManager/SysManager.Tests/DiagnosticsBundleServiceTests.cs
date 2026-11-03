@@ -304,13 +304,7 @@ public sealed class DiagnosticsBundleServiceTests : IDisposable
     [Fact]
     public void Readme_SaysNothingWasSent_NamesTheLogs_AndStatesWhatWasWithheld()
     {
-        var logs = new List<FileInfo>
-        {
-            new(NewLog("20260918", "x")),
-            new(NewLog("20260917", "y")),
-        };
-
-        var readme = DiagnosticsBundleService.Readme(logs);
+        var readme = DiagnosticsBundleService.Readme(["sysmanager-20260918.log", "sysmanager-20260917.log"], [], "");
 
         Assert.Contains("NOTHING HAS BEEN SENT ANYWHERE.", readme, StringComparison.Ordinal);
         Assert.Contains("sysmanager-20260918.log", readme, StringComparison.Ordinal);
@@ -325,10 +319,99 @@ public sealed class DiagnosticsBundleServiceTests : IDisposable
     [Fact]
     public void Readme_WithNoLogs_SaysSoRatherThanPromisingAFolder()
     {
-        var readme = DiagnosticsBundleService.Readme([]);
+        var readme = DiagnosticsBundleService.Readme([], [], "");
 
         Assert.Contains("no log files", readme, StringComparison.Ordinal);
         Assert.DoesNotContain("most recent daily log files", readme, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Readme_WhenNoLogCouldBeRead_SaysSoAndNamesThem()
+    {
+        var readme = DiagnosticsBundleService.Readme([], ["sysmanager-20260918.log"], "");
+
+        Assert.Contains("could not read its newest log files, so none are included:", readme, StringComparison.Ordinal);
+        Assert.Contains("sysmanager-20260918.log", readme, StringComparison.Ordinal);
+        Assert.DoesNotContain("found no log files", readme, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// The README describes environment.txt line by line, from the lines the file holds (#2774). It was a sentence
+    /// written apart from the file, and it left out the build, the .NET runtime, the graphics cards, the drives and the
+    /// display.
+    /// </summary>
+    [Fact]
+    public void Readme_DescribesEveryLineOfTheEnvironmentFile_EachKindOnce()
+    {
+        const string environment = """
+            SysManager 1.136.92 (build abc1234)
+            Windows: Microsoft Windows 11 Pro (build 26200)
+            Architecture: X64
+            .NET: .NET 10.0.0
+            Elevated: no
+            Language: en-US (display en-US)
+            CPU: Some CPU (8c/16t) @ 3.6 GHz
+            RAM: 32.0 GB total, 20.1 GB free
+            GPU: First GPU (8.0 GB VRAM) driver 1.0
+            GPU: Second GPU driver 2.0
+            Disk C: 931 GB total, 400 GB free (NTFS)
+            Disk D: 1863 GB total, 900 GB free (NTFS)
+            Display: 2560×1440 @ 144 Hz
+            """;
+
+        var readme = DiagnosticsBundleService.Readme([], [], environment);
+
+        foreach (var (label, says) in DiagnosticsBundleService.EnvironmentLines)
+        {
+            Assert.Contains(says, readme, StringComparison.Ordinal);
+            Assert.Single(readme.Split('\n'), l => l.TrimStart().StartsWith(label + " ", StringComparison.Ordinal)
+                                                 && l.Contains(says, StringComparison.Ordinal));
+        }
+    }
+
+    [Fact]
+    public void Readme_NamesAnEnvironmentLineItHasNoDescriptionFor()
+    {
+        var readme = DiagnosticsBundleService.Readme(
+            [], [], "Windows: Microsoft Windows 11 Pro\nGadget: something new\n");
+
+        Assert.Contains("the edition and build", readme, StringComparison.Ordinal);
+        Assert.Contains(readme.Split('\n'), l => l.Trim() == "Gadget");
+    }
+
+    /// <summary>
+    /// A log that cannot be read is neither named nor counted as in the zip, and the README says it was left out
+    /// (#2774). It was named in the README's list and in the count the About tab shows, though the zip did not have it.
+    /// </summary>
+    /// <remarks>
+    /// The newest log is held open with no sharing, which is what a reader that only reads, sharing everything, cannot
+    /// get past.
+    /// </remarks>
+    [Fact]
+    public async Task PackAsync_ALogThatCannotBeRead_IsNeitherNamedNorCounted_AndTheReadmeSaysSo()
+    {
+        var held = NewLog("20260918", "MARKER-HELD");
+        NewLog("20260917", "MARKER-YESTERDAY");
+        NewLog("20260916", "MARKER-BEFORE");
+        var zipPath = Path.Combine(_outDir, "bundle-unreadable.zip");
+
+        DiagnosticsBundleService.BundleContents contents;
+        using (new FileStream(held, FileMode.Open, FileAccess.ReadWrite, FileShare.None))
+            contents = await NewService().PackAsync(zipPath, "Windows: x", CannedReport);
+
+        Assert.Equal((2, 1), (contents.LogFilesIncluded, contents.LogFilesUnreadable));
+        using var zip = ZipFile.OpenRead(zipPath);
+        var names = zip.Entries.Select(e => e.FullName).ToList();
+        Assert.DoesNotContain("logs/sysmanager-20260918.log", names);
+        Assert.Contains("logs/sysmanager-20260917.log", names);
+        Assert.Contains("logs/sysmanager-20260916.log", names);
+
+        var readme = ReadEntry(zip, "README.txt");
+        Assert.Contains("The 2 most recent daily log files:", readme, StringComparison.Ordinal);
+        var unread = readme.IndexOf("Could not be read, so not included:", StringComparison.Ordinal);
+        var heldAt = readme.IndexOf("sysmanager-20260918.log", StringComparison.Ordinal);
+        Assert.True(unread > 0 && heldAt > unread,
+            "the README names the log it could not read among the ones it holds, or does not say it was left out");
     }
 
     // ── The archive ──────────────────────────────────────────────────────────

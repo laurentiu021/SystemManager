@@ -102,7 +102,11 @@ public sealed class FixedDriveService
                     }
                 }
             }
-            catch (ManagementException) { /* partition query not supported — fall through */ }
+            // Partition query not supported, or WMI failing as a COM error (#2774): the drives are listed without it.
+            catch (Exception ex) when (ex is ManagementException or System.Runtime.InteropServices.COMException)
+            {
+                Log.Debug("Fixed drives: the partition query failed: {Error}", ex.Message);
+            }
 
             for (var i = 0; i < drives.Count; i++)
             {

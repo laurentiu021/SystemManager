@@ -403,6 +403,9 @@ public class ProfileServiceTests : IDisposable
     [InlineData("welcome.json")]
     // The GUID of the copy of the Ultimate Performance plan made on THIS PC (#2717). Another PC has no plan of that GUID.
     [InlineData(PerformanceService.UltimateCopyFileName)]
+    // What THIS PC's privacy values held before SysManager first wrote them (#2778). Carried over, turning a switch off
+    // on another PC would put back this one's settings.
+    [InlineData(PrivacyLedgerService.FileName)]
     public void AvailableSections_NeverCarriesMachineSpecificState(string fileName)
     {
         WriteConfig(fileName, "{\"machine\":\"specific\"}");

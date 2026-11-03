@@ -2,6 +2,7 @@
 // Author: laurentiu021 · https://github.com/laurentiu021/SystemManager
 // License: MIT
 
+using System.IO;
 using CommunityToolkit.Mvvm.Input;
 using Microsoft.Win32;
 using NSubstitute;
@@ -27,15 +28,23 @@ public sealed class PrivacyViewModelTests : IDisposable
     private readonly string _rootName = @"Software\SysManagerTests\PrivacyVmSettings_" + Guid.NewGuid().ToString("N");
     private readonly RegistryKey _root;
 
+    // And what an apply records about the values it writes goes to a folder of the test's own, not the profile's.
+    private readonly string _ledgerDir =
+        Path.Combine(Path.GetTempPath(), "SysManagerPrivacyLedgerTests", Guid.NewGuid().ToString("N"));
+
     public PrivacyViewModelTests() => _root = Registry.CurrentUser.CreateSubKey(_rootName, writable: true);
 
     public void Dispose()
     {
         _root.Dispose();
         Registry.CurrentUser.DeleteSubKeyTree(_rootName, throwOnMissingSubKey: false);
+        try { Directory.Delete(_ledgerDir, recursive: true); }
+        catch (DirectoryNotFoundException) { /* nothing was recorded */ }
     }
 
-    private PrivacyService Privacy() => new(hkcuRoot: _root, hklmRoot: _root);
+    private PrivacyLedgerService Ledger() => new(_ledgerDir);
+
+    private PrivacyService Privacy() => new(hkcuRoot: _root, hklmRoot: _root, ledger: Ledger());
 
     // The VM loads its toggles asynchronously off the UI thread (so startup isn't blocked);
     // wait for that init to finish before asserting loaded state, so the tests observe the
@@ -221,8 +230,8 @@ public sealed class PrivacyViewModelTests : IDisposable
         {
             var restorePoint = NoRestorePoint();
             using var dialog = new DialogAnswer(confirm: true);
-            var vm = new PrivacyViewModel(new PrivacyService(hkcuRoot: root, hklmRoot: root), restorePoint,
-                new PrivacyChoicesHandoff());
+            var vm = new PrivacyViewModel(new PrivacyService(hkcuRoot: root, hklmRoot: root, ledger: Ledger()),
+                restorePoint, new PrivacyChoicesHandoff());
             await vm.InitializationComplete;
             vm.Toggles[0].IsEnabled = !vm.Toggles[0].IsEnabled;
             var pendingBefore = vm.PendingChangeCount;
@@ -541,6 +550,64 @@ public sealed class PrivacyViewModelTests : IDisposable
         int changes, int needAdmin, bool elevated, string expected)
         => Assert.Equal(expected, PrivacyViewModel.DescribeImportedChoices(changes, needAdmin, elevated));
 
+    // ---------- what Apply says when a switch was not written (#2778) ----------
+
+    private static PrivacyWriteFailure[] Failures(params PrivacyWriteOutcome[] outcomes) =>
+        [.. outcomes.Select((o, i) => new PrivacyWriteFailure(FakePrivacy.Toggle($"t{i}", on: true), o))];
+
+    [Theory]
+    [InlineData(false, "Applied 2 changes.")]
+    [InlineData(true, "Applied 2 changes.")]
+    public void AppliedStatus_WithNothingLeft_SaysOnlyWhatWasApplied(bool elevated, string expected)
+        => Assert.Equal(expected, PrivacyViewModel.AppliedStatus(2, Failures(), elevated));
+
+    [Fact]
+    public void AppliedStatus_ForSwitchesWindowsRefused_AsksForAdministrator_OnlyWhenSysManagerIsNotOne()
+    {
+        Assert.Equal("Applied 1 change; 1 needs administrator rights — relaunch as admin and try again.",
+            PrivacyViewModel.AppliedStatus(1, Failures(PrivacyWriteOutcome.Refused), elevated: false));
+        Assert.Equal("Applied 0 changes; 2 need administrator rights — relaunch as admin and try again.",
+            PrivacyViewModel.AppliedStatus(0, Failures(PrivacyWriteOutcome.Refused, PrivacyWriteOutcome.Refused),
+                elevated: false));
+        Assert.Equal("Applied 1 change; Windows refused 1.",
+            PrivacyViewModel.AppliedStatus(1, Failures(PrivacyWriteOutcome.Refused), elevated: true));
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void AppliedStatus_ForASwitchLeftAsItWas_SaysWhy_AndNeverBlamesAdministratorRights(bool elevated)
+    {
+        var text = PrivacyViewModel.AppliedStatus(0,
+            Failures(PrivacyWriteOutcome.NotRecorded, PrivacyWriteOutcome.RecordUnreadable), elevated);
+
+        Assert.Equal("Applied 0 changes; 1 could not be changed, because SysManager could not save a copy of the old "
+            + "setting first; 1 could not be changed back, because SysManager could not read its copy of the old "
+            + "setting.", text);
+        Assert.DoesNotContain("administrator", text, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task ASwitchLeftAsItWas_StaysPending_AndTheTabSaysWhy()
+    {
+        // Not elevated, where a refusal would be blamed on administrator rights: this one must not be.
+        using var probe = AdminHelper.ForceElevation(false);
+        var privacy = ThisPc();
+        privacy.ApplyAll(Arg.Any<IEnumerable<PrivacyToggle>>()).Returns(call =>
+            [.. call.Arg<IEnumerable<PrivacyToggle>>()
+                .Select(t => new PrivacyWriteFailure(t, PrivacyWriteOutcome.NotRecorded))]);
+        using var dialog = new DialogAnswer(confirm: true);
+        var vm = await StagingVmAsync(privacy, new PrivacyChoicesHandoff());
+        Switch(vm, "tips").IsEnabled = true;
+
+        await vm.ApplyChangesCommand.ExecuteAsync(null);
+
+        Assert.True(Switch(vm, "tips").IsPending);
+        Assert.Equal(1, vm.PendingChangeCount);
+        Assert.Contains("could not save a copy of the old setting", vm.StatusMessage, StringComparison.Ordinal);
+        Assert.DoesNotContain("administrator", vm.StatusMessage, StringComparison.Ordinal);
+    }
+
     [Fact]
     public async Task ImportedChoices_ArrivingDuringARefresh_AreStagedOnTheTogglesItLoads()
     {
@@ -732,7 +799,7 @@ public sealed class PrivacyViewModelTests : IDisposable
     [Fact]
     public void TheRealSwitches_FillEveryReach()
     {
-        var toggles = new PrivacyService().LoadToggles();
+        var toggles = new PrivacyService(ledger: Ledger()).LoadToggles();
         Assert.True(toggles.Count >= 10,
             $"only {toggles.Count} switch definitions, so this would pass over a short list");
 

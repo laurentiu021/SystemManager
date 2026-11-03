@@ -804,7 +804,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable,
         var speedHistory = new SpeedTestHistoryService(lookRecords);
         // One privacy service and one handoff, as under DI: Profile Export / Import leaves imported privacy
         // choices in the handoff for the Privacy & Telemetry tab, which only works if both hold the same one.
-        var privacy = new PrivacyService();
+        var privacy = new PrivacyService(ledger: new PrivacyLedgerService(lookRecords));
         var privacyChoices = new PrivacyChoicesHandoff();
         // One of each store Undo Changes reads, shared with the tab that writes it, as under DI: a put-back through one
         // instance and a tab reading another would disagree about what is there. And one signal, so the tab that made a

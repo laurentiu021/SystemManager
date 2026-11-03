@@ -2,6 +2,7 @@
 // Author: laurentiu021 · https://github.com/laurentiu021/SystemManager
 // License: MIT
 
+using System.IO;
 using Microsoft.Win32;
 using SysManager.Helpers;
 using SysManager.Models;
@@ -12,11 +13,26 @@ namespace SysManager.Tests;
 /// <summary>
 /// Tests for <see cref="PrivacyService"/>'s apply-result signalling (regression for
 /// the "false success on a swallowed write failure" defect). Uses toggles whose
-/// registry path has an unrecognized hive so <c>ApplyToggle</c> returns false WITHOUT
+/// registry path has an unrecognized hive so <c>ApplyToggle</c> is refused WITHOUT
 /// touching the real registry — deterministic and side-effect-free.
 /// </summary>
-public class PrivacyServiceTests
+public sealed class PrivacyServiceTests : IDisposable
 {
+    /// <summary>
+    /// This test's own ledger folder, so what one test records about a value is never what another puts back: the
+    /// ledger is keyed by the value's path, and the tests below write the same paths under roots of their own.
+    /// </summary>
+    private readonly string _ledgerDir =
+        Path.Combine(Path.GetTempPath(), "SysManagerPrivacyLedgerTests", Guid.NewGuid().ToString("N"));
+
+    public void Dispose()
+    {
+        try { Directory.Delete(_ledgerDir, recursive: true); }
+        catch (DirectoryNotFoundException) { /* nothing was recorded */ }
+    }
+
+    private PrivacyLedgerService Ledger() => new(_ledgerDir);
+
     private static PrivacyToggle BadHiveToggle(string name = "bad") => new()
     {
         Key = name,
@@ -30,16 +46,16 @@ public class PrivacyServiceTests
     };
 
     [Fact]
-    public void ApplyToggle_UnwritableHive_ReturnsFalse()
+    public void ApplyToggle_UnwritableHive_IsRefused()
     {
-        var svc = new PrivacyService();
-        Assert.False(svc.ApplyToggle(BadHiveToggle()));
+        var svc = new PrivacyService(ledger: Ledger());
+        Assert.Equal(PrivacyWriteOutcome.Refused, svc.ApplyToggle(BadHiveToggle()));
     }
 
     [Fact]
-    public void ApplyAll_ReturnsTheTogglesThatFailed()
+    public void ApplyAll_ReturnsTheTogglesThatFailed_WithWhy()
     {
-        var svc = new PrivacyService();
+        var svc = new PrivacyService(ledger: Ledger());
         var a = BadHiveToggle("a");
         var b = BadHiveToggle("b");
 
@@ -47,15 +63,14 @@ public class PrivacyServiceTests
 
         // Both writes fail (unrecognized hive) so both come back in the failed list —
         // the caller must not treat them as applied.
-        Assert.Equal(2, failed.Count);
-        Assert.Contains(a, failed);
-        Assert.Contains(b, failed);
+        Assert.Equal([new PrivacyWriteFailure(a, PrivacyWriteOutcome.Refused),
+            new PrivacyWriteFailure(b, PrivacyWriteOutcome.Refused)], failed);
     }
 
     [Fact]
     public void ApplyToggle_NullToggle_Throws()
     {
-        var svc = new PrivacyService();
+        var svc = new PrivacyService(ledger: Ledger());
         Assert.Throws<ArgumentNullException>(() => svc.ApplyToggle(null!));
     }
 
@@ -71,7 +86,7 @@ public class PrivacyServiceTests
     [Fact]
     public void EveryToggle_KeepsTheKeyProfilesNameItBy()
     {
-        var keys = new PrivacyService().LoadToggles().Select(t => t.Key);
+        var keys = new PrivacyService(ledger: Ledger()).LoadToggles().Select(t => t.Key);
 
         Assert.Equal(
             ["diagnostic-data", "activity-history", "advertising-id", "feedback-prompts",
@@ -130,7 +145,7 @@ public class PrivacyServiceTests
         var root = Registry.CurrentUser.CreateSubKey(rootName, writable: true)!;
         try
         {
-            var service = new PrivacyService(hkcuRoot: root, hklmRoot: root);
+            var service = new PrivacyService(hkcuRoot: root, hklmRoot: root, ledger: Ledger());
             Assert.Equal(PrivacyService.DiagnosticDataWording(null), Wording(service));
 
             const string currentVersionPath = @"SOFTWARE\Microsoft\Windows NT\CurrentVersion";
@@ -161,6 +176,8 @@ public class PrivacyServiceTests
     private sealed class RedirectedRoot : IDisposable
     {
         private readonly string _name = @"Software\SysManagerTests\PrivacyWrites_" + Guid.NewGuid().ToString("N");
+        private readonly string _ledgerDir =
+            Path.Combine(Path.GetTempPath(), "SysManagerPrivacyLedgerTests", Guid.NewGuid().ToString("N"));
 
         public RedirectedRoot(string? build = null)
         {
@@ -172,12 +189,15 @@ public class PrivacyServiceTests
 
         public RegistryKey Key { get; }
 
-        public PrivacyService Service() => new(hkcuRoot: Key, hklmRoot: Key);
+        public PrivacyService Service() =>
+            new(hkcuRoot: Key, hklmRoot: Key, ledger: new PrivacyLedgerService(_ledgerDir));
 
         public void Dispose()
         {
             Key.Dispose();
             Registry.CurrentUser.DeleteSubKeyTree(_name, throwOnMissingSubKey: false);
+            try { Directory.Delete(_ledgerDir, recursive: true); }
+            catch (DirectoryNotFoundException) { /* nothing was recorded */ }
         }
     }
 
@@ -232,11 +252,11 @@ public class PrivacyServiceTests
     }
 
     /// <summary>
-    /// A switch with several values writes every one of them and removes every one, and reads as on only when all
+    /// A switch with several values writes every one of them and puts every one back, and reads as on only when all
     /// of them say so, as Windows' own switch for the Settings app's suggestions sets the three together.
     /// </summary>
     [Fact]
-    public void ASwitchWithSeveralValues_WritesAndRemovesEachOne_AndIsOnOnlyWhenAllAre()
+    public void ASwitchWithSeveralValues_WritesAndPutsBackEachOne_AndIsOnOnlyWhenAllAre()
     {
         using var root = new RedirectedRoot();
         var service = root.Service();
@@ -252,13 +272,14 @@ public class PrivacyServiceTests
         Assert.False(Settings().IsEnabled);   // two of the three: Windows still shows the suggestions
 
         settings.IsEnabled = true;
-        Assert.True(service.ApplyToggle(settings));
+        Assert.Equal(PrivacyWriteOutcome.Written, service.ApplyToggle(settings));
         Assert.Equal([0, 0, 0], Values());
         Assert.True(Settings().IsEnabled);
 
+        // Back as each was: the two that were there before, and the third gone (#2778).
         settings.IsEnabled = false;
-        Assert.True(service.ApplyToggle(settings));
-        Assert.Equal([null, null, null], Values());
+        Assert.Equal(PrivacyWriteOutcome.Written, service.ApplyToggle(settings));
+        Assert.Equal([0, 0, null], Values());
         Assert.False(Settings().IsEnabled);
 
         PrivacyToggle Settings() => service.LoadToggles().Single(t => t.Key == "spotlight-ads");
@@ -324,6 +345,21 @@ public class PrivacyServiceTests
             return k?.GetValue("AllowTelemetry");
         }
 
+        /// <summary>
+        /// Sets the value before the switch is first written, as a policy the user set themselves would be.
+        /// </summary>
+        public void SetBefore(object value, RegistryValueKind kind)
+        {
+            using var k = Registry.CurrentUser.CreateSubKey(SubPath, writable: true);
+            k.SetValue("AllowTelemetry", value, kind);
+        }
+
+        public RegistryValueKind KindNow()
+        {
+            using var k = Registry.CurrentUser.OpenSubKey(SubPath)!;
+            return k.GetValueKind("AllowTelemetry");
+        }
+
         public void Dispose()
         {
             try { Registry.CurrentUser.DeleteSubKeyTree(SubPath, throwOnMissingSubKey: false); } catch { /* best-effort cleanup */ }
@@ -334,9 +370,9 @@ public class PrivacyServiceTests
     public void ApplyToggle_On_WritesEnabledValue()
     {
         using var t = new HkcuTestKey();
-        var svc = new PrivacyService();
+        var svc = new PrivacyService(ledger: Ledger());
 
-        Assert.True(svc.ApplyToggle(t.Toggle(isEnabled: true)));
+        Assert.Equal(PrivacyWriteOutcome.Written, svc.ApplyToggle(t.Toggle(isEnabled: true)));
         Assert.Equal(0, t.ReadValue()); // EnabledValue written
     }
 
@@ -344,13 +380,13 @@ public class PrivacyServiceTests
     public void ApplyToggle_Off_RemovesValue_DoesNotWriteDisabledValue()
     {
         using var t = new HkcuTestKey();
-        var svc = new PrivacyService();
+        var svc = new PrivacyService(ledger: Ledger());
 
         // First enable (writes 0), then revert (OFF).
-        Assert.True(svc.ApplyToggle(t.Toggle(isEnabled: true)));
+        Assert.Equal(PrivacyWriteOutcome.Written, svc.ApplyToggle(t.Toggle(isEnabled: true)));
         Assert.Equal(0, t.ReadValue());
 
-        Assert.True(svc.ApplyToggle(t.Toggle(isEnabled: false)));
+        Assert.Equal(PrivacyWriteOutcome.Written, svc.ApplyToggle(t.Toggle(isEnabled: false)));
 
         // Regression: the value must be GONE, not set to DisabledValue (3). The old code
         // wrote 3 here — materialising an enforced "Full telemetry" policy on revert.
@@ -361,11 +397,204 @@ public class PrivacyServiceTests
     public void ApplyToggle_Off_WhenNeverSet_IsIdempotentNoOp()
     {
         using var t = new HkcuTestKey();
-        var svc = new PrivacyService();
+        var svc = new PrivacyService(ledger: Ledger());
 
         // Revert with no prior value present: must succeed and leave the value absent
         // (does not create the key-value with DisabledValue).
-        Assert.True(svc.ApplyToggle(t.Toggle(isEnabled: false)));
+        Assert.Equal(PrivacyWriteOutcome.Written, svc.ApplyToggle(t.Toggle(isEnabled: false)));
         Assert.Null(t.ReadValue());
+    }
+
+    // ── Putting back what was there (#2778) ──────────────────────────────
+    // Turning a switch off removed its value whatever had been there, so a policy the user had set themselves was gone
+    // after turning the switch on and off again. What each value held is recorded before the first write.
+
+    [Fact]
+    public void AValueThatWasThere_IsPutBack_WhenTheSwitchIsTurnedOffAgain()
+    {
+        // AllowTelemetry = 1, the required level, set through Group Policy or another tool before SysManager.
+        using var t = new HkcuTestKey();
+        t.SetBefore(1, RegistryValueKind.DWord);
+        var svc = new PrivacyService(ledger: Ledger());
+
+        Assert.Equal(PrivacyWriteOutcome.Written, svc.ApplyToggle(t.Toggle(isEnabled: true)));
+        Assert.Equal(0, t.ReadValue());
+
+        Assert.Equal(PrivacyWriteOutcome.Written, svc.ApplyToggle(t.Toggle(isEnabled: false)));
+        Assert.Equal(1, t.ReadValue());
+        Assert.Equal(RegistryValueKind.DWord, t.KindNow());
+    }
+
+    [Fact]
+    public void AValueOfAnotherKind_IsPutBackWithItsOwnKind()
+    {
+        using var t = new HkcuTestKey();
+        t.SetBefore("1", RegistryValueKind.String);
+        var svc = new PrivacyService(ledger: Ledger());
+
+        svc.ApplyToggle(t.Toggle(isEnabled: true));
+        Assert.Equal(PrivacyWriteOutcome.Written, svc.ApplyToggle(t.Toggle(isEnabled: false)));
+
+        Assert.Equal("1", t.ReadValue());
+        Assert.Equal(RegistryValueKind.String, t.KindNow());
+    }
+
+    [Fact]
+    public void TheFirstWritesRecord_IsTheOneKept_SoALaterChangeIsNotPutBack()
+    {
+        // Applied, then Windows changed the value back, then applied again: off puts back what was there before
+        // SysManager's first write, not what Windows had set in between.
+        using var t = new HkcuTestKey();
+        t.SetBefore(1, RegistryValueKind.DWord);
+        var svc = new PrivacyService(ledger: Ledger());
+
+        svc.ApplyToggle(t.Toggle(isEnabled: true));
+        t.SetBefore(3, RegistryValueKind.DWord);
+        svc.ApplyToggle(t.Toggle(isEnabled: true));
+        svc.ApplyToggle(t.Toggle(isEnabled: false));
+
+        Assert.Equal(1, t.ReadValue());
+    }
+
+    [Fact]
+    public void PuttingAValueBack_ForgetsItsRecord()
+    {
+        using var t = new HkcuTestKey();
+        var svc = new PrivacyService(ledger: Ledger());
+
+        svc.ApplyToggle(t.Toggle(isEnabled: true));
+        Assert.Single(Ledger().Read().Records!);
+        svc.ApplyToggle(t.Toggle(isEnabled: false));
+
+        Assert.Empty(Ledger().Read().Records!);
+    }
+
+    [Fact]
+    public void AValueWithNoRecord_IsRemoved_AsBeforeRecordsWereKept()
+    {
+        // Written by a SysManager that kept no records: there is nothing to put back, so the value goes and Windows
+        // falls back to its own default, never to DisabledValue.
+        using var t = new HkcuTestKey();
+        t.SetBefore(0, RegistryValueKind.DWord);
+        var svc = new PrivacyService(ledger: Ledger());
+
+        Assert.Equal(PrivacyWriteOutcome.Written, svc.ApplyToggle(t.Toggle(isEnabled: false)));
+
+        Assert.Null(t.ReadValue());
+    }
+
+    [Fact]
+    public void ALedgerThatCannotBeRead_LeavesTheValueAsItIs_RatherThanGuess()
+    {
+        using var t = new HkcuTestKey();
+        t.SetBefore(1, RegistryValueKind.DWord);
+        var svc = new PrivacyService(ledger: Ledger());
+        svc.ApplyToggle(t.Toggle(isEnabled: true));
+
+        using (new FileStream(Path.Combine(_ledgerDir, PrivacyLedgerService.FileName), FileMode.Open, FileAccess.Read,
+                   FileShare.None))
+        {
+            Assert.Equal(PrivacyWriteOutcome.RecordUnreadable, svc.ApplyToggle(t.Toggle(isEnabled: false)));
+        }
+
+        Assert.Equal(0, t.ReadValue());   // still SysManager's, and its record still there to put back
+        Assert.Equal(PrivacyWriteOutcome.Written, svc.ApplyToggle(t.Toggle(isEnabled: false)));
+        Assert.Equal(1, t.ReadValue());
+    }
+
+    [Fact]
+    public void ALedgerThatDoesNotParse_LeavesTheValueAsItIs_RatherThanGuess()
+    {
+        using var t = new HkcuTestKey();
+        t.SetBefore(1, RegistryValueKind.DWord);
+        var svc = new PrivacyService(ledger: Ledger());
+        svc.ApplyToggle(t.Toggle(isEnabled: true));
+        File.WriteAllText(Path.Combine(_ledgerDir, PrivacyLedgerService.FileName), "{ not a ledger");
+
+        Assert.Equal(PrivacyWriteOutcome.RecordUnreadable, svc.ApplyToggle(t.Toggle(isEnabled: false)));
+
+        Assert.Equal(0, t.ReadValue());
+    }
+
+    // ── A key only an administrator can write gets back only a value the setting takes (#2747, #2778) ──
+    // The ledger is a file in the user's own profile, which anything running as the user can change.
+
+    private static PrivacyPriorValue Recorded(string? kind, string? data) =>
+        new(@"HKLM\SOFTWARE\SysManagerTests", "V", kind, data, null, DateTimeOffset.UnixEpoch);
+
+    [Theory]
+    [InlineData("DWord", "0", true)]    // EnabledValue
+    [InlineData("DWord", "1", true)]    // DisabledValue
+    [InlineData("DWord", "7", false)]   // a value SysManager never sets there
+    [InlineData("String", "1", false)]  // the right number in the wrong kind
+    [InlineData("Binary", "AQ==", false)]
+    [InlineData(null, null, true)]      // there was no value: removing it writes nothing
+    public void ASwitchThatNeedsAdministrator_PutsBackOnlyAValueTheSettingTakes(string? kind, string? data, bool may)
+    {
+        Assert.Equal(may,
+            PrivacyService.MayPutBack(FakePrivacy.Toggle("t", on: true, hive: "HKLM"), Recorded(kind, data)));
+        Assert.Equal(may,
+            PrivacyService.MayPutBack(FakePrivacy.Toggle("t", on: true, policy: true), Recorded(kind, data)));
+    }
+
+    [Theory]
+    [InlineData("DWord", "7")]
+    [InlineData("String", "1")]
+    [InlineData("Binary", "AQ==")]
+    public void ASwitchForYourOwnSettings_PutsBackWhatWasThere_WhateverItIs(string kind, string data)
+        => Assert.True(PrivacyService.MayPutBack(FakePrivacy.Toggle("t", on: true), Recorded(kind, data)));
+
+    [Fact]
+    public void TheDiagnosticDataPolicy_TakesItsFourLevels_AndNothingElse()
+    {
+        using var root = new RedirectedRoot();
+        var diagnosticData = root.Service().LoadToggles().Single(t => t.Key == "diagnostic-data");
+
+        Assert.Equal([true, true, true, true, false, false],
+            new[] { 0, 1, 2, 3, 4, -1 }.Select(diagnosticData.TakesValue));
+    }
+
+    /// <summary>
+    /// Through the real diagnostic data switch, whose machine-wide key the redirected root stands in for: the required
+    /// level comes back, and a value it never takes, or one of another kind, is removed instead.
+    /// </summary>
+    [Theory]
+    [InlineData(1, RegistryValueKind.DWord, 1)]
+    [InlineData(7, RegistryValueKind.DWord, null)]
+    [InlineData("1", RegistryValueKind.String, null)]
+    public void TheDiagnosticDataSwitch_PutsBackOnlyALevelItTakes(object before, RegistryValueKind kind, object? after)
+    {
+        using var root = new RedirectedRoot();
+        const string policyPath = @"SOFTWARE\Policies\Microsoft\Windows\DataCollection";
+        using (var policy = root.Key.CreateSubKey(policyPath, writable: true))
+            policy.SetValue("AllowTelemetry", before, kind);
+        var service = root.Service();
+        var diagnosticData = service.LoadToggles().Single(t => t.Key == "diagnostic-data");
+
+        diagnosticData.IsEnabled = true;
+        Assert.Equal(PrivacyWriteOutcome.Written, service.ApplyToggle(diagnosticData));
+        diagnosticData.IsEnabled = false;
+        Assert.Equal(PrivacyWriteOutcome.Written, service.ApplyToggle(diagnosticData));
+
+        using var read = root.Key.OpenSubKey(policyPath)!;
+        Assert.Equal(after, read.GetValue("AllowTelemetry"));
+    }
+
+    [Fact]
+    public void WhenWhatWasThereCannotBeRecorded_NothingIsWritten()
+    {
+        using var t = new HkcuTestKey();
+        t.SetBefore(1, RegistryValueKind.DWord);
+        var svc = new PrivacyService(ledger: Ledger());
+        Directory.CreateDirectory(_ledgerDir);
+        File.WriteAllText(Path.Combine(_ledgerDir, PrivacyLedgerService.FileName), "[]");
+
+        using (new FileStream(Path.Combine(_ledgerDir, PrivacyLedgerService.FileName), FileMode.Open, FileAccess.Read,
+                   FileShare.None))
+        {
+            Assert.Equal(PrivacyWriteOutcome.NotRecorded, svc.ApplyToggle(t.Toggle(isEnabled: true)));
+        }
+
+        Assert.Equal(1, t.ReadValue());
     }
 }

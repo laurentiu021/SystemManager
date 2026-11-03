@@ -313,7 +313,8 @@ public sealed partial class PrivacyViewModel : ElevatedViewModelBase, ISearchDes
 
         if (!DialogService.Instance.Confirm(
                 $"Apply {changed.Count} privacy change{(changed.Count == 1 ? "" : "s")} to the Windows registry?\n\n" +
-                "Each toggle can be reverted by switching it back and pressing Apply again." +
+                "Each toggle can be reverted by switching it back and pressing Apply again, which puts back what "
+                + "the setting held before." +
                 _restorePoint.ConfirmationNotice,
                 "Confirm Privacy Changes"))
         {
@@ -363,8 +364,10 @@ public sealed partial class PrivacyViewModel : ElevatedViewModelBase, ISearchDes
 
         foreach (var (toggle, on) in confirmed)
             toggle.IsEnabled = on;
-        var failed = _service.ApplyAll(changed);
-        var failedSet = failed.ToHashSet();
+        // Off the UI thread: each switch's write now saves what its values held first, a flushed file write (#2778).
+        // The tab is busy throughout, so nothing moves a switch while it is written.
+        var failed = await Task.Run(() => _service.ApplyAll(changed)).ConfigureAwait(true);
+        var failedSet = failed.Select(f => f.Toggle).ToHashSet();
 
         // Only rebase the baseline for toggles that actually succeeded — a failed
         // (e.g. needs-elevation HKLM) toggle stays "pending" so the user sees it
@@ -379,18 +382,12 @@ public sealed partial class PrivacyViewModel : ElevatedViewModelBase, ISearchDes
         // saying nothing.
         var rp = snapshotTaken ? " Restore point created." : "";
 
+        StatusMessage = AppliedStatus(applied.Count, failed, IsElevated) + rp;
         if (failed.Count == 0)
-        {
-            StatusMessage = $"Applied {applied.Count} change{(applied.Count == 1 ? "" : "s")}.{rp}";
             Log.Information("Privacy: applied {Count} pending changes", applied.Count);
-        }
         else
-        {
-            StatusMessage = $"Applied {applied.Count} change{(applied.Count == 1 ? "" : "s")}; " +
-                $"{failed.Count} need administrator rights — relaunch as admin and try again.{rp}";
-            Log.Warning("Privacy: {Applied} applied, {Failed} failed (likely elevation required)",
-                applied.Count, failed.Count);
-        }
+            Log.Warning("Privacy: {Applied} applied, {Failed} not written: {Outcomes}",
+                applied.Count, failed.Count, string.Join(", ", failed.Select(f => f.Outcome)));
 
         // Logged once for both branches, and only when something actually changed, so a partial apply
         // is recorded honestly rather than claiming the full count. Counts only — naming the toggles
@@ -400,11 +397,39 @@ public sealed partial class PrivacyViewModel : ElevatedViewModelBase, ISearchDes
             ActivityLogService.Instance.Log("Privacy & Telemetry",
                 failed.Count == 0
                     ? $"Applied {applied.Count} change{(applied.Count == 1 ? "" : "s")}"
-                    : $"Applied {applied.Count} of {applied.Count + failed.Count} changes ({failed.Count} needed administrator)");
+                    : $"Applied {applied.Count} of {applied.Count + failed.Count} changes "
+                      + $"({failed.Count} not written)");
         }
 
         // An import that arrived while the restore point was being taken, now that the write is done.
         if (IsActive) StageImportedChoices();
+    }
+
+    /// <summary>
+    /// What the tab says once Apply has written: how many changes it applied and, for any it did not, why. A switch
+    /// Windows refused needs administrator unless SysManager runs as one already, and one SysManager left as it was,
+    /// because it could not keep or read its copy of the old setting, says so instead of blaming rights (#2778). Pure.
+    /// </summary>
+    internal static string AppliedStatus(int applied, IReadOnlyCollection<PrivacyWriteFailure> failed, bool elevated)
+    {
+        var text = $"Applied {applied} change{(applied == 1 ? "" : "s")}";
+        if (failed.Count == 0) return text + ".";
+
+        List<string> why = [];
+        var refused = failed.Count(f => f.Outcome == PrivacyWriteOutcome.Refused);
+        if (refused > 0)
+            why.Add(elevated
+                ? $"Windows refused {refused}"
+                : $"{refused} need{(refused == 1 ? "s" : "")} administrator rights — relaunch as admin and try again");
+        var notRecorded = failed.Count(f => f.Outcome == PrivacyWriteOutcome.NotRecorded);
+        if (notRecorded > 0)
+            why.Add($"{notRecorded} could not be changed, because SysManager could not save a copy of the old "
+                + "setting first");
+        var unreadable = failed.Count(f => f.Outcome == PrivacyWriteOutcome.RecordUnreadable);
+        if (unreadable > 0)
+            why.Add($"{unreadable} could not be changed back, because SysManager could not read its copy of the old "
+                + "setting");
+        return text + "; " + string.Join("; ", why) + ".";
     }
 
     [RelayCommand(CanExecute = nameof(NotBusy))]

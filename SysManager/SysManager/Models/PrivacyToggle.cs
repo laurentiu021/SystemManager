@@ -63,6 +63,20 @@ public sealed partial class PrivacyToggle : ObservableObject
     /// <summary>Value written when privacy protection is OFF (default Windows state).</summary>
     public required int DisabledValue { get; init; }
 
+    /// <summary>
+    /// The other values the setting is known to take, besides <see cref="EnabledValue"/> and
+    /// <see cref="DisabledValue"/>: the levels between them, for a policy that has some.
+    /// </summary>
+    public IReadOnlyList<int> KnownValues { get; init; } = [];
+
+    /// <summary>True when <paramref name="value"/> is one the setting is known to take.</summary>
+    /// <remarks>
+    /// Turning a switch off puts back what its value held, read from a file in the user's own profile, which anything
+    /// running as the user can change. A switch that needs administrator writes a key the user cannot, so it puts back
+    /// only a known value, as Settings Watchdog's Restore does (#2747, #2778).
+    /// </remarks>
+    public bool TakesValue(int value) => value == EnabledValue || value == DisabledValue || KnownValues.Contains(value);
+
     /// <summary>Whose settings this switch changes, read from <see cref="RegistryPath"/>.</summary>
     public PrivacyReach Reach => ReachOf(RegistryPath);
 

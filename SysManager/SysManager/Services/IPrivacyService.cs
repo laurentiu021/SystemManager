@@ -21,14 +21,15 @@ public interface IPrivacyService
     List<PrivacyToggle> LoadToggles();
 
     /// <summary>
-    /// Writes one toggle's <see cref="PrivacyToggle.IsEnabled"/> state to the registry. Returns false when the
-    /// write was refused, as an HKLM toggle is without elevation, so the caller does not report it as applied.
+    /// Writes one toggle's <see cref="PrivacyToggle.IsEnabled"/> state to the registry, and says what became of it:
+    /// anything but <see cref="PrivacyWriteOutcome.Written"/> means nothing was changed, as an HKLM toggle is refused
+    /// without elevation, so the caller does not report it as applied.
     /// </summary>
-    bool ApplyToggle(PrivacyToggle toggle);
+    PrivacyWriteOutcome ApplyToggle(PrivacyToggle toggle);
 
     /// <summary>
-    /// Applies every toggle in turn and returns the ones that failed, empty when all succeeded. One failure does
-    /// not stop the rest.
+    /// Applies every toggle in turn and returns the ones that were not written, each with why, empty when all were.
+    /// One failure does not stop the rest.
     /// </summary>
-    IReadOnlyList<PrivacyToggle> ApplyAll(IEnumerable<PrivacyToggle> toggles);
+    IReadOnlyList<PrivacyWriteFailure> ApplyAll(IEnumerable<PrivacyToggle> toggles);
 }

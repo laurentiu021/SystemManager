@@ -2,6 +2,7 @@
 // Author: laurentiu021 · https://github.com/laurentiu021/SystemManager
 // License: MIT
 
+using System.IO;
 using System.Windows;
 using System.Windows.Automation;
 using System.Windows.Controls;
@@ -29,18 +30,25 @@ public sealed class PrivacyViewUiTests : IDisposable
     private readonly string _rootName = @"Software\SysManagerTests\PrivacyView_" + Guid.NewGuid().ToString("N");
     private readonly RegistryKey _root;
 
+    // Nothing is applied, so nothing is recorded; a folder of the test's own all the same, never the profile's.
+    private readonly string _ledgerDir =
+        Path.Combine(Path.GetTempPath(), "SysManagerPrivacyLedgerTests", Guid.NewGuid().ToString("N"));
+
     public PrivacyViewUiTests() => _root = Registry.CurrentUser.CreateSubKey(_rootName, writable: true)!;
 
     public void Dispose()
     {
         _root.Dispose();
         Registry.CurrentUser.DeleteSubKeyTree(_rootName, throwOnMissingSubKey: false);
+        try { Directory.Delete(_ledgerDir, recursive: true); }
+        catch (DirectoryNotFoundException) { /* nothing was recorded */ }
     }
 
     /// <summary>Built off the STA thread over this test's own key, with a restore point that is never made.</summary>
     private async Task<PrivacyViewModel> VmAsync()
     {
-        var vm = new PrivacyViewModel(new PrivacyService(hkcuRoot: _root, hklmRoot: _root),
+        var vm = new PrivacyViewModel(
+            new PrivacyService(hkcuRoot: _root, hklmRoot: _root, ledger: new PrivacyLedgerService(_ledgerDir)),
             new SessionRestorePoint((_, _) => Task.FromResult(false), () => false), new PrivacyChoicesHandoff());
         await vm.InitializationComplete;
         return vm;

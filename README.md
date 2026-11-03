@@ -1503,8 +1503,12 @@ Answers "what is actually using my space?" by listing the biggest files in one p
 - Category filter
 - Requires admin for the switches that change Windows for everyone on the PC, and for the
   policies Windows keeps for your account, which it lets your account read but not change
-- Fully reversible — switch a toggle back and press **Apply**. Turning one off removes the
-  value SysManager wrote, so Windows goes back to its own default
+- Fully reversible — switch a toggle back and press **Apply**. Turning one off puts back what
+  the setting held before SysManager first changed it, a policy you set yourself included, and
+  removes the value only when there was none, so Windows goes back to its own default. SysManager
+  keeps a copy of each old setting for this, and when it cannot save or read that copy it leaves
+  the setting as it is and says so, rather than guess. A setting that needs administrator gets back
+  only a value it is known to take, because the copy is a file anything running as you can change
 - **A Windows restore point is attempted before the first Apply of the session**, shared with the
   other tabs that try one before their first change, listed under
   [Restore Points](#restore-points). It is attempted after you confirm, so declining costs you

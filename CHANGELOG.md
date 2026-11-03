@@ -10,6 +10,23 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.136.100] - 2026-11-03
+
+**Turning a Privacy & Telemetry switch off puts back what the setting held before.**
+
+### Fixed
+- Turning a Privacy & Telemetry switch off did not put back what the setting held before SysManager first changed
+  it. A policy you had set yourself, the required diagnostic data level through Group Policy or another tool for
+  example, was gone after turning the switch on and off again. SysManager now keeps a copy of what each setting held
+  before its first change, and turning the switch off puts that back, with its own kind of value, removing the value
+  only when there was none. A setting only an administrator can change gets back only a value it is known to take,
+  because the copy is a file in your own profile. A setting changed before this version has no copy, so turning it
+  off removes the value, as before. From 1.5.0 turning a switch off wrote the opposite value, and from 1.52.12 it
+  removed the value.
+- When that copy cannot be saved, the switch is not changed, and when it cannot be read, the setting is not changed
+  back; Apply says which, rather than that they need administrator rights. A write Windows refused while SysManager
+  runs as administrator is no longer said to need administrator rights either.
+
 ## [1.136.99] - 2026-11-03
 
 **Two Privacy & Telemetry switches write what they say: the one for the Settings app's suggestions, and widgets on Windows 10.**

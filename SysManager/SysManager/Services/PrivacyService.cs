@@ -2,6 +2,7 @@
 // Author: laurentiu021 · https://github.com/laurentiu021/SystemManager
 // License: MIT
 
+using System.Globalization;
 using System.IO;
 using System.Security;
 using Microsoft.Win32;
@@ -16,11 +17,15 @@ namespace SysManager.Services;
 /// to a policy Windows keeps for the account under <c>HKCU\Software\Policies</c>, needs elevation; the summary said
 /// every HKCU write succeeds, and those policies refuse the account (#2778). A refused write is logged and reported to
 /// the caller.
+/// <para>What a switch's values held before its first write is kept in <see cref="PrivacyLedgerService"/>, and
+/// turning the switch off puts that back (#2778).</para>
 /// </summary>
 public sealed class PrivacyService : IPrivacyService
 {
     private readonly RegistryKey _hkcuRoot;
     private readonly RegistryKey _hklmRoot;
+    private readonly PrivacyLedgerService _ledger;
+    private readonly TimeProvider _clock;
 
     /// <summary>
     /// Creates the service. <paramref name="hkcuRoot"/> defaults to the signed-in account's own hive via
@@ -30,12 +35,16 @@ public sealed class PrivacyService : IPrivacyService
     /// name="hklmRoot"/> defaults to <see cref="Registry.LocalMachine"/>, the other hive the toggles' paths
     /// name. Tests pass redirected roots (an HKCU subkey they own), as <see cref="EdgeOneDriveService"/>'s
     /// tests do, so a test that applies a change writes there rather than into this machine's privacy
-    /// policies.
+    /// policies. <paramref name="ledger"/> keeps what each value held before its first write, in the config
+    /// folder unless a test gives one of its own; <paramref name="clock"/> dates its records.
     /// </summary>
-    public PrivacyService(RegistryKey? hkcuRoot = null, RegistryKey? hklmRoot = null)
+    public PrivacyService(RegistryKey? hkcuRoot = null, RegistryKey? hklmRoot = null,
+                          PrivacyLedgerService? ledger = null, TimeProvider? clock = null)
     {
         _hkcuRoot = hkcuRoot ?? AdminHelper.PerUserRegistryRoot();
         _hklmRoot = hklmRoot ?? Registry.LocalMachine;
+        _ledger = ledger ?? new PrivacyLedgerService();
+        _clock = clock ?? TimeProvider.System;
     }
 
     /// <summary>
@@ -54,12 +63,12 @@ public sealed class PrivacyService : IPrivacyService
     }
 
     /// <summary>
-    /// Writes a single toggle's current <see cref="PrivacyToggle.IsEnabled"/> state
-    /// to the registry. Returns <c>true</c> if the write succeeded, <c>false</c> if it
-    /// was rejected (e.g. an HKLM-backed toggle without elevation) or the hive was
-    /// unrecognized — so the caller can avoid reporting an unwritten change as applied.
+    /// Writes a single toggle's current <see cref="PrivacyToggle.IsEnabled"/> state to the registry, and says what
+    /// became of it, so the caller can avoid reporting an unwritten change as applied: refused (an HKLM-backed
+    /// toggle without elevation, or a hive it does not recognise), or not written because what was there could not
+    /// be recorded or the record could not be read.
     /// </summary>
-    public bool ApplyToggle(PrivacyToggle toggle)
+    public PrivacyWriteOutcome ApplyToggle(PrivacyToggle toggle)
     {
         ArgumentNullException.ThrowIfNull(toggle);
 
@@ -70,75 +79,142 @@ public sealed class PrivacyService : IPrivacyService
             {
                 Log.Warning("Privacy toggle {Name} not applied — could not open/create {Path}",
                     toggle.Name, toggle.RegistryPath);
-                return false;
+                return PrivacyWriteOutcome.Refused;
             }
 
             // Every value the switch writes, the ones Windows' own switch sets with it included (#2778).
-            foreach (var valueName in toggle.ValueNames)
-            {
-                if (toggle.IsEnabled)
-                {
-                    // Privacy ON → enforce our protection value.
-                    key.SetValue(valueName, toggle.EnabledValue, RegistryValueKind.DWord);
-                    Log.Information("Privacy toggle applied: {Name} = {Value} at {Path}\\{ValueName}",
-                        toggle.Name, toggle.EnabledValue, toggle.RegistryPath, valueName);
-                }
-                else
-                {
-                    // Privacy OFF (revert) → REMOVE our value so Windows falls back to its own
-                    // default, rather than WRITING DisabledValue. Writing DisabledValue was wrong:
-                    // for policy-backed toggles it materialises an enforced GPO the machine may
-                    // never have had (e.g. AllowTelemetry=3 = Full telemetry ENFORCED), which is
-                    // strictly worse than the value being absent. Deleting is the correct undo of
-                    // an enforcement. DeleteValue(name, throwOnMissingValue: false) is a no-op when
-                    // the value is already absent, so revert is idempotent.
-                    key.DeleteValue(valueName, throwOnMissingValue: false);
-                    Log.Information("Privacy toggle reverted (value removed): {Name} at {Path}\\{ValueName}",
-                        toggle.Name, toggle.RegistryPath, valueName);
-                }
-            }
-            return true;
+            return toggle.IsEnabled ? Protect(toggle, key) : PutBack(toggle, key);
         }
         catch (UnauthorizedAccessException ex)
         {
             Log.Warning(ex, "Access denied writing privacy toggle {Name} at {Path} — elevation required",
                 toggle.Name, toggle.RegistryPath);
-            return false;
+            return PrivacyWriteOutcome.Refused;
         }
         catch (SecurityException ex)
         {
             Log.Warning(ex, "Security exception writing privacy toggle {Name} at {Path} — elevation required",
                 toggle.Name, toggle.RegistryPath);
-            return false;
+            return PrivacyWriteOutcome.Refused;
         }
         catch (IOException ex)
         {
             Log.Warning(ex, "Registry I/O error writing privacy toggle {Name} at {Path}",
                 toggle.Name, toggle.RegistryPath);
-            return false;
+            return PrivacyWriteOutcome.Refused;
         }
         catch (ArgumentException ex)
         {
             Log.Warning(ex, "Invalid registry key or value writing privacy toggle {Name} at {Path}",
                 toggle.Name, toggle.RegistryPath);
-            return false;
+            return PrivacyWriteOutcome.Refused;
         }
     }
 
     /// <summary>
-    /// Applies all toggles in sequence. Errors on individual toggles are logged but do
-    /// not stop the batch. Returns the toggles that failed to apply (empty when all
-    /// succeeded) so the caller can report failures and avoid rebasing their baseline.
+    /// Privacy ON: records what each value holds now, then writes the protection value. Nothing is written when the
+    /// record cannot be kept, because turning the switch off again could then not put the values back (#2778).
     /// </summary>
-    public IReadOnlyList<PrivacyToggle> ApplyAll(IEnumerable<PrivacyToggle> toggles)
+    private PrivacyWriteOutcome Protect(PrivacyToggle toggle, RegistryKey key)
+    {
+        List<PrivacyPriorValue> priors = [];
+        foreach (var valueName in toggle.ValueNames)
+        {
+            if (PrivacyLedgerService.Capture(key, toggle.RegistryPath, valueName, _clock.GetUtcNow()) is not { } prior)
+            {
+                Log.Warning("Privacy toggle {Name} not applied — {Path}\\{ValueName} holds a kind of value SysManager "
+                    + "could not put back", toggle.Name, toggle.RegistryPath, valueName);
+                return PrivacyWriteOutcome.NotRecorded;
+            }
+            priors.Add(prior);
+        }
+
+        if (!_ledger.Remember(priors))
+        {
+            Log.Warning("Privacy toggle {Name} not applied — what its values held could not be recorded", toggle.Name);
+            return PrivacyWriteOutcome.NotRecorded;
+        }
+
+        foreach (var valueName in toggle.ValueNames)
+        {
+            key.SetValue(valueName, toggle.EnabledValue, RegistryValueKind.DWord);
+            Log.Information("Privacy toggle applied: {Name} = {Value} at {Path}\\{ValueName}",
+                toggle.Name, toggle.EnabledValue, toggle.RegistryPath, valueName);
+        }
+        return PrivacyWriteOutcome.Written;
+    }
+
+    /// <summary>
+    /// Privacy OFF (revert): puts each value back as the ledger recorded it before SysManager's first write, and
+    /// removes it only when there was none (#2778). A value with no record, one SysManager wrote before it kept them,
+    /// is removed, so Windows falls back to its own default, never set to <see cref="PrivacyToggle.DisabledValue"/>:
+    /// for a policy that would enforce a level the machine may never have had (AllowTelemetry=3, Full telemetry).
+    /// Nothing is changed when the ledger cannot be read, because putting the values back would then be a guess.
+    /// <para>The ledger is a file in the user's own profile, so for a switch that needs administrator only a DWORD the
+    /// setting is known to take is written back; any other record is removed like a value with none, so a change to
+    /// the file cannot have SysManager write what it chooses into a key the user cannot write (#2747).</para>
+    /// </summary>
+    private PrivacyWriteOutcome PutBack(PrivacyToggle toggle, RegistryKey key)
+    {
+        if (_ledger.Read() is not ({ } records, false))
+        {
+            Log.Warning("Privacy toggle {Name} not reverted — the record of what its values held could not be read",
+                toggle.Name);
+            return PrivacyWriteOutcome.RecordUnreadable;
+        }
+
+        List<PrivacyPriorValue> used = [];
+        foreach (var valueName in toggle.ValueNames)
+        {
+            if (records.TryGetValue(PrivacyPriorValue.KeyOf(toggle.RegistryPath, valueName), out var prior))
+            {
+                used.Add(prior);
+                if (MayPutBack(toggle, prior))
+                {
+                    PrivacyLedgerService.PutBack(key, prior);
+                    Log.Information("Privacy toggle reverted (value put back as it was): {Name} at "
+                        + "{Path}\\{ValueName}", toggle.Name, toggle.RegistryPath, valueName);
+                    continue;
+                }
+                Log.Warning("Privacy toggle {Name}: the record for {Path}\\{ValueName} holds a value SysManager never "
+                    + "sets there, so the value is removed rather than written back",
+                    toggle.Name, toggle.RegistryPath, valueName);
+            }
+
+            key.DeleteValue(valueName, throwOnMissingValue: false);
+            Log.Information("Privacy toggle reverted (value removed): {Name} at {Path}\\{ValueName}",
+                toggle.Name, toggle.RegistryPath, valueName);
+        }
+        _ledger.Forget(used);
+        return PrivacyWriteOutcome.Written;
+    }
+
+    /// <summary>
+    /// True when <paramref name="prior"/> may be written back for <paramref name="toggle"/>: always for a switch that
+    /// changes only the account's own settings, which the account can write itself, and for one that needs
+    /// administrator only an absent value or a DWORD the setting is known to take.
+    /// </summary>
+    internal static bool MayPutBack(PrivacyToggle toggle, PrivacyPriorValue prior) =>
+        !toggle.NeedsAdministrator
+        || prior.Kind is null
+        || (prior.Kind == nameof(RegistryValueKind.DWord)
+            && int.TryParse(prior.Data, NumberStyles.Integer, CultureInfo.InvariantCulture, out var value)
+            && toggle.TakesValue(value));
+
+    /// <summary>
+    /// Applies all toggles in sequence. Errors on individual toggles are logged but do not stop the batch. Returns the
+    /// toggles that were not written, each with why (empty when all were), so the caller can report them and avoid
+    /// rebasing their baseline.
+    /// </summary>
+    public IReadOnlyList<PrivacyWriteFailure> ApplyAll(IEnumerable<PrivacyToggle> toggles)
     {
         ArgumentNullException.ThrowIfNull(toggles);
 
-        List<PrivacyToggle> failed = [];
+        List<PrivacyWriteFailure> failed = [];
         foreach (var toggle in toggles)
         {
-            if (!ApplyToggle(toggle))
-                failed.Add(toggle);
+            if (ApplyToggle(toggle) is var outcome and not PrivacyWriteOutcome.Written)
+                failed.Add(new PrivacyWriteFailure(toggle, outcome));
         }
         return failed;
     }
@@ -232,7 +308,8 @@ public sealed class PrivacyService : IPrivacyService
                 RegistryPath = RegistryPaths.DataCollectionPolicy,
                 ValueName = "AllowTelemetry",
                 EnabledValue = 0,
-                DisabledValue = 3
+                DisabledValue = 3,
+                KnownValues = [1, 2]   // Required, and Enhanced on Windows 10 1809 and earlier
             },
             new PrivacyToggle
             {

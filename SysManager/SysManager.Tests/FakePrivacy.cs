@@ -46,7 +46,7 @@ internal static class FakePrivacy
     {
         var service = Substitute.For<IPrivacyService>();
         service.LoadToggles().Returns(_ => [.. toggles.Select(Copy)]);
-        service.ApplyToggle(Arg.Any<PrivacyToggle>()).Returns(true);
+        service.ApplyToggle(Arg.Any<PrivacyToggle>()).Returns(PrivacyWriteOutcome.Written);
         service.ApplyAll(Arg.Any<IEnumerable<PrivacyToggle>>()).Returns([]);
         return service;
     }

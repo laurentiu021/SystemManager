@@ -93,6 +93,8 @@ public sealed class ProfileService
     ///   first launch would open without saying what the app is.</item>
     /// <item><c>ultimate-performance-copy.json</c> — the GUID of the copy of the Ultimate Performance plan SysManager
     ///   made on THIS PC (#2717). Another PC has no plan of that GUID.</item>
+    /// <item><c>privacy-ledger.json</c> — what THIS PC's privacy values held before SysManager first wrote them
+    ///   (#2778). Carried over, turning a switch off on another PC would put back this one's settings.</item>
     /// </list>
     /// </summary>
     private static readonly (string Key, string DisplayName, string FileName, Base Base)[] Catalog =

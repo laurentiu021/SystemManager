@@ -1353,6 +1353,10 @@ Key services:
   turns diagnostic data off only on Enterprise, Education and Server, and Home and Pro read it as 1.
   A switch can write several values (`PrivacyToggle.AlsoWrites`), as the Settings app's suggestions switch
   writes the three Windows' own switch sets together, and reads as on only when all of them are.
+  `ApplyToggle` returns a `PrivacyWriteOutcome` and `ApplyAll` the switches not written, each with why, so
+  Privacy & Telemetry says "needs administrator" only for a write Windows refused while SysManager is not
+  elevated (`PrivacyViewModel.AppliedStatus`). What each value held before its first write is kept in
+  `PrivacyLedgerService`, and turning the switch off puts that back (#2778).
 - `UndoChangesService` (`IUndoChangesService`) — finds the changes SysManager can put back from the copies
   five tabs already keep: Performance Mode's record of the original settings (compared with the settings now,
   through `PerformanceService.TakeSnapshotAsync`, its graphics setting read from the card the record names; held
@@ -1808,6 +1812,19 @@ Key services:
   does not parse as empty; the internal `Read` also says it did not parse, so Undo Changes reports
   that ledger as damaged rather than as nothing to put back, since the services it recorded are still
   off (#1525).
+- `PrivacyLedgerService` — records what each privacy switch's values held before SysManager first wrote
+  them, as JSON under `%LocalAppData%\SysManager\privacy-ledger.json`, so turning a switch off puts back
+  exactly that and removes a value only when there was none (#2778). Turning one off used to remove its
+  values whatever had been there, so a policy the user set themselves was lost. Same shape as
+  `ServiceStartupLedgerService`. A record holds the value's kind and its data, a string unexpanded and
+  binary data in base64, and the first record of a value is the one kept, so a later write, or Windows
+  changing the value in between, does not move what is put back. `PrivacyService.ApplyToggle` records
+  before it writes and writes nothing when it cannot (`PrivacyWriteOutcome.NotRecorded`), and puts nothing
+  back from a ledger it cannot read or parse (`RecordUnreadable`). A value with no record, one written
+  before records were kept, is removed as before. The file is in the user's own profile, so for a switch
+  that needs administrator only a DWORD the setting takes (`PrivacyToggle.TakesValue`) is written back
+  and any other record is removed instead, as Settings Watchdog's Restore writes back only a known value
+  (#2747). A profile never carries the file.
 - `CrashMarkerService` — records that the process died from an unhandled exception, as JSON under
   `%LocalAppData%\SysManager\last-crash.json`, so the next launch can say so. `App.OnDomain` writes
   the marker (a domain-level unhandled exception kills the process with no UI at all, so this is the

@@ -106,6 +106,8 @@ public static class ServiceRegistration
         services.AddSingleton<BulkInstallerService>();
         services.AddSingleton<AppIconService>();
         services.AddSingleton<FileShredderService>();
+        // What each privacy switch's values held before SysManager first wrote them, for turning it off (#2778).
+        services.AddSingleton<PrivacyLedgerService>();
         services.AddSingleton<IPrivacyService, PrivacyService>();
         // One slot for the whole app: Profile Export / Import leaves imported privacy choices in it and the
         // Privacy & Telemetry tab takes them, so two instances would lose every import between the tabs.

@@ -979,7 +979,9 @@ System → System Fixes, where the tab name matches what they do.
   account and the whole machine, **including the separate location 64-bit Windows uses for programs
   installed by a 32-bit installer**, plus both Startup folders and scheduled tasks belonging to
   programs you installed. Windows lets only administrators read which scheduled tasks exist, so
-  without "Run as administrator" those tasks are left out, and the tab says so
+  without "Run as administrator" those tasks are left out, and the tab says so. The files Windows
+  keeps in a Startup folder for itself, its hidden `desktop.ini` and a `Thumbs.db`, are not
+  programs and are not listed
 - **A scheduled task says when it runs.** One that runs when you sign in or Windows starts reads
   "Enabled (at start-up)"; one that runs on a schedule, such as an hourly updater, reads "Enabled
   (scheduled)", and the Dashboard's Why is it slow? does not count it as starting with Windows.

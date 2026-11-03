@@ -284,7 +284,16 @@ public sealed class StartupService : IDisposable
         return space > 0 ? text[..space] : text;
     }
 
-    private static void ReadStartupFolder(string folderPath, string locationLabel, bool isCommon, List<StartupEntry> results)
+    /// <summary>
+    /// Files Windows keeps in a Startup folder for itself and does not start: <c>desktop.ini</c>, which gives the
+    /// folder its name in the display language, and <c>Thumbs.db</c>, Explorer's thumbnail cache. Every file in the
+    /// folder was listed as a program that starts with Windows, desktop.ini as "desktop", and the Dashboard counted it
+    /// (#2780).
+    /// </summary>
+    internal static readonly string[] NotStartupItems = ["desktop.ini", "Thumbs.db"];
+
+    internal static void ReadStartupFolder(
+        string folderPath, string locationLabel, bool isCommon, List<StartupEntry> results)
     {
         try
         {
@@ -292,6 +301,9 @@ public sealed class StartupService : IDisposable
 
             foreach (var file in System.IO.Directory.GetFiles(folderPath))
             {
+                if (NotStartupItems.Contains(System.IO.Path.GetFileName(file), StringComparer.OrdinalIgnoreCase))
+                    continue;
+
                 var name = System.IO.Path.GetFileNameWithoutExtension(file);
                 if (string.IsNullOrWhiteSpace(name)) continue;
 

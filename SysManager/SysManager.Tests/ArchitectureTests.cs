@@ -18457,6 +18457,46 @@ public partial class ArchitectureTests
             + "so that read has no time limit (#2845):\n  " + string.Join("\n  ", offenders));
     }
 
+    /// <summary>A sort clause, which WQL does not have.</summary>
+    [GeneratedRegex(@"\bORDER\s+BY\b")]
+    private static partial Regex SortClause();
+
+    /// <summary>The start of a WMI query written in a string literal.</summary>
+    [GeneratedRegex(@"""SELECT\s")]
+    private static partial Regex WmiQueryLiteral();
+
+    /// <summary>
+    /// No WMI query in the app sorts what it reads with ORDER BY.
+    /// </summary>
+    /// <remarks>
+    /// WQL has no ORDER BY, and WMI does not skip the clause: it refuses the whole query as invalid.
+    /// <c>TemperatureService</c> asked for the disk models <c>ORDER BY Index</c> from #595 on, so the query failed on
+    /// every elevated Dashboard poll, every 2 seconds and with a log line each time, and the names it was there for
+    /// were never once read (#2782). Nothing else in the app is SQL, so the clause anywhere outside a comment is a
+    /// WMI query that cannot run; one that needs an order sorts the results itself. Matched in capitals, as every
+    /// query here is written, so a sentence that happens to say "in order by size" is not taken for one.
+    /// </remarks>
+    [Fact]
+    public void NoWmiQuery_SortsWithOrderBy()
+    {
+        var app = TestPaths.AppProject();
+        var queries = 0;
+        var offenders = new List<string>();
+        foreach (var path in SourceFilesUnder(app, ".cs").OrderBy(p => p, StringComparer.Ordinal))
+        {
+            var code = WithoutComments(File.ReadAllText(path));
+            queries += WmiQueryLiteral().Count(code);
+            if (SortClause().IsMatch(code)) offenders.Add(Path.GetRelativePath(app, path));
+        }
+
+        // Floor: 25 queries when this was written. Far fewer means the files stopped being found, and then "no query
+        // sorts" holds of nothing.
+        Assert.True(queries >= 20, $"only {queries} WMI queries were read in the app, so this checked almost none.");
+        Assert.True(offenders.Count == 0,
+            "these files sort a WMI query with ORDER BY, which WMI refuses as an invalid query (#2782):\n  "
+            + string.Join("\n  ", offenders));
+    }
+
     /// <summary>
     /// The three values the 300 ms snapshot poll refreshes must come from syscalls, never from WMI.
     /// </summary>

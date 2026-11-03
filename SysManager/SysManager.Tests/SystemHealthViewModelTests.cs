@@ -17,7 +17,10 @@ namespace SysManager.Tests;
 [Collection("ProcessWideStatics")]
 public class SystemHealthViewModelTests
 {
-    private static SystemHealthViewModel NewVm(MemoryTestService? memTest = null, IPowerShellRunner? runner = null) => new(new SystemInfoService(), new DiskHealthService(), memTest ?? new MemoryTestService(), new FixedDriveService(), runner ?? new PowerShellRunner(), new BiosService());
+    private static SystemHealthViewModel NewVm(MemoryTestService? memTest = null, IPowerShellRunner? runner = null,
+        DiskHealthService? diskHealth = null) =>
+        new(new SystemInfoService(), diskHealth ?? new DiskHealthService(), memTest ?? new MemoryTestService(),
+            new FixedDriveService(), runner ?? new PowerShellRunner(), new BiosService());
 
     // ---------- construction ----------
 
@@ -123,6 +126,34 @@ public class SystemHealthViewModelTests
         Assert.DoesNotContain("No memory errors", vm.MemoryHealthVerdict, StringComparison.Ordinal);
         Assert.Equal(StatusColors.Warning, vm.MemoryHealthColorHex);
         Assert.False(vm.IsBusy);
+    }
+
+    // ---------- the disk check that could not read the drives (#2782) ----------
+
+    [Fact]
+    public async Task CheckDiskHealth_WhenWindowsDoesNotAnswer_SaysTheReadFailed()
+    {
+        // The service reports a failed read in what it returns rather than by throwing, so the status read "Collected
+        // 0 disk report(s)." as if there were no drives, and the catch for a failure could never run.
+        var failing = new DiskHealthService(() => new DiskHealthRead([], "The RPC server is unavailable."), _ => { });
+        var vm = NewVm(diskHealth: failing);
+        await vm.InitializationComplete;
+
+        await vm.CheckDiskHealthCommand.ExecuteAsync(null);
+
+        Assert.Equal("CheckDiskHealth failed: The RPC server is unavailable.", vm.StatusMessage);
+        Assert.Empty(vm.DiskHealth);
+        Assert.False(vm.IsBusy);
+    }
+
+    [Theory]
+    [InlineData(null, "Collected 1 disk report(s).")]
+    [InlineData("Time out", "Collected 1 disk report(s), then the read failed: Time out")]
+    public void DescribeDiskRead_SaysWhenTheDrivesReadAreNotAllOfThem(string? fault, string expected)
+    {
+        var read = new DiskHealthRead([new DiskHealthReport { FriendlyName = "Samsung SSD 990 PRO 2TB" }], fault);
+
+        Assert.Equal(expected, SystemHealthViewModel.DescribeDiskRead(read));
     }
 
     // ---------- commands ----------

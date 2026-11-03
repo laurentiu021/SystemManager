@@ -585,7 +585,8 @@ Edit Windows environment variables without the cramped built-in dialog:
 - OS / CPU / RAM / storage overview
 - SMART data per disk: temperature, life remaining, power-on hours, read/write errors —
   fullest when SysManager runs as administrator. A figure the drive does not report reads "—",
-  with an empty bar, rather than a value it never measured, and no errors reads 0
+  with an empty bar, rather than a value it never measured, and no errors reads 0. A check
+  Windows does not answer says it failed, and why, rather than that it found no drives
 - Colour-coded verdict per drive. A drive Windows gives no health for, with nothing read from it,
   says so instead of being called Healthy, and a failing drive's health gauge is red like its verdict
 - A drive's temperature takes the same colours here and on the Dashboard: green to 50 °C, blue while
@@ -2339,7 +2340,9 @@ offers, "rate us" prompts:
   visible. Without administrator rights only the NVIDIA graphics card and the disks' own (SMART)
   temperatures are available, and the card says so. The processor and motherboard temperatures
   also need the PawnIO driver, which SysManager does not install: without it the processor shows
-  "Requires driver", as administrator too, and the card says why
+  "Requires driver", as administrator too, and the card says why. A drive the sensors leave
+  unnamed takes its name from the drive list System Health reads, and a read of that list that
+  Windows does not answer is tried again at the next refresh rather than kept
 - **Recent Activity** — the five most recent things SysManager changed on this PC, with how long
   ago, kept current while the Dashboard is shown: cleanups, deletes, uninstalls, the Dashboard's Update All Apps, privacy and DNS changes,
   restore points, shredded files, game mode, and what Undo Changes put back. Not every tab writes

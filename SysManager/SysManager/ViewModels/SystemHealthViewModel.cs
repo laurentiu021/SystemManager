@@ -222,17 +222,25 @@ public sealed partial class SystemHealthViewModel : ElevatedViewModelBase
         StatusMessage = "Reading SMART data...";
         try
         {
-            var reports = await _diskHealth.CollectAsync();
-            DiskHealth.ReplaceWith(reports);
-            StatusMessage = $"Collected {reports.Count} disk report(s).";
-        }
-        catch (Exception ex) when (ex is ManagementException or System.Runtime.InteropServices.COMException)
-        {
-            StatusMessage = $"CheckDiskHealth failed: {ex.Message}";
+            var read = await _diskHealth.ReadAsync();
+            DiskHealth.ReplaceWith(read.Disks);
+            StatusMessage = DescribeDiskRead(read);
         }
         catch (InvalidOperationException ex) { StatusMessage = $"CheckDiskHealth failed: {ex.Message}"; }
         finally { EndRead(); }
     }
+
+    /// <summary>What the status line says about <paramref name="read"/>.</summary>
+    /// <remarks>
+    /// The service reports a failed read in what it returns, not by throwing, so a read Windows did not answer used
+    /// to say "Collected 0 disk report(s)." (#2782).
+    /// </remarks>
+    internal static string DescribeDiskRead(DiskHealthRead read) => read switch
+    {
+        { Fault: null } => $"Collected {read.Disks.Count} disk report(s).",
+        { Disks.Count: 0 } => $"CheckDiskHealth failed: {read.Fault}",
+        _ => $"Collected {read.Disks.Count} disk report(s), then the read failed: {read.Fault}",
+    };
 
     [RelayCommand]
     private async Task CheckMemoryErrorsAsync()

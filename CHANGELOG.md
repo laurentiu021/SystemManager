@@ -10,6 +10,23 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.136.104] - 2026-11-03
+
+**The Dashboard names the drives on its temperature card again after a disk read fails, and System Health says when it could not read the drives.**
+
+### Fixed
+- When a read of the drives failed, which a WMI service still starting at logon is enough for, the Dashboard's
+  temperature card kept the failed read as if it were the drives. Run as administrator, a drive the sensors could
+  not name stayed "Drive 1" until SysManager was restarted; without administrator, the drive temperatures were gone
+  for 30 seconds. Only a read Windows answers in full is kept now, a failed one is tried again at the next refresh,
+  two seconds later, and a read that keeps failing is written to the log once rather than at every refresh. The
+  names were kept like this since 1.52.94, the temperatures since 1.75.21.
+- Run as administrator, the temperature card asked Windows for the drive models in a query Windows does not accept,
+  at every refresh, and logged the refusal each time. It never named a drive, so it is gone, and the card names the
+  drives from the list System Health reads, as it already did. It was there since 1.17.0.
+- System Health's Run SMART check said "Collected 0 disk report(s)." when Windows did not answer at all. It now says
+  the check failed, and why, and a read that stopped partway says so after the drives it did read.
+
 ## [1.136.103] - 2026-11-03
 
 **Recent Changes leaves out a failed install on Windows in any language, and keeps updates with their own program.**

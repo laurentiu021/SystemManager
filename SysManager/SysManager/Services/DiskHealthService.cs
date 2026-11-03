@@ -9,6 +9,19 @@ using SysManager.Models;
 
 namespace SysManager.Services;
 
+/// <summary>The drives one read found, and the fault that stopped it before the end, if one did.</summary>
+/// <param name="Disks">Every drive read, in the order Windows listed them.</param>
+/// <param name="Fault">
+/// Null when Windows answered the whole read. Otherwise why it stopped, and drives that are there may be missing from
+/// <paramref name="Disks"/>: all of them when the Storage provider could not be reached at all. A drive skipped for a
+/// field that does not convert does not count: it is the same at every read.
+/// </param>
+public sealed record DiskHealthRead(IReadOnlyList<DiskHealthReport> Disks, string? Fault = null)
+{
+    /// <summary>Whether Windows answered the whole read, so what it found can be kept.</summary>
+    public bool Complete => Fault is null;
+}
+
 /// <summary>
 /// Collects disk health via CIM — reads Storage Reliability Counters
 /// (which are backed by SMART on real drives) and projects them into a
@@ -17,10 +30,64 @@ namespace SysManager.Services;
 /// </summary>
 public sealed class DiskHealthService
 {
-    public Task<IReadOnlyList<DiskHealthReport>> CollectAsync(CancellationToken ct = default)
-        => Task.Run(() => Collect(), ct);
+    private readonly Func<DiskHealthRead> _read;
+    private readonly Action<string> _logFault;
 
-    private static IReadOnlyList<DiskHealthReport> Collect()
+    // Whether the last read failed, so that a run of failed reads logs its fault once. Guarded by _faultGate: the
+    // Dashboard, the health score, Tune-up and the report each read on their own schedule.
+    private readonly Lock _faultGate = new();
+    private bool _failing;
+
+    /// <summary>Creates the service over Windows' Storage provider.</summary>
+    public DiskHealthService() : this(ReadFromWindows) { }
+
+    /// <summary>
+    /// Creates the service over <paramref name="read"/>, so a test can make a read fail, and can see what is logged
+    /// through <paramref name="logFault"/>, which is the app's log when it is null.
+    /// </summary>
+    internal DiskHealthService(Func<DiskHealthRead> read, Action<string>? logFault = null)
+    {
+        _read = read;
+        _logFault = logFault ?? LogFault;
+    }
+
+    /// <summary>The drives Windows reported, or the ones it reported before a fault, without saying which.</summary>
+    /// <remarks>For a caller that judges each drive it is given, and treats an empty list as not checked.</remarks>
+    public Task<IReadOnlyList<DiskHealthReport>> CollectAsync(CancellationToken ct = default)
+        => Task.Run(() => ReadAndLog().Disks, ct);
+
+    /// <summary>One read of the drives, which says whether Windows answered all of it.</summary>
+    /// <remarks>
+    /// For a caller that keeps what it reads. The Dashboard kept a read that had failed as if it were the drives: the
+    /// drive names on its temperatures for the whole session, and the drive temperatures for 30 seconds (#2782).
+    /// </remarks>
+    public Task<DiskHealthRead> ReadAsync(CancellationToken ct = default) => Task.Run(ReadAndLog, ct);
+
+    /// <summary>Reads once, and logs the fault unless the read before this one failed too.</summary>
+    /// <remarks>
+    /// Once per run of failures rather than once per read: the Dashboard reads every 2 seconds, and a fault that
+    /// lasts, a WMI service that is switched off for one, would put a line in the log every time and push out of the
+    /// rotating log the history a bug report needs. <see cref="NvidiaGpuReader"/> logs a failing read once for the
+    /// same reason.
+    /// </remarks>
+    private DiskHealthRead ReadAndLog()
+    {
+        var read = _read();
+        bool log;
+        lock (_faultGate)
+        {
+            log = !read.Complete && !_failing;
+            _failing = !read.Complete;
+        }
+
+        if (log && read.Fault is { } fault) _logFault(fault);
+        return read;
+    }
+
+    private static void LogFault(string fault) =>
+        Log.Debug("DiskHealth: the storage provider could not be read: {Error}", fault);
+
+    private static DiskHealthRead ReadFromWindows()
     {
         List<DiskHealthReport> results = [];
         try
@@ -71,22 +138,15 @@ public sealed class DiskHealthService
                 }
             }
         }
-        catch (Exception ex) when (ex is ManagementException or System.Runtime.InteropServices.COMException)
+        catch (Exception ex) when (ex is ManagementException or System.Runtime.InteropServices.COMException
+                                       or UnauthorizedAccessException)
         {
-            // Storage scope might not exist on some Windows SKUs, and a WMI service that is off or not answering is a
-            // COM error, not a management one (#2774).
-            Log.Debug("DiskHealth: the storage provider could not be read: {Error}", ex.Message);
+            // Storage scope might not exist on some Windows SKUs, a WMI service that is off or not answering is a
+            // COM error, not a management one (#2774), and WMI can deny access without elevation. The drives read
+            // before the fault are still right, and the fault says the list may be short.
+            return new DiskHealthRead(results, ex.Message);
         }
-        catch (UnauthorizedAccessException)
-        {
-            // WMI access denied without elevation.
-        }
-        catch (System.Runtime.InteropServices.COMException)
-        {
-            // scope.Connect() can throw COMException when the Storage WMI namespace
-            // is unavailable (older/headless Windows). Non-fatal — return what we have.
-        }
-        return results;
+        return new DiskHealthRead(results);
     }
 
     private static void EnrichWithReliability(ManagementObject disk, DiskHealthReport report)

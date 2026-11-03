@@ -12,14 +12,13 @@ namespace SysManager.Tests;
 /// <summary>
 /// Tests for <see cref="TemperatureService.ApplyStorageNames"/> — the storage-name substitution that used to
 /// display one drive's temperature under another drive's name — and for what the service makes of the sensors
-/// it is handed and of a missing CPU temperature.
+/// it is handed, of a missing CPU temperature, and of a disk read that fails.
 /// </summary>
 /// <remarks>
-/// The other three fixes in the same change as the storage names are not reachable from a unit test and are
-/// not pretended to be: opening LibreHardwareMonitor needs administrator rights and real hardware, the WMI
-/// disk-name query needs live WMI, and the storage-temperature time-to-live sits behind
-/// <see cref="DiskHealthService"/>, which is sealed with a non-virtual CollectAsync. What is read from the
-/// hardware once it is open is reachable: <see cref="TemperatureService.ReadHardware"/> takes stand-in hardware.
+/// Opening LibreHardwareMonitor needs administrator rights and real hardware, so that is not reached from a unit
+/// test. What is read from the hardware once it is open is: <see cref="TemperatureService.ReadHardware"/> takes
+/// stand-in hardware. So are the drive names and the drive temperatures, which come from a
+/// <see cref="DiskHealthService"/> that a test can make read anything, a read that fails included (#2782).
 /// </remarks>
 public class TemperatureServiceTests
 {
@@ -57,7 +56,7 @@ public class TemperatureServiceTests
     public void ApplyStorageNames_CountsDisagree_SubstitutesNothing()
     {
         // An unequal count is proof the ordinal pairing is broken, and it breaks for a real reason:
-        // DiskHealthService.Collect silently SKIPS any disk with an unreadable WMI field, which shifts every
+        // DiskHealthService silently SKIPS any disk with an unreadable WMI field, which shifts every
         // later index by one. Two placeholders and one name means the one name might belong to either — and
         // keeping "Drive 1" is better than confidently showing the wrong model.
         List<TemperatureReading> readings =
@@ -172,7 +171,7 @@ public class TemperatureServiceTests
     {
         using var service = new TemperatureService(new DiskHealthService(), skipHardwareInit: true);
         List<TemperatureReading> readings = [];
-        service.ReadHardware(hardware, readings, includeStorage, []);
+        service.ReadHardware(hardware, readings, includeStorage);
         return readings;
     }
 
@@ -265,6 +264,180 @@ public class TemperatureServiceTests
         cpu.Received(1).Update();
         disk.Received(includeStorage ? 1 : 0).Update();
         Assert.Equal(includeStorage, readings.Any(r => r.Component == "Storage"));
+    }
+
+    /// <summary>
+    /// A drive LibreHardwareMonitor cannot name is numbered, and marked as a placeholder for the names to replace.
+    /// </summary>
+    [Fact]
+    public void ReadHardware_ADriveLhmCannotName_IsANumberedPlaceholder()
+    {
+        var named = Hardware(HardwareType.Storage, "Samsung SSD 990 PRO 2TB", Temperature("Temperature", 38));
+        var unnamed = Hardware(HardwareType.Storage, "1", Temperature("Temperature", 31));
+
+        var readings = Read(includeStorage: true, named, unnamed);
+
+        Assert.Equal(new (string, bool)[] { ("Samsung SSD 990 PRO 2TB", false), ("Drive 2", true) },
+            readings.Select(r => (r.SensorName, r.NameIsPlaceholder)).ToArray());
+    }
+
+    // ---------- a disk read that failed is not kept (#2782) ----------
+
+    /// <summary>A <see cref="TimeProvider"/> whose clock only moves when a test says so.</summary>
+    /// <remarks>The same hand-written shape <c>NvidiaGpuReaderTests</c> uses.</remarks>
+    private sealed class TestTimeProvider : TimeProvider
+    {
+        private long _ticks;
+
+        public override long TimestampFrequency => TimeSpan.TicksPerSecond;
+        public override long GetTimestamp() => _ticks;
+
+        public void Advance(TimeSpan by) => _ticks += by.Ticks;
+    }
+
+    private static readonly DiskHealthRead WindowsDidNotAnswer = new([], "The RPC server is unavailable.");
+
+    private static DiskHealthReport Disk(string name, double? temperatureC = null) =>
+        new() { FriendlyName = name, TemperatureC = temperatureC };
+
+    /// <summary>A disk service over <paramref name="reads"/>, read in order, and how many reads it got.</summary>
+    private static (DiskHealthService Service, Func<int> Reads) DisksReading(params DiskHealthRead[] reads)
+    {
+        var queue = new Queue<DiskHealthRead>(reads);
+        var count = 0;
+        return (new DiskHealthService(() => { count++; return queue.Dequeue(); }, _ => { }), () => count);
+    }
+
+    /// <summary>
+    /// A disk read that failed leaves the drives unnamed for one poll, not for the session.
+    /// </summary>
+    /// <remarks>
+    /// <see cref="DiskHealthService"/> reports a failed read as no drives rather than by throwing, and the names were
+    /// kept with <c>??=</c>, so one failed first read, a WMI service still starting at logon, held the drives at
+    /// "Drive 1" until SysManager was restarted.
+    /// </remarks>
+    [Fact]
+    public async Task TheDriveNames_AreReadAgain_AfterAReadThatFailed()
+    {
+        var (disks, reads) = DisksReading(WindowsDidNotAnswer, new([Disk("Samsung SSD 990 PRO 2TB")]));
+        using var service = new TemperatureService(disks, skipHardwareInit: true);
+        List<TemperatureReading> first = [Storage("Drive 1", placeholder: true)];
+        List<TemperatureReading> second = [Storage("Drive 1", placeholder: true)];
+
+        await service.EnrichStorageNamesAsync(first);
+        await service.EnrichStorageNamesAsync(second);
+
+        Assert.Equal("Drive 1", first[0].SensorName);
+        Assert.Equal("Samsung SSD 990 PRO 2TB", second[0].SensorName);
+        Assert.Equal(2, reads());
+    }
+
+    /// <summary>
+    /// A read cut short names nothing, even with as many drives as there are readings, and is not kept.
+    /// </summary>
+    /// <remarks>
+    /// Paired by position, the one drive it read could be one with no temperature sensor, and the reading would carry
+    /// another drive's name.
+    /// </remarks>
+    [Fact]
+    public async Task TheDriveNames_FromAReadCutShort_AreNotUsed()
+    {
+        var (disks, reads) = DisksReading(new([Disk("WDC WD40EZAZ-00SF3B0")], "Time out"),
+            new([Disk("Samsung SSD 990 PRO 2TB")]));
+        using var service = new TemperatureService(disks, skipHardwareInit: true);
+        List<TemperatureReading> first = [Storage("Drive 1", placeholder: true)];
+        List<TemperatureReading> second = [Storage("Drive 1", placeholder: true)];
+
+        await service.EnrichStorageNamesAsync(first);
+        await service.EnrichStorageNamesAsync(second);
+
+        Assert.Equal("Drive 1", first[0].SensorName);
+        Assert.Equal("Samsung SSD 990 PRO 2TB", second[0].SensorName);
+        Assert.Equal(2, reads());
+    }
+
+    /// <summary>The names from a read Windows answered in full are read once, and used at every poll.</summary>
+    [Fact]
+    public async Task TheDriveNames_FromAReadThatWorked_AreReadOnce()
+    {
+        var (disks, reads) = DisksReading(new DiskHealthRead([Disk("Samsung SSD 990 PRO 2TB")]));
+        using var service = new TemperatureService(disks, skipHardwareInit: true);
+
+        for (var poll = 0; poll < 3; poll++)
+        {
+            List<TemperatureReading> readings = [Storage("Drive 1", placeholder: true)];
+            await service.EnrichStorageNamesAsync(readings);
+            Assert.Equal("Samsung SSD 990 PRO 2TB", readings[0].SensorName);
+        }
+
+        Assert.Equal(1, reads());
+    }
+
+    /// <summary>
+    /// Without administrator rights, a disk read that failed hides the drive temperatures for one poll, not for
+    /// <see cref="TemperatureService.DiskTemperatureTtl"/>.
+    /// </summary>
+    /// <remarks>
+    /// The read was kept whatever it found: the catches meant to stop a failed one being kept were for exceptions
+    /// <see cref="DiskHealthService"/> never lets out.
+    /// </remarks>
+    [Fact]
+    public async Task TheDriveTemperatures_AreReadAgainAtTheNextPoll_AfterAReadThatFailed()
+    {
+        var (disks, reads) = DisksReading(WindowsDidNotAnswer, new([Disk("Samsung SSD 990 PRO 2TB", 38)]));
+        using var service = new TemperatureService(disks, skipHardwareInit: true, timeProvider: new TestTimeProvider());
+        List<TemperatureReading> first = [];
+        List<TemperatureReading> second = [];
+
+        await service.ReadDiskTemperaturesAsync(first);
+        await service.ReadDiskTemperaturesAsync(second);
+
+        Assert.Empty(first);
+        var drive = Assert.Single(second);
+        Assert.Equal("Samsung SSD 990 PRO 2TB", drive.SensorName);
+        Assert.Equal(38.0, drive.TemperatureC);
+        Assert.Equal(2, reads());
+    }
+
+    /// <summary>A read cut short shows the drives it did read, and is read again at the next poll.</summary>
+    [Fact]
+    public async Task TheDriveTemperatures_FromAReadCutShort_AreShownButNotKept()
+    {
+        var (disks, reads) = DisksReading(new([Disk("Samsung SSD 990 PRO 2TB", 38)], "Time out"),
+            new([Disk("Samsung SSD 990 PRO 2TB", 38), Disk("WDC WD40EZAZ-00SF3B0", 31)]));
+        using var service = new TemperatureService(disks, skipHardwareInit: true, timeProvider: new TestTimeProvider());
+        List<TemperatureReading> first = [];
+        List<TemperatureReading> second = [];
+
+        await service.ReadDiskTemperaturesAsync(first);
+        await service.ReadDiskTemperaturesAsync(second);
+
+        Assert.Equal(["Samsung SSD 990 PRO 2TB"], first.Select(r => r.SensorName));
+        Assert.Equal(["Samsung SSD 990 PRO 2TB", "WDC WD40EZAZ-00SF3B0"], second.Select(r => r.SensorName));
+        Assert.Equal(2, reads());
+    }
+
+    /// <summary>A read Windows answered in full is kept for the time-to-live, and read again after it.</summary>
+    [Fact]
+    public async Task TheDriveTemperatures_FromAReadThatWorked_AreKeptForTheTimeToLive()
+    {
+        var clock = new TestTimeProvider();
+        var (disks, reads) = DisksReading(new([Disk("Samsung SSD 990 PRO 2TB", 38)]),
+            new([Disk("Samsung SSD 990 PRO 2TB", 41)]));
+        using var service = new TemperatureService(disks, skipHardwareInit: true, timeProvider: clock);
+        List<TemperatureReading> first = [];
+        List<TemperatureReading> kept = [];
+        List<TemperatureReading> later = [];
+
+        await service.ReadDiskTemperaturesAsync(first);
+        clock.Advance(TemperatureService.DiskTemperatureTtl);
+        await service.ReadDiskTemperaturesAsync(kept);
+        clock.Advance(TimeSpan.FromSeconds(1));
+        await service.ReadDiskTemperaturesAsync(later);
+
+        Assert.Equal(38.0, Assert.Single(kept).TemperatureC);
+        Assert.Equal(41.0, Assert.Single(later).TemperatureC);
+        Assert.Equal(2, reads());
     }
 
     // ---------- the CPU row when there is no CPU temperature (#2828) ----------

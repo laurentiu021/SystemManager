@@ -789,8 +789,8 @@ Across the tab:
   publisher created it. The task's folder decides the type first (telemetry folders, then
   `\Microsoft\Windows\` for System); the publisher decides it only outside those folders
 - **Color-coded by type** — Third-party, well-known **Telemetry** (Compatibility
-  Appraiser, CEIP, Feedback, Error Reporting), and **System** — so it's obvious
-  what's safe to touch
+  Appraiser, CEIP, Feedback, Error Reporting, and the Autochk Proxy task), and **System** — so
+  it's obvious what's safe to touch
 - **Enable / disable** any task; disabling is **fully reversible and never deletes
   the task** — System tasks show an extra warning before you disable them
 - Filter by name or path, and optionally hide system tasks to focus on the rest

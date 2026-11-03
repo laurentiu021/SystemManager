@@ -10,6 +10,16 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.136.102] - 2026-11-03
+
+**Task Scheduler classes the Autochk Proxy task as telemetry.**
+
+### Fixed
+- Task Scheduler classed the Autochk Proxy task as System, though its list of telemetry tasks names it: the list
+  names it by its folder and name, and the check compared that with the folder alone. So the task got the warning
+  for system tasks, and "Hide system tasks" hid it. It is labelled Telemetry now. This was there since the tab first
+  shipped, in 1.40.0.
+
 ## [1.136.101] - 2026-11-03
 
 **Startup Manager no longer lists the Startup folder's own desktop.ini as a program.**

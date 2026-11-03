@@ -83,32 +83,56 @@ public class TaskSchedulerServiceTests
     [InlineData(@"\Microsoft\Windows\Feedback\Siuf\", "Microsoft")]
     [InlineData(@"\Microsoft\Windows\Windows Error Reporting\", "Microsoft")]
     public void ClassifyTask_KnownTelemetryFolders_AreTelemetry(string path, string author)
-        => Assert.Equal(TaskCategory.Telemetry, TaskSchedulerService.ClassifyTask(path, author));
+        => Assert.Equal(TaskCategory.Telemetry, TaskSchedulerService.ClassifyTask(path, "AnyTask", author));
 
+    /// <summary>
+    /// Through the folder and the name apart, as Task Scheduler reports them and both callers pass them: the test
+    /// joined them itself, a shape production never supplies, so it stayed green while the task was classed as System
+    /// (#2781).
+    /// </summary>
     [Fact]
     public void ClassifyTask_AutochkProxy_IsTelemetry()
-        => Assert.Equal(TaskCategory.Telemetry, TaskSchedulerService.ClassifyTask(@"\Microsoft\Windows\Autochk\Proxy", "Microsoft"));
+        => Assert.Equal(TaskCategory.Telemetry,
+            TaskSchedulerService.ClassifyTask(@"\Microsoft\Windows\Autochk\", "Proxy", "Microsoft"));
+
+    [Fact]
+    public void ClassifyTask_AnotherTaskInTheAutochkFolder_IsSystem()
+        => Assert.Equal(TaskCategory.System,
+            TaskSchedulerService.ClassifyTask(@"\Microsoft\Windows\Autochk\", "Other", "Microsoft"));
+
+    [Fact]
+    public async Task ListTasksAsync_ClassesTheAutochkProxyTaskAsTelemetry()
+    {
+        // The production path: Task Scheduler reports the folder and the name as two properties.
+        var svc = ServiceReturning(TaskRow("Proxy", @"\Microsoft\Windows\Autochk\", "Ready"));
+
+        var task = Assert.Single((await svc.ListTasksAsync())!);
+
+        Assert.Equal(TaskCategory.Telemetry, task.Category);
+        Assert.Equal(@"\Microsoft\Windows\Autochk\Proxy", task.FullPath);
+    }
 
     [Theory]
     [InlineData(@"\Microsoft\Windows\Defrag\", "Microsoft Corporation")]
     [InlineData(@"\Microsoft\Windows\UpdateOrchestrator\", "Microsoft")]
     public void ClassifyTask_OtherMicrosoftTasks_AreSystem(string path, string author)
-        => Assert.Equal(TaskCategory.System, TaskSchedulerService.ClassifyTask(path, author));
+        => Assert.Equal(TaskCategory.System, TaskSchedulerService.ClassifyTask(path, "AnyTask", author));
 
     [Theory]
     [InlineData(@"\", "Valve")]
     [InlineData(@"\GoogleSystem\", "Google")]
     [InlineData(@"\", null)]
     public void ClassifyTask_NonMicrosoft_AreThirdParty(string path, string? author)
-        => Assert.Equal(TaskCategory.ThirdParty, TaskSchedulerService.ClassifyTask(path, author));
+        => Assert.Equal(TaskCategory.ThirdParty, TaskSchedulerService.ClassifyTask(path, "AnyTask", author));
 
     [Fact]
     public void ClassifyTask_MicrosoftAuthorButRootPath_IsSystem()
-        => Assert.Equal(TaskCategory.System, TaskSchedulerService.ClassifyTask(@"\", "Microsoft Corporation"));
+        => Assert.Equal(TaskCategory.System,
+            TaskSchedulerService.ClassifyTask(@"\", "AnyTask", "Microsoft Corporation"));
 
     [Fact]
     public void ClassifyTask_NullPath_IsThirdParty()
-        => Assert.Equal(TaskCategory.ThirdParty, TaskSchedulerService.ClassifyTask(null!, null));
+        => Assert.Equal(TaskCategory.ThirdParty, TaskSchedulerService.ClassifyTask(null!, null, null));
 
     [Fact]
     public async Task ListTasksAsync_WhenTheReadFails_ReturnsNull_NotAnEmptyList()

@@ -7,13 +7,13 @@ using Microsoft.Win32;
 namespace SysManager.Helpers;
 
 /// <summary>
-/// The six registry paths <see cref="Services.PrivacyService"/> writes and
+/// The seven registry paths <see cref="Services.PrivacyService"/> writes and
 /// <see cref="Services.SettingsWatchdogService"/> re-reads to notice when Windows silently reverts
 /// them, declared once so editing one can no longer miss the other (#2860). Watching your own writes
 /// needs the same path in two services; it does not need the same path written out twice.
 /// </summary>
 /// <remarks>
-/// Only the six PATHS are shared here. Each service keeps its own value names, its own enabled/baseline
+/// Only the seven PATHS are shared here. Each service keeps its own value names, its own enabled/baseline
 /// semantics, and — for <see cref="Services.SettingsWatchdogService"/> specifically — its own three Key
 /// spellings that differ from Privacy's (<c>telemetry</c>, <c>activity-feed</c>, <c>lockscreen-ads</c> vs
 /// Privacy's <c>diagnostic-data</c>, <c>activity-history</c>, <c>lock-screen-tips</c>): those Keys are
@@ -28,6 +28,12 @@ internal static class RegistryPaths
     internal const string ContentDeliveryManager = @"HKCU\Software\Microsoft\Windows\CurrentVersion\ContentDeliveryManager";
     internal const string ExplorerPolicy = @"HKCU\Software\Policies\Microsoft\Windows\Explorer";
     internal const string Dsh = @"HKLM\SOFTWARE\Policies\Microsoft\Dsh";
+
+    /// <summary>
+    /// Windows 10's news and interests policy (<c>EnableFeeds</c>), which <see cref="Dsh"/>'s widgets policy does not
+    /// govern: on Windows 10 the widgets switch wrote that one and the weather button stayed (#2778).
+    /// </summary>
+    internal const string WindowsFeedsPolicy = @"HKLM\SOFTWARE\Policies\Microsoft\Windows\Windows Feeds";
 
     /// <summary>
     /// Opens or creates the subkey a full path (<c>HKCU\...</c> or <c>HKLM\...</c>) names, under the

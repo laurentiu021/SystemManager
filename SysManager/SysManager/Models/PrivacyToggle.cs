@@ -45,6 +45,18 @@ public sealed partial class PrivacyToggle : ObservableObject
     /// <summary>Registry value name to read/write.</summary>
     public required string ValueName { get; init; }
 
+    /// <summary>
+    /// The other values this switch writes with <see cref="ValueName"/>, in the same key, to the same values, and
+    /// removes with it: those Windows' own switch for the same thing sets together. The switch reads as on only when
+    /// every one of them is <see cref="EnabledValue"/>. Empty for a switch with one value (#2778).
+    /// </summary>
+    public IReadOnlyList<string> AlsoWrites { get; init; } = [];
+
+    /// <summary>
+    /// <see cref="ValueName"/>, then <see cref="AlsoWrites"/>: every value the switch reads and writes.
+    /// </summary>
+    public IReadOnlyList<string> ValueNames => [ValueName, .. AlsoWrites];
+
     /// <summary>Value written when privacy protection is ON.</summary>
     public required int EnabledValue { get; init; }
 

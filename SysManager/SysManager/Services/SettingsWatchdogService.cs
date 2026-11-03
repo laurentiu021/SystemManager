@@ -73,10 +73,14 @@ public sealed class SettingsWatchdogService : ISettingsWatchdogService
         _sightingsPath = Path.Join(dir, "settings-drift.json");
         _hkcuRoot = hkcuRoot ?? Registry.CurrentUser;
         _hklmRoot = hklmRoot ?? Registry.LocalMachine;
+        Catalog = BuildCatalog(InstalledWindows.Read(_hklmRoot));
     }
 
-    /// <summary>The catalog of settings the watchdog tracks. Stable order for the UI.</summary>
-    public IReadOnlyList<WatchedSetting> Catalog { get; } = BuildCatalog();
+    /// <summary>
+    /// The catalog of settings the watchdog tracks, for the Windows under the HKLM root it was given. Stable order for
+    /// the UI.
+    /// </summary>
+    public IReadOnlyList<WatchedSetting> Catalog { get; }
 
     /// <summary>Reads the current raw value of each watched setting (null if absent).</summary>
     public IReadOnlyDictionary<string, int?> ReadCurrent()
@@ -357,7 +361,7 @@ public sealed class SettingsWatchdogService : ISettingsWatchdogService
 
     // ── Catalog ─────────────────────────────────────────────────────────────
 
-    private static List<WatchedSetting> BuildCatalog()
+    private static List<WatchedSetting> BuildCatalog(InstalledWindows windows)
     {
         var onOff = new Dictionary<int, string> { [0] = "Off", [1] = "On" };
         var offOn = new Dictionary<int, string> { [0] = "Enabled", [1] = "Disabled" };
@@ -381,9 +385,15 @@ public sealed class SettingsWatchdogService : ISettingsWatchdogService
                 "Bing web results in the Start-menu search box.",
                 "Search", RegistryPaths.ExplorerPolicy, "DisableSearchBoxSuggestions", offOn),
 
-            new WatchedSetting("widgets", "Widgets (news & interests)",
-                "The taskbar Widgets board, often re-enabled by updates.",
-                "Taskbar", RegistryPaths.Dsh, "AllowNewsAndInterests", onOff),
+            // The same key on both, so a baseline saved before an upgrade to Windows 11 still names it. Windows 10's
+            // news and interests has a policy of its own, which Windows 11's widgets policy does not govern (#2778).
+            windows.IsWindows10
+                ? new WatchedSetting("widgets", "News and interests",
+                    "The taskbar's news and weather button, often re-enabled by updates.",
+                    "Taskbar", RegistryPaths.WindowsFeedsPolicy, "EnableFeeds", onOff)
+                : new WatchedSetting("widgets", "Widgets (news & interests)",
+                    "The taskbar Widgets board, often re-enabled by updates.",
+                    "Taskbar", RegistryPaths.Dsh, "AllowNewsAndInterests", onOff),
 
             new WatchedSetting("start-suggestions", "Start menu suggestions",
                 "Suggested apps and promoted content in Start.",

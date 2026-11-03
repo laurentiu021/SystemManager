@@ -85,9 +85,9 @@ public sealed class RegistryPathsTests : IDisposable
     }
 
     [Fact]
-    public void TheSixSharedPaths_AreAllWellFormedHiveRootedPaths()
+    public void TheSevenSharedPaths_AreAllWellFormedHiveRootedPaths()
     {
-        // Pinned by value, not just by not-null: a future edit that quietly changes one of these six
+        // Pinned by value, not just by not-null: a future edit that quietly changes one of these seven
         // changes what PrivacyService writes and what SettingsWatchdogService re-reads, together.
         Assert.Equal(@"HKLM\SOFTWARE\Policies\Microsoft\Windows\DataCollection", RegistryPaths.DataCollectionPolicy);
         Assert.Equal(@"HKLM\SOFTWARE\Policies\Microsoft\Windows\System", RegistryPaths.WindowsSystemPolicy);
@@ -95,5 +95,6 @@ public sealed class RegistryPathsTests : IDisposable
         Assert.Equal(@"HKCU\Software\Microsoft\Windows\CurrentVersion\ContentDeliveryManager", RegistryPaths.ContentDeliveryManager);
         Assert.Equal(@"HKCU\Software\Policies\Microsoft\Windows\Explorer", RegistryPaths.ExplorerPolicy);
         Assert.Equal(@"HKLM\SOFTWARE\Policies\Microsoft\Dsh", RegistryPaths.Dsh);
+        Assert.Equal(@"HKLM\SOFTWARE\Policies\Microsoft\Windows\Windows Feeds", RegistryPaths.WindowsFeedsPolicy);
     }
 }

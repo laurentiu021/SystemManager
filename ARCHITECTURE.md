@@ -1351,6 +1351,8 @@ Key services:
   `IsPerUserPolicy`, which `PrivacyToggle.ReachOf` reads (#2778). The diagnostic data switch is worded
   for the edition `EditionID` names under the HKLM root (`DiagnosticDataWording`): its policy value 0
   turns diagnostic data off only on Enterprise, Education and Server, and Home and Pro read it as 1.
+  A switch can write several values (`PrivacyToggle.AlsoWrites`), as the Settings app's suggestions switch
+  writes the three Windows' own switch sets together, and reads as on only when all of them are.
 - `UndoChangesService` (`IUndoChangesService`) — finds the changes SysManager can put back from the copies
   five tabs already keep: Performance Mode's record of the original settings (compared with the settings now,
   through `PerformanceService.TakeSnapshotAsync`, its graphics setting read from the card the record names; held
@@ -2267,6 +2269,10 @@ Key utility classes that don't fit neatly into Services or ViewModels (not an ex
 - `DriveProbe` — a drive as `DriveInfo` answers for it, behind delegates. `ReadFixed` reads each fixed drive that
   is ready, asking the type first and catching each drive on its own, for the Dashboard's storage card and About's
   environment info (#2802).
+- `InstalledWindows` — the edition (`EditionID`) and build (`CurrentBuildNumber`) of the Windows SysManager runs
+  on, read under the HKLM root a service was given, so a test chooses both (#2778). `PrivacyService` words the
+  diagnostic data switch for the edition, and it and `SettingsWatchdogService` pick the widgets policy by the build:
+  below 22000, Windows 10's news and interests policy, which Windows 11's widgets policy does not govern.
 - `KnownFolders` — resolves Windows Known Folder paths via shell API. `TryGetPath` resolves
   any known folder by its ID, and returns null for one Windows does not resolve.
 - `SystemPaths` — the one place the tools SysManager launches are resolved. A bare tool

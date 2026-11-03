@@ -43,7 +43,7 @@ public sealed class PrivacyService : IPrivacyService
     /// </summary>
     public List<PrivacyToggle> LoadToggles()
     {
-        var toggles = CreateToggleDefinitions(ReadEditionId());
+        var toggles = CreateToggleDefinitions(InstalledWindows.Read(_hklmRoot));
 
         foreach (var toggle in toggles)
         {
@@ -73,25 +73,29 @@ public sealed class PrivacyService : IPrivacyService
                 return false;
             }
 
-            if (toggle.IsEnabled)
+            // Every value the switch writes, the ones Windows' own switch sets with it included (#2778).
+            foreach (var valueName in toggle.ValueNames)
             {
-                // Privacy ON → enforce our protection value.
-                key.SetValue(toggle.ValueName, toggle.EnabledValue, RegistryValueKind.DWord);
-                Log.Information("Privacy toggle applied: {Name} = {Value} at {Path}\\{ValueName}",
-                    toggle.Name, toggle.EnabledValue, toggle.RegistryPath, toggle.ValueName);
-            }
-            else
-            {
-                // Privacy OFF (revert) → REMOVE our value so Windows falls back to its own
-                // default, rather than WRITING DisabledValue. Writing DisabledValue was wrong:
-                // for policy-backed toggles it materialises an enforced GPO the machine may
-                // never have had (e.g. AllowTelemetry=3 = Full telemetry ENFORCED), which is
-                // strictly worse than the value being absent. Deleting is the correct undo of
-                // an enforcement. DeleteValue(name, throwOnMissingValue: false) is a no-op when
-                // the value is already absent, so revert is idempotent.
-                key.DeleteValue(toggle.ValueName, throwOnMissingValue: false);
-                Log.Information("Privacy toggle reverted (value removed): {Name} at {Path}\\{ValueName}",
-                    toggle.Name, toggle.RegistryPath, toggle.ValueName);
+                if (toggle.IsEnabled)
+                {
+                    // Privacy ON → enforce our protection value.
+                    key.SetValue(valueName, toggle.EnabledValue, RegistryValueKind.DWord);
+                    Log.Information("Privacy toggle applied: {Name} = {Value} at {Path}\\{ValueName}",
+                        toggle.Name, toggle.EnabledValue, toggle.RegistryPath, valueName);
+                }
+                else
+                {
+                    // Privacy OFF (revert) → REMOVE our value so Windows falls back to its own
+                    // default, rather than WRITING DisabledValue. Writing DisabledValue was wrong:
+                    // for policy-backed toggles it materialises an enforced GPO the machine may
+                    // never have had (e.g. AllowTelemetry=3 = Full telemetry ENFORCED), which is
+                    // strictly worse than the value being absent. Deleting is the correct undo of
+                    // an enforcement. DeleteValue(name, throwOnMissingValue: false) is a no-op when
+                    // the value is already absent, so revert is idempotent.
+                    key.DeleteValue(valueName, throwOnMissingValue: false);
+                    Log.Information("Privacy toggle reverted (value removed): {Name} at {Path}\\{ValueName}",
+                        toggle.Name, toggle.RegistryPath, valueName);
+                }
             }
             return true;
         }
@@ -143,8 +147,8 @@ public sealed class PrivacyService : IPrivacyService
 
     /// <summary>
     /// Reads the current registry state for a toggle.
-    /// Returns true (privacy ON) if the current value matches <see cref="PrivacyToggle.EnabledValue"/>.
-    /// If the key/value does not exist, returns false (default Windows state = privacy off).
+    /// Returns true (privacy ON) if every value it writes matches <see cref="PrivacyToggle.EnabledValue"/>.
+    /// If the key or any of the values does not exist, returns false (default Windows state = privacy off).
     /// </summary>
     private bool ReadCurrentState(PrivacyToggle toggle)
     {
@@ -153,16 +157,12 @@ public sealed class PrivacyService : IPrivacyService
             using var key = RegistryPaths.OpenOrCreateKey(_hkcuRoot, _hklmRoot, toggle.RegistryPath, writable: false);
             if (key is null) return false;
 
-            var value = key.GetValue(toggle.ValueName);
-            if (value is null) return false;
-
-            if (value is int intVal)
-                return intVal == toggle.EnabledValue;
-
-            if (int.TryParse(value.ToString(), out var parsed))
-                return parsed == toggle.EnabledValue;
-
-            return false;
+            return toggle.ValueNames.All(name => key.GetValue(name) switch
+            {
+                int intVal => intVal == toggle.EnabledValue,
+                { } other => int.TryParse(other.ToString(), out var parsed) && parsed == toggle.EnabledValue,
+                null => false,
+            });
         }
         catch (UnauthorizedAccessException)
         {
@@ -175,37 +175,6 @@ public sealed class PrivacyService : IPrivacyService
             return false;
         }
     }
-
-    /// <summary>
-    /// The running Windows edition as the registry names it (<c>Core</c> for Home, <c>Professional</c>,
-    /// <c>Enterprise</c>, …), read under the HKLM root this service was given, so a test chooses it; null when it
-    /// cannot be read.
-    /// </summary>
-    private string? ReadEditionId()
-    {
-        try
-        {
-            using var key = _hklmRoot.OpenSubKey(WindowsCurrentVersion, writable: false);
-            return key?.GetValue("EditionID") as string;
-        }
-        catch (UnauthorizedAccessException ex)
-        {
-            Log.Debug("Cannot read the Windows edition — access denied: {Error}", ex.Message);
-            return null;
-        }
-        catch (SecurityException ex)
-        {
-            Log.Debug("Cannot read the Windows edition — security exception: {Error}", ex.Message);
-            return null;
-        }
-        catch (IOException ex)
-        {
-            Log.Debug("Cannot read the Windows edition — registry I/O error: {Error}", ex.Message);
-            return null;
-        }
-    }
-
-    private const string WindowsCurrentVersion = @"SOFTWARE\Microsoft\Windows NT\CurrentVersion";
 
     /// <summary>
     /// The name and description of the diagnostic data switch on the edition <paramref name="editionId"/> names. The
@@ -244,12 +213,13 @@ public sealed class PrivacyService : IPrivacyService
         + "Education, the required level on Home and Pro.";
 
     /// <summary>
-    /// Builds the full set of toggle definitions with their registry mappings, worded for the edition
-    /// <paramref name="editionId"/> names.
+    /// Builds the full set of toggle definitions with their registry mappings, for the edition and build of
+    /// <paramref name="windows"/>: the diagnostic data switch is worded for the edition, and the widgets switch writes
+    /// Windows 10's news and interests policy on Windows 10 (#2778).
     /// </summary>
-    private static List<PrivacyToggle> CreateToggleDefinitions(string? editionId)
+    private static List<PrivacyToggle> CreateToggleDefinitions(InstalledWindows windows)
     {
-        var diagnosticData = DiagnosticDataWording(editionId);
+        var diagnosticData = DiagnosticDataWording(windows.EditionId);
         return
         [
             // ── Telemetry ─────────────────────────────────────────────────
@@ -325,21 +295,25 @@ public sealed class PrivacyService : IPrivacyService
             {
                 Key = "lock-screen-tips",
                 Name = "Disable lock screen tips",
-                Description = "Removes tips and tricks from the lock screen.",
+                Description = "Removes the tips, fun facts and promotions Windows shows on the lock screen.",
                 Category = "UI Declutter",
                 RegistryPath = RegistryPaths.ContentDeliveryManager,
                 ValueName = "RotatingLockScreenOverlayEnabled",
                 EnabledValue = 0,
                 DisabledValue = 1
             },
+            // The key is the one profiles already name it by. The switch was "Disable Spotlight ads" and promised the
+            // lock screen's promotions, and its one value was one of the three behind Windows' "Show me suggested
+            // content in the Settings app"; the lock screen's are lock-screen-tips' (#2778).
             new PrivacyToggle
             {
                 Key = "spotlight-ads",
-                Name = "Disable Spotlight ads",
-                Description = "Removes promotional content from Windows Spotlight on the lock screen.",
+                Name = "Disable suggestions in Settings",
+                Description = "Stops the Settings app from showing suggested content.",
                 Category = "UI Declutter",
                 RegistryPath = RegistryPaths.ContentDeliveryManager,
-                ValueName = "SubscribedContent-353696Enabled",
+                ValueName = "SubscribedContent-338393Enabled",
+                AlsoWrites = ["SubscribedContent-353694Enabled", "SubscribedContent-353696Enabled"],
                 EnabledValue = 0,
                 DisabledValue = 1
             },
@@ -378,17 +352,31 @@ public sealed class PrivacyService : IPrivacyService
                 EnabledValue = 1,
                 DisabledValue = 0
             },
-            new PrivacyToggle
-            {
-                Key = "widgets",
-                Name = "Disable widgets",
-                Description = "Turns off the Widgets board (news and interests) on the taskbar.",
-                Category = "Features",
-                RegistryPath = RegistryPaths.Dsh,
-                ValueName = "AllowNewsAndInterests",
-                EnabledValue = 0,
-                DisabledValue = 1
-            },
+            // Windows 11's widgets policy does nothing on Windows 10, whose news and interests has a policy of its own,
+            // so the switch read back as on there and the weather button stayed (#2778).
+            windows.IsWindows10
+                ? new PrivacyToggle
+                {
+                    Key = "widgets",
+                    Name = "Disable news and interests",
+                    Description = "Turns off news and interests, the weather and news button on the taskbar.",
+                    Category = "Features",
+                    RegistryPath = RegistryPaths.WindowsFeedsPolicy,
+                    ValueName = "EnableFeeds",
+                    EnabledValue = 0,
+                    DisabledValue = 1
+                }
+                : new PrivacyToggle
+                {
+                    Key = "widgets",
+                    Name = "Disable widgets",
+                    Description = "Turns off the Widgets board (news and interests) on the taskbar.",
+                    Category = "Features",
+                    RegistryPath = RegistryPaths.Dsh,
+                    ValueName = "AllowNewsAndInterests",
+                    EnabledValue = 0,
+                    DisabledValue = 1
+                },
         ];
     }
 }

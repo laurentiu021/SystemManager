@@ -4,6 +4,7 @@
 
 using System.IO;
 using Microsoft.Win32;
+using SysManager.Helpers;
 using SysManager.Models;
 using SysManager.Services;
 
@@ -184,6 +185,43 @@ public sealed class SettingsWatchdogServiceTests : IDisposable
             act(svc, svc.Catalog.Single(s => s.Key == "advertising-id"));
             using var check = root.OpenSubKey(AdvertisingInfo)!;
             return check.GetValue("Enabled");
+        }
+        finally
+        {
+            root.Dispose();
+            Registry.CurrentUser.DeleteSubKeyTree(rootName, throwOnMissingSubKey: false);
+        }
+    }
+
+    /// <summary>
+    /// The widgets entry watches the policy of the Windows under the HKLM root the watchdog was given: Windows 10's
+    /// news and interests has its own, which Windows 11's widgets policy does not govern (#2778). Its key is the same
+    /// on both, so a baseline saved before an upgrade still names it.
+    /// </summary>
+    [Theory]
+    [InlineData("19045", @"HKLM\SOFTWARE\Policies\Microsoft\Windows\Windows Feeds", "EnableFeeds",
+        "News and interests")]
+    [InlineData("22631", @"HKLM\SOFTWARE\Policies\Microsoft\Dsh", "AllowNewsAndInterests",
+        "Widgets (news & interests)")]
+    [InlineData(null, @"HKLM\SOFTWARE\Policies\Microsoft\Dsh", "AllowNewsAndInterests",
+        "Widgets (news & interests)")]
+    public void TheWidgetsEntry_WatchesThePolicyOfTheWindowsItRunsOn(string? build, string path, string value,
+                                                                    string name)
+    {
+        var rootName = @"Software\SysManagerTests\WatchdogWidgets_" + Guid.NewGuid().ToString("N");
+        var root = Registry.CurrentUser.CreateSubKey(rootName, writable: true)!;
+        try
+        {
+            if (build is not null)
+            {
+                using var currentVersion = root.CreateSubKey(InstalledWindows.CurrentVersionPath, writable: true);
+                currentVersion.SetValue("CurrentBuildNumber", build);
+            }
+
+            var widgets = new SettingsWatchdogService(_dir, hkcuRoot: root, hklmRoot: root).Catalog
+                .Single(s => s.Key == "widgets");
+
+            Assert.Equal((path, value, name), (widgets.RegistryPath, widgets.ValueName, widgets.Name));
         }
         finally
         {

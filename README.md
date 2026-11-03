@@ -1320,7 +1320,7 @@ Answers "what is actually using my space?" by listing the biggest files in one p
 ### Settings Watchdog 🔬
 - **Catch the settings Windows Update silently resets** — feature and quality
   updates often flip telemetry back to Full, re-enable web search, the Widgets
-  board, lock-screen ads, and Start-menu suggestions
+  board (news and interests on Windows 10), lock-screen ads, and Start-menu suggestions
 - **See exactly what is being watched** — the full list of monitored settings, each
   with its value right now in plain language and the reason it is watched, visible
   from the moment you open the tab rather than only after something has changed.
@@ -1478,8 +1478,11 @@ Answers "what is actually using my space?" by listing the biggest files in one p
 - **Telemetry**: limit diagnostic data (off on Enterprise and Education; on Home and Pro, which
   cannot turn it off, the required level, and the switch says which your edition gets), and
   disable activity history, advertising ID, feedback prompts
-- **UI Declutter**: disable Start suggestions, tips, lock screen tips, Spotlight ads
+- **UI Declutter**: disable Start suggestions, tips, lock screen tips (with the promotions shown
+  there), and the suggestions in the Settings app
 - **Features**: disable Copilot, Cortana, web search in Start, widgets
+- On Windows 10 the widgets switch turns off news and interests, the taskbar's weather and news
+  button, through Windows 10's own policy for it
 - Explicit apply — flip toggles to stage changes, press **Apply** to write to the
   registry, or **Discard** to revert pending changes. The button says how many changes
   it will make ("Apply 2 changes") and each switch you moved says "changes when you

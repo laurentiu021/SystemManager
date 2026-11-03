@@ -10,6 +10,23 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.136.99] - 2026-11-03
+
+**Two Privacy & Telemetry switches write what they say: the one for the Settings app's suggestions, and widgets on Windows 10.**
+
+### Fixed
+- "Disable Spotlight ads" on Privacy & Telemetry said it removes promotions from Windows Spotlight on the lock
+  screen, and its only value was one of the three behind Windows' "Show me suggested content in the Settings app".
+  It read back as applied and the lock screen kept its promotions, which are the value "Disable lock screen tips"
+  writes. The switch is now "Disable suggestions in Settings" and writes all three values Windows' own switch sets,
+  and "Disable lock screen tips" says it covers the promotions. A profile exported before still matches it. It reads
+  as on only when all three are set, so if you turned it on before, it can show as off, and turning it on again sets
+  the other two. It was like this since the tab first shipped, in 1.5.0.
+- On Windows 10, "Disable widgets" wrote Windows 11's widgets policy, and Windows 10's news and interests has a
+  policy of its own. Apply reported success, the switch read back as on, and the weather button stayed. On Windows
+  10 the switch is now "Disable news and interests" and writes that policy, and Settings Watchdog watches it there.
+  The switch was like this since 1.5.0, and the watchdog since it shipped, in 1.48.0.
+
 ## [1.136.98] - 2026-11-03
 
 **Privacy & Telemetry lists the two switches that are policies for your account as needing administrator, and the diagnostic data switch says what it does on your edition.**

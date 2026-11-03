@@ -139,6 +139,61 @@ public class StartupServiceTests
         }
     }
 
+    // ── The Startup folder's own files (#2780) ──────────────────────────────
+
+    /// <summary>
+    /// Windows keeps a hidden desktop.ini in each Startup folder to give it its name in the display language, and
+    /// Explorer can leave a Thumbs.db; neither is started, so neither is listed. Over a folder of the test's own.
+    /// </summary>
+    [Fact]
+    public void ReadStartupFolder_LeavesOutTheFilesWindowsKeepsThereForItself()
+    {
+        var folder = System.IO.Path.Combine(System.IO.Path.GetTempPath(), "SysManagerStartupFolderTests",
+            Guid.NewGuid().ToString("N"));
+        System.IO.Directory.CreateDirectory(folder);
+        try
+        {
+            // In another case than the list's, as a folder another tool made could hold it, and hidden, as Windows
+            // keeps it.
+            foreach (var name in new[] { "Desktop.INI", "Thumbs.db", "Backup Tool.exe" })
+                System.IO.File.WriteAllText(System.IO.Path.Combine(folder, name), "");
+            System.IO.File.SetAttributes(System.IO.Path.Combine(folder, "Desktop.INI"),
+                System.IO.FileAttributes.Hidden | System.IO.FileAttributes.System);
+            List<StartupEntry> found = [];
+
+            StartupService.ReadStartupFolder(folder, "User Startup Folder", isCommon: false, found);
+
+            Assert.Equal("Backup Tool", Assert.Single(found).Name);
+        }
+        finally
+        {
+            foreach (var file in System.IO.Directory.GetFiles(folder))
+                System.IO.File.SetAttributes(file, System.IO.FileAttributes.Normal);
+            System.IO.Directory.Delete(folder, recursive: true);
+        }
+    }
+
+    [Fact]
+    public void ReadStartupFolder_HoldingOnlyItsDesktopIni_ListsNothing()
+    {
+        var folder = System.IO.Path.Combine(System.IO.Path.GetTempPath(), "SysManagerStartupFolderTests",
+            Guid.NewGuid().ToString("N"));
+        System.IO.Directory.CreateDirectory(folder);
+        try
+        {
+            System.IO.File.WriteAllText(System.IO.Path.Combine(folder, "desktop.ini"), "[.ShellClassInfo]");
+            List<StartupEntry> found = [];
+
+            StartupService.ReadStartupFolder(folder, "User Startup Folder", isCommon: false, found);
+
+            Assert.Empty(found);
+        }
+        finally
+        {
+            System.IO.Directory.Delete(folder, recursive: true);
+        }
+    }
+
     // ── BuildStartupFolderEntry (pure — the StartupApproved key-name toggle bug) ──
 
     [Theory]

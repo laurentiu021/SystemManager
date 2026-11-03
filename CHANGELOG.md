@@ -10,6 +10,17 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.136.101] - 2026-11-03
+
+**Startup Manager no longer lists the Startup folder's own desktop.ini as a program.**
+
+### Fixed
+- Startup Manager listed the hidden `desktop.ini` Windows keeps in each Startup folder, which gives the folder its
+  name in the display language, as a program called "desktop" that starts with Windows, though Windows does not
+  start it and neither Task Manager nor Settings lists it. It counted as enabled, so the Dashboard's slowdown check
+  counted one startup program too many. It, and the `Thumbs.db` Explorer can leave there, are no longer listed. This
+  was there since Startup Manager first read the Startup folders, in 0.12.2.
+
 ## [1.136.100] - 2026-11-03
 
 **Turning a Privacy & Telemetry switch off puts back what the setting held before.**

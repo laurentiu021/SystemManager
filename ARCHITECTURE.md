@@ -807,7 +807,8 @@ Key services:
   location, each a distinct `StartupSource` because the enable/disable state lives
   in a different place per kind: the `Run`/`RunOnce` keys in both hives, the
   `Wow6432Node` pair (approved-state in `StartupApproved\Run32`), both shell Startup
-  folders (per-user approved under HKCU, Common under HKLM), the
+  folders (per-user approved under HKCU, Common under HKLM; `NotStartupItems`, the folder's own
+  `desktop.ini` and `Thumbs.db`, are skipped, #2780), the
   `Policies\Explorer\Run` key (no approved-state at all — shown, never toggled), and
   third-party scheduled tasks read from the `TaskCache` registry (`\Microsoft\` and
   `\Windows\` excluded; toggled through `schtasks /Change`, so the same task the

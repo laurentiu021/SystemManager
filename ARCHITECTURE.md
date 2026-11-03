@@ -367,8 +367,10 @@ to scroll.
 - `DnsHostsViewModel` — DNS server configuration and hosts file editor in one tab.
 - `PrivacyViewModel` — Windows privacy and telemetry toggles via registry. Apply takes the shared
   `ISessionRestorePoint` snapshot first — after the confirmation, so declining costs nothing.
-  `Grouping` lists the switches by topic or by reach (`PrivacyToggle.Reach`, from the hive), with
-  `GroupByReach` building the "Just you" and "Everyone on this PC" sections: the grouping the Tweaks Hub
+  `Grouping` lists the switches by topic or by reach (`PrivacyToggle.Reach`, from the hive and, under HKCU,
+  whether the key is one of the policies Windows keeps for the account, which only an administrator can write,
+  #2778), with `GroupByReach` building the "Just you", "Just you, with administrator" and "Everyone on this PC"
+  sections, and `PrivacyToggle.NeedsAdministrator` counting the last two for an import: the grouping the Tweaks Hub
   tab added over this one, which listed exactly these switches and was merged in (#1517). As an
   `ISearchDestination` it opens by reach when the sidebar search that found it said "tweak" or "tune
   windows", the searches that used to find Tweaks Hub. Each moved
@@ -1345,7 +1347,10 @@ Key services:
   key would make every profile already exported drop that choice. The six registry paths it shares
   with `SettingsWatchdogService` — which re-reads the same policy keys to notice Windows reverting
   them — are declared once, in `Helpers.RegistryPaths`, which also owns the hive-parsing and
-  open/create logic both services used to carry as byte-identical private copies (#2860).
+  open/create logic both services used to carry as byte-identical private copies (#2860), and
+  `IsPerUserPolicy`, which `PrivacyToggle.ReachOf` reads (#2778). The diagnostic data switch is worded
+  for the edition `EditionID` names under the HKLM root (`DiagnosticDataWording`): its policy value 0
+  turns diagnostic data off only on Enterprise, Education and Server, and Home and Pro read it as 1.
 - `UndoChangesService` (`IUndoChangesService`) — finds the changes SysManager can put back from the copies
   five tabs already keep: Performance Mode's record of the original settings (compared with the settings now,
   through `PerformanceService.TakeSnapshotAsync`, its graphics setting read from the card the record names; held

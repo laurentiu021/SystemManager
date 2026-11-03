@@ -79,6 +79,79 @@ public class PrivacyServiceTests
             keys);
     }
 
+    // ── The diagnostic data switch, by edition (#2778) ───────────────────
+    // It sets AllowTelemetry to 0, which turns diagnostic data off only on Enterprise, Education and Server. Home and
+    // Pro read 0 as 1 and still send the required diagnostic data, and the switch promised them none.
+
+    [Theory]
+    [InlineData("Enterprise")]
+    [InlineData("EnterpriseS")]
+    [InlineData("enterprise")]
+    [InlineData("Education")]
+    [InlineData("ServerStandard")]
+    public void OnAnEditionThatCanTurnItOff_TheDiagnosticDataSwitchSaysItStopsIt(string editionId)
+        => Assert.Equal(
+            ("Disable diagnostic data", "Prevents Windows from sending diagnostic and usage data to Microsoft."),
+            PrivacyService.DiagnosticDataWording(editionId));
+
+    [Theory]
+    [InlineData("Core", "Home")]
+    [InlineData("CoreSingleLanguage", "Home")]
+    [InlineData("Professional", "Pro")]
+    [InlineData("ProfessionalN", "Pro")]
+    [InlineData("ProfessionalWorkstation", "Pro for Workstations")]
+    public void OnHomeAndPro_TheDiagnosticDataSwitchSaysItLowersItToTheRequiredLevel(string editionId, string edition)
+        => Assert.Equal(("Limit diagnostic data",
+                "Lowers the diagnostic data Windows sends to Microsoft to the required level, "
+                + $"the least Windows {edition} allows."),
+            PrivacyService.DiagnosticDataWording(editionId));
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData("")]
+    [InlineData("ProfessionalEducation")]
+    [InlineData("IoTEnterprise")]
+    [InlineData("Cloud")]
+    public void OnAnEditionItCannotPlace_TheDiagnosticDataSwitchSaysWhatItDoesOnEach(string? editionId)
+        => Assert.Equal(("Limit diagnostic data",
+                "Lowers the diagnostic data Windows sends to Microsoft as far as your edition allows: "
+                + "off on Enterprise and Education, the required level on Home and Pro."),
+            PrivacyService.DiagnosticDataWording(editionId));
+
+    /// <summary>
+    /// The edition is the one the registry names, read under the HKLM root the service was given: this test's own
+    /// key, so the switch is worded for an edition the test chooses and nothing is written outside that key.
+    /// </summary>
+    [Fact]
+    public void LoadToggles_WordsTheDiagnosticDataSwitchForTheEditionTheRegistryNames()
+    {
+        var rootName = @"Software\SysManagerTests\PrivacyEdition_" + Guid.NewGuid().ToString("N");
+        var root = Registry.CurrentUser.CreateSubKey(rootName, writable: true)!;
+        try
+        {
+            var service = new PrivacyService(hkcuRoot: root, hklmRoot: root);
+            Assert.Equal(PrivacyService.DiagnosticDataWording(null), Wording(service));
+
+            const string currentVersionPath = @"SOFTWARE\Microsoft\Windows NT\CurrentVersion";
+            using (var currentVersion = root.CreateSubKey(currentVersionPath, writable: true))
+                currentVersion.SetValue("EditionID", "Core");
+
+            Assert.Equal(PrivacyService.DiagnosticDataWording("Core"), Wording(service));
+            Assert.NotEqual(PrivacyService.DiagnosticDataWording(null), Wording(service));
+        }
+        finally
+        {
+            root.Dispose();
+            Registry.CurrentUser.DeleteSubKeyTree(rootName, throwOnMissingSubKey: false);
+        }
+
+        static (string, string) Wording(PrivacyService service)
+        {
+            var toggle = service.LoadToggles().Single(t => t.Key == "diagnostic-data");
+            return (toggle.Name, toggle.Description);
+        }
+    }
+
     // ── Revert behavior (F07 regression) ──────────────────────────────────
     // Turning a toggle OFF must REMOVE our value (so Windows falls back to its own
     // default), NOT write DisabledValue — which for policy toggles would materialise

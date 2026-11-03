@@ -12,9 +12,10 @@ using SysManager.Models;
 namespace SysManager.Services;
 
 /// <summary>
-/// Provides a curated list of Windows privacy toggles and persists their
-/// state to the registry. HKCU writes always succeed; HKLM writes require
-/// elevation and failures are handled gracefully.
+/// Provides a curated list of Windows privacy toggles and persists their state to the registry. A write to HKLM, or
+/// to a policy Windows keeps for the account under <c>HKCU\Software\Policies</c>, needs elevation; the summary said
+/// every HKCU write succeeds, and those policies refuse the account (#2778). A refused write is logged and reported to
+/// the caller.
 /// </summary>
 public sealed class PrivacyService : IPrivacyService
 {
@@ -42,7 +43,7 @@ public sealed class PrivacyService : IPrivacyService
     /// </summary>
     public List<PrivacyToggle> LoadToggles()
     {
-        var toggles = CreateToggleDefinitions();
+        var toggles = CreateToggleDefinitions(ReadEditionId());
 
         foreach (var toggle in toggles)
         {
@@ -176,18 +177,87 @@ public sealed class PrivacyService : IPrivacyService
     }
 
     /// <summary>
-    /// Builds the full set of toggle definitions with their registry mappings.
+    /// The running Windows edition as the registry names it (<c>Core</c> for Home, <c>Professional</c>,
+    /// <c>Enterprise</c>, …), read under the HKLM root this service was given, so a test chooses it; null when it
+    /// cannot be read.
     /// </summary>
-    private static List<PrivacyToggle> CreateToggleDefinitions()
+    private string? ReadEditionId()
     {
+        try
+        {
+            using var key = _hklmRoot.OpenSubKey(WindowsCurrentVersion, writable: false);
+            return key?.GetValue("EditionID") as string;
+        }
+        catch (UnauthorizedAccessException ex)
+        {
+            Log.Debug("Cannot read the Windows edition — access denied: {Error}", ex.Message);
+            return null;
+        }
+        catch (SecurityException ex)
+        {
+            Log.Debug("Cannot read the Windows edition — security exception: {Error}", ex.Message);
+            return null;
+        }
+        catch (IOException ex)
+        {
+            Log.Debug("Cannot read the Windows edition — registry I/O error: {Error}", ex.Message);
+            return null;
+        }
+    }
+
+    private const string WindowsCurrentVersion = @"SOFTWARE\Microsoft\Windows NT\CurrentVersion";
+
+    /// <summary>
+    /// The name and description of the diagnostic data switch on the edition <paramref name="editionId"/> names. The
+    /// switch sets the AllowTelemetry policy to 0, which turns diagnostic data off only on Enterprise, Education and
+    /// Server. Home and Pro read 0 as 1 and still send the required diagnostic data, and the switch promised them none
+    /// (#2778). An edition this cannot place, or none, gets the description that holds on every edition. Pure.
+    /// </summary>
+    /// <remarks>
+    /// Pro Education is left to that description rather than placed: Microsoft lists the editions that can turn
+    /// diagnostic data off as Enterprise, Education and Server, and whether Pro Education counts as one of them is
+    /// not something its documentation says.
+    /// </remarks>
+    internal static (string Name, string Description) DiagnosticDataWording(string? editionId)
+    {
+        const StringComparison ic = StringComparison.OrdinalIgnoreCase;
+        return editionId switch
+        {
+            { } e when e.StartsWith("Enterprise", ic) || e.StartsWith("Education", ic) || e.StartsWith("Server", ic)
+                => ("Disable diagnostic data", "Prevents Windows from sending diagnostic and usage data to Microsoft."),
+            { } e when e.StartsWith("Core", ic) => LeastOn("Home"),
+            { } e when e.StartsWith("ProfessionalEducation", ic) => (LimitDiagnosticData, OnAnyEdition),
+            { } e when e.StartsWith("ProfessionalWorkstation", ic) => LeastOn("Pro for Workstations"),
+            { } e when e.StartsWith("Professional", ic) => LeastOn("Pro"),
+            _ => (LimitDiagnosticData, OnAnyEdition),
+        };
+
+        static (string, string) LeastOn(string edition) => (LimitDiagnosticData,
+            "Lowers the diagnostic data Windows sends to Microsoft to the required level, "
+            + $"the least Windows {edition} allows.");
+    }
+
+    private const string LimitDiagnosticData = "Limit diagnostic data";
+
+    private const string OnAnyEdition =
+        "Lowers the diagnostic data Windows sends to Microsoft as far as your edition allows: off on Enterprise and "
+        + "Education, the required level on Home and Pro.";
+
+    /// <summary>
+    /// Builds the full set of toggle definitions with their registry mappings, worded for the edition
+    /// <paramref name="editionId"/> names.
+    /// </summary>
+    private static List<PrivacyToggle> CreateToggleDefinitions(string? editionId)
+    {
+        var diagnosticData = DiagnosticDataWording(editionId);
         return
         [
             // ── Telemetry ─────────────────────────────────────────────────
             new PrivacyToggle
             {
                 Key = "diagnostic-data",
-                Name = "Disable diagnostic data",
-                Description = "Prevents Windows from sending diagnostic and usage data to Microsoft.",
+                Name = diagnosticData.Name,
+                Description = diagnosticData.Description,
                 Category = "Telemetry",
                 RegistryPath = RegistryPaths.DataCollectionPolicy,
                 ValueName = "AllowTelemetry",

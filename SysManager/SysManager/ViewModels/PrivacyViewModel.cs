@@ -13,9 +13,9 @@ namespace SysManager.ViewModels;
 
 /// <summary>
 /// ViewModel for the Privacy Toggles tab. Loads registry-backed toggles and lists them by topic, or by reach:
-/// the switches that change only your account, then those that change Windows for everyone on the PC. Toggle
-/// flips update local state only; the user must explicitly press "Apply" to write changes to the registry.
-/// Apply takes the shared session restore point first.
+/// the switches that change only your account, then those that change only your account but need administrator,
+/// then those that change Windows for everyone on the PC. Toggle flips update local state only; the user must
+/// explicitly press "Apply" to write changes to the registry. Apply takes the shared session restore point first.
 /// <para>The grouping by reach is what the Tweaks Hub tab added over this one, and the hub listed exactly these
 /// switches through the same writes, so it went and its grouping came here (#1517).</para>
 /// <para>Privacy choices imported from a profile arrive through <see cref="IPrivacyChoicesHandoff"/> and are
@@ -186,7 +186,7 @@ public sealed partial class PrivacyViewModel : ElevatedViewModelBase, ISearchDes
             toggle.IsEnabled = on;
             if (!_baselineStates.TryGetValue(toggle, out var baseline) || baseline == on) continue;
             changes++;
-            if (toggle.Reach == PrivacyReach.EveryoneOnThisPc) needAdmin++;
+            if (toggle.NeedsAdministrator) needAdmin++;
         }
 
         StatusMessage = DescribeImportedChoices(changes, needAdmin, IsElevated);
@@ -245,14 +245,21 @@ public sealed partial class PrivacyViewModel : ElevatedViewModelBase, ISearchDes
 
     /// <summary>
     /// The "By reach" sections for <paramref name="toggles"/>, in their order: the switches that change only this
-    /// account first, then those that change Windows for everyone on the PC. Pure, so the words and counts are
-    /// testable without the registry.
+    /// account first, then those that change only this account but need administrator, then those that change Windows
+    /// for everyone on the PC. Pure, so the words and counts are testable without the registry.
     /// </summary>
+    /// <remarks>
+    /// The middle section holds the policies Windows keeps for one account. They were listed under "Just you", which
+    /// says no administrator is needed, and Apply then said they needed it (#2778).
+    /// </remarks>
     internal static List<PrivacyReachGroup> GroupByReach(IReadOnlyList<PrivacyToggle> toggles)
     {
         List<PrivacyReachGroup> groups = [];
         Add(PrivacyReach.JustYou, "Just you",
             "Change only your own account. No administrator needed.");
+        Add(PrivacyReach.JustYouByPolicy, "Just you, with administrator",
+            "Change only your own account, but Windows keeps them as policies, which only an administrator can set. "
+            + "Still fully reversible.");
         Add(PrivacyReach.EveryoneOnThisPc, "Everyone on this PC",
             "Change Windows for every account on this PC, so they need administrator. Still fully reversible.");
         return groups;

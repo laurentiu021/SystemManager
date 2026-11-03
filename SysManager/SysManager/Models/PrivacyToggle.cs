@@ -3,6 +3,8 @@
 // License: MIT
 
 using CommunityToolkit.Mvvm.ComponentModel;
+using Microsoft.Win32;
+using SysManager.Helpers;
 
 namespace SysManager.Models;
 
@@ -53,12 +55,21 @@ public sealed partial class PrivacyToggle : ObservableObject
     public PrivacyReach Reach => ReachOf(RegistryPath);
 
     /// <summary>
-    /// Pure: a machine-wide key (HKLM) changes Windows for everyone on the PC and needs administrator; anything else
-    /// (HKCU) changes only the signed-in account. Unit-testable without the registry.
+    /// True when only an administrator can write this switch: it changes Windows for everyone on the PC, or it is a
+    /// policy Windows keeps for this account.
     /// </summary>
-    public static PrivacyReach ReachOf(string registryPath) =>
-        registryPath.StartsWith("HKLM", StringComparison.OrdinalIgnoreCase) ||
-        registryPath.StartsWith("HKEY_LOCAL_MACHINE", StringComparison.OrdinalIgnoreCase)
-            ? PrivacyReach.EveryoneOnThisPc
-            : PrivacyReach.JustYou;
+    public bool NeedsAdministrator => Reach != PrivacyReach.JustYou;
+
+    /// <summary>
+    /// Pure: a machine-wide key (HKLM) changes Windows for everyone on the PC and needs administrator. A per-user
+    /// policy (<c>HKCU\Software\Policies</c>) changes only the signed-in account but needs administrator too, because
+    /// Windows lets the account read its policies and not write them; it was listed as needing nothing (#2778).
+    /// Anything else under HKCU changes only the signed-in account. Unit-testable without the registry.
+    /// </summary>
+    public static PrivacyReach ReachOf(string registryPath)
+    {
+        if (RegistryPaths.Split(registryPath) is { Hive: RegistryHive.LocalMachine })
+            return PrivacyReach.EveryoneOnThisPc;
+        return RegistryPaths.IsPerUserPolicy(registryPath) ? PrivacyReach.JustYouByPolicy : PrivacyReach.JustYou;
+    }
 }

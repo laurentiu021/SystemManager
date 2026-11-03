@@ -38,21 +38,42 @@ internal static class RegistryPaths
     /// </summary>
     internal static RegistryKey? OpenOrCreateKey(RegistryKey hkcuRoot, RegistryKey hklmRoot, string fullPath, bool writable)
     {
+        if (Split(fullPath) is not { } split) return null;
+
+        var hive = split.Hive == RegistryHive.CurrentUser ? hkcuRoot : hklmRoot;
+        return writable
+            ? hive.CreateSubKey(split.SubPath, writable: true)
+            : hive.OpenSubKey(split.SubPath, writable: false);
+    }
+
+    /// <summary>
+    /// The hive a full path names, <see cref="RegistryHive.CurrentUser"/> (<c>HKCU</c>) or
+    /// <see cref="RegistryHive.LocalMachine"/> (<c>HKLM</c>), and the path below it; null for any other hive or a path
+    /// that names no key below one.
+    /// </summary>
+    internal static (RegistryHive Hive, string SubPath)? Split(string fullPath)
+    {
         var separatorIndex = fullPath.IndexOf('\\');
         if (separatorIndex < 0) return null;
 
-        var hiveName = fullPath[..separatorIndex].ToUpperInvariant();
-        var subPath = fullPath[(separatorIndex + 1)..];
-
-        var hive = hiveName switch
+        RegistryHive? hive = fullPath[..separatorIndex].ToUpperInvariant() switch
         {
-            "HKCU" or "HKEY_CURRENT_USER" => hkcuRoot,
-            "HKLM" or "HKEY_LOCAL_MACHINE" => hklmRoot,
+            "HKCU" or "HKEY_CURRENT_USER" => RegistryHive.CurrentUser,
+            "HKLM" or "HKEY_LOCAL_MACHINE" => RegistryHive.LocalMachine,
             _ => null
         };
-
-        if (hive is null) return null;
-
-        return writable ? hive.CreateSubKey(subPath, writable: true) : hive.OpenSubKey(subPath, writable: false);
+        return hive is { } named ? (named, fullPath[(separatorIndex + 1)..]) : null;
     }
+
+    /// <summary>
+    /// True for a key under <c>HKCU\Software\Policies</c>, where Windows keeps the policies set for one account. The
+    /// account may read them but only SYSTEM and administrators may write them, so that a user cannot lift a policy
+    /// set for them, which makes writing one an administrator's change though it changes one account (#2778).
+    /// </summary>
+    internal static bool IsPerUserPolicy(string fullPath) =>
+        Split(fullPath) is { Hive: RegistryHive.CurrentUser, SubPath: var subPath }
+        && subPath.StartsWith(PoliciesBelowTheHive, StringComparison.OrdinalIgnoreCase)
+        && (subPath.Length == PoliciesBelowTheHive.Length || subPath[PoliciesBelowTheHive.Length] == '\\');
+
+    private const string PoliciesBelowTheHive = @"Software\Policies";
 }

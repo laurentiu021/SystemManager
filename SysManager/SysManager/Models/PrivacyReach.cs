@@ -4,7 +4,7 @@
 
 namespace SysManager.Models;
 
-/// <summary>Whose settings a privacy switch changes, which is also whether it needs administrator rights.</summary>
+/// <summary>Whose settings a privacy switch changes, and so whether it needs administrator rights.</summary>
 public enum PrivacyReach
 {
     /// <summary>Only the signed-in account's own settings (HKCU). No administrator needed.</summary>
@@ -12,6 +12,13 @@ public enum PrivacyReach
 
     /// <summary>Windows for every account on the PC (HKLM). Needs administrator.</summary>
     EveryoneOnThisPc,
+
+    /// <summary>
+    /// Only the signed-in account, through a policy Windows keeps for it (<c>HKCU\Software\Policies</c>). Needs
+    /// administrator all the same: the account may read its policies but not write them (#2778).
+    /// </summary>
+    /// <remarks>Last rather than between the other two, so that neither of theirs changes number.</remarks>
+    JustYouByPolicy,
 }
 
 /// <summary>How Privacy &amp; Telemetry lists its switches (#1517).</summary>
@@ -20,13 +27,16 @@ public enum PrivacyGrouping
     /// <summary>One list, narrowed by the topic filter.</summary>
     ByTopic,
 
-    /// <summary>Two lists: the switches that change only your account, then those that change the whole PC.</summary>
+    /// <summary>
+    /// Three lists: the switches that change only your account, then those that change only your account but need
+    /// administrator, then those that change the whole PC.
+    /// </summary>
     ByReach,
 }
 
 /// <summary>One "By reach" section of Privacy &amp; Telemetry: its heading, what it means, and its switches.</summary>
 /// <param name="Reach">Whose settings these switches change.</param>
-/// <param name="Title">The heading with its count, e.g. "Just you — 8 switches".</param>
+/// <param name="Title">The heading with its count, e.g. "Just you — 6 switches".</param>
 /// <param name="Description">What the reach means for the person flipping them.</param>
 /// <param name="Toggles">The switches, in the order the list shows them.</param>
 public sealed record PrivacyReachGroup(

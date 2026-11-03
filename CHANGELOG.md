@@ -10,6 +10,25 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.136.98] - 2026-11-03
+
+**Privacy & Telemetry lists the two switches that are policies for your account as needing administrator, and the diagnostic data switch says what it does on your edition.**
+
+### Fixed
+- Two switches on Privacy & Telemetry write a policy Windows keeps for your account, under `HKCU\Software\Policies`:
+  the assistant switch in Features and "Disable web search". Windows lets an account read its policies but not
+  change them, so only an administrator can write either one. The tab listed both under "Just you", which says no
+  administrator is needed, and left them out when an imported profile counted the changes that need one, and Apply
+  then said they needed administrator rights. They now have a section of their own, "Just you, with administrator",
+  and count as needing it. The banner at the top of the tab says so, and so does the one on Settings Watchdog, whose
+  web search setting is the same policy. The import count read the hive alone since it was added, in 1.115.0, and
+  the section since 1.120.0.
+- "Disable diagnostic data" said it stops Windows sending diagnostic data to Microsoft, and the policy it sets does
+  that only on Enterprise, Education and Server. Home and Pro read it as the required level and go on sending the
+  required diagnostic data. There the switch is now called "Limit diagnostic data" and says it lowers diagnostic
+  data to the required level, the least the edition allows, and on an edition it cannot place it says what it does
+  on each. It promised more than Home and Pro allow since 1.5.0.
+
 ## [1.136.97] - 2026-11-03
 
 **Large Files lists two files whose names differ only in capitals as two files.**

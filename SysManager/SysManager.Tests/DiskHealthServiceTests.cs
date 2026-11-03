@@ -165,6 +165,65 @@ public class DiskHealthServiceTests
         Assert.Contains("Healthy", r.Verdict);
     }
 
+    // ---------- a read that fails, and its log (#2782) ----------
+
+    private const string Unavailable = "The RPC server is unavailable.";
+    private static readonly DiskHealthRead Worked =
+        new([new DiskHealthReport { FriendlyName = "Samsung SSD 990 PRO 2TB" }]);
+    private static readonly DiskHealthRead Failed = new([], Unavailable);
+
+    [Fact]
+    public void ARead_IsComplete_OnlyWithNoFault()
+    {
+        Assert.True(Worked.Complete);
+        Assert.False(Failed.Complete);
+        Assert.False(new DiskHealthRead([], "").Complete);
+    }
+
+    [Fact]
+    public async Task ReadAsync_SaysTheReadFailed_AndCollectAsync_StillGivesWhatWasRead()
+    {
+        // CollectAsync's callers judge each drive they are given and take none as not checked, so for them a read cut
+        // short is still the drives it read. ReadAsync is for a caller that keeps what it reads.
+        var disk = new DiskHealthReport { FriendlyName = "WDC WD40EZAZ-00SF3B0" };
+        var service = new DiskHealthService(() => new DiskHealthRead([disk], "Time out"), _ => { });
+
+        var read = await service.ReadAsync();
+        var collected = await service.CollectAsync();
+
+        Assert.False(read.Complete);
+        Assert.Equal("Time out", read.Fault);
+        Assert.Same(disk, Assert.Single(read.Disks));
+        Assert.Same(disk, Assert.Single(collected));
+    }
+
+    [Fact]
+    public async Task ARunOfFailedReads_IsLoggedOnce_AndAgainAfterAReadThatWorked()
+    {
+        // The Dashboard reads every 2 seconds. A fault that lasts was a log line each time, which pushes the history a
+        // bug report needs out of the rotating log.
+        var reads = new Queue<DiskHealthRead>([Failed, Failed, Failed, Worked, Failed]);
+        List<string> logged = [];
+        var service = new DiskHealthService(reads.Dequeue, logged.Add);
+
+        for (var read = 0; read < 5; read++)
+            await service.ReadAsync();
+
+        Assert.Equal([Unavailable, Unavailable], logged);
+    }
+
+    [Fact]
+    public async Task AReadThatWorked_IsNotLogged()
+    {
+        List<string> logged = [];
+        var service = new DiskHealthService(() => Worked, logged.Add);
+
+        await service.ReadAsync();
+        await service.CollectAsync();
+
+        Assert.Empty(logged);
+    }
+
     // ---------- ToDouble / ToInt / ToLong helpers ----------
 
     private static double? InvokeToDouble(object? o)

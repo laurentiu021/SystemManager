@@ -638,7 +638,10 @@ Key services:
 - `DiskHealthService` — pulls SMART data through WMI. Its verdict is the sentence for
   `DiskHealthReport.Finding`, the first of Windows' failing or warning status, 90% wear, 70 °C or I/O errors, and
   `DiskHealthReport.Condition` (Fine, Watch, Failing, Unknown) follows the same finding, so every tab judges a drive
-  alike (#2866). `HealthPercent` stays the life-left gauge on System Health's card.
+  alike (#2866). `HealthPercent` stays the life-left gauge on System Health's card. `ReadAsync` returns a
+  `DiskHealthRead`, the drives and the fault that cut the read short, for a caller that keeps what it reads;
+  `CollectAsync` gives the same drives without saying. A run of failed reads is logged once, and an internal
+  constructor takes the read itself, so a test can make one fail (#2782).
 - `MemoryTestService` — scans WHEA / MemoryDiagnostics events. A log it cannot read is thrown,
   never returned as zero errors, so the Dashboard and System Health can say the check did not run.
   `Summarize` counts the records by `MemoryEvents`' IDs, and stops at the first one older than 30 days.
@@ -2001,6 +2004,9 @@ Key services:
   hand it stand-ins; it leaves out sensors that are not the chip's temperature (Intel's Distance to
   TjMax, an offset Zen Tctl) and does not update storage when storage is not asked for. It does not
   poll: the Dashboard asks every 2 s while it is visible, and the Resource History sampler every 10 s.
+  A drive LibreHardwareMonitor cannot name is named from `DiskHealthService`'s list. It keeps those names
+  for the session and the drive temperatures it reads without elevation for 30 s, each only from a read
+  Windows answered in full (#2782).
 - `ActivityLogService` — persists the last 200 user actions (60 before Recent Changes read them over as
   long as 90 days, #1507) to a JSON file for the Dashboard's recent-activity card and Recent Changes: 22
   kinds of action, from 29 call sites. The six destructive operations (deep cleanup, browser clean,

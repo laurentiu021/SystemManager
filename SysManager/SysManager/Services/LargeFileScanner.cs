@@ -81,13 +81,7 @@ public sealed class LargeFileScanner
         if (top <= 0)
             return [];
 
-        var heap = new SortedSet<(long Size, string Path)>(Comparer<(long, string)>.Create(
-            (a, b) =>
-            {
-                var c = a.Item1.CompareTo(b.Item1);
-                return c != 0 ? c : string.CompareOrdinal(a.Item2, b.Item2);
-            }));
-        var meta = new Dictionary<string, LargeFileEntry>(StringComparer.OrdinalIgnoreCase);
+        var biggest = new Biggest(top);
 
         var stack = new Stack<string>();
         stack.Push(rootPath);
@@ -144,34 +138,13 @@ public sealed class LargeFileScanner
 
                     if (fi.Length < minSizeBytes) continue;
 
-                    if (heap.Count < top)
+                    biggest.Offer(new LargeFileEntry
                     {
-                        heap.Add((fi.Length, f));
-                        meta[f] = new LargeFileEntry
-                        {
-                            Path = f,
-                            Name = fi.Name,
-                            SizeBytes = fi.Length,
-                            LastModified = fi.LastWriteTime
-                        };
-                    }
-                    else
-                    {
-                        var smallest = heap.Min;
-                        if (fi.Length > smallest.Size)
-                        {
-                            heap.Remove(smallest);
-                            meta.Remove(smallest.Path);
-                            heap.Add((fi.Length, f));
-                            meta[f] = new LargeFileEntry
-                            {
-                                Path = f,
-                                Name = fi.Name,
-                                SizeBytes = fi.Length,
-                                LastModified = fi.LastWriteTime
-                            };
-                        }
-                    }
+                        Path = f,
+                        Name = fi.Name,
+                        SizeBytes = fi.Length,
+                        LastModified = fi.LastWriteTime
+                    });
                 }
                 catch (IOException) { /* gone or unreadable since the listing: left out */ }
                 catch (UnauthorizedAccessException) { /* denied: left out */ }
@@ -207,7 +180,43 @@ public sealed class LargeFileScanner
         // these are the final counts and no folder is being scanned any more. Nothing has to recognise a
         // sentinel to avoid displaying it.
         progress?.Report(new LargeFileProgress(scanned, bytesScanned, string.Empty));
-        return heap.Reverse().Select(h => meta[h.Path]).ToArray();
+        return biggest.Largest();
+    }
+
+    /// <summary>The <c>top</c> largest files offered so far, each by its own path.</summary>
+    /// <remarks>
+    /// Both collections compare paths ordinally, as Windows returns them. The set was ordinal and the details were kept
+    /// case-insensitively, and a folder can be case-sensitive (WSL makes them, and fsutil turns it on), so a.bin and
+    /// A.bin shared one entry: the second overwrote the first, and the list showed one file twice, or one of them was
+    /// pushed out and took the other's entry with it, and the scan ended in the app's error handler (#2777).
+    /// </remarks>
+    internal sealed class Biggest(int top)
+    {
+        private readonly SortedSet<(long Size, string Path)> _heap = new(Comparer<(long, string)>.Create(
+            (a, b) =>
+            {
+                var c = a.Item1.CompareTo(b.Item1);
+                return c != 0 ? c : string.CompareOrdinal(a.Item2, b.Item2);
+            }));
+
+        private readonly Dictionary<string, LargeFileEntry> _entries = new(StringComparer.Ordinal);
+
+        /// <summary>Keeps <paramref name="file"/> when it is among the largest so far.</summary>
+        public void Offer(LargeFileEntry file)
+        {
+            if (_heap.Count >= top)
+            {
+                var smallest = _heap.Min;
+                if (file.SizeBytes <= smallest.Size) return;
+                _heap.Remove(smallest);
+                _entries.Remove(smallest.Path);
+            }
+            _heap.Add((file.SizeBytes, file.Path));
+            _entries[file.Path] = file;
+        }
+
+        /// <summary>The files kept, largest first.</summary>
+        public LargeFileEntry[] Largest() => [.. _heap.Reverse().Select(h => _entries[h.Path])];
     }
 
     private static bool ShouldSkip(string path)

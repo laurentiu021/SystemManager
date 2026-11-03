@@ -41,7 +41,14 @@ public sealed record ScheduledTaskInfo(
         _ => "Third-party",
     };
 
-    public string FullPath => $"{Path}{Name}";
+    public string FullPath => FullPathOf(Path, Name);
+
+    /// <summary>
+    /// A task's folder, as Task Scheduler reports it with its closing backslash, joined to its name: what the
+    /// telemetry list names a single task by (#2781).
+    /// </summary>
+    public static string FullPathOf(string folder, string name) => $"{folder}{name}";
+
     /// <summary>Whether Task Scheduler says the task has never run, which it reports as a date in 1999.</summary>
     public bool HasNeverRun { get; init; }
 

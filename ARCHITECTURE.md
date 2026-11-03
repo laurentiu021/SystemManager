@@ -1918,7 +1918,9 @@ Key services:
 - `TaskSchedulerService` — the `ScheduledTasks` PowerShell module (`Get-ScheduledTask`
   / `Get-ScheduledTaskInfo` / `Enable`/`Disable-ScheduledTask`) through `IPowerShellRunner`.
   Disabling is reversible and never unregisters; toggles are verified by read-back. The
-  `ClassifyTask` safety heuristic (telemetry/system/third-party) is a pure, unit-tested method.
+  `ClassifyTask` safety heuristic (telemetry/system/third-party) is a pure, unit-tested method. It takes the
+  task's folder and name apart, as Task Scheduler reports them, and matches the single telemetry tasks on
+  `ScheduledTaskInfo.FullPathOf` of the two: compared with the folder alone, Autochk Proxy was System (#2781).
   `ListTasksAsync` returns null for a read that failed, so the tab never reports one as no tasks.
 - `WindowsThemeService` — reads/writes the per-user Windows light/dark theme (HKCU
   `AppsUseLightTheme`/`SystemUsesLightTheme`, no admin) and broadcasts

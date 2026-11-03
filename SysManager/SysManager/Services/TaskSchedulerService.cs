@@ -86,7 +86,7 @@ public sealed class TaskSchedulerService
                 string? author = Str(item, "Author");
                 list.Add(new ScheduledTaskInfo(
                     name, path, Str(item, "State") ?? "Unknown", author,
-                    Str(item, "Description"), ClassifyTask(path, author), null, null));
+                    Str(item, "Description"), ClassifyTask(path, name, author), null, null));
             }
             return list.OrderBy(t => t.Path, StringComparer.OrdinalIgnoreCase)
                        .ThenBy(t => t.Name, StringComparer.OrdinalIgnoreCase).ToList();
@@ -146,7 +146,7 @@ public sealed class TaskSchedulerService
             string? author = Str(row, "Author");
             return new ScheduledTaskInfo(
                 Str(row, "TaskName") ?? name, Str(row, "TaskPath") ?? path, observed,
-                author, Str(row, "Description"), ClassifyTask(path, author), null, null);
+                author, Str(row, "Description"), ClassifyTask(path, name, author), null, null);
         }
         catch (System.Management.Automation.RuntimeException ex)
         {
@@ -175,14 +175,19 @@ public sealed class TaskSchedulerService
     /// Pure classification: telemetry folders first (safe-to-disable), then any other
     /// Microsoft/Windows task as System (caution), else Third-party.
     /// </summary>
-    public static TaskCategory ClassifyTask(string path, string? author)
+    /// <remarks>
+    /// <paramref name="folder"/> is the task's folder as Task Scheduler reports it, <c>\Microsoft\Windows\Autochk\</c>,
+    /// and <paramref name="name"/> its name. The single tasks in the telemetry list are named by both: the check
+    /// compared the folder alone with them, so the Autochk Proxy task never matched and was classed as System (#2781).
+    /// </remarks>
+    public static TaskCategory ClassifyTask(string folder, string? name, string? author)
     {
-        path ??= "";
-        foreach (var folder in TelemetryFolders)
-            if (path.StartsWith(folder, StringComparison.OrdinalIgnoreCase))
+        var path = folder ?? "";
+        foreach (var telemetryFolder in TelemetryFolders)
+            if (path.StartsWith(telemetryFolder, StringComparison.OrdinalIgnoreCase))
                 return TaskCategory.Telemetry;
 
-        if (TelemetryFullPaths.Contains(path.TrimEnd('\\')))
+        if (name is not null && TelemetryFullPaths.Contains(ScheduledTaskInfo.FullPathOf(path, name)))
             return TaskCategory.Telemetry;
 
         bool microsoftPath = path.StartsWith(@"\Microsoft\Windows\", StringComparison.OrdinalIgnoreCase);

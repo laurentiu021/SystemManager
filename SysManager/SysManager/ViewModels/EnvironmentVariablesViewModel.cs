@@ -459,6 +459,14 @@ public sealed partial class EnvironmentVariablesViewModel : ElevatedViewModelBas
         }
 
         try { _service.EnsureBackup(touchesUser, touchesMachine); }
+        catch (EnvironmentVariableService.BackupRefusedException ex)
+        {
+            // The variables as they are cannot be kept, which is not a damaged copy, and saying it was sent the user
+            // looking for a copy that may not exist (#2775).
+            StatusMessage = $"No changes were made: SysManager could not take its safety copy, because {ex.Message}.";
+            Log.Warning(ex, "Environment: the safety backup could not be taken; aborting apply");
+            return;
+        }
         catch (InvalidDataException ex)
         {
             StatusMessage = "The existing safety backup is invalid - no changes were made.";
@@ -614,26 +622,38 @@ public sealed partial class EnvironmentVariablesViewModel : ElevatedViewModelBas
             return;
         }
 
-        // Restoring Machine-scope variables needs admin; warn early like Apply does.
-        if (!IsElevated && _service.HasMachineBackup)
+        // What restoring would change, read before asking, so the question names each variable, as Undo Changes asks
+        // for the same restore. It said only that it "removes variables added since", though a copy kept since the
+        // first Apply rewrites PATH without every folder installers added after it (#2775).
+        EnvironmentVariableService.RestorePreview? preview;
+        try
         {
-            // Still allow restoring User-scope vars, but tell the user System ones will be skipped.
-            if (!DialogService.Instance.Confirm(
-                    "Restore the original environment from the backup?\n\n" +
-                    "This rewrites every variable to its value from before your first change, and removes " +
-                    "variables added since. System variables can only be restored when running as administrator " +
-                    "and will be skipped now.",
-                    "Restore Environment"))
-            {
-                StatusMessage = "Restore cancelled.";
-                return;
-            }
+            preview = await Task.Run(_service.PreviewRestore);
         }
-        else if (!DialogService.Instance.Confirm(
-                     "Restore the original environment from the backup?\n\n" +
-                     "This rewrites every variable to its value from before your first change, and removes " +
-                     "variables added since.",
-                     "Restore Environment"))
+        catch (EnvironmentVariableService.BackupUnreadableException)
+        {
+            StatusMessage = BackupUnreadable;
+            return;
+        }
+        catch (InvalidDataException)
+        {
+            StatusMessage = "The available environment backup is invalid; no changes were made.";
+            return;
+        }
+        if (preview is null)
+        {
+            StatusMessage = "There is no environment backup to restore.";
+            return;
+        }
+        if (preview.Differences.Count == 0)
+        {
+            StatusMessage = "Your variables already match the backup, so there is nothing to restore.";
+            return;
+        }
+
+        var lines = preview.Differences.Select(UndoChangesService.EnvironmentLine).ToList();
+        var machineLeft = !IsElevated && preview.Differences.Any(d => d.Scope == EnvVarScope.Machine);
+        if (!DialogService.Instance.Confirm(RestoreQuestion(lines, machineLeft), "Restore Environment"))
         {
             StatusMessage = "Restore cancelled.";
             return;
@@ -658,10 +678,44 @@ public sealed partial class EnvironmentVariablesViewModel : ElevatedViewModelBas
         if (r.Restored > 0 || r.Removed > 0) await Task.Run(EnvironmentVariableService.BroadcastSettingChange);
         await LoadAsync();
 
-        StatusMessage = r.Failed == 0
-            ? $"Restored {r.Restored} variable{(r.Restored == 1 ? "" : "s")}" +
-              (r.Removed > 0 ? $" and removed {r.Removed} added since." : ".")
-            : $"Restored {r.Restored}, removed {r.Removed}; {r.Failed} need administrator rights.";
+        StatusMessage = RestoredStatus(r, IsElevated);
+    }
+
+    /// <summary>The question Restore asks: each variable it would change, as Undo Changes words them.</summary>
+    internal static string RestoreQuestion(IReadOnlyList<string> lines, bool machineWideLeft) =>
+        $"Restore your environment variables from the backup?\n\n{UndoChangesService.Bullets(lines)}\n\n"
+        + "Every variable goes back to the backup, including changes other programs made since, and the ones added "
+        + "since are removed."
+        + (machineWideLeft
+            ? " System variables can only be restored when running as administrator, so the machine-wide ones above "
+              + "are left as they are."
+            : "");
+
+    /// <summary>What the status line says after a restore, from what it changed.</summary>
+    /// <remarks>
+    /// A refusal is said to need administrator only when it was a machine-wide variable and SysManager is not running
+    /// as administrator, and a variable the restore cannot write is named apart. Every refusal, those included, was
+    /// said to need administrator rights, elevated or not (#2775).
+    /// </remarks>
+    internal static string RestoredStatus(EnvironmentVariableService.RestoreResult r, bool isElevated)
+    {
+        var needAdmin = isElevated ? 0 : r.FailedMachine;
+        var refused = r.Failed - needAdmin;
+        var said = r.Failed == 0
+            ? $"Restored {r.Restored} variable{(r.Restored == 1 ? "" : "s")}"
+              + (r.Removed > 0 ? $" and removed {r.Removed} added since." : ".")
+            : $"Restored {r.Restored}, removed {r.Removed}"
+              + (needAdmin > 0 ? $"; {needAdmin} need{(needAdmin == 1 ? "s" : "")} administrator rights" : "")
+              + (refused > 0 ? $"; Windows refused {refused}" : "")
+              + ".";
+        if (r.Skipped.Count == 0) return said;
+
+        var names = r.Skipped.Count <= 3
+            ? FormatHelper.JoinForSentence([.. r.Skipped])
+            : $"{string.Join(", ", r.Skipped.Take(2))} and {r.Skipped.Count - 2} more";
+        var one = r.Skipped.Count == 1;
+        return $"{said} {names} {(one ? "was" : "were")} left as {(one ? "it is" : "they are")}: SysManager does not "
+            + "write a name with a space or that kind of character in it.";
     }
 
     [RelayCommand]

@@ -755,6 +755,74 @@ public class EnvironmentVariableServiceTests
         Assert.Null(env.GetMachine("ADDED_MACHINE"));
     }
 
+    /// <summary>
+    /// A name the restore cannot write, such as one with a space, is left as it is and named, not counted as a failure
+    /// (#2775). The preview leaves such names out; the restore wrote and deleted them anyway and counted each refusal
+    /// as one that "needs administrator rights", elevated or not.
+    /// </summary>
+    [Fact]
+    public void RestoreFromBackup_LeavesANameItCannotWriteAlone_AndCountsNoFailure()
+    {
+        using var env = new RedirectedEnvironment();
+        env.SetUser("MY VAR", "changed");
+        env.SetUser("ADDED VAR", "added since");
+        env.SetUser("SAFE_USER", "changed");
+        env.WriteUserBackup("""{"User":{"MY VAR":"original","SAFE_USER":"original"}}""");
+
+        var result = env.Service.RestoreFromBackup();
+
+        Assert.Equal((1, 0, 0), (result.Restored, result.Removed, result.Failed));
+        Assert.Equal(["ADDED VAR", "MY VAR"], result.Skipped);
+        Assert.Equal("changed", env.GetUser("MY VAR"));
+        Assert.Equal("added since", env.GetUser("ADDED VAR"));
+        Assert.Equal("original", env.GetUser("SAFE_USER"));
+    }
+
+    /// <summary>
+    /// A restore writes what differs from the copy, and counts that (#2775). It wrote every variable the copy held, so
+    /// a restore that changed one said "Restored 58 variables".
+    /// </summary>
+    [Fact]
+    public void RestoreFromBackup_WritesOnlyWhatDiffers_AndCountsThat()
+    {
+        using var env = new RedirectedEnvironment();
+        env.SetUser("SAME_ONE", "kept");
+        env.SetUser("SAME_TWO", "kept");
+        env.SetUser("CHANGED_ONE", "original");
+        env.Service.EnsureBackup(includeUser: true, includeMachine: false);
+        env.SetUser("CHANGED_ONE", "changed");
+
+        var result = env.Service.RestoreFromBackup();
+
+        Assert.Equal((1, 0, 0), (result.Restored, result.Removed, result.Failed));
+        Assert.Equal("original", env.GetUser("CHANGED_ONE"));
+        Assert.Empty(env.Service.PreviewRestore()!.Differences);
+    }
+
+    /// <summary>A value that is not text blocks the copy by name, in the user's words (#2775).</summary>
+    [Fact]
+    public void EnsureBackup_ANumberAmongYourVariables_IsRefusedByName_NotAsADamagedCopy()
+    {
+        using var env = new RedirectedEnvironment();
+        env.SetUser("SAFE_USER", "text");
+        env.SetUser("COUNTER", 7, RegistryValueKind.DWord);
+
+        var refused = Assert.Throws<EnvironmentVariableService.BackupRefusedException>(() =>
+            env.Service.EnsureBackup(includeUser: true, includeMachine: false));
+
+        Assert.Equal("COUNTER, one of your variables, holds a number rather than text, and the copy keeps text only",
+            refused.Message);
+    }
+
+    [Theory]
+    [InlineData(RegistryValueKind.DWord, "a number")]
+    [InlineData(RegistryValueKind.QWord, "a number")]
+    [InlineData(RegistryValueKind.MultiString, "a list of text values")]
+    [InlineData(RegistryValueKind.Binary, "binary data")]
+    [InlineData(RegistryValueKind.None, "a value of another kind")]
+    public void DescribeKind_SaysWhatTheValueHolds(RegistryValueKind kind, string said)
+        => Assert.Equal(said, EnvironmentVariableService.DescribeKind(kind));
+
     [Fact]
     public void ReadBackup_ExactDuplicateNames_ReturnsNull()
     {
@@ -952,9 +1020,12 @@ public class EnvironmentVariableServiceTests
         using var env = new RedirectedEnvironment();
         env.SetMachine("UNSUPPORTED", 1, RegistryValueKind.DWord);
 
-        Assert.Throws<InvalidDataException>(() =>
+        // Refused as the variables are, naming the one that blocks it, not as a damaged copy (#2775).
+        var refused = Assert.Throws<EnvironmentVariableService.BackupRefusedException>(() =>
             env.Service.EnsureBackup(includeUser: false, includeMachine: true));
 
+        Assert.Equal("UNSUPPORTED, one of the machine-wide variables, holds a number rather than text, and the copy "
+                     + "keeps text only", refused.Message);
         Assert.Null(env.GetMachineBackupRaw());
     }
 

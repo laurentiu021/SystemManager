@@ -409,9 +409,16 @@ Edit Windows environment variables without the cramped built-in dialog:
 - **Refresh asks before it drops your changes.** Refresh, and F5, read the variables again,
   so with a change not applied yet they ask first, and No keeps it
 - **Restore backup** puts every variable back to that snapshot and removes the ones added
-  since, after a confirmation — the machine-wide ones only as administrator — and **Discard**
-  drops the staged changes. A snapshot another program has open just then is said to be
-  unreadable for now, on Apply and on Restore backup, rather than called invalid
+  since, after a confirmation that names each variable it would change, including changes other
+  programs made since — the machine-wide ones only as administrator — and **Discard** drops the
+  staged changes. The status line counts what changed, says "administrator" only for a
+  machine-wide variable while SysManager is not elevated, and names a variable it left alone
+  because its name has a space or a character SysManager does not write. A snapshot another
+  program has open just then is said to be unreadable for now, on Apply and on Restore backup,
+  rather than called invalid
+- **A variable the snapshot cannot keep is named.** A value that is not text, such as a number an
+  installer stored among your variables, stops Apply with a line that says which variable it is,
+  instead of calling a snapshot that does not exist invalid
 - Changes broadcast to Windows, so new terminals pick them up without a reboot
 - System-scope edits need administrator rights (standard elevation banner); user
   variables can be edited without it. An Apply that includes a System change is refused

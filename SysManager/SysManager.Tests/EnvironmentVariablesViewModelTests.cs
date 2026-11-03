@@ -96,6 +96,97 @@ public class EnvironmentVariablesViewModelTests : IDisposable
     }
 
     /// <summary>
+    /// A variable the copy cannot keep blocks Apply by name, not as a damaged copy that does not exist (#2775).
+    /// </summary>
+    [Fact]
+    public async Task ApplyingWithANumberAmongYourVariables_SaysWhichBlocksTheCopy()
+    {
+        using var env = new RedirectedEnvironment();
+        env.SetUser("COUNTER", 7, RegistryValueKind.DWord);
+        var vm = new EnvironmentVariablesViewModel(env.Service);
+        await vm.InitializationComplete;
+        vm.NewName = "SAFE_ADDED";
+        vm.NewValue = "added";
+        vm.AddVariableCommand.Execute(null);
+        using var dialog = new DialogAnswer(confirm: true);
+
+        await vm.ApplyChangesCommand.ExecuteAsync(null);
+
+        Assert.Equal("No changes were made: SysManager could not take its safety copy, because COUNTER, one of your "
+                     + "variables, holds a number rather than text, and the copy keeps text only.", vm.StatusMessage);
+        Assert.Null(env.GetUser("SAFE_ADDED"));
+    }
+
+    /// <summary>
+    /// Restore asks with each variable it would change, as Undo Changes does (#2775). It said only that it "removes
+    /// variables added since", with no names, though it also rewrites PATH without folders installers added since.
+    /// </summary>
+    [Fact]
+    public async Task Restoring_AsksWithEachVariableItWouldChange()
+    {
+        using var env = new RedirectedEnvironment();
+        env.SetUser("SAFE_USER", "changed");
+        env.SetUser("ADDED_SINCE", "new");
+        env.WriteUserBackup("""{"User":{"SAFE_USER":"original","GONE_NOW":"was here"}}""");
+        var vm = new EnvironmentVariablesViewModel(env.Service);
+        await vm.InitializationComplete;
+        using var dialog = new DialogAnswer(confirm: false);
+
+        await vm.RestoreBackupCommand.ExecuteAsync(null);
+
+        var shown = Assert.Single(dialog.Messages);
+        Assert.Contains("• ADDED_SINCE (yours): removed, added since", shown, StringComparison.Ordinal);
+        Assert.Contains("• GONE_NOW (yours): put back", shown, StringComparison.Ordinal);
+        Assert.Contains("• SAFE_USER (yours): back to its earlier value", shown, StringComparison.Ordinal);
+        Assert.Contains("including changes other programs made since", shown, StringComparison.Ordinal);
+        Assert.Equal("Restore cancelled.", vm.StatusMessage);
+    }
+
+    [Fact]
+    public async Task Restoring_WhenNothingDiffers_SaysSo_WithoutAsking()
+    {
+        using var env = new RedirectedEnvironment();
+        env.SetUser("SAFE_USER", "original");
+        env.WriteUserBackup("""{"User":{"SAFE_USER":"original"}}""");
+        var vm = new EnvironmentVariablesViewModel(env.Service);
+        await vm.InitializationComplete;
+        using var dialog = new DialogAnswer(confirm: true);
+
+        await vm.RestoreBackupCommand.ExecuteAsync(null);
+
+        Assert.Empty(dialog.Messages);
+        Assert.Equal("Your variables already match the backup, so there is nothing to restore.", vm.StatusMessage);
+    }
+
+    /// <summary>
+    /// The status after a restore counts what changed, says "administrator" only for machine-wide refusals while not
+    /// elevated, and names the variables it left alone (#2775).
+    /// </summary>
+    [Theory]
+    [InlineData(2, 1, 0, 0, false, "", "Restored 2 variables and removed 1 added since.")]
+    [InlineData(1, 0, 0, 0, false, "", "Restored 1 variable.")]
+    [InlineData(1, 0, 2, 2, false, "", "Restored 1, removed 0; 2 need administrator rights.")]
+    [InlineData(1, 0, 2, 2, true, "", "Restored 1, removed 0; Windows refused 2.")]
+    [InlineData(1, 0, 3, 1, false, "", "Restored 1, removed 0; 1 needs administrator rights; Windows refused 2.")]
+    [InlineData(1, 0, 0, 0, false, "MY VAR",
+        "Restored 1 variable. MY VAR was left as it is: SysManager does not write a name with a space or that kind of "
+        + "character in it.")]
+    [InlineData(0, 0, 0, 0, true, "A B|C D",
+        "Restored 0 variables. A B and C D were left as they are: SysManager does not write a name with a space or "
+        + "that kind of character in it.")]
+    public void TheRestoredStatus_SaysWhatChanged(int restored, int removed, int failed, int failedMachine,
+                                                  bool elevated, string skipped, string said)
+    {
+        var result = new EnvironmentVariableService.RestoreResult(true, restored, removed, failed)
+        {
+            FailedMachine = failedMachine,
+            Skipped = skipped.Length == 0 ? [] : skipped.Split('|'),
+        };
+
+        Assert.Equal(said, EnvironmentVariablesViewModel.RestoredStatus(result, elevated));
+    }
+
+    /// <summary>
     /// A search term that matches no name and no value is reported as a search with no matches.
     /// </summary>
     /// <remarks>

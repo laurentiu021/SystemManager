@@ -10,6 +10,22 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.136.96] - 2026-11-03
+
+**System Logs and the System Report explain an event only for its own source, and a blue screen is explained as one.**
+
+### Fixed
+- System Logs and the System Report explained events by their ID alone when they had nothing for the source and ID
+  together, and an event ID belongs to its source. So every event 1000 was "A program crashed", with advice to look
+  for a faulting module, though many sources use 1000 for ordinary messages, an informational .NET Runtime trace
+  line among them, and IDs 1001, 41 and 6008 had the same problem. An explanation now applies only to the source it
+  was written for; any other event is described from its severity and source.
+- A blue screen got the explanation of an application's crash report, because its row was keyed by "BugCheck", the
+  source Event Viewer shows, rather than the provider Windows records. It now says Windows blue-screened and points
+  to the memory dump. Tcpip 4227 was blamed on Wi-Fi or a cable; Windows' own text says a program opened and closed
+  connections so fast that it ran short of local ports, which a link cannot cause. All three were there since the
+  first release, 0.3.0.
+
 ## [1.136.95] - 2026-11-03
 
 **Restore backup on Environment Variables says what it will change and counts what it did, and Apply names what blocks a backup.**

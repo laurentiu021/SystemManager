@@ -8,11 +8,15 @@ using SysManager.Models;
 namespace SysManager.Services;
 
 /// <summary>
-/// Maps common Windows event IDs to plain-English explanations and
-/// actionable recommendations. Lookup is (ProviderName, EventId) when
-/// possible, falling back to EventId alone. When nothing matches we
-/// produce a generic explanation from the severity and source.
+/// Maps common Windows events to plain-English explanations and actionable recommendations, by the provider that
+/// wrote each and its event ID together. When nothing matches, the explanation is built from the severity and source.
 /// </summary>
+/// <remarks>
+/// An event ID belongs to its provider, and many providers use 1000 and 1001 for ordinary messages. A table keyed by
+/// the ID alone explained every event 1000 as a program crash, with advice to look for a faulting module, an
+/// informational trace line from .NET Runtime among them, and the System Report repeated it (#2776). Each row here is
+/// keyed by the provider name Windows records, which is what <see cref="EventLogService"/> reads.
+/// </remarks>
 public static class EventExplainer
 {
     private readonly record struct Key(string Provider, int EventId);
@@ -23,12 +27,20 @@ public static class EventExplainer
         [new("Microsoft-Windows-Kernel-Power", 41)] = (
             "Your PC rebooted unexpectedly — Windows wasn't shut down cleanly. Usually means a power loss, BSOD, or a hard lock-up.",
             "Check Reliability Monitor for a BSOD around the same time. If frequent: update chipset/GPU drivers, test RAM (mdsched.exe), check PSU on desktops."),
-        [new("BugCheck", 1001)] = (
+        // "The computer has rebooted from a bugcheck." Event Viewer shows its source as BugCheck, and Windows records
+        // the provider as Microsoft-Windows-WER-SystemErrorReporting, the name this row was missing, so a blue screen
+        // got the explanation of an application's crash report (#2776).
+        [new("Microsoft-Windows-WER-SystemErrorReporting", 1001)] = (
             "Windows blue-screened (BSOD) and recovered. A memory dump was written.",
             "Open the .dmp file in WinDbg or use BlueScreenView to identify the driver. Update the implicated driver first."),
-        [new("Microsoft-Windows-WER-SystemErrorReporting", 1001)] = (
-            "A fault was reported to Windows Error Reporting — something crashed.",
-            "Look at the earlier Application Error to see which process faulted."),
+        // "Fault bucket …": the report Windows Error Reporting files after an application crash.
+        [new("Windows Error Reporting", 1001)] = (
+            "A crash report was filed with Windows Error Reporting.",
+            "See the Application Error just before it for the program and module that crashed."),
+        // "The previous system shutdown at … was unexpected."
+        [new("EventLog", 6008)] = (
+            "The previous system shutdown was unexpected.",
+            "Often a duplicate of Kernel-Power 41. Look for a BSOD or power loss around that time."),
         [new("Application Error", 1000)] = (
             "A user-mode program crashed.",
             "Check the Faulting application and Faulting module fields. Reinstall the app or update it. If the module is a Windows DLL, run 'sfc /scannow'."),
@@ -60,9 +72,13 @@ public static class EventExplainer
         [new("Microsoft-Windows-DNS-Client", 1014)] = (
             "DNS resolution timed out for a domain.",
             "Often transient. If frequent, try switching DNS to 1.1.1.1 / 8.8.8.8 or flush DNS ('ipconfig /flushdns')."),
+        // Windows' own text: "TCP/IP failed to establish an outgoing connection because the selected local endpoint was
+        // recently used to connect to the same remote endpoint", when connections are opened and closed at a high rate.
+        // The row blamed Wi-Fi or a cable, which cannot cause it (#2776).
         [new("Tcpip", 4227)] = (
-            "TCP/IP had to close a connection due to repeated retransmissions.",
-            "Usually a bad Wi-Fi signal or a flaky cable. Check physical link first."),
+            "A program opened and closed network connections so quickly that Windows ran short of local ports.",
+            "Harmless if rare. If it repeats, find the program making the connections, in Resource Monitor's "
+            + "Network tab, and update or restart it."),
         [new("Microsoft-Windows-NetBT", 4321)] = (
             "Another device on the network is using the same computer name.",
             "Rename one of the machines. Use 'hostname' to see yours."),
@@ -151,17 +167,6 @@ public static class EventExplainer
                     "Windows Memory Diagnostic tested your RAM and found hardware errors.",
                     "Your RAM is likely faulty. Test each stick individually to find the culprit."))));
 
-    // Fallbacks by EventId only (when provider varies or isn't known)
-    private static readonly FrozenDictionary<int, (string Explanation, string Recommendation)> KnownById = new Dictionary<int, (string Explanation, string Recommendation)>
-    {
-        [41] = ("The PC wasn't shut down cleanly — crash, freeze, or power loss.",
-                "See Reliability Monitor. Frequent = hardware/driver issue."),
-        [1000] = ("A program crashed.", "Look at 'Faulting module' for the culprit."),
-        [1001] = ("A crash report was filed.", "See the related Application Error for details."),
-        [6008] = ("The previous system shutdown was unexpected.",
-                  "Often a duplicate of Kernel-Power 41. Look for a BSOD or power loss around that time."),
-    }.ToFrozenDictionary();
-
     public static void Enrich(FriendlyEventEntry entry)
     {
         if (TryLookup(entry, out var info))
@@ -187,12 +192,7 @@ public static class EventExplainer
     /// one tells the reader to look at the message below, and the report never carries an event's message.
     /// </remarks>
     public static bool TryExplain(string providerName, int eventId, out (string Explanation, string Recommendation) info)
-    {
-        if (Known.TryGetValue(new Key(providerName, eventId), out info)) return true;
-        if (KnownById.TryGetValue(eventId, out info)) return true;
-        info = default;
-        return false;
-    }
+        => Known.TryGetValue(new Key(providerName, eventId), out info);
 
     private static string BuildGenericExplanation(FriendlyEventEntry e) => e.Severity switch
     {

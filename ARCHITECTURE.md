@@ -656,7 +656,8 @@ Key services:
   formatted, and its outcome returned with the groups rather than through `LastOutcome`, because
   System Report and About make their reports through one `SystemReportService` (#2827).
   `EventExplainer.TryExplain` returns the written explanation for a known (source, ID) only, which
-  is what the report uses.
+  is what the report uses. Every row is keyed by the provider name Windows records: a second table
+  keyed by the event ID alone explained another source's event 1000 as a program crash (#2776).
 - `HealthAnalyzer` — the Ping tab's per-target latency, jitter and loss into one network verdict: is it the PC,
   the ISP or the server. Pure and static; `NetworkSharedState` calls it. A layer with no samples is unmeasured, not
   clean: a far end in trouble with no public DNS reference measured is `Inconclusive`, and the wording says when the

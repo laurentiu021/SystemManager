@@ -41,11 +41,11 @@ public class EventExplainerEdgeCaseTests
     }
 
     [Fact]
-    public void Enrich_KnownById_6008_SetsExplanation()
+    public void Enrich_EventLog6008_SetsExplanation()
     {
         var entry = new FriendlyEventEntry
         {
-            ProviderName = "UnknownProvider",
+            ProviderName = "EventLog",
             EventId = 6008,
             Severity = EventSeverity.Error
         };

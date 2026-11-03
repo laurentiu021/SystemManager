@@ -25,12 +25,14 @@ public class EventExplainerTests
         Assert.NotEmpty(e.Recommendation);
     }
 
+    /// <summary>An event ID is explained only for the provider it was written for (#2776).</summary>
     [Fact]
-    public void KnownFallbackById_StillExplained()
+    public void AKnownIdFromAnotherProvider_GetsTheGenericExplanation()
     {
         var e = Make("Some-Obscure-Provider", 6008);
         EventExplainer.Enrich(e);
-        Assert.Contains("unexpected", e.Explanation, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("unexpected", e.Explanation, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("Some-Obscure-Provider", e.Explanation, StringComparison.Ordinal);
     }
 
     [Fact]

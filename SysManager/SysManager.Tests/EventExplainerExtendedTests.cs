@@ -20,8 +20,9 @@ public class EventExplainerExtendedTests
 
     [Theory]
     [InlineData("Microsoft-Windows-Kernel-Power", 41)]
-    [InlineData("BugCheck", 1001)]
     [InlineData("Microsoft-Windows-WER-SystemErrorReporting", 1001)]
+    [InlineData("Windows Error Reporting", 1001)]
+    [InlineData("EventLog", 6008)]
     [InlineData("Application Error", 1000)]
     [InlineData("Application Hang", 1002)]
     [InlineData(".NET Runtime", 1026)]
@@ -140,12 +141,68 @@ public class EventExplainerExtendedTests
         Assert.False(string.IsNullOrWhiteSpace(e.Recommendation));
     }
 
-    [Fact]
-    public void UnknownProviderButKnownId_FallsBackToIdEntry()
+    /// <summary>
+    /// An event ID belongs to the provider that wrote it, so another provider's event with the same ID gets the
+    /// explanation built from its severity and source, not one written for something else (#2776). A table keyed by
+    /// the ID alone explained every event 1000 as a program crash, an informational .NET Runtime trace line among them.
+    /// </summary>
+    [Theory]
+    [InlineData(".NET Runtime", 1000, EventSeverity.Info, "Informational event from '.NET Runtime'.")]
+    [InlineData("Some-Watchdog", 1000, EventSeverity.Info, "Informational event from 'Some-Watchdog'.")]
+    [InlineData("Some-Provider", 1001, EventSeverity.Info, "Informational event from 'Some-Provider'.")]
+    [InlineData("Weird-Provider", 6008, EventSeverity.Error, "An error was logged by 'Weird-Provider'.")]
+    [InlineData("Weird-Provider", 41, EventSeverity.Error, "An error was logged by 'Weird-Provider'.")]
+    public void AnotherProvidersEventWithTheSameId_IsNotExplainedAsSomethingElse(
+        string provider, int id, EventSeverity severity, string explained)
     {
-        var e = Make("Weird-Provider", 6008);
+        var e = Make(provider, id, severity);
+
         EventExplainer.Enrich(e);
-        Assert.Contains("unexpected", e.Explanation, StringComparison.OrdinalIgnoreCase);
+
+        Assert.Equal(explained, e.Explanation);
+        Assert.False(EventExplainer.TryExplain(provider, id, out _));
+    }
+
+    /// <summary>
+    /// A blue screen is explained as one, by the provider Windows records for "The computer has rebooted from a
+    /// bugcheck" (#2776). The row was keyed by BugCheck, the source Event Viewer shows, so it never matched, and a blue
+    /// screen got the text for an application's crash report.
+    /// </summary>
+    [Fact]
+    public void ABlueScreen_IsExplainedAsOne()
+    {
+        var e = Make("Microsoft-Windows-WER-SystemErrorReporting", 1001);
+
+        EventExplainer.Enrich(e);
+
+        Assert.Equal("Windows blue-screened (BSOD) and recovered. A memory dump was written.", e.Explanation);
+        Assert.Contains(".dmp", e.Recommendation, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void AnApplicationsCrashReport_IsExplainedAsOne()
+    {
+        var e = Make("Windows Error Reporting", 1001, EventSeverity.Info);
+
+        EventExplainer.Enrich(e);
+
+        Assert.Equal("A crash report was filed with Windows Error Reporting.", e.Explanation);
+    }
+
+    /// <summary>
+    /// Tcpip 4227 is a program reusing local ports, in Windows' own words, not a bad link (#2776). It was blamed on
+    /// Wi-Fi or a cable, which cannot cause it.
+    /// </summary>
+    [Fact]
+    public void TcpipLocalPortReuse_IsNotBlamedOnTheNetworkLink()
+    {
+        var e = Make("Tcpip", 4227, EventSeverity.Warning);
+
+        EventExplainer.Enrich(e);
+
+        Assert.Contains("ran short of local ports", e.Explanation, StringComparison.Ordinal);
+        Assert.DoesNotContain("Wi-Fi", e.Explanation + e.Recommendation, StringComparison.Ordinal);
+        Assert.DoesNotContain("cable", e.Explanation + e.Recommendation, StringComparison.Ordinal);
     }
 
     // ---------- Memory test results (#2715) ----------

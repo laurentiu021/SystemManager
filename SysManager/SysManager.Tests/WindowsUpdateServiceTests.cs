@@ -2,6 +2,7 @@
 // Author: laurentiu021 · https://github.com/laurentiu021/SystemManager
 // License: MIT
 
+using System.Runtime.InteropServices;
 using SysManager.Services;
 
 namespace SysManager.Tests;
@@ -84,32 +85,11 @@ public class WindowsUpdateServiceTests
             () => throw new InvalidOperationException("the update's own result must not be read")));
 
     // ---------- the pill from what Windows Update says the update is, in any language (#2791) ----------
-    //
-    // Public, because the dynamic calls that read them are made from the app's own assembly.
 
-    /// <summary>A category as ClassifyCategory reads one off a WUA update.</summary>
-    public sealed class FakeCategory(string name, string categoryId)
-    {
-        public string Name { get; } = name;
-        public string CategoryID { get; } = categoryId;
-    }
-
-    /// <summary>A WUA update's Categories collection.</summary>
-    public sealed class FakeCategories(FakeCategory[] items)
-    {
-        public int Count => items.Length;
-        public FakeCategory Item(int index) => items[index];
-    }
-
-    /// <summary>A WUA update, as far as ClassifyCategory reads one: its type and its categories.</summary>
-    public sealed class FakeUpdate(int type, params FakeCategory[] categories)
-    {
-        public int Type { get; } = type;
-        public FakeCategories Categories { get; } = new(categories);
-    }
-
-    private const int SoftwareUpdate = 1;
     private const int DriverUpdate = 2;
+
+    /// <summary>Windows Update's classification of security updates, as this PC's own update store names it.</summary>
+    private const string SecurityUpdates = "0FA1201D-4330-4FA8-8AE9-B877473B6441";
 
     /// <summary>The product category every update also carries, with an ID that names no classification.</summary>
     private static FakeCategory Product => new("A product", "00000000-0000-0000-0000-000000000001");
@@ -127,8 +107,7 @@ public class WindowsUpdateServiceTests
     public void TheClassificationsId_DecidesThePill_WhateverItIsCalled(
         string title, string categoryName, string categoryId, string expected)
     {
-        var update = new FakeUpdate(SoftwareUpdate, Product,
-            new FakeCategory(categoryName, categoryId));
+        var update = new FakeUpdate(Product, new FakeCategory(categoryName, categoryId));
 
         Assert.Equal(expected, WindowsUpdateService.ClassifyCategory(title, update));
     }
@@ -136,7 +115,7 @@ public class WindowsUpdateServiceTests
     [Fact]
     public void ADriverUpdate_IsADriver_EvenWithNoClassificationToGoBy()
     {
-        var update = new FakeUpdate(DriverUpdate, Product);
+        var update = new FakeUpdate(Product) { Type = DriverUpdate };
 
         Assert.Equal("Driver", WindowsUpdateService.ClassifyCategory("Realtek - Extension - 10.0.26100.1", update));
     }
@@ -144,9 +123,64 @@ public class WindowsUpdateServiceTests
     [Fact]
     public void AnUpdateWithNothingToGoBy_FallsBackToItsTitle()
     {
-        var update = new FakeUpdate(SoftwareUpdate, Product);
+        var update = new FakeUpdate(Product);
 
         Assert.Equal("Cumulative",
             WindowsUpdateService.ClassifyCategory("2026-10 Cumulative Update for Windows 11", update));
+    }
+
+    // ---------- the scan, over an agent of the test's own ----------
+
+    private static WindowsUpdateService AgentOver(FakeUpdateSession session) =>
+        new(() => session, () => new FakeCollection<FakeUpdate>());
+
+    [Fact]
+    public async Task TheScan_AsksForWhatIsPendingAndNotHidden_AndListsEachUpdateItFinds()
+    {
+        var session = new FakeUpdateSession();
+        session.Pending.Add(new FakeUpdate(Product, new FakeCategory("Security Updates", SecurityUpdates))
+        {
+            Title = "2026-10 Cumulative Update for Windows 11 (KB5031234)",
+            Id = "cumulative",
+            KbNumbers = ["5031234"],
+            MaxDownloadSize = 734003200m,
+        });
+        var drivers = new FakeCategory("Drivers", WindowsUpdateService.DriversClassification);
+        session.Pending.Add(new FakeUpdate(Product, drivers)
+        {
+            Title = "Intel - System - 10.1.1.44",
+            Id = "driver",
+            Type = DriverUpdate,
+            MaxDownloadSize = 2048m,
+        });
+        var progress = new SyncProgress<string>();
+
+        var found = await AgentOver(session).ScanAsync(progress, CancellationToken.None);
+
+        Assert.Equal([WindowsUpdateService.PendingCriteria], session.Searches);
+        Assert.Equal(["Connecting to Windows Update…", "Found 2 update(s)."], progress.Reports);
+        Assert.Equal(
+            [("cumulative", "KB5031234", "700.0 MB", "Cumulative"), ("driver", "", "2.0 KB", "Driver")],
+            found.Select(e => (e.UpdateId, e.KB, e.SizeDisplay, e.Category)));
+    }
+
+    [Fact]
+    public async Task AScanWhoseSearchFails_ThrowsTheAgentsError()
+    {
+        var session = new FakeUpdateSession
+        {
+            SearchFails = new COMException("search failed", unchecked((int)0x8024402C)),
+        };
+
+        var error = await Assert.ThrowsAsync<COMException>(() => AgentOver(session).ScanAsync());
+
+        Assert.Equal(unchecked((int)0x8024402C), error.HResult);
+    }
+
+    [Fact]
+    public void TheAgent_WantsBothFactories()
+    {
+        Assert.Throws<ArgumentNullException>(() => new WindowsUpdateService(null!, () => new object()));
+        Assert.Throws<ArgumentNullException>(() => new WindowsUpdateService(() => new object(), null!));
     }
 }

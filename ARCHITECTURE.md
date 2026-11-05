@@ -631,7 +631,9 @@ Key services:
   `WindowsUpdateViewModel`, and the Dashboard's Check Windows Updates action, which only scans. The
   one instance serves both, so each scan and install reports to an `IProgress<string>` its caller
   passes in, rather than to an event on the instance, which gave the tab's console the Dashboard's
-  lines too (#2791).
+  lines too (#2791). An internal constructor takes the factories for WUA's session and update
+  collection, and every COM release goes through one helper that leaves other objects alone, so a test
+  runs the scan over a fake agent (`FakeWindowsUpdateAgent.cs`) instead of Microsoft's servers.
 - `WindowsUpdatePolicyService` — reads/writes the documented Windows Update
   deferral policy (defer feature updates, restore default), and a bounded pause through the Settings app's own
   pause values under `SOFTWARE\Microsoft\WindowsUpdate\UX\Settings`: the policy's pause is a start date that

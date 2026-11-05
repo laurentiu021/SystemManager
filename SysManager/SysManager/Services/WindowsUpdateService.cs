@@ -19,6 +19,29 @@ namespace SysManager.Services;
 /// </summary>
 public sealed class WindowsUpdateService : IWindowsUpdateService
 {
+    private readonly Func<object> _createSession;
+    private readonly Func<object> _createUpdateCollection;
+
+    public WindowsUpdateService() : this(CreateSession, CreateUpdateCollection)
+    {
+    }
+
+    /// <summary>
+    /// The agent over <paramref name="createSession"/> and <paramref name="createUpdateCollection"/> in place of WUA's
+    /// <c>Microsoft.Update.Session</c> and <c>Microsoft.Update.UpdateColl</c>.
+    /// </summary>
+    /// <remarks>
+    /// So a test can run a scan and an install over objects of its own, which a real session would replace with a
+    /// search of Microsoft's servers and a real install. Every object is read late-bound, as WUA's are, and released
+    /// through <see cref="ReleaseComObject"/>, which leaves an object that is not a COM one alone.
+    /// </remarks>
+    internal WindowsUpdateService(Func<object> createSession, Func<object> createUpdateCollection)
+    {
+        _createSession = createSession ?? throw new ArgumentNullException(nameof(createSession));
+        _createUpdateCollection =
+            createUpdateCollection ?? throw new ArgumentNullException(nameof(createUpdateCollection));
+    }
+
     /// <summary>What the scan and the install ask Windows Update for: updates not installed and not hidden.</summary>
     /// <remarks>
     /// A criteria string replaces the search's default, which is these same two conditions, rather than adding to it.
@@ -46,7 +69,7 @@ public sealed class WindowsUpdateService : IWindowsUpdateService
             dynamic? session = null, searcher = null, result = null, updates = null;
             try
             {
-                session = CreateSession();
+                session = _createSession();
                 searcher = session.CreateUpdateSearcher();
                 searcher.IncludePotentiallySupersededUpdates = false;
 
@@ -63,16 +86,16 @@ public sealed class WindowsUpdateService : IWindowsUpdateService
                     ct.ThrowIfCancellationRequested();
                     var u = updates.Item(i);
                     list.Add(MapToEntry(u));
-                    Marshal.FinalReleaseComObject(u);
+                    ReleaseComObject(u);
                 }
                 return list;
             }
             finally
             {
-                if (updates is not null) Marshal.FinalReleaseComObject(updates);
-                if (result is not null) Marshal.FinalReleaseComObject(result);
-                if (searcher is not null) Marshal.FinalReleaseComObject(searcher);
-                if (session is not null) Marshal.FinalReleaseComObject(session);
+                ReleaseComObject(updates);
+                ReleaseComObject(result);
+                ReleaseComObject(searcher);
+                ReleaseComObject(session);
             }
         }, ct);
 
@@ -106,7 +129,7 @@ public sealed class WindowsUpdateService : IWindowsUpdateService
 
             try
             {
-                session = CreateSession();
+                session = _createSession();
                 searcher = session.CreateUpdateSearcher();
                 search = searcher.Search(PendingCriteria);
                 liveUpdates = search.Updates;
@@ -120,11 +143,11 @@ public sealed class WindowsUpdateService : IWindowsUpdateService
                     dynamic? idObj = null;
                     string id;
                     try { idObj = u.Identity; id = (string)idObj.UpdateID; }
-                    finally { if (idObj is not null) Marshal.FinalReleaseComObject(idObj); }
+                    finally { ReleaseComObject(idObj); }
                     if (!byId.ContainsKey(id))
                         byId[id] = u;
                     else
-                        Marshal.FinalReleaseComObject(u);
+                        ReleaseComObject(u);
                 }
 
                 int idx = 0;
@@ -143,7 +166,7 @@ public sealed class WindowsUpdateService : IWindowsUpdateService
                     progress?.Report($"[{idx}/{entries.Count}] {entry.Title}");
                     entry.Status = "Downloading…";
 
-                    var coll = CreateUpdateCollection();
+                    dynamic coll = _createUpdateCollection();
                     coll.Add(u);
 
                     try
@@ -165,14 +188,14 @@ public sealed class WindowsUpdateService : IWindowsUpdateService
                                 }
                                 finally
                                 {
-                                    Marshal.FinalReleaseComObject(dlResult);
+                                    ReleaseComObject(dlResult);
                                 }
                             }
                             finally
                             {
                                 // Release the downloader even if Download() throws,
                                 // otherwise a failed download leaks the COM object.
-                                Marshal.FinalReleaseComObject(dl);
+                                ReleaseComObject(dl);
                             }
 
                             if (dlCode != Succeeded)
@@ -220,14 +243,14 @@ public sealed class WindowsUpdateService : IWindowsUpdateService
                             }
                             finally
                             {
-                                Marshal.FinalReleaseComObject(iResult);
+                                ReleaseComObject(iResult);
                             }
                         }
                         finally
                         {
                             // Release the installer even if Install() (or reading its
                             // result) throws — a failed install otherwise leaks it.
-                            Marshal.FinalReleaseComObject(inst);
+                            ReleaseComObject(inst);
                         }
 
                         if (iCode == Succeeded)
@@ -255,17 +278,17 @@ public sealed class WindowsUpdateService : IWindowsUpdateService
                     }
                     finally
                     {
-                        Marshal.FinalReleaseComObject(coll);
+                        ReleaseComObject(coll);
                     }
                 }
             }
             finally
             {
-                foreach (var u in byId.Values) Marshal.FinalReleaseComObject(u);
-                if (liveUpdates is not null) Marshal.FinalReleaseComObject(liveUpdates);
-                if (search is not null) Marshal.FinalReleaseComObject(search);
-                if (searcher is not null) Marshal.FinalReleaseComObject(searcher);
-                if (session is not null) Marshal.FinalReleaseComObject(session);
+                foreach (var u in byId.Values) ReleaseComObject(u);
+                ReleaseComObject(liveUpdates);
+                ReleaseComObject(search);
+                ReleaseComObject(searcher);
+                ReleaseComObject(session);
             }
 
             return new InstallReport(installed, failed, reboot);
@@ -306,7 +329,7 @@ public sealed class WindowsUpdateService : IWindowsUpdateService
         }
         finally
         {
-            if (one is not null) Marshal.FinalReleaseComObject(one);
+            ReleaseComObject(one);
         }
     }
 
@@ -321,17 +344,17 @@ public sealed class WindowsUpdateService : IWindowsUpdateService
         }
         finally
         {
-            if (one is not null) Marshal.FinalReleaseComObject(one);
+            ReleaseComObject(one);
         }
     }
 
-    private static dynamic CreateSession()
+    private static object CreateSession()
     {
         var t = Type.GetTypeFromProgID("Microsoft.Update.Session", throwOnError: true)!;
         return Activator.CreateInstance(t)!;
     }
 
-    private static dynamic CreateUpdateCollection()
+    private static object CreateUpdateCollection()
     {
         var t = Type.GetTypeFromProgID("Microsoft.Update.UpdateColl", throwOnError: true)!;
         return Activator.CreateInstance(t)!;
@@ -362,7 +385,7 @@ public sealed class WindowsUpdateService : IWindowsUpdateService
         }
         finally
         {
-            if (identity is not null) Marshal.FinalReleaseComObject(identity);
+            ReleaseComObject(identity);
         }
 
         return new UpdateEntry
@@ -398,7 +421,7 @@ public sealed class WindowsUpdateService : IWindowsUpdateService
         catch (Microsoft.CSharp.RuntimeBinder.RuntimeBinderException ex) { Serilog.Log.Debug(ex, "ExtractKbIds: dynamic binding error"); }
         finally
         {
-            if (ids is not null) Marshal.FinalReleaseComObject(ids);
+            ReleaseComObject(ids);
         }
         return list;
     }

@@ -54,14 +54,36 @@ public class ResourceHistoryTimeAxisTests
         // way a fix for this could silently make the chart worse rather than better.
         var when = new DateTime(2026, 9, 21, 14, 5, 0);
 
-        Assert.Equal("09-21 14:05", ResourceHistoryViewModel.TimeAxisLabel(when.Ticks));
+        Assert.Equal("09-21 14:05", ResourceHistoryViewModel.TimeAxisLabel(when.Ticks, TimeZoneInfo.Utc));
+    }
+
+    [Fact]
+    public void ATick_IsAnInstant_LabelledInTheZonesTime()
+    {
+        // The chart plots each sample at its instant, so the hour the clock repeats in autumn runs on along the axis
+        // (#2790). Its labels are local: both passes of 03:30 on 25 October 2026 in Bucharest read 03:30.
+        var bucharest = TimeZoneInfo.FindSystemTimeZoneById("GTB Standard Time");
+        var first = new DateTime(2026, 10, 25, 0, 30, 0, DateTimeKind.Utc);
+
+        Assert.Equal("10-25 03:30", ResourceHistoryViewModel.TimeAxisLabel(first.Ticks, bucharest));
+        Assert.Equal("10-25 03:30", ResourceHistoryViewModel.TimeAxisLabel(first.AddHours(1).Ticks, bucharest));
+        Assert.Equal("10-25 05:30", ResourceHistoryViewModel.TimeAxisLabel(first.AddHours(3).Ticks, bucharest));
+    }
+
+    [Fact]
+    public void ALabelNearTheEndOfTime_RendersNothingRatherThanThrowing()
+    {
+        // A zone ahead of UTC would carry the last ticks past DateTime.MaxValue.
+        var kiribati = TimeZoneInfo.FindSystemTimeZoneById("Line Islands Standard Time");
+        Assert.Equal("", ResourceHistoryViewModel.TimeAxisLabel(DateTime.MaxValue.Ticks - 1, kiribati));
     }
 
     [Fact]
     public void TheBoundaryItselfRenders()
     {
         // Inclusive at the floor, so the one instant the rule names is labelled rather than dropped.
-        Assert.Equal("01-01 00:00", ResourceHistoryViewModel.TimeAxisLabel(new DateTime(2000, 1, 1).Ticks));
+        Assert.Equal("01-01 00:00",
+            ResourceHistoryViewModel.TimeAxisLabel(new DateTime(2000, 1, 1).Ticks, TimeZoneInfo.Utc));
     }
 
     [Fact]

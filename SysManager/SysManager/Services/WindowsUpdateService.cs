@@ -403,10 +403,30 @@ public sealed class WindowsUpdateService : IWindowsUpdateService
         return list;
     }
 
+    /// <summary>Windows Update's classification of drivers.</summary>
+    /// <remarks>Read off a PC's own update store, where WUA names it "Drivers" and gives its updates type 2.</remarks>
+    internal const string DriversClassification = "EBFC1FC5-71A4-4F7B-9ACA-3B9A503104A0";
+
+    /// <summary>Windows Update's classification of feature upgrades, a new version of Windows.</summary>
+    internal const string UpgradesClassification = "3689BDC8-B205-4AF4-8D4A-A63924C5E9D5";
+
+    /// <summary>Windows Update's classification of definition updates, which on Windows are Defender's.</summary>
+    internal const string DefinitionUpdatesClassification = "E0789628-CE08-4437-BE74-2495B842F43B";
+
+    /// <summary>WUA's <c>UpdateType.utDriver</c>.</summary>
+    private const int DriverUpdateType = 2;
+
     /// <summary>
     /// Classify an update into a SysManager category for the colored pill in
     /// the DataGrid. Order matters — most specific first.
     /// </summary>
+    /// <remarks>
+    /// What Windows Update says the update is comes first, by its classification's ID and the update's type: a
+    /// category's name and the title are in the display language. Matched on the English names "Drivers" and
+    /// "Upgrades" and on English title words, nearly every row on German, French or Romanian Windows got the plain
+    /// "Update" pill, so an optional driver or a feature upgrade, ticked like every other row, looked like any other
+    /// update (#2791). The names and the title words stay behind it, for what has no ID to go by.
+    /// </remarks>
     internal static string ClassifyCategory(string title, dynamic? u = null)
     {
         if (string.IsNullOrWhiteSpace(title)) return "Update";
@@ -428,11 +448,18 @@ public sealed class WindowsUpdateService : IWindowsUpdateService
                 {
                     var cat = cats.Item(i);
                     var name = (string)(cat.Name ?? string.Empty);
-                    Marshal.FinalReleaseComObject(cat);
+                    var id = (string)(cat.CategoryID ?? string.Empty);
+                    ReleaseComObject(cat);
+                    if (id.Equals(DriversClassification, StringComparison.OrdinalIgnoreCase)) return "Driver";
+                    if (id.Equals(UpgradesClassification, StringComparison.OrdinalIgnoreCase)) return "Feature upgrade";
+                    if (id.Equals(DefinitionUpdatesClassification, StringComparison.OrdinalIgnoreCase))
+                        return "Defender";
                     if (name.Equals("Drivers", StringComparison.OrdinalIgnoreCase)) return "Driver";
                     if (name.Equals("Upgrades", StringComparison.OrdinalIgnoreCase)) return "Feature upgrade";
                     if (name.Contains("Servicing", StringComparison.OrdinalIgnoreCase)) return "Servicing";
                 }
+
+                if ((int)u.Type == DriverUpdateType) return "Driver";
             }
             catch (COMException ex) { Serilog.Log.Debug(ex, "ClassifyCategory: COM error reading Categories"); }
             catch (Microsoft.CSharp.RuntimeBinder.RuntimeBinderException ex) { Serilog.Log.Debug(ex, "ClassifyCategory: dynamic binding error"); }
@@ -440,7 +467,7 @@ public sealed class WindowsUpdateService : IWindowsUpdateService
             {
                 // Release the Categories collection even when an early return fires on
                 // a match inside the loop (previously the release was skipped on match).
-                if (cats is not null) Marshal.FinalReleaseComObject(cats);
+                ReleaseComObject(cats);
             }
         }
 
@@ -452,6 +479,12 @@ public sealed class WindowsUpdateService : IWindowsUpdateService
         if (title.Contains("Servicing Stack", StringComparison.OrdinalIgnoreCase)) return "Servicing";
         if (title.Contains(".NET", StringComparison.OrdinalIgnoreCase)) return ".NET";
         return "Update";
+    }
+
+    /// <summary>Releases a COM object and leaves anything else alone: a test hands in objects of its own.</summary>
+    private static void ReleaseComObject(object? o)
+    {
+        if (o is not null && Marshal.IsComObject(o)) Marshal.FinalReleaseComObject(o);
     }
 
     internal static string FormatSize(long bytes) => bytes switch

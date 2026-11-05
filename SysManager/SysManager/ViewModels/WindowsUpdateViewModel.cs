@@ -41,7 +41,7 @@ public sealed partial class WindowsUpdateViewModel : ViewModelBase
     internal const int HistoryModuleImportFailedExitCode = 41;
     internal const int HistoryQueryFailedExitCode = 42;
 
-    internal const string PsWindowsUpdateHistoryScript = """
+    internal const string PsWindowsUpdateHistoryScript = $$"""
         $ErrorActionPreference = 'Stop'
         try {
             Import-Module PSWindowsUpdate -ErrorAction Stop
@@ -61,15 +61,26 @@ public sealed partial class WindowsUpdateViewModel : ViewModelBase
 
         if (-not $hist -or $hist.Count -eq 0) { '[]' }
         else {
-            $hist | Select-Object @{N='Title';E={$_.Title}},
-                @{N='KB';E={if($_.KBArticleIDs){('KB'+($_.KBArticleIDs -join ','))}else{''}}},
-                @{N='Size';E={''}},
-                @{N='Status';E={$_.Result}},
-                @{N='Date';E={if($_.Date){$_.Date.ToString('yyyy-MM-dd')}else{''}}},
-                @{N='IsHidden';E={$false}},
-                @{N='Category';E={'History'}} |
-            ConvertTo-Json -Compress
+        {{PsWindowsUpdateHistoryColumns}}
         }
+        """;
+
+    /// <summary>The history's columns, as JSON, from the entries <c>Get-WUHistory</c> put in <c>$hist</c>.</summary>
+    /// <remarks>
+    /// The KB number is the entry's own <c>KB</c>, which PSWindowsUpdate fills for a history entry, and the title's
+    /// "KB" and digits when that is empty. It was read from <c>KBArticleIDs</c>, which only an update the scan lists
+    /// has, so the column was blank on every row (#2791). A constant of its own, so a test can run it on entries shaped
+    /// like the module's without the module.
+    /// </remarks>
+    internal const string PsWindowsUpdateHistoryColumns = """
+        $hist | Select-Object @{N='Title';E={$_.Title}},
+            @{N='KB';E={if($_.KB){[string]$_.KB}elseif($_.Title -match 'KB\d+'){$Matches[0]}else{''}}},
+            @{N='Size';E={''}},
+            @{N='Status';E={$_.Result}},
+            @{N='Date';E={if($_.Date){$_.Date.ToString('yyyy-MM-dd')}else{''}}},
+            @{N='IsHidden';E={$false}},
+            @{N='Category';E={'History'}} |
+        ConvertTo-Json -Compress
         """;
 
     private readonly IPowerShellRunner _runner;

@@ -1070,7 +1070,7 @@ public sealed class DashboardViewModelTests : IDisposable
         IReadOnlyList<UpdateEntry> found = Enumerable.Range(0, count)
             .Select(i => new UpdateEntry { Title = $"Update {i}", UpdateId = $"id-{i}" })
             .ToList();
-        agent.ScanAsync(Arg.Any<CancellationToken>()).Returns(Task.FromResult(found));
+        agent.ScanAsync(Arg.Any<IProgress<string>?>(), Arg.Any<CancellationToken>()).Returns(Task.FromResult(found));
         return agent;
     }
 
@@ -1082,7 +1082,7 @@ public sealed class DashboardViewModelTests : IDisposable
 
         await vm.QuickWindowsUpdateCommand.ExecuteAsync(null);
 
-        await agent.Received(1).ScanAsync(Arg.Any<CancellationToken>());
+        await agent.Received(1).ScanAsync(Arg.Any<IProgress<string>?>(), Arg.Any<CancellationToken>());
         Assert.Equal("Check Windows Updates", vm.QuickActionName);
         Assert.Equal("✓ Done", vm.QuickActionStatus);
         Assert.Equal("3 updates available", vm.QuickActionDetail);
@@ -1136,7 +1136,8 @@ public sealed class DashboardViewModelTests : IDisposable
     public async Task QuickWindowsUpdate_WhenTheAgentFails_EndsAsFailed_NotUpToDate(bool refused)
     {
         var agent = Substitute.For<IWindowsUpdateService>();
-        agent.ScanAsync(Arg.Any<CancellationToken>()).Returns<Task<IReadOnlyList<UpdateEntry>>>(_ =>
+        agent.ScanAsync(Arg.Any<IProgress<string>?>(), Arg.Any<CancellationToken>())
+            .Returns<Task<IReadOnlyList<UpdateEntry>>>(_ =>
         {
             if (refused) throw new UnauthorizedAccessException();
             throw new System.Runtime.InteropServices.COMException("search failed", unchecked((int)0x8024402C));

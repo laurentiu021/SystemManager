@@ -19,11 +19,6 @@ namespace SysManager.Services;
 /// </summary>
 public sealed class WindowsUpdateService : IWindowsUpdateService
 {
-    /// <summary>Raised on the calling thread for each progress/log line.</summary>
-    public event Action<string>? Log;
-
-    private void Emit(string text) => Log?.Invoke(text);
-
     /// <summary>What the scan and the install ask Windows Update for: updates not installed and not hidden.</summary>
     /// <remarks>
     /// A criteria string replaces the search's default, which is these same two conditions, rather than adding to it.
@@ -37,11 +32,13 @@ public sealed class WindowsUpdateService : IWindowsUpdateService
     /// Scan for the updates Windows has pending, leaving out the ones the user hid (<see cref="PendingCriteria"/>).
     /// Returns one entry per update with stable UpdateID for later install.
     /// </summary>
-    public Task<IReadOnlyList<UpdateEntry>> ScanAsync(CancellationToken ct = default) =>
+    public Task<IReadOnlyList<UpdateEntry>> ScanAsync(
+        IProgress<string>? progress = null,
+        CancellationToken ct = default) =>
         Task.Run<IReadOnlyList<UpdateEntry>>(() =>
         {
             ct.ThrowIfCancellationRequested();
-            Emit("Connecting to Windows Update…");
+            progress?.Report("Connecting to Windows Update…");
 
             // Declared outside the try so the finally can release every COM object
             // even when cancellation or MapToEntry throws mid-scan (previously these
@@ -58,7 +55,7 @@ public sealed class WindowsUpdateService : IWindowsUpdateService
 
                 updates = result.Updates;
                 var count = (int)updates.Count;
-                Emit($"Found {count} update(s).");
+                progress?.Report($"Found {count} update(s).");
 
                 var list = new List<UpdateEntry>(count);
                 for (int i = 0; i < count; i++)
@@ -81,12 +78,13 @@ public sealed class WindowsUpdateService : IWindowsUpdateService
 
     /// <summary>
     /// Download + install the given updates. Per-update progress is reported
-    /// via <see cref="Log"/>; per-update result is set on the entry's
+    /// to <paramref name="progress"/>; per-update result is set on the entry's
     /// <see cref="UpdateEntry.Status"/> property.
     /// Returns aggregate counts (installed, failed, rebootRequired).
     /// </summary>
     public Task<InstallReport> InstallAsync(
         IReadOnlyList<UpdateEntry> entries,
+        IProgress<string>? progress = null,
         CancellationToken ct = default) =>
         Task.Run(() =>
         {
@@ -94,7 +92,7 @@ public sealed class WindowsUpdateService : IWindowsUpdateService
                 return new InstallReport(0, 0, false);
 
             ct.ThrowIfCancellationRequested();
-            Emit("Connecting to Windows Update…");
+            progress?.Report("Connecting to Windows Update…");
 
             // Declared outside the try so the finally releases every COM object even
             // when a cancellation check or the map-build throws during setup (these
@@ -137,12 +135,12 @@ public sealed class WindowsUpdateService : IWindowsUpdateService
 
                     if (string.IsNullOrWhiteSpace(entry.UpdateId) || !byId.TryGetValue(entry.UpdateId, out var u))
                     {
-                        Emit($"[{idx}/{entries.Count}] SKIP (not in live feed): {entry.Title}");
+                        progress?.Report($"[{idx}/{entries.Count}] SKIP (not in live feed): {entry.Title}");
                         entry.Status = "Not applied";
                         continue;
                     }
 
-                    Emit($"[{idx}/{entries.Count}] {entry.Title}");
+                    progress?.Report($"[{idx}/{entries.Count}] {entry.Title}");
                     entry.Status = "Downloading…";
 
                     var coll = CreateUpdateCollection();
@@ -152,7 +150,7 @@ public sealed class WindowsUpdateService : IWindowsUpdateService
                     {
                         if (!(bool)u.IsDownloaded)
                         {
-                            Emit("  Downloading…");
+                            progress?.Report("  Downloading…");
                             var dl = session.CreateUpdateDownloader();
                             int dlCode;
                             int dlHr;
@@ -180,7 +178,7 @@ public sealed class WindowsUpdateService : IWindowsUpdateService
                             if (dlCode != Succeeded)
                             {
                                 entry.Status = FailureStatus("download", dlCode, dlHr);
-                                Emit($"  Download failed: {entry.Status}.");
+                                progress?.Report($"  Download failed: {entry.Status}.");
                                 Serilog.Log.Warning("Windows Update download failed for {Title}: result code {Code}, 0x{HResult:X8}",
                                     entry.Title, dlCode, dlHr);
                                 failed++;
@@ -197,13 +195,13 @@ public sealed class WindowsUpdateService : IWindowsUpdateService
                             try { u.AcceptEula(); }
                             catch (COMException ex)
                             {
-                                Log?.Invoke($"  EULA accept failed: 0x{ex.HResult:X8}");
+                                progress?.Report($"  EULA accept failed: 0x{ex.HResult:X8}");
                                 Serilog.Log.Warning(ex, "Windows Update licence acceptance failed for {Title}", entry.Title);
                             }
                         }
 
                         ct.ThrowIfCancellationRequested();
-                        Emit("  Installing…");
+                        progress?.Report("  Installing…");
                         entry.Status = "Installing…";
 
                         int iCode;
@@ -237,13 +235,13 @@ public sealed class WindowsUpdateService : IWindowsUpdateService
                             entry.Status = needsReboot ? "Installed (reboot required)" : "Installed";
                             installed++;
                             if (needsReboot) reboot = true;
-                            Emit("  ✓ Installed");
+                            progress?.Report("  ✓ Installed");
                         }
                         else
                         {
                             entry.Status = FailureStatus("install", iCode, iHr);
                             failed++;
-                            Emit($"  ✗ Install failed: {entry.Status}.");
+                            progress?.Report($"  ✗ Install failed: {entry.Status}.");
                             Serilog.Log.Warning("Windows Update install failed for {Title}: result code {Code}, 0x{HResult:X8}",
                                 entry.Title, iCode, iHr);
                         }
@@ -252,7 +250,7 @@ public sealed class WindowsUpdateService : IWindowsUpdateService
                     {
                         entry.Status = $"Error 0x{ex.HResult:X8}";
                         failed++;
-                        Emit($"  ✗ COM error: 0x{ex.HResult:X8} {ex.Message}");
+                        progress?.Report($"  ✗ COM error: 0x{ex.HResult:X8} {ex.Message}");
                         Serilog.Log.Warning(ex, "Install failed for {Title}", entry.Title);
                     }
                     finally

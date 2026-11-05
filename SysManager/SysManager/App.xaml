@@ -38,7 +38,6 @@
             <h:SignatureTrustToColorConverter x:Key="SigTrustColor"/>
             <h:SignatureTrustToBackgroundColorConverter x:Key="SigTrustBgColor"/>
             <h:SignatureTrustToTextConverter x:Key="SigTrustText"/>
-            <h:IntGreaterThanZeroConverter x:Key="GreaterThanZero"/>
             <h:EqualityConverter x:Key="IsEqual"/>
             <h:MaintenanceActionToTextConverter x:Key="MaintenanceActionText"/>
             <!-- The text for a property typed object, Content, Header or ToolTip, where a binding's StringFormat is

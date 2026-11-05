@@ -15139,6 +15139,137 @@ public partial class ArchitectureTests
     }
 
     /// <summary>
+    /// A converter on a <c>Visibility</c> binding hands back a <c>Visibility</c>.
+    /// </summary>
+    /// <remarks>
+    /// WPF does not convert what a converter returns to the type of the property it sets. A converter that returns
+    /// a <c>bool</c> there is refused on every update, with a binding error in the debug output and nothing on
+    /// screen, and the element keeps its default, Visible. The Windows Update table's binding did that from the day
+    /// it was written: it read as hiding the table while no updates were listed, and hid nothing (#2791). Measured
+    /// headless before it went: the binding's status was <c>UpdateTargetError</c> with no rows and with three, and
+    /// the table was Visible both times.
+    /// <para>Each converter is judged by what it returns rather than by its name: the key a binding names is
+    /// resolved to its type in App.xaml, built as XAML builds it, and handed a bool, a count, a text and nothing,
+    /// with the binding's own parameter. A list of good names would pass a new converter that returns the wrong
+    /// type.</para>
+    /// </remarks>
+    [Fact]
+    public void EveryVisibilityBinding_GoesThroughAConverterThatReturnsAVisibility()
+    {
+        var appDir = TestPaths.AppProject();
+        var xamlNamespace = XNamespace.Get("http://schemas.microsoft.com/winfx/2006/xaml");
+
+        // The framework's converters by name, for an element in the WPF namespace.
+        var framework = typeof(System.Windows.Controls.BooleanToVisibilityConverter).Assembly.GetExportedTypes()
+            .Where(t => typeof(System.Windows.Data.IValueConverter).IsAssignableFrom(t))
+            .GroupBy(t => t.Name, StringComparer.Ordinal)
+            .ToDictionary(g => g.Key, g => g.First(), StringComparer.Ordinal);
+
+        var converters = new Dictionary<string, System.Windows.Data.IValueConverter>(StringComparer.Ordinal);
+        foreach (var element in XDocument.Load(Path.Combine(appDir, "App.xaml")).Descendants())
+        {
+            if ((string?)element.Attribute(xamlNamespace + "Key") is { } key
+                && ConverterType(element.Name, framework) is { } type)
+                converters[key] = (System.Windows.Data.IValueConverter)Activator.CreateInstance(type)!;
+        }
+
+        // The verdict tells the two kinds apart, both ways: BoolToVis and FlexVis give a Visibility, and BoolInvert,
+        // registered beside them, gives a bool. So do the readers: an attribute and a Setter are both read, and a
+        // property whose name only ends in Visibility is not.
+        Assert.True(GivesVisibility(converters["BoolToVis"], null));
+        Assert.True(GivesVisibility(converters["FlexVis"], "Inverse"));
+        Assert.False(GivesVisibility(converters["BoolInvert"], null));
+        const string Attribute = "<Border Visibility=\"{Binding IsBusy, Converter={StaticResource BoolToVis}}\">";
+        Assert.Matches(VisibilityBinding(), Attribute);
+        Assert.Matches(VisibilityBinding(), "<Setter Property=\"Visibility\" Value=\"{Binding Count}\"/>");
+        Assert.DoesNotMatch(VisibilityBinding(), "<DataGrid HeadersVisibility=\"{Binding Mode}\">");
+
+        var files = Directory.GetFiles(Path.Combine(appDir, "Views"), "*.xaml")
+            .Append(Path.Combine(appDir, "MainWindow.xaml"))
+            .ToList();
+        Assert.True(files.Count >= 50, $"only {files.Count} XAML files found — this guard is reading almost nothing.");
+
+        var offenders = new List<string>();
+        var judged = 0;
+
+        foreach (var file in files)
+        {
+            foreach (var binding in VisibilityBinding().Matches(XamlCode(file)).Cast<Match>()
+                         .Select(m => m.Groups["binding"].Value))
+            {
+                var key = BindingConverterKey().Match(binding);
+                if (!key.Success) continue;
+                judged++;
+
+                var parameter = BindingConverterParameter().Match(binding);
+                if (!converters.TryGetValue(key.Groups["key"].Value, out var converter))
+                    offenders.Add($"{Path.GetFileName(file)} — {binding}: App.xaml registers no converter by that key");
+                else if (!GivesVisibility(converter, parameter.Success ? parameter.Groups["parameter"].Value : null))
+                    offenders.Add($"{Path.GetFileName(file)} — {binding}");
+            }
+        }
+
+        // Measured when written: 352 Visibility bindings through a converter, 279 of them FlexVis and 73 BoolToVis.
+        Assert.True(judged >= 300,
+            $"only {judged} Visibility bindings through a converter were found — the reader stopped matching, so the "
+            + "check below is looking at almost nothing.");
+
+        Assert.True(offenders.Count == 0,
+            "These Visibility bindings go through a converter that hands back something other than a Visibility. "
+            + "WPF refuses the value on every update and the element stays Visible, whatever the binding says. Use "
+            + "FlexVis, or remove the binding:\n  " + string.Join("\n  ", offenders));
+    }
+
+    /// <summary>The converter type a XAML element names, or null when it names something else.</summary>
+    /// <remarks>
+    /// The WPF namespace is looked up in <paramref name="framework"/>, the framework's converters by name, and a
+    /// <c>clr-namespace</c> without an assembly in the app's own. Any other namespace holds no converter App.xaml
+    /// registers, a <c>sys:Boolean</c> for one.
+    /// </remarks>
+    private static Type? ConverterType(XName element, IReadOnlyDictionary<string, Type> framework)
+    {
+        const string Presentation = "http://schemas.microsoft.com/winfx/2006/xaml/presentation";
+        const string ClrNamespace = "clr-namespace:";
+        var ns = element.NamespaceName;
+        var type = ns == Presentation
+            ? framework.GetValueOrDefault(element.LocalName)
+            : ns.StartsWith(ClrNamespace, StringComparison.Ordinal) && !ns.Contains(';', StringComparison.Ordinal)
+                ? typeof(SysManager.Helpers.FlexibleBoolToVisibilityConverter).Assembly
+                    .GetType(ns[ClrNamespace.Length..] + "." + element.LocalName)
+                : null;
+        return type is not null && typeof(System.Windows.Data.IValueConverter).IsAssignableFrom(type) ? type : null;
+    }
+
+    /// <summary>
+    /// Whether <paramref name="converter"/>, given <paramref name="parameter"/>, answers a bool, a count, a text and
+    /// nothing with a <c>Visibility</c>, or with no value at all.
+    /// </summary>
+    private static bool GivesVisibility(System.Windows.Data.IValueConverter converter, string? parameter)
+    {
+        object?[] values = [true, false, 0, 3, "", "text", null];
+        var results = values
+            .Select(v => converter.Convert(
+                v!, typeof(System.Windows.Visibility), parameter!, CultureInfo.InvariantCulture))
+            .ToList();
+        return results.Any(r => r is System.Windows.Visibility)
+               && results.All(r => r is System.Windows.Visibility
+                                   || r == System.Windows.DependencyProperty.UnsetValue
+                                   || r == System.Windows.Data.Binding.DoNothing);
+    }
+
+    /// <summary>A <c>Visibility</c> a binding sets, as an attribute or as a Setter's value: the binding.</summary>
+    [GeneratedRegex(@"(?:\bVisibility|<Setter\s+Property=""Visibility""\s+Value)=""(?<binding>\{Binding\b[^""]*)""")]
+    private static partial Regex VisibilityBinding();
+
+    /// <summary>The key of the converter a binding names.</summary>
+    [GeneratedRegex(@"\bConverter=\{StaticResource\s+(?<key>\w+)\s*\}")]
+    private static partial Regex BindingConverterKey();
+
+    /// <summary>The parameter a binding hands its converter.</summary>
+    [GeneratedRegex(@"\bConverterParameter=(?<parameter>[^,}\s]+)")]
+    private static partial Regex BindingConverterParameter();
+
+    /// <summary>
     /// Nearly every tab carries plain-language search keywords, and the jargon-named ones all do.
     /// </summary>
     /// <remarks>

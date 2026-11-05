@@ -378,6 +378,158 @@ public sealed class WindowsUpdateViewModelTests : IDisposable
         Assert.True(cts.IsCancellationRequested);
     }
 
+    // ---------- Cancel stops the module work, and a run's lines go to its own console (#2791) ----------
+    //
+    // The module check and install made no token, so Cancel and Escape cancelled whatever an earlier list or history
+    // had left behind, and an install held up by the PowerShell Gallery ran on. And the agent reported every caller's
+    // lines through an event this tab listened to for as long as it lived, so the Dashboard's check wrote into its
+    // console.
+
+    /// <summary>
+    /// A runner whose call number <paramref name="waitingCall"/> runs until its token is cancelled, and whose earlier
+    /// calls succeed at once. Every token it is handed goes into <paramref name="tokens"/>.
+    /// </summary>
+    private static (IPowerShellRunner Runner, TaskCompletionSource<int> Waiting) RunnerThatWaitsAtCall(
+        int waitingCall, List<CancellationToken> tokens)
+    {
+        var waiting = new TaskCompletionSource<int>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var runner = Substitute.For<IPowerShellRunner>();
+        runner.RunScriptViaPwshAsync(Arg.Any<string>(), Arg.Any<CancellationToken>()).Returns(ci =>
+        {
+            var token = ci.ArgAt<CancellationToken>(1);
+            tokens.Add(token);
+            if (tokens.Count - 1 != waitingCall) return Task.FromResult(0);
+            token.Register(() => waiting.TrySetCanceled(token));
+            return waiting.Task;
+        });
+        return (runner, waiting);
+    }
+
+    [Theory]
+    [InlineData(0)]   // while the install script runs
+    [InlineData(1)]   // while the probe after it looks for the module
+    public async Task Cancel_StopsTheModuleInstall(int waitingCall)
+    {
+        var tokens = new List<CancellationToken>();
+        var (runner, waiting) = RunnerThatWaitsAtCall(waitingCall, tokens);
+        var vm = new WindowsUpdateViewModel(runner, Substitute.For<IWindowsUpdateService>(), Policy(), () => false);
+
+        var install = vm.InstallModuleCommand.ExecuteAsync(null);
+        vm.CancelCommand.Execute(null);
+        // How the run would end if the cancel had not reached it. Once the cancel has ended it, this changes nothing.
+        waiting.TrySetResult(0);
+        await install;
+
+        Assert.Equal("Module install cancelled.", vm.StatusMessage);
+        Assert.False(vm.IsBusy);
+        Assert.All(tokens, token => Assert.True(token.IsCancellationRequested));
+    }
+
+    [Fact]
+    public async Task Cancel_StopsTheModuleCheck()
+    {
+        var tokens = new List<CancellationToken>();
+        var (runner, waiting) = RunnerThatWaitsAtCall(0, tokens);
+        var vm = new WindowsUpdateViewModel(runner, Substitute.For<IWindowsUpdateService>(), Policy(), () => false);
+
+        var check = vm.CheckModuleCommand.ExecuteAsync(null);
+        vm.CancelCommand.Execute(null);
+        waiting.TrySetResult(0);
+        await check;
+
+        Assert.Equal("Module check cancelled.", vm.ModuleStatus);
+        Assert.False(vm.IsBusy);
+    }
+
+    /// <summary>An agent that reports, as the real one does, to the reporter of the call it is running.</summary>
+    private static IWindowsUpdateService AgentThatReports()
+    {
+        var wu = Substitute.For<IWindowsUpdateService>();
+        wu.ScanAsync(Arg.Any<IProgress<string>?>(), Arg.Any<CancellationToken>()).Returns(ci =>
+        {
+            var progress = ci.ArgAt<IProgress<string>?>(0);
+            progress?.Report("Connecting to Windows Update…");
+            progress?.Report("Found 1 update(s).");
+            return Task.FromResult<IReadOnlyList<UpdateEntry>>(
+                [new UpdateEntry { Title = "Update a", UpdateId = "a" }]);
+        });
+        wu.InstallAsync(
+                Arg.Any<IReadOnlyList<UpdateEntry>>(), Arg.Any<IProgress<string>?>(), Arg.Any<CancellationToken>())
+            .Returns(ci =>
+            {
+                ci.ArgAt<IProgress<string>?>(1)?.Report("[1/1] Update a");
+                return Task.FromResult(new InstallReport(1, 0, false));
+            });
+        return wu;
+    }
+
+    [Fact]
+    public async Task AScanStartedElsewhere_WritesNothingIntoThisTabsConsole()
+    {
+        var wu = AgentThatReports();
+        var vm = new WindowsUpdateViewModel(Substitute.For<IPowerShellRunner>(), wu, Policy(), () => false);
+
+        // The call the Dashboard's Check Windows Updates makes, on the one agent the two tabs share.
+        await wu.ScanAsync(ct: CancellationToken.None);
+
+        Assert.Empty(vm.Console.Lines);
+    }
+
+    /// <summary>The agent has no event at all, so a tab has nothing to hear another caller's lines through.</summary>
+    [Fact]
+    public void TheAgent_ReportsOnlyToTheCallThatAsked()
+        => Assert.Empty(typeof(IWindowsUpdateService).GetEvents());
+
+    [Fact]
+    public async Task ThisTabsOwnList_WritesItsLinesIntoItsConsole()
+    {
+        var vm = new WindowsUpdateViewModel(
+            Substitute.For<IPowerShellRunner>(), AgentThatReports(), Policy(), () => false);
+
+        await WithReportsDeliveredAsMade(() => vm.ListUpdatesCommand.ExecuteAsync(null));
+
+        Assert.Equal(["Connecting to Windows Update…", "Found 1 update(s)."], vm.Console.Lines.Select(l => l.Text));
+    }
+
+    [Fact]
+    public async Task ThisTabsOwnInstall_WritesItsLinesIntoItsConsole()
+    {
+        var vm = new WindowsUpdateViewModel(
+            Substitute.For<IPowerShellRunner>(), AgentThatReports(), Policy(), () => true);
+        vm.Updates.Add(new UpdateEntry { Title = "Update a", UpdateId = "a", IsSelected = true });
+        using var dialog = new DialogAnswer(confirm: true);
+
+        await WithReportsDeliveredAsMade(() => vm.InstallUpdatesCommand.ExecuteAsync(null));
+
+        Assert.Equal(["[1/1] Update a"], vm.Console.Lines.Select(l => l.Text));
+        Assert.Equal("Installed 1/1.", vm.StatusMessage);
+    }
+
+    /// <summary>
+    /// Runs <paramref name="command"/> under a context that delivers a progress report on the thread that made it, so
+    /// every line is in the console by the time the command ends. A test has no context of its own, so a report would
+    /// be queued on the thread pool and could arrive after the run, when the reporter drops it.
+    /// </summary>
+    private static async Task WithReportsDeliveredAsMade(Func<Task> command)
+    {
+        var previous = SynchronizationContext.Current;
+        SynchronizationContext.SetSynchronizationContext(new InlineContext());
+        try
+        {
+            await command();
+        }
+        finally
+        {
+            SynchronizationContext.SetSynchronizationContext(previous);
+        }
+    }
+
+    /// <summary>Runs a post on the thread that made it, so a report has landed by the time Report returns.</summary>
+    private sealed class InlineContext : SynchronizationContext
+    {
+        public override void Post(SendOrPostCallback d, object? state) => d(state);
+    }
+
     // ---------- ParseUpdateJson via reflection ----------
 
     [Fact]
@@ -530,7 +682,7 @@ public sealed class WindowsUpdateViewModelTests : IDisposable
     {
         var wu = Substitute.For<IWindowsUpdateService>();
         var call = 0;
-        wu.ScanAsync(Arg.Any<CancellationToken>()).Returns(_ =>
+        wu.ScanAsync(Arg.Any<IProgress<string>?>(), Arg.Any<CancellationToken>()).Returns(_ =>
         {
             var ids = scans[Math.Min(call++, scans.Length - 1)];
             return Task.FromResult<IReadOnlyList<UpdateEntry>>(
@@ -627,7 +779,7 @@ public sealed class WindowsUpdateViewModelTests : IDisposable
     {
         var wu = Substitute.For<IWindowsUpdateService>();
         var call = 0;
-        wu.ScanAsync(Arg.Any<CancellationToken>()).Returns(_ => call++ switch
+        wu.ScanAsync(Arg.Any<IProgress<string>?>(), Arg.Any<CancellationToken>()).Returns(_ => call++ switch
         {
             0 => Task.FromResult<IReadOnlyList<UpdateEntry>>(
                 [new UpdateEntry { Title = "Update a", UpdateId = "a" }, new UpdateEntry { Title = "Update b", UpdateId = "b" }]),
@@ -654,7 +806,7 @@ public sealed class WindowsUpdateViewModelTests : IDisposable
         // The history's rows are not updates to install, so they go when a list starts, as they did before.
         var scan = new TaskCompletionSource<IReadOnlyList<UpdateEntry>>(TaskCreationOptions.RunContinuationsAsynchronously);
         var wu = Substitute.For<IWindowsUpdateService>();
-        wu.ScanAsync(Arg.Any<CancellationToken>()).Returns(scan.Task);
+        wu.ScanAsync(Arg.Any<IProgress<string>?>(), Arg.Any<CancellationToken>()).Returns(scan.Task);
         var vm = new WindowsUpdateViewModel(Substitute.For<IPowerShellRunner>(), wu, Policy(), () => false);
         vm.IsShowingHistory = true;
         vm.Updates.Add(new UpdateEntry { Title = "Installed last week", Category = "History" });

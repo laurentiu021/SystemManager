@@ -627,7 +627,10 @@ Key services:
   app by id rather than `upgrade --all`, which would take that package too and replace the running exe (#2889).
 - `WindowsUpdateService` — drives Windows Update through the WUA COM API
   (scan, select, install) with progress reporting, behind `IWindowsUpdateService`; backs
-  `WindowsUpdateViewModel`, and the Dashboard's Check Windows Updates action, which only scans.
+  `WindowsUpdateViewModel`, and the Dashboard's Check Windows Updates action, which only scans. The
+  one instance serves both, so each scan and install reports to an `IProgress<string>` its caller
+  passes in, rather than to an event on the instance, which gave the tab's console the Dashboard's
+  lines too (#2791).
 - `WindowsUpdatePolicyService` — reads/writes the documented Windows Update
   deferral policy (defer feature updates, restore default), and a bounded pause through the Settings app's own
   pause values under `SOFTWARE\Microsoft\WindowsUpdate\UX\Settings`: the policy's pause is a start date that
@@ -2371,7 +2374,7 @@ Key utility classes that don't fit neatly into Services or ViewModels (not an ex
   blocked thread costs a thread. A fitness function asserts nothing marshals
   synchronously, including via a short local holding the dispatcher.
 - `MarkdownTextBlock` — lightweight Markdown-to-WPF inline renderer.
-- Value converters: `EqualityConverter`, `IntGreaterThanZeroConverter`, and `ValueConverters` —
+- Value converters: `EqualityConverter` and `ValueConverters` —
   17 converters (among them visibility, inversion, the colour of a console line and of Process
   Manager's status, the colour, tint and text of the safety, process-safety and signature pills, each
   colour a name for `ThemeBrush`, and `Format`, which gives a chip, a button, a menu

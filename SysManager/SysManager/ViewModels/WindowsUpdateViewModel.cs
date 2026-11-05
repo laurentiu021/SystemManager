@@ -143,7 +143,6 @@ public sealed partial class WindowsUpdateViewModel : ViewModelBase
         _policy = policy;
         _runner.LineReceived += OnRunnerLineReceived;
         _runner.ProgressChanged += OnRunnerProgressChanged;
-        _wu.Log += OnWuLog;
         // IsBusy lives in the base class, so observe it here to re-evaluate the
         // long-running commands' CanExecute (disabling them while one runs prevents
         // a second command disposing the shared CTS the first is still awaiting).
@@ -244,7 +243,11 @@ public sealed partial class WindowsUpdateViewModel : ViewModelBase
         IsProgressIndeterminate = false;
     }
 
-    private void OnWuLog(string text) => Console.Append(PowerShellLine.Output(text));
+    /// <summary>A progress line of this tab's own scan or install, into its console.</summary>
+    private void OnWuLog(string text)
+    {
+        Console.Append(PowerShellLine.Output(text));
+    }
 
     /// <summary>
     /// Gate for the long-running commands. They all share <see cref="_cts"/> and each
@@ -273,7 +276,6 @@ public sealed partial class WindowsUpdateViewModel : ViewModelBase
         {
             _runner.LineReceived -= OnRunnerLineReceived;
             _runner.ProgressChanged -= OnRunnerProgressChanged;
-            _wu.Log -= OnWuLog;
             PropertyChanged -= OnVmPropertyChanged;
             _cts?.Cancel();
             _cts?.Dispose();
@@ -298,9 +300,13 @@ public sealed partial class WindowsUpdateViewModel : ViewModelBase
         IsBusy = true;
         // Without it the bar showed whatever value the last download left, standing still (#2812).
         IsProgressIndeterminate = true;
+        // A token of its own, so Cancel and Escape stop the check. Without one they cancelled whatever an earlier list
+        // or history had left behind, and the check ran on (#2791).
+        _cts?.Dispose();
+        _cts = new CancellationTokenSource();
         try
         {
-            ModuleAvailable = await ProbeModuleAvailabilityAsync();
+            ModuleAvailable = await ProbeModuleAvailabilityAsync(_cts.Token);
             ModuleStatus = ModuleAvailable
                 ? "PSWindowsUpdate is available (used for update history)."
                 : MissingModuleStatus();
@@ -310,7 +316,7 @@ public sealed partial class WindowsUpdateViewModel : ViewModelBase
         finally { IsBusy = false; IsProgressIndeterminate = false; }
     }
 
-    private async Task<bool> ProbeModuleAvailabilityAsync()
+    private async Task<bool> ProbeModuleAvailabilityAsync(CancellationToken ct)
     {
         var found = false;
         void Listen(PowerShellLine line)
@@ -326,7 +332,7 @@ public sealed partial class WindowsUpdateViewModel : ViewModelBase
         try
         {
             var exitCode = await _runner.RunScriptViaPwshAsync(
-                "if (Get-Module -ListAvailable -Name PSWindowsUpdate) { 'AVAILABLE' } else { 'MISSING' }");
+                "if (Get-Module -ListAvailable -Name PSWindowsUpdate) { 'AVAILABLE' } else { 'MISSING' }", ct);
             return exitCode == 0 && found;
         }
         finally
@@ -351,9 +357,14 @@ public sealed partial class WindowsUpdateViewModel : ViewModelBase
         IsProgressIndeterminate = true;
         StatusMessage = "Installing PSWindowsUpdate...";
         ShowConsole = true;
+        // Its own token, as the check has, so Cancel and Escape stop an install held up by a slow or blocked
+        // PowerShell Gallery (#2791). Read once: the probe after the install takes the same one.
+        _cts?.Dispose();
+        _cts = new CancellationTokenSource();
+        var ct = _cts.Token;
         try
         {
-            var exitCode = await _runner.RunScriptViaPwshAsync(PsWindowsUpdateInstallScript);
+            var exitCode = await _runner.RunScriptViaPwshAsync(PsWindowsUpdateInstallScript, ct);
             if (exitCode != 0)
             {
                 ModuleAvailable = false;
@@ -362,7 +373,7 @@ public sealed partial class WindowsUpdateViewModel : ViewModelBase
                 return;
             }
 
-            ModuleAvailable = await ProbeModuleAvailabilityAsync();
+            ModuleAvailable = await ProbeModuleAvailabilityAsync(ct);
             ModuleStatus = ModuleAvailable
                 ? "PSWindowsUpdate is available (used for update history)."
                 : "Installation completed, but PSWindowsUpdate could not be loaded.";
@@ -396,7 +407,11 @@ public sealed partial class WindowsUpdateViewModel : ViewModelBase
 
         try
         {
-            var results = await _wu.ScanAsync(_cts.Token);
+            // This list's own lines, into this tab's console. The Dashboard's check runs the same scan on the same
+            // agent, and its lines came here too while the tab listened to an event the agent raised for every caller
+            // (#2791).
+            var progress = new SettlingProgress<string>(OnWuLog);
+            var results = await progress.SettleAfterAsync(reporter => _wu.ScanAsync(reporter, _cts.Token));
             var fresh = results.OrderBy(r => r.Title, StringComparer.OrdinalIgnoreCase).ToList();
             // Matched by the Windows Update id, which stays the same for an update between scans.
             SelectionCarry.Apply(_listed, fresh, u => u.UpdateId, StringComparer.OrdinalIgnoreCase);
@@ -583,7 +598,8 @@ public sealed partial class WindowsUpdateViewModel : ViewModelBase
 
         try
         {
-            var report = await _wu.InstallAsync(selected, _cts.Token);
+            var progress = new SettlingProgress<string>(OnWuLog);
+            var report = await progress.SettleAfterAsync(reporter => _wu.InstallAsync(selected, reporter, _cts.Token));
             var notApplied = selected.Count - report.Installed - report.Failed;
             StatusMessage = report.Failed > 0 || notApplied > 0
                 ? $"Installed {report.Installed}/{selected.Count}. Failed: {report.Failed}. Not applied: {notApplied}."

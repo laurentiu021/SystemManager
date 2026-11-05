@@ -172,8 +172,7 @@
                       CanUserResizeColumns="True"
                       CanUserAddRows="False" CanUserDeleteRows="False"
                       VirtualizingPanel.IsVirtualizing="True"
-                      VirtualizingPanel.VirtualizationMode="Recycling"
-                      Visibility="{Binding UpdateCount, Converter={StaticResource GreaterThanZero}}">
+                      VirtualizingPanel.VirtualizationMode="Recycling">
                 <DataGrid.Columns>
                     <DataGridCheckBoxColumn Binding="{Binding IsSelected, UpdateSourceTrigger=PropertyChanged}" Width="44" MinWidth="44" CanUserResize="False">
                         <DataGridCheckBoxColumn.Header>

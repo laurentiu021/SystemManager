@@ -10,7 +10,7 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
-## [1.136.105] - 2026-11-03
+## [1.136.105] - 2026-11-05
 
 **Uninstaller removes apps installed on another drive or for one user in Roaming AppData, and Cancel stops the search for what an uninstall left behind.**
 

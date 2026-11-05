@@ -10,6 +10,19 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.136.113] - 2026-11-05
+
+**Resource History asks before a shorter Keep deletes older history, and says so when it cannot save the choice instead of saying it kept it.**
+
+### Fixed
+- Choosing a shorter Keep on Resource History deleted the older history at once, with no question: going from 30
+  days to 7 removed 23 days of CPU, RAM, GPU and temperature history for good, and choosing 30 again brought nothing
+  back. The tab asks first now, naming the date the history goes back to, and keeps everything if you say no. Since
+  Resource History first shipped, in 1.47.0.
+- A Keep choice that could not be saved was still announced as "Keeping 14 days of history.", and the next start
+  pruned the samples it was meant to keep. A choice that cannot be saved is not made: the tab says so and keeps the
+  window it had, and nothing is deleted for it. Since 1.47.0 as well.
+
 ## [1.136.112] - 2026-11-05
 
 **Resource History's CPU readings are the average over each 10 seconds again while the Dashboard is open, and the Dashboard's CPU figure no longer jumps every 10 seconds.**

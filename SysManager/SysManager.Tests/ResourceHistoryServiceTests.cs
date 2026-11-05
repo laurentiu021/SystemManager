@@ -425,10 +425,10 @@ public class ResourceHistoryServiceDiskTests : IDisposable
     }
 
     [Fact]
-    public void RetentionDays_PersistsAcrossInstances()
+    public async Task RetentionDays_PersistsAcrossInstances()
     {
         using (var first = NewService())
-            first.RetentionDays = 30;
+            Assert.True(await first.ChangeRetentionAsync(30));
 
         // A second instance, as after an app restart — the point of persisting at all.
         using var second = NewService();
@@ -452,7 +452,7 @@ public class ResourceHistoryServiceDiskTests : IDisposable
     [Fact]
     public async Task Prune_WhenTheRetentionCannotBeRead_KeepsWhatTheLongestChoiceWould()
     {
-        using (var first = NewService()) first.RetentionDays = 30;
+        using (var first = NewService()) await first.ChangeRetentionAsync(30);
         SeedAcrossTheOptions();
 
         ResourceHistoryService service;
@@ -484,19 +484,66 @@ public class ResourceHistoryServiceDiskTests : IDisposable
         SeedAcrossTheOptions();
 
         using (var service = NewService())
-        {
-            service.RetentionDays = 7;
-            await service.PruneAsync();
-        }
+            await service.ChangeRetentionAsync(7);
 
         Assert.Single(File.ReadAllLines(DataPath));
     }
 
     [Fact]
-    public void RetentionDays_RejectsAValueOutsideTheOfferedOptions()
+    public async Task RetentionDays_RejectsAValueOutsideTheOfferedOptions()
     {
         using var service = NewService();
-        service.RetentionDays = 999;
+        await service.ChangeRetentionAsync(999);
         Assert.Equal(7, service.RetentionDays);
+    }
+
+    // ── A Keep choice is made only once it is saved (#2790) ─────────────────
+    //
+    // The setter saved the choice, swallowed a failed save, and pruned with the new window either way, while the tab
+    // said the choice was kept. A folder where the setting's file goes makes its save fail.
+
+    [Fact]
+    public async Task ChangeRetention_Saved_PrunesToTheNewWindowAtOnce()
+    {
+        using var service = NewService();
+        Assert.True(await service.ChangeRetentionAsync(30));
+        SeedAcrossTheOptions();
+
+        Assert.True(await service.ChangeRetentionAsync(7));
+
+        Assert.Equal(7, service.RetentionDays);
+        Assert.Single(File.ReadAllLines(DataPath));   // only the sample from five minutes ago
+    }
+
+    [Fact]
+    public async Task ChangeRetention_ThatCannotBeSaved_ChangesNothing_AndRemovesNothing()
+    {
+        using var service = NewService();
+        Assert.True(await service.ChangeRetentionAsync(30));
+        SeedAcrossTheOptions();
+        var before = File.ReadAllLines(DataPath);
+        File.Delete(ConfigPath);
+        Directory.CreateDirectory(ConfigPath);
+
+        Assert.False(await service.ChangeRetentionAsync(7));
+        Assert.False(await service.ChangeRetentionAsync(14));
+
+        Assert.Equal(30, service.RetentionDays);
+        Assert.Equal(before, File.ReadAllLines(DataPath));
+        await service.PruneAsync();
+        Assert.Equal(before[1..], File.ReadAllLines(DataPath));   // the hourly prune still keeps 30 days, not 7
+    }
+
+    [Fact]
+    public async Task OldestSampleOutside_IsTheOldestSample_WhenTheWindowWouldRemoveIt()
+    {
+        using var service = NewService();
+        Assert.Null(await service.OldestSampleOutsideAsync(7));   // no history yet
+
+        var oldest = DateTime.Now.AddDays(-20);
+        Seed(At(oldest), At(DateTime.Now.AddMinutes(-5)));
+
+        Assert.Equal(oldest, await service.OldestSampleOutsideAsync(7));
+        Assert.Null(await service.OldestSampleOutsideAsync(30));
     }
 }

@@ -198,8 +198,7 @@
                                         <ItemsControl ItemsSource="{Binding Rows}" Focusable="False">
                                             <ItemsControl.ItemTemplate>
                                                 <DataTemplate>
-                                                    <Border Style="{StaticResource ListRowBorder}"
-                                                            AutomationProperties.Name="{Binding SpokenName}">
+                                                    <Border Style="{StaticResource ListRowBorder}">
                                                         <Grid>
                                                             <Grid.ColumnDefinitions>
                                                                 <ColumnDefinition Width="Auto"/>

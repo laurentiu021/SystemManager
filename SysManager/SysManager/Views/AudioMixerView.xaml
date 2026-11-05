@@ -96,7 +96,7 @@
                 DataContext="{Binding Pc}">
             <Border Style="{StaticResource CardInner}" Margin="8,6" Padding="14,12"
                     Background="{DynamicResource AccentSoft}" BorderBrush="{DynamicResource Accent}"
-                    AutomationProperties.Name="This PC">
+                    x:Name="ThisPcCard">
                 <StackPanel>
                     <DockPanel>
                         <TextBlock DockPanel.Dock="Right" Text="Applies to everything, on top of each app's own level"

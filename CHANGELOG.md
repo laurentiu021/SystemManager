@@ -10,6 +10,21 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.136.110] - 2026-11-05
+
+**A screen reader finds and presses the Help and Appearance buttons and each theme in the Appearance panel, and hears which theme is in use.**
+
+### Fixed
+- The Help and Appearance buttons at the bottom of the sidebar, and each theme card in the Appearance panel, could be
+  reached with Tab, but a screen reader read nothing on them and voice control could not press them, since they were
+  drawn as plain boxes, which Windows does not show to assistive software. They are buttons now, and the theme cards
+  are a group of choices named "Midnight Indigo theme" and so on, with the theme in use announced as selected. Since
+  1.20.8 for the theme cards, 1.52.38 for the Appearance button and 1.110.0 for the Help button.
+- System Logs' four count cards carried their names, such as "Critical events: 3", on the card itself, where nothing
+  read them. Each count is read with what it counts now. Since 1.20.11.
+- A test refuses a name that no screen reader can read, on a box, a layout panel or a shape, and a click only a mouse
+  can make on anything but a button.
+
 ## [1.136.109] - 2026-11-05
 
 **A screen reader names each row of every table by what it is, such as the app, the service or the file, instead of by the program's internal type name.**

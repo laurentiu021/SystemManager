@@ -60,8 +60,7 @@
             <!-- Critical — uses the per-preset Critical brushes (ThemeService.ApplyStatusBrushes)
                  like its sibling cards, so it stays legible on the light presets instead of keeping a
                  dark-calibrated 8%-alpha red that washed out to near-invisible on near-white. -->
-            <Border Style="{StaticResource GlassCard}" Background="{DynamicResource CriticalBgSubtle}" Margin="0,0,12,0"
-                    AutomationProperties.Name="{Binding CriticalCount, StringFormat='Critical events: {0}'}">
+            <Border Style="{StaticResource GlassCard}" Background="{DynamicResource CriticalBgSubtle}" Margin="0,0,12,0">
                 <Grid>
                     <Border Background="{DynamicResource CriticalText}" Width="4" HorizontalAlignment="Left" CornerRadius="2"
                             Margin="-16,-12,0,-12"/>
@@ -72,6 +71,7 @@
                             </Ellipse.Effect>
                         </Ellipse>
                         <TextBlock Text="{Binding CriticalCount}" Style="{StaticResource MetricSmall}" FontWeight="Bold"
+                                   AutomationProperties.Name="{Binding CriticalCount, StringFormat='Critical events: {0}'}"
                                    Foreground="{DynamicResource Danger}" VerticalAlignment="Center" Margin="10,0,0,0"/>
                         <!-- Bold + ▲ glyph distinguish Critical from Error without relying on hue
                              (both are reds — a colorblind-safe, non-color cue). -->
@@ -83,8 +83,7 @@
                 </Grid>
             </Border>
             <!-- Errors -->
-            <Border Style="{StaticResource GlassCard}" Background="{DynamicResource DangerBgSubtle}" Margin="0,0,12,0"
-                    AutomationProperties.Name="{Binding ErrorCount, StringFormat='Errors: {0}'}">
+            <Border Style="{StaticResource GlassCard}" Background="{DynamicResource DangerBgSubtle}" Margin="0,0,12,0">
                 <Grid>
                     <Border Background="{DynamicResource Danger}" Width="4" HorizontalAlignment="Left" CornerRadius="2"
                             Margin="-16,-12,0,-12"/>
@@ -95,6 +94,7 @@
                             </Ellipse.Effect>
                         </Ellipse>
                         <TextBlock Text="{Binding ErrorCount}" Style="{StaticResource MetricSmall}" FontWeight="Bold"
+                                   AutomationProperties.Name="{Binding ErrorCount, StringFormat='Errors: {0}'}"
                                    Foreground="{DynamicResource Danger}" VerticalAlignment="Center" Margin="10,0,0,0"/>
                         <!-- Plain "Errors" — the coloured SevDot already marks the row; the leading
                              glyph is reserved for Critical (▲) as its colourblind-safe "most severe red"
@@ -105,8 +105,7 @@
                 </Grid>
             </Border>
             <!-- Warnings -->
-            <Border Style="{StaticResource GlassCard}" Background="{DynamicResource WarningBgSubtle}" Margin="0,0,12,0"
-                    AutomationProperties.Name="{Binding WarningCount, StringFormat='Warnings: {0}'}">
+            <Border Style="{StaticResource GlassCard}" Background="{DynamicResource WarningBgSubtle}" Margin="0,0,12,0">
                 <Grid>
                     <Border Background="{DynamicResource WarningStripe}" Width="4" HorizontalAlignment="Left" CornerRadius="2"
                             Margin="-16,-12,0,-12"/>
@@ -121,6 +120,7 @@
                             </Ellipse.Effect>
                         </Ellipse>
                         <TextBlock Text="{Binding WarningCount}" Style="{StaticResource MetricSmall}" FontWeight="Bold"
+                                   AutomationProperties.Name="{Binding WarningCount, StringFormat='Warnings: {0}'}"
                                    Foreground="{DynamicResource Warning}" VerticalAlignment="Center" Margin="10,0,0,0"/>
                         <TextBlock Text="Warnings" Style="{StaticResource Subtle}" Foreground="{DynamicResource TextMuted}"
                                    VerticalAlignment="Center" Margin="10,0,0,0"/>
@@ -128,8 +128,7 @@
                 </Grid>
             </Border>
             <!-- Info -->
-            <Border Style="{StaticResource GlassCard}" Background="{DynamicResource InfoBgSubtle}"
-                    AutomationProperties.Name="{Binding InfoCount, StringFormat='Info events: {0}'}">
+            <Border Style="{StaticResource GlassCard}" Background="{DynamicResource InfoBgSubtle}">
                 <Grid>
                     <Border Background="{DynamicResource Info}" Width="4" HorizontalAlignment="Left" CornerRadius="2"
                             Margin="-16,-12,0,-12"/>
@@ -140,6 +139,7 @@
                             </Ellipse.Effect>
                         </Ellipse>
                         <TextBlock Text="{Binding InfoCount}" Style="{StaticResource MetricSmall}" FontWeight="Bold"
+                                   AutomationProperties.Name="{Binding InfoCount, StringFormat='Info events: {0}'}"
                                    Foreground="{DynamicResource Info}" VerticalAlignment="Center" Margin="10,0,0,0"/>
                         <TextBlock Text="Info" Style="{StaticResource Subtle}" Foreground="{DynamicResource TextMuted}"
                                    VerticalAlignment="Center" Margin="10,0,0,0"/>
@@ -342,7 +342,6 @@
                             <DataGridTemplateColumn.CellTemplate>
                                 <DataTemplate>
                                     <StackPanel Orientation="Horizontal" VerticalAlignment="Center"
-                                                AutomationProperties.Name="{Binding SeverityLabel}"
                                                 ToolTip="{Binding SeverityLabel}">
                                         <Ellipse Width="10" Height="10" VerticalAlignment="Center"
                                                  helpers:ThemeBrush.Fill="{Binding SeverityColor}"/>

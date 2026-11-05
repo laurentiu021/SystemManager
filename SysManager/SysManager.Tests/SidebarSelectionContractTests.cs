@@ -175,9 +175,9 @@ public class SidebarSelectionContractTests
                 && (string?)trigger.Attribute("Value") == "True");
         AssertSetter(focusTrigger, "BorderBrush", "{DynamicResource Accent}");
 
-        // Focusable is necessary but not sufficient: ButtonBase treats Enter as a click only where
-        // this is set, so without it a row could be tabbed to and then not opened with the key most
-        // people press. Asserted on the style, which is what both the leaf and single-item rows use.
+        // Enter, the key most people press on a row they tabbed to. A Button takes it by default, so the
+        // setter pins it, and this keeps a base style that turned Enter off from reaching the rows.
+        // Asserted on the style, which is what both the leaf and single-item rows use.
         AssertSetter(buttonStyle, "KeyboardNavigation.AcceptsReturn", "True");
 
         var navItemsControls = document
@@ -203,7 +203,7 @@ public class SidebarSelectionContractTests
 
         Assert.Equal("True", (string?)header.Attribute("Focusable"));
         Assert.Equal("True", (string?)header.Attribute("KeyboardNavigation.IsTabStop"));
-        // The header is a ToggleButton, so it too answers Space by default and Enter only with this.
+        // The header is a ToggleButton, which takes Space and Enter by default; the attribute pins Enter.
         // Reaching a collapsed group and being unable to open it is the same dead end as not reaching it.
         Assert.Equal("True", (string?)header.Attribute("KeyboardNavigation.AcceptsReturn"));
         Assert.Equal(
@@ -383,6 +383,45 @@ public class SidebarSelectionContractTests
         // PresentationSource, so a handler on the Popup element never sees the key.
         Assert.Contains("popup.PreviewKeyDown += ThemePopup_PreviewKeyDown", code, StringComparison.Ordinal);
         Assert.Contains("Key.Escape", code, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// The Help and Appearance chips at the foot of the sidebar are Buttons, named for what they open.
+    /// </summary>
+    /// <remarks>
+    /// They were focusable Borders, and WPF gives a Border no automation peer: Tab landed on each and Narrator
+    /// read nothing, and UI Automation had nothing to press (#2785). A Button brings the peer, focus, Space and
+    /// Enter with it. The guards in <c>ArchitectureTests</c> refuse a mouse handler or a name on a Border anywhere;
+    /// this pins the two chips by name, and the style that keeps their look, as the rows above are pinned.
+    /// </remarks>
+    [Fact]
+    public void TheFooterChips_AreButtonsNamedForWhatTheyOpen()
+    {
+        var document = LoadProjectXaml("MainWindow.xaml");
+        foreach (var (name, spoken, click) in new[]
+                 {
+                     ("HelpBtn", "Help and support", "HelpBtn_Click"),
+                     ("ThemeBtn", "Appearance", "ThemeBtn_Click"),
+                 })
+        {
+            var chip = document.Descendants().Single(element => (string?)element.Attribute(Xaml + "Name") == name);
+            Assert.Equal(Presentation + "Button", chip.Name);
+            Assert.Equal(spoken, (string?)chip.Attribute("AutomationProperties.Name"));
+            Assert.Equal(click, (string?)chip.Attribute("Click"));
+            Assert.Equal("{StaticResource ShellChipButton}", (string?)chip.Attribute("Style"));
+            Assert.Null(chip.Attribute("Focusable"));
+        }
+
+        var chipStyle = FindStyle(document, "ShellChipButton");
+        Assert.Equal("Button", (string?)chipStyle.Attribute("TargetType"));
+        AssertSetter(chipStyle, "KeyboardNavigation.AcceptsReturn", "True");
+        // The accent edge on the chip that has keyboard focus, which the Borders showed (#2610).
+        var focusTrigger = chipStyle
+            .Descendants(Presentation + "Trigger")
+            .Single(trigger =>
+                (string?)trigger.Attribute("Property") == "IsKeyboardFocused"
+                && (string?)trigger.Attribute("Value") == "True");
+        AssertSetter(focusTrigger, "BorderBrush", "{DynamicResource Accent}");
     }
 
     private static XDocument LoadProjectXaml(string fileName) => XDocument.Load(TestPaths.AppFile(fileName));

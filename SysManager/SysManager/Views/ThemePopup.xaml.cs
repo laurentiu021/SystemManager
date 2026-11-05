@@ -71,7 +71,7 @@ public partial class ThemePopup : UserControl
         }
     }
 
-    private Border CreatePresetCard(string id, ThemePreset preset)
+    private RadioButton CreatePresetCard(string id, ThemePreset preset)
     {
         var mini = new StackPanel { Orientation = Orientation.Horizontal };
         mini.Children.Add(new Rectangle
@@ -116,26 +116,36 @@ public partial class ThemePopup : UserControl
         content.Children.Add(new Border { Width = 10 });
         content.Children.Add(name);
 
-        var card = new Border
+        var face = new Border
         {
             Padding = new Thickness(10),
             CornerRadius = new CornerRadius(10),
             BorderThickness = new Thickness(1),
+            Width = 140,
+            Child = content,
+        };
+        face.SetResourceReference(Border.BorderBrushProperty, _theme.CurrentPresetId == id ? "Accent" : "Border1");
+
+        // The card itself is a RadioButton around that face: one of a group, so which preset is chosen is a state a
+        // screen reader reads, not only an accent border (#2785). A RadioButton takes Space and not Enter, where a
+        // Button takes both, so Enter is turned on to pick it as the Border's own key handler did. The focus rectangle
+        // is the one the Border was drawn with.
+        var card = new RadioButton
+        {
+            GroupName = "ThemePresets",
             Cursor = Cursors.Hand,
             Margin = new Thickness(0, 0, 6, 8),
-            Width = 140,
             Tag = id,
-            Child = content,
-            // Keyboard accessibility: make the card Tab-reachable, activatable with
-            // Enter/Space, and announced by its preset name to assistive technology.
-            Focusable = true
+            Content = face,
+            IsChecked = _theme.CurrentPresetId == id,
         };
-        card.SetResourceReference(Border.BorderBrushProperty, _theme.CurrentPresetId == id ? "Accent" : "Border1");
+        card.SetResourceReference(Control.TemplateProperty, "PresetCardChrome");
+        card.SetResourceReference(FocusVisualStyleProperty, SystemParameters.FocusVisualStyleKey);
+        KeyboardNavigation.SetAcceptsReturn(card, true);
         AutomationProperties.SetName(card, $"{preset.Name} theme");
-        KeyboardNavigation.SetIsTabStop(card, true);
 
-        card.MouseLeftButtonUp += Preset_Click;
-        card.KeyDown += Preset_KeyDown;
+        card.Checked += Preset_Checked;
+        card.Click += Preset_Click;
         return card;
     }
 
@@ -212,30 +222,44 @@ public partial class ThemePopup : UserControl
     }
 
 
-    private void Preset_Click(object sender, MouseButtonEventArgs e)
-        => SelectPreset((Border)sender);
+    // An unchecked card is picked by checking it: a click, Space, Enter, or a screen reader selecting it.
+    private void Preset_Checked(object sender, RoutedEventArgs e) => SelectPreset((RadioButton)sender);
 
-    private void Preset_KeyDown(object sender, KeyEventArgs e)
+    /// <summary>A click, Space or Enter on the card that is already checked, which raises no Checked.</summary>
+    /// <remarks>
+    /// The checked card is not always the theme as it is pinned now. Under Auto it is the preset Windows' side resolved
+    /// to, and picking it pins it, as picking any other does (#2599). And when Windows switches between light and dark
+    /// under Auto, the theme moves on without these cards being rebuilt. As a Border, a card applied its preset on
+    /// every click, so this keeps that. After a click whose Checked has just applied the card, there is nothing to do.
+    /// </remarks>
+    private void Preset_Click(object sender, RoutedEventArgs e)
     {
-        // Enter/Space activate the focused preset card, matching standard button semantics.
-        if (e.Key is Key.Enter or Key.Space)
-        {
-            SelectPreset((Border)sender);
-            e.Handled = true;
-        }
+        var card = (RadioButton)sender;
+        if ((string)card.Tag != _theme.CurrentPresetId || _theme.CurrentMode == ThemeService.AutoMode)
+            SelectPreset(card);
     }
 
     /// <summary>Applies the preset <paramref name="card"/> stands for and marks it as the chosen one.</summary>
-    internal void SelectPreset(Border card)
+    /// <remarks>
+    /// Checking the card raises <see cref="Preset_Checked"/>, which comes back here with it checked, so a pick made
+    /// from code goes the way a click does. The group has unchecked the others by then.
+    /// </remarks>
+    internal void SelectPreset(RadioButton card)
     {
+        if (card.IsChecked != true)
+        {
+            card.IsChecked = true;
+            return;
+        }
+
         var id = (string)card.Tag;
         _theme.SetPreset(id);
         // A preset pins its own mode, Dark or Light, so a pick made under Auto leaves Auto (#2599).
         CheckModePill();
 
-        foreach (Border c in PresetPanel.Children)
-            c.SetResourceReference(Border.BorderBrushProperty, "Border1");
-        card.SetResourceReference(Border.BorderBrushProperty, "Accent");
+        foreach (var c in PresetPanel.Children.OfType<RadioButton>())
+            ((Border)c.Content).SetResourceReference(
+                Border.BorderBrushProperty, c.IsChecked == true ? "Accent" : "Border1");
     }
 
     private void Shade_Changed(object sender, RoutedPropertyChangedEventArgs<double> e)

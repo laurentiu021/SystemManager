@@ -177,9 +177,14 @@ public sealed class BrowserCleanerViewUiTests : IDisposable
         StaHelper.Run(() =>
         {
             var view = Laid(vm);
-            var rows = Descendants<Border>(view).Where(b => AutomationProperties.GetName(b) is { Length: > 0 } n && n.Contains(", version ", StringComparison.Ordinal)).ToList();
-            var withIcon = Assert.Single(rows, r => AutomationProperties.GetName(r) == "Search Pro New Tab, version 2.4.1");
-            var withoutIcon = Assert.Single(rows, r => AutomationProperties.GetName(r) == "Docs Offline, version 1.92.1");
+            // Each extension's row, found by the record it draws. The row's Border no longer carries a name, which
+            // reached no screen reader; the list announces each row by its words instead (#2785).
+            var rows = Descendants<Border>(view)
+                .Where(b => VisualTreeHelper.GetParent(b) is ContentPresenter { Content: ExtensionRow })
+                .ToList();
+            ExtensionRow Row(Border border) => (ExtensionRow)border.DataContext;
+            var withIcon = Assert.Single(rows, r => Row(r).SpokenName == "Search Pro New Tab, version 2.4.1");
+            var withoutIcon = Assert.Single(rows, r => Row(r).SpokenName == "Docs Offline, version 1.92.1");
 
             Assert.True(Shown(Assert.Single(Descendants<Image>(withIcon))));
             Assert.NotNull(Assert.Single(Descendants<Image>(withIcon)).Source);

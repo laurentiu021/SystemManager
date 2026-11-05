@@ -835,7 +835,8 @@ Across the tab:
   before Install selected. **What you untick stays unticked**: listing again, with F5 or after a
   look at the history, keeps your choices, and only an update not listed before starts ticked
 - Live progress per update: `Connecting → Downloading → Installing → ✓ Installed`
-  streamed to the console as it happens
+  streamed to the console as it happens. The console shows this tab's own runs only: the Dashboard's
+  Check Windows Updates does not write into it
 - Per-row Status column updated in real time
   (`Pending…` → `Downloading…` → `Installing…` → `Installed` /
   `Installed (reboot required)` / `Failed` / `Not applied`). A failed row names the error code
@@ -853,7 +854,8 @@ Across the tab:
   from a normal, non-administrator SysManager session. The installer validates
   the official PowerShell Gallery endpoint and uses the current-user module directory.
   A **Check now** button confirms on demand whether the module is present, so you
-  don't have to run Update History to find out
+  don't have to run Update History to find out. Cancel or Escape stops the install or the check, which can
+  hang on a slow or blocked PowerShell Gallery
 - **Update timing & deferral** — defer feature updates by N days while security
   patches keep flowing, pause all updates for a bounded window (max 35 days, then
   Windows auto-resumes), or restore defaults. The deferral uses the documented Windows

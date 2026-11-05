@@ -10,6 +10,26 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.136.116] - 2026-11-05
+
+**On Windows Update, Cancel stops a PSWindowsUpdate install or check that is stuck, and the Dashboard's update check no longer writes into the tab's console.**
+
+### Fixed
+- Cancel and Escape did nothing while Windows Update checked for or installed the PSWindowsUpdate module, which the
+  History view uses. They stopped only what an earlier list or history had left running, so an install held up by a
+  slow or blocked PowerShell Gallery kept the tab busy, with its other buttons off, until it gave up. They stop the
+  check and the install now. Since the tab first shipped, in 0.3.0.
+- The Dashboard's Check Windows Updates wrote its "Connecting to Windows Update…" and "Found N update(s)." lines
+  into the Windows Update tab's console, in the middle of an install log if one was running. A check or an install
+  now writes only into the console of the tab that started it. Since the Dashboard's check first ran a real scan, in
+  1.114.0.
+
+### Removed
+- The Windows Update table's `Visibility` binding, which never worked: its converter returned a `bool` where WPF needs
+  a `Visibility`, so WPF refused the value and the table was always shown, as it still is. The converter,
+  `IntGreaterThanZeroConverter`, was used nowhere else and went with it. A test now fails any `Visibility` binding
+  whose converter returns something other than a `Visibility`.
+
 ## [1.136.115] - 2026-11-05
 
 **Under Auto, the Appearance panel opens on the presets of the side Windows is on, after Windows switches between light and dark.**

@@ -1266,7 +1266,7 @@ public sealed partial class DashboardViewModel : ElevatedViewModelBase
             IReadOnlyList<UpdateEntry> found;
             try
             {
-                found = await _windowsUpdate.ScanAsync(_quickActionCts!.Token);
+                found = await _windowsUpdate.ScanAsync(ct: _quickActionCts!.Token);
             }
             // The card shows the message as its detail, and a COM message is an HRESULT in jargon. These are the
             // Windows Update tab's own words for the same two failures.

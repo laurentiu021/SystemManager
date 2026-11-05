@@ -12212,6 +12212,34 @@ public partial class ArchitectureTests
         static bool IsInsideAnItemTemplate(System.Xml.Linq.XElement e) =>
             e.Ancestors().Any(a => a.Name.LocalName == "DataTemplate");
 
+        // The name a row control is announced by, wherever the markup gives it: the attribute, the property element
+        // a MultiBinding needs, or a Setter of the keyed Style it takes from the same file. Null when it has none.
+        static string? RowNameOf(System.Xml.Linq.XElement e, System.Xml.Linq.XElement root)
+        {
+            var attribute = e.Attributes().FirstOrDefault(a => a.Name.LocalName == "AutomationProperties.Name");
+            if (attribute is not null) return attribute.Value;
+
+            var property = e.Elements().FirstOrDefault(c => c.Name.LocalName == "AutomationProperties.Name");
+            if (property is not null)
+                return property.Descendants().Any(d => d.Name.LocalName is "Binding" or "MultiBinding")
+                    ? "{Binding}"
+                    : property.Value;
+
+            if ((string?)e.Attribute("Style") is { } style
+                && style.StartsWith("{StaticResource ", StringComparison.Ordinal) && style.EndsWith('}'))
+            {
+                var key = style["{StaticResource ".Length..^1].Trim();
+                var setter = root.Descendants()
+                    .Where(d => d.Name.LocalName == "Style"
+                                && d.Attributes().Any(a => a.Name.LocalName == "Key" && a.Value == key))
+                    .SelectMany(s => s.Descendants().Where(d => d.Name.LocalName == "Setter"))
+                    .FirstOrDefault(s => (string?)s.Attribute("Property") == "AutomationProperties.Name");
+                if (setter is not null) return (string?)setter.Attribute("Value") ?? "";
+            }
+
+            return null;
+        }
+
         var namedOnTheColumn = new List<string>();
         var unnamedRowControls = new List<string>();
         var sameOnEveryRow = new List<string>();
@@ -12219,6 +12247,7 @@ public partial class ArchitectureTests
         var namedRowControls = 0;
         var rowNameSetters = 0;
         var itemTemplateSelectors = 0;
+        var namedTemplateButtons = 0;
 
         foreach (var path in files)
         {
@@ -12257,8 +12286,7 @@ public partial class ArchitectureTests
                 // "CheckBox" on all six drives is as useless as "Open" on all forty rows.
                 if (name is ("CheckBox" or "RadioButton") && IsInsideAnItemTemplate(element))
                 {
-                    var boxName = element.Attributes()
-                        .FirstOrDefault(a => a.Name.LocalName == "AutomationProperties.Name")?.Value;
+                    var boxName = RowNameOf(element, root);
                     if (boxName is null)
                     {
                         unnamedRowControls.Add($"{file} — <{name}> in an item template carries no name");
@@ -12273,12 +12301,14 @@ public partial class ArchitectureTests
                     continue;
                 }
 
-                // A pressable control living in a cell template.
+                // A pressable control living in a cell template, or in a list's item template, where every row
+                // brings its own copy too: the PATH editor's buttons said "Move directory up", "Move directory down"
+                // and "Remove directory" on every directory (#2785).
                 if (name is not ("Button" or "ToggleButton" or "RepeatButton")) continue;
-                if (!IsInsideAColumn(element)) continue;
+                var inACell = IsInsideAColumn(element);
+                if (!inACell && !IsInsideAnItemTemplate(element)) continue;
 
-                var declared = element.Attributes()
-                    .FirstOrDefault(a => a.Name.LocalName == "AutomationProperties.Name")?.Value;
+                var declared = RowNameOf(element, root);
                 if (declared is null)
                 {
                     var content = (string?)element.Attribute("Content")
@@ -12289,6 +12319,7 @@ public partial class ArchitectureTests
                 else
                 {
                     namedRowControls++;
+                    if (!inACell) namedTemplateButtons++;
                     if (!declared.Contains("{Binding", StringComparison.Ordinal))
                         sameOnEveryRow.Add($"{file} — <{name}> name \"{declared}\"");
                 }
@@ -12309,6 +12340,9 @@ public partial class ArchitectureTests
         Assert.True(itemTemplateSelectors >= 6,
             $"only {itemTemplateSelectors} named item-template checkboxes were found — eight views carry "
             + "one each, so a lower count means the DataTemplate ancestor test has stopped matching.");
+        Assert.True(namedTemplateButtons >= 25,
+            $"only {namedTemplateButtons} named buttons were found in item templates, where 29 sit in 2026-11, so "
+            + "the template test or one of the ways a name is read has stopped matching.");
 
         Assert.True(namedOnTheColumn.Count == 0,
             "AutomationProperties.Name is set on a DataGrid COLUMN, which is a definition rather than a "

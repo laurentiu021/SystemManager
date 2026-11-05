@@ -434,4 +434,18 @@ public class BrowserCleanerViewModelTests
     [Fact]
     public void CleanToast_WhenFilesWereRemoved_SaysHowMany()
         => Assert.Equal(("Browser data cleaned", "12 files removed."), BrowserCleanerViewModel.CleanToast(12));
+
+    [Fact]
+    public void ARowsCheckbox_IsNamedForItsCategory_AndWhoseItIs()
+    {
+        // Every browser and profile has the same four categories, so "Select Cookies" was said for Chrome, for its
+        // Work profile and for Firefox alike (#2785).
+        static BrowserCleanupItem Cookies(string browser) =>
+            new() { Browser = browser, Category = "Cookies", Description = "", Paths = [] };
+        var chrome = Cookies("Chrome");
+        var work = Cookies("Chrome (Work)");
+
+        Assert.Equal("Select Cookies in Chrome", chrome.SelectName);
+        Assert.Equal("Select Cookies in Chrome (Work)", work.SelectName);
+    }
 }

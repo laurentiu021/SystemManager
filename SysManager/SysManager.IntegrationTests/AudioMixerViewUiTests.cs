@@ -233,9 +233,14 @@ public sealed class AudioMixerViewUiTests : IDisposable
         {
             var view = Laid(vm);
 
-            // The struck-through speaker, drawn by the one shared style, on the card and on Spotify's muted row.
-            Assert.Equal("\uE74F", Glyph(Named<Button>(view, "Mute all sound on this PC")));
-            Assert.Equal("\uE74F", Glyph(Named<Button>(view, "Mute Spotify")));
+            // The struck-through speaker, drawn by the one shared style, on the card and on Spotify's muted row, and
+            // each button named, and tipped, for what pressing it does now (#2785).
+            var card = Named<Button>(view, "Unmute all sound on this PC");
+            var row = Named<Button>(view, "Unmute Spotify");
+            Assert.Equal("\uE74F", Glyph(card));
+            Assert.Equal("\uE74F", Glyph(row));
+            Assert.Equal("Unmute all sound on this PC", card.ToolTip);
+            Assert.Equal("Unmute Spotify", row.ToolTip);
         });
     }
 

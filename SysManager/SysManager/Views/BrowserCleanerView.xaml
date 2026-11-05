@@ -133,7 +133,7 @@
                             <DataGridTemplateColumn.CellTemplate>
                                 <DataTemplate>
                                     <CheckBox IsChecked="{Binding IsSelected, UpdateSourceTrigger=PropertyChanged}"
-                                              AutomationProperties.Name="{Binding Category, StringFormat='Select {0}'}"
+                                              AutomationProperties.Name="{Binding SelectName}"
                                               Style="{StaticResource GridCheckBox}" VerticalAlignment="Center"/>
                                 </DataTemplate>
                             </DataGridTemplateColumn.CellTemplate>

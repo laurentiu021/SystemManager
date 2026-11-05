@@ -49,7 +49,10 @@ public sealed partial class AudioSessionRowViewModel : ObservableObject, IAdjust
     public string ExePath => _iconSourcePath;
 
     [ObservableProperty] private uint _processId;
-    [ObservableProperty] private string _displayName;
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(MuteName))]
+    private string _displayName;
+
     [ObservableProperty] private ImageSource? _icon;
     [ObservableProperty] private bool _isActive;
 
@@ -57,7 +60,10 @@ public sealed partial class AudioSessionRowViewModel : ObservableObject, IAdjust
     [NotifyPropertyChangedFor(nameof(VolumeDisplay))]
     private float _volume;
 
-    [ObservableProperty] private bool _isMuted;
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(MuteName))]
+    private bool _isMuted;
+
     [ObservableProperty] private float _peakLevel;
 
     /// <summary>
@@ -109,6 +115,13 @@ public sealed partial class AudioSessionRowViewModel : ObservableObject, IAdjust
 
     /// <summary>Volume as a friendly percentage, e.g. "65%".</summary>
     public string VolumeDisplay => $"{Volume * 100:F0}%";
+
+    /// <summary>
+    /// What the mute button does if pressed now, as a screen reader and its tooltip say it: "Mute Spotify", or
+    /// "Unmute Spotify" while the app is muted. Only the glyph followed the state, so a muted app's button was still
+    /// announced as "Mute" (#2785).
+    /// </summary>
+    public string MuteName => IsMuted ? $"Unmute {DisplayName}" : $"Mute {DisplayName}";
 
     /// <summary>
     /// Builds one row of the mixer from a session snapshot. Volume, mute, name and peak are seeded through

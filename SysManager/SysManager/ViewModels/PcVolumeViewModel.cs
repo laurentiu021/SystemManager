@@ -72,7 +72,10 @@ public sealed partial class PcVolumeViewModel : ObservableObject, IAdjustableVol
     [NotifyPropertyChangedFor(nameof(VolumeDisplay))]
     private float _volume;
 
-    [ObservableProperty] private bool _isMuted;
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(MuteName))]
+    private bool _isMuted;
+
     [ObservableProperty] private float _peakLevel;
 
     /// <inheritdoc/>
@@ -93,6 +96,12 @@ public sealed partial class PcVolumeViewModel : ObservableObject, IAdjustableVol
 
     /// <summary>The PC's volume as a percentage, e.g. "38%".</summary>
     public string VolumeDisplay => $"{Volume * 100:F0}%";
+
+    /// <summary>
+    /// What the card's mute button does if pressed now: "Mute all sound on this PC", or "Unmute all sound on this PC"
+    /// while the PC is muted (#2785).
+    /// </summary>
+    public string MuteName => IsMuted ? "Unmute all sound on this PC" : "Mute all sound on this PC";
 
     /// <summary>True when there is a device the sound plays through.</summary>
     public bool HasOutput => OutputName.Length > 0;

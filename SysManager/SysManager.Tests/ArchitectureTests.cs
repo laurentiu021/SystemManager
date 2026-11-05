@@ -12170,6 +12170,198 @@ public partial class ArchitectureTests
     }
 
     /// <summary>
+    /// Every item of a ListBox, ComboBox or ListView that draws its items through a template or a member path is
+    /// announced by words: not by its record's fields, and not by its type name.
+    /// </summary>
+    /// <remarks>
+    /// <para>A list item is announced by its container's name, and a container with no name of its own takes its
+    /// content's <c>ToString()</c>. When the list draws the item through an ItemTemplate or a DisplayMemberPath, that
+    /// content is the item object, so a record read out every field and a class its type name. The live output read
+    /// "PowerShellLine { Kind = Output, Text = …, Timestamp = … }" for every line, and the Display Profiles and CPU
+    /// Core Affinity pickers read their records the same way (#2785).</para>
+    /// <para>So the item type overrides ToString with the words a person hears, as ChartWindowOption, DnsPreset and
+    /// ExtensionRow already do, or the list names its containers with an AutomationProperties.Name setter in its
+    /// ItemContainerStyle. The item type is read from the view model a view is named after, following ItemsSource
+    /// paths, DataContext bindings and the item template of an enclosing list. A list whose items this cannot
+    /// resolve fails here rather than pass unread.</para>
+    /// </remarks>
+    [Fact]
+    public void EveryListItem_IsAnnouncedByItsWords()
+    {
+        var appDir = TestPaths.AppProject();
+        var assembly = typeof(SysManager.ViewModels.MainWindowViewModel).Assembly;
+        var files = Directory.EnumerateFiles(Path.Combine(appDir, "Views"), "*.xaml")
+            .Append(Path.Combine(appDir, "MainWindow.xaml"))
+            .ToArray();
+        Assert.True(files.Length >= 60, $"only {files.Length} XAML files were found — fix this guard.");
+
+        // A record's own ToString lists its fields and is compiler-generated; an enum's is its identifier.
+        static bool SaysItsWords(Type type)
+        {
+            if (type == typeof(string) || type.IsPrimitive || type == typeof(decimal)) return true;
+            if (type.IsEnum) return false;
+            var toString = type.GetMethod(nameof(ToString), Type.EmptyTypes);
+            return toString is not null
+                   && toString.DeclaringType != typeof(object)
+                   && toString.DeclaringType != typeof(ValueType)
+                   && toString.GetCustomAttribute<CompilerGeneratedAttribute>() is null;
+        }
+
+        // The rule read right before it is trusted: a record left to its own ToString, an enum and a class with none
+        // are refused, and a record with one of its own passes.
+        Assert.False(SaysItsWords(typeof(SysManager.Models.VolumePresetEntry)), "a record's own ToString was accepted");
+        Assert.False(SaysItsWords(typeof(SysManager.Models.OutputKind)), "an enum's identifier was accepted");
+        Assert.False(SaysItsWords(typeof(SysManager.ViewModels.SelectableSection)), "a type name was accepted");
+        Assert.True(SaysItsWords(typeof(SysManager.Models.ChartWindowOption)), "a ToString of its own was refused");
+
+        // The path a {Binding} reads from the data context: "" for the context itself, null for any other source.
+        static string? PathOf(string? binding)
+        {
+            if (binding is null || !binding.StartsWith("{Binding", StringComparison.Ordinal)) return null;
+            var parts = binding["{Binding".Length..^1].Split(',', StringSplitOptions.TrimEntries);
+            if (parts.Any(p => p.StartsWith("Source=", StringComparison.Ordinal)
+                               || p.StartsWith("RelativeSource=", StringComparison.Ordinal)
+                               || p.StartsWith("ElementName=", StringComparison.Ordinal)))
+                return null;
+            var named = parts.FirstOrDefault(p => p.StartsWith("Path=", StringComparison.Ordinal));
+            return named is not null ? named["Path=".Length..] : parts.FirstOrDefault(p => !p.Contains('=')) ?? "";
+        }
+
+        static Type? TypeAt(Type? type, string? path)
+        {
+            if (path is null) return null;
+            foreach (var part in path.Split('.', StringSplitOptions.RemoveEmptyEntries))
+                type = type?.GetProperty(part, BindingFlags.Public | BindingFlags.Instance)?.PropertyType;
+            return type;
+        }
+
+        static Type? ItemTypeOf(Type? list) =>
+            (list is { IsGenericType: true } && list.GetGenericTypeDefinition() == typeof(IEnumerable<>)
+                ? list
+                : list?.GetInterfaces().FirstOrDefault(i => i.IsGenericType
+                                                           && i.GetGenericTypeDefinition() == typeof(IEnumerable<>)))
+            ?.GetGenericArguments()[0];
+
+        static bool SetsAName(XElement e) =>
+            e.Descendants().Any(d => d.Name.LocalName == "Setter"
+                                     && (string?)d.Attribute("Property") == "AutomationProperties.Name");
+
+        static bool DrawsItsItems(XElement list) =>
+            list.Attribute("DisplayMemberPath") is not null
+            || list.Attribute("ItemTemplate") is not null
+            || list.Elements().Any(c => c.Name.LocalName.EndsWith(".ItemTemplate", StringComparison.Ordinal));
+
+        var listsSeen = 0;
+        var resolved = 0;
+        var namedByTheList = 0;
+        var unresolved = new List<string>();
+        var unworded = new List<string>();
+
+        foreach (var path in files)
+        {
+            var doc = XDocument.Load(path).Root!;
+            var file = Path.GetFileName(path);
+            var stem = Path.GetFileNameWithoutExtension(path);
+            var root = assembly.GetType(
+                "SysManager.ViewModels." + (stem.EndsWith("View", StringComparison.Ordinal) ? stem[..^4] : stem)
+                + "ViewModel");
+            var namespaces = doc.Attributes()
+                .Where(a => a.IsNamespaceDeclaration && a.Value.StartsWith("clr-namespace:", StringComparison.Ordinal))
+                .ToDictionary(a => a.Name.LocalName, a => a.Value["clr-namespace:".Length..].Split(';')[0]);
+
+            Type? TypeNamed(string reference)
+            {
+                // {x:Type prefix:Name}
+                var inner = reference.Trim('{', '}').Replace("x:Type", "", StringComparison.Ordinal).Trim();
+                var colon = inner.IndexOf(':');
+                return colon > 0 && namespaces.TryGetValue(inner[..colon], out var ns)
+                    ? assembly.GetType(ns + "." + inner[(colon + 1)..])
+                    : null;
+            }
+
+            // The type the bindings of an element read: its own DataContext's, else the context it sits in.
+            Type? ContextOf(XElement e) =>
+                (string?)e.Attribute("DataContext") is { } own ? TypeAt(ContextAbove(e), PathOf(own)) : ContextAbove(e);
+
+            Type? ContextAbove(XElement e)
+            {
+                for (var above = e.Parent; above is not null; above = above.Parent)
+                {
+                    if (above.Name.LocalName == "DataTemplate")
+                    {
+                        if ((string?)above.Attribute("DataType") is { } dataType) return TypeNamed(dataType);
+                        return above.Parent is { } holder
+                               && holder.Name.LocalName.EndsWith(".ItemTemplate", StringComparison.Ordinal)
+                               && holder.Parent is { } owner
+                            ? ItemTypeOf(TypeAt(ContextOf(owner), PathOf((string?)owner.Attribute("ItemsSource"))))
+                            : null;
+                    }
+                    if ((string?)above.Attribute("DataContext") is { } context)
+                        return TypeAt(ContextAbove(above), PathOf(context));
+                }
+                return root;
+            }
+
+            bool NamesItsContainers(XElement list)
+            {
+                var inline = list.Elements()
+                    .FirstOrDefault(c => c.Name.LocalName.EndsWith(".ItemContainerStyle", StringComparison.Ordinal));
+                if (inline is not null && SetsAName(inline)) return true;
+                if ((string?)list.Attribute("ItemContainerStyle") is not { } keyed
+                    || !keyed.StartsWith("{StaticResource ", StringComparison.Ordinal))
+                    return false;
+                var key = keyed["{StaticResource ".Length..^1].Trim();
+                return doc.Descendants()
+                    .Where(d => d.Name.LocalName == "Style"
+                                && d.Attributes().Any(a => a.Name.LocalName == "Key" && a.Value == key))
+                    .Any(SetsAName);
+            }
+
+            var lists = doc.Descendants().Where(d => d.Name.LocalName is "ListBox" or "ComboBox" or "ListView");
+            foreach (var list in lists)
+            {
+                if (!DrawsItsItems(list)) continue;
+                listsSeen++;
+                if (NamesItsContainers(list))
+                {
+                    namedByTheList++;
+                    continue;
+                }
+
+                var source = (string?)list.Attribute("ItemsSource");
+                var itemType = ItemTypeOf(TypeAt(ContextOf(list), PathOf(source)));
+                if (itemType is null)
+                {
+                    unresolved.Add($"{file} — <{list.Name.LocalName} ItemsSource=\"{source}\">");
+                    continue;
+                }
+
+                resolved++;
+                if (!SaysItsWords(itemType))
+                    unworded.Add($"{file} — <{list.Name.LocalName}> lists {itemType.Name}");
+            }
+        }
+
+        Assert.True(unresolved.Count == 0,
+            "this guard cannot tell what these lists hold, so it cannot say how their items are announced. Name the "
+            + "items in the list's ItemContainerStyle, or teach the guard the context they bind to:\n  "
+            + string.Join("\n  ", unresolved));
+        Assert.True(unworded.Count == 0,
+            "these lists draw their items through a template or a member path, so each item is announced by its "
+            + "ToString, which for these types reads out a record's fields, an enum's identifier or a type name. "
+            + "Override ToString with the words the item shows, or name the items in the list's "
+            + "ItemContainerStyle:\n  " + string.Join("\n  ", unworded));
+
+        // Vacuity floors: 16 lists draw their items in 2026-11, 2 of them naming the items themselves.
+        Assert.True(listsSeen >= 15,
+            $"only {listsSeen} lists draw their items, so the element test has stopped matching.");
+        Assert.True(resolved >= 13,
+            $"only {resolved} item types were read, so the type lookup has stopped matching.");
+        Assert.True(namedByTheList >= 2,
+            $"only {namedByTheList} lists name their items, so the style lookup has stopped matching.");
+    }
+
+    /// <summary>
     /// Every control inside a DataGrid row must announce WHICH ROW it belongs to, and the name must be
     /// somewhere an automation peer can actually read it.
     /// <para>Three distinct defects, all of which look correct in the markup. App Blocker set

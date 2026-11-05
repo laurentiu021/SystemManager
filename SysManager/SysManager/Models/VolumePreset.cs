@@ -13,7 +13,11 @@ namespace SysManager.Models;
 /// </summary>
 public sealed record VolumePreset(
     string Name,
-    IReadOnlyList<VolumePresetEntry> Entries);
+    IReadOnlyList<VolumePresetEntry> Entries)
+{
+    /// <summary>The preset's name, which a screen reader says for it in the picker (#2785).</summary>
+    public override string ToString() => Name;
+}
 
 /// <summary>One app's saved volume/mute within a <see cref="VolumePreset"/>, keyed by exe name.</summary>
 public sealed record VolumePresetEntry(

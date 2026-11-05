@@ -45,6 +45,13 @@
                               Margin="0,6,0,0" Padding="8,6" FontSize="13"
                               MaxDropDownHeight="320" TextSearch.TextPath="Display"
                               AutomationProperties.Name="Process to set affinity for">
+                        <!-- Named as shown, with the cores a process is pinned to: an item takes its name from
+                             its process's own words otherwise, which leave the pinning out (#2785). -->
+                        <ComboBox.ItemContainerStyle>
+                            <Style TargetType="ComboBoxItem" BasedOn="{StaticResource {x:Type ComboBoxItem}}">
+                                <Setter Property="AutomationProperties.Name" Value="{Binding PinnedDisplay}"/>
+                            </Style>
+                        </ComboBox.ItemContainerStyle>
                         <ComboBox.ItemTemplate>
                             <DataTemplate>
                                 <TextBlock Text="{Binding PinnedDisplay}" TextTrimming="CharacterEllipsis"/>

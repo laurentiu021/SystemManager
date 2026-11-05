@@ -36,4 +36,10 @@ public sealed record DisplayMode(int Width, int Height, int RefreshHz, int BitsP
 public sealed record DisplayDevice(string DeviceName, string FriendlyName, bool IsPrimary, bool IsActive)
 {
     public string Display => IsPrimary ? $"{FriendlyName} (primary)" : FriendlyName;
+
+    /// <summary>
+    /// <see cref="Display"/>, which a screen reader says for the display in the picker; the record's own read every
+    /// field (#2785).
+    /// </summary>
+    public override string ToString() => Display;
 }

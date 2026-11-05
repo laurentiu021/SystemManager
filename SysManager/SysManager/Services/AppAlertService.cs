@@ -200,7 +200,12 @@ public sealed partial class AppAlertService : IDisposable
     }
 
     /// <summary>A version: digits with at least one dot, as "24.08" or "v3.12.4", standing as a word of its own.</summary>
-    [GeneratedRegex(@"(?<![\w.])v?\d+(?:\.\d+)+[a-z]?(?![\w.])", RegexOptions.IgnoreCase)]
+    /// <remarks>
+    /// The digits and dots are taken whole, in an atomic group. Giving any back would leave a digit or a dot next,
+    /// which neither the letter that may follow nor the end of the version can be, so it could never make a match,
+    /// and the matcher keeps nothing to give back.
+    /// </remarks>
+    [GeneratedRegex(@"(?<![\w.])v?(?>\d+(?:\.\d+)+)[a-z]?(?![\w.])", RegexOptions.IgnoreCase)]
     private static partial Regex VersionNumber();
 
     /// <summary>Brackets left empty once their version is gone.</summary>

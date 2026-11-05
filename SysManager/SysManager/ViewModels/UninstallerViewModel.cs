@@ -2,6 +2,7 @@
 // Author: laurentiu021 · https://github.com/laurentiu021/SystemManager
 // License: MIT
 
+using System.Diagnostics.CodeAnalysis;
 using System.Globalization;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
@@ -141,8 +142,7 @@ public sealed partial class UninstallerViewModel : ViewModelBase
         // The list stays until the new one arrives. It was cleared here, so a scan cancelled or failed left an empty
         // grid while the count and the summary still described the apps before it, and Select all and Uninstall
         // then had nothing to act on (#2729).
-        _cts?.Dispose();
-        _cts = new CancellationTokenSource();
+        RenewCancellation();
 
         try
         {
@@ -215,8 +215,7 @@ public sealed partial class UninstallerViewModel : ViewModelBase
         }
 
         IsBusy = true;
-        _cts?.Dispose();
-        _cts = new CancellationTokenSource();
+        RenewCancellation();
         _uninstallerCts?.Dispose();
         _uninstallerCts = new CancellationTokenSource();
         int completed = 0;
@@ -396,8 +395,7 @@ public sealed partial class UninstallerViewModel : ViewModelBase
                 // A source of its own, which Cancel reaches: the batch's may be cancelled already, and measuring a
                 // large folder can keep the search going for a while. It was given no token, so Cancel showed and
                 // stopped nothing (#2783).
-                _cts.Dispose();
-                _cts = new CancellationTokenSource();
+                RenewCancellation();
                 await ShowLeftoversAsync([.. removedApps.Select(a => probes[a])], _cts.Token);
             }
         }
@@ -567,8 +565,7 @@ public sealed partial class UninstallerViewModel : ViewModelBase
         IsProgressIndeterminate = true;
         // A source of its own, which Cancel reaches: every folder is measured again before it goes, which takes a while
         // over a large one. It was given no token, so Cancel showed and stopped nothing (#2783).
-        _cts?.Dispose();
-        _cts = new CancellationTokenSource();
+        RenewCancellation();
         try
         {
             var result = await _leftovers.RemoveAsync(ticked, _cts.Token).ConfigureAwait(true);
@@ -666,6 +663,21 @@ public sealed partial class UninstallerViewModel : ViewModelBase
               + "and then deleted; double-click the file to put a key back."
             : "";
         return $"{ConfirmRemovalQuestion(ticked)}\n\n{lines}\n\n{string.Join(" ", new[] { folders, keys }.Where(s => s.Length > 0))}";
+    }
+
+    /// <summary>
+    /// Disposes the source of the last scan, batch, search or removal, and starts the one <see cref="Cancel"/> reaches
+    /// for the next.
+    /// </summary>
+    /// <remarks>
+    /// The field owns the source, so the one it replaces is disposed here, or in <see cref="Dispose(bool)"/>, and an
+    /// operation that throws leaves it to whichever comes first.
+    /// </remarks>
+    [MemberNotNull(nameof(_cts))]
+    private void RenewCancellation()
+    {
+        _cts?.Dispose();
+        _cts = new CancellationTokenSource();
     }
 
     /// <summary>

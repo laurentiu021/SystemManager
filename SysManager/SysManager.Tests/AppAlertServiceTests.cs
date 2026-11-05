@@ -171,6 +171,11 @@ public class AppAlertServiceTests
     [InlineData("Contoso Player (v2.1)", "Contoso Player")]
     [InlineData("Visual Studio 2022", "Visual Studio 2022")]
     [InlineData("Notepad++ (64-bit x64)", "Notepad++ (64-bit x64)")]
+    [InlineData("Contoso Tool 1.2.3b", "Contoso Tool")]
+    [InlineData("Contoso Tool 1.2.3ab", "Contoso Tool 1.2.3ab")]
+    [InlineData("Contoso Tool 1.2.3.beta", "Contoso Tool 1.2.3.beta")]
+    [InlineData("Contoso Tool v1.2b.3", "Contoso Tool v1.2b.3")]
+    [InlineData("Contoso Tool (1.2.3x5)", "Contoso Tool (1.2.3x5)")]
     public void WithoutVersion_TakesOutTheVersionAndNothingElse(string name, string expected)
         => Assert.Equal(expected, AppAlertService.WithoutVersion(name));
 

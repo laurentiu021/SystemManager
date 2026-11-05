@@ -26,6 +26,17 @@ public sealed class UninstallerViewModelLeftoverTests : IDisposable
     // never launched — the same stand-in UninstallerRemovalCheckTests uses.
     private static readonly string Uninstaller = $"\"{Path.Combine(Environment.SystemDirectory, "where.exe")}\"";
 
+    // How long a test waits on the view model before it fails rather than hangs.
+    private static readonly TimeSpan Bound = TimeSpan.FromSeconds(30);
+
+    /// <summary>A task that ends, cancelled, when <paramref name="ct"/> is cancelled, and never otherwise.</summary>
+    private static Task UntilCancelled(CancellationToken ct)
+    {
+        var cancelled = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        ct.Register(() => cancelled.TrySetCanceled(ct));
+        return cancelled.Task;
+    }
+
     private readonly string _rootName = @"Software\SysManagerTests\LeftoverList_" + Guid.NewGuid().ToString("N");
     private readonly RegistryKey _root;
     private readonly IPowerShellRunner _runner = Substitute.For<IPowerShellRunner>();
@@ -191,6 +202,89 @@ public sealed class UninstallerViewModelLeftoverTests : IDisposable
         Assert.StartsWith("2 apps were uninstalled.", vm.LeftoverIntro, StringComparison.Ordinal);
     }
 
+    [Fact]
+    public async Task Cancel_DuringTheSearch_StopsIt_AndTheCardShowsWhatItHadFound()
+    {
+        // Cancel showed while the search ran and stopped nothing: the search was given no token (#2783). The first
+        // app searched for finds a folder; the search for the second goes on until it is cancelled.
+        LeftoverGroup? found = null;
+        var searching = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        _leftovers.FindAsync(Arg.Any<UninstallProbe>(), Arg.Any<IReadOnlyCollection<UninstallProbe>>(),
+                             Arg.Any<CancellationToken>())
+            .Returns(async call =>
+            {
+                if (found is null)
+                {
+                    found = Group(call.Arg<UninstallProbe>().Name, Item(@"C:\Program Files\Acme"));
+                    return found;
+                }
+                searching.TrySetResult();
+                await UntilCancelled(call.Arg<CancellationToken>());
+                return Group(call.Arg<UninstallProbe>().Name);
+            });
+        var vm = Vm();
+        foreach (var app in new[] { App("Acme Notes"), App("Acme Draw") }) vm.AllApps.Add(app);
+        vm.FilterText = "x";
+        vm.FilterText = "";
+        foreach (var row in vm.FilteredApps) row.IsSelected = true;
+
+        Task run;
+        using (new DialogAnswer(confirm: true))
+            run = vm.UninstallSelectedCommand.ExecuteAsync(null);
+        await searching.Task.WaitAsync(Bound);
+        vm.CancelCommand.Execute(null);
+        await run.WaitAsync(Bound);
+
+        Assert.Same(found, Assert.Single(vm.LeftoverGroups));
+        Assert.True(vm.ShowLeftovers);
+        Assert.StartsWith("The search was stopped before it finished, so this may not be everything. 2 apps were",
+            vm.LeftoverIntro, StringComparison.Ordinal);
+        Assert.False(vm.IsBusy);
+    }
+
+    [Fact]
+    public async Task ABatchThatWasCancelled_StillSearchesForWhatItsRemovedAppsLeft()
+    {
+        // The search gets a source of its own, so the batch's cancelled one does not stop it before it starts. The
+        // list is in name order, so Acme Draw is removed and the batch stops before Acme Notes. The search answers a
+        // cancelled token as the service does, with a cancelled task.
+        var group = Group("Acme Draw", Item(@"C:\Program Files\Acme Draw"));
+        _leftovers.FindAsync(Arg.Any<UninstallProbe>(), Arg.Any<IReadOnlyCollection<UninstallProbe>>(),
+                             Arg.Any<CancellationToken>())
+            .Returns(call => call.Arg<CancellationToken>() is { IsCancellationRequested: true } ct
+                ? Task.FromCanceled<LeftoverGroup>(ct)
+                : Task.FromResult(group));
+        var vm = Vm();
+        _runner.RunProcessWithShellAsync(Arg.Any<string>(), Arg.Any<string>(), Arg.Any<CancellationToken>())
+            .Returns(_ => { vm.CancelCommand.Execute(null); return Task.FromResult(0); });
+
+        await UninstallAsync(vm, App("Acme Notes"), App("Acme Draw"));
+
+        Assert.StartsWith("Uninstall cancelled after 1/2 completed.", vm.StatusMessage, StringComparison.Ordinal);
+        Assert.StartsWith("1 app was uninstalled.", vm.LeftoverIntro, StringComparison.Ordinal);
+        Assert.Single(Assert.Single(vm.LeftoverGroups).Items);
+    }
+
+    [Theory]
+    [InlineData(true, false, "The search was stopped before it finished, so this may not be everything. 1 app was "
+                             + "uninstalled.")]
+    [InlineData(false, true, "The search was stopped before it finished, so this may not be everything. Nothing to "
+                             + "remove.")]
+    [InlineData(false, false, "The search was stopped before it found anything the app you uninstalled left behind.")]
+    public void TheCardsOpening_AfterAStoppedSearch_SaysItWasStopped(bool items, bool notOffered, string expected)
+    {
+        var group = new LeftoverGroup
+        {
+            AppName = "Acme Notes",
+            Publisher = "Acme",
+            Items = items ? [Item(@"C:\Program Files\Acme Notes")] : [],
+            NotOffered = notOffered ? [@"Not offered: C:\Users\me\Documents\Acme Notes is in Documents."] : [],
+        };
+
+        Assert.StartsWith(expected, UninstallerViewModel.DescribeFindings(1, [group], stopped: true),
+            StringComparison.Ordinal);
+    }
+
     // ── Removing ──────────────────────────────────────────────────────────
 
     private async Task<UninstallerViewModel> ShowingAsync(params LeftoverGroup[] groups)
@@ -270,6 +364,36 @@ public sealed class UninstallerViewModelLeftoverTests : IDisposable
 
         Assert.Same(certain, Assert.Single(Assert.Single(vm.LeftoverGroups).Items));
         Assert.Equal(@"Nothing was removed. C:\Program Files\Acme Notes: Windows did not send it to the Recycle Bin.", vm.StatusMessage);
+    }
+
+    [Fact]
+    public async Task Cancel_DuringARemoval_StopsIt_AndWhatWasNotRemovedStaysOnTheList()
+    {
+        // Cancel showed while the removal ran and stopped nothing: the removal was given no token (#2783).
+        var first = Item(@"C:\Program Files\Acme Notes");
+        var second = Item(@"C:\Program Files\Acme Draw");
+        var vm = await ShowingAsync(Group("Acme Notes", first, second));
+        var removing = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        _leftovers.RemoveAsync(Arg.Any<IReadOnlyList<LeftoverItem>>(), Arg.Any<CancellationToken>())
+            .Returns(async call =>
+            {
+                removing.TrySetResult();
+                try { await UntilCancelled(call.Arg<CancellationToken>()); }
+                catch (OperationCanceledException) { /* as the service: what went before the cancel is returned */ }
+                return new LeftoverRemoval([first], 1024, [], Stopped: true);
+            });
+
+        Task run;
+        using (new DialogAnswer(confirm: true))
+            run = vm.RemoveLeftoversCommand.ExecuteAsync(null);
+        await removing.Task.WaitAsync(Bound);
+        vm.CancelCommand.Execute(null);
+        await run.WaitAsync(Bound);
+
+        Assert.Same(second, Assert.Single(Assert.Single(vm.LeftoverGroups).Items));
+        Assert.Equal("Removed 1 leftover item (1.0 KB). Stopped before the rest, which are still on the list.",
+            vm.StatusMessage);
+        Assert.False(vm.IsBusy);
     }
 
     [Fact]
@@ -426,6 +550,21 @@ public sealed class UninstallerViewModelLeftoverTests : IDisposable
         Assert.Equal("Removed 1 leftover item (1.0 KB). 1 could not be removed. C:\\B: denied.",
             UninstallerViewModel.DescribeRemovalResult(new LeftoverRemoval([item], 1024, [@"C:\B: denied."])));
         Assert.Equal("Nothing was removed.", UninstallerViewModel.DescribeRemovalResult(new LeftoverRemoval([], 0, [])));
+    }
+
+    [Fact]
+    public void TheResultLine_OfAStoppedRemoval_SaysItWasStopped()
+    {
+        var item = Item(@"C:\A");
+
+        Assert.Equal("Stopped before anything was removed.",
+            UninstallerViewModel.DescribeRemovalResult(new LeftoverRemoval([], 0, [], Stopped: true)));
+        Assert.Equal("Removed 1 leftover item (1.0 KB). 1 could not be removed. C:\\B: denied. Stopped before the "
+                     + "rest, which are still on the list.",
+            UninstallerViewModel.DescribeRemovalResult(
+                new LeftoverRemoval([item], 1024, [@"C:\B: denied."], Stopped: true)));
+        Assert.Equal("Nothing was removed. C:\\B: denied. Stopped before the rest, which are still on the list.",
+            UninstallerViewModel.DescribeRemovalResult(new LeftoverRemoval([], 0, [@"C:\B: denied."], Stopped: true)));
     }
 
     // ── The Disk lock (#2891) ─────────────────────────────────────────────────

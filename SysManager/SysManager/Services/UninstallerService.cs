@@ -301,35 +301,9 @@ public sealed partial class UninstallerService
         }
         else
         {
-            // Registry uninstall commands must identify the exact executable. A relative
-            // path would be checked against SysManager's current directory but resolved by
-            // ShellExecute against its working directory, so reject it before any file check.
-            if (!System.IO.Path.IsPathFullyQualified(exe))
-                throw new InvalidOperationException(
-                    $"Uninstall executable path is not absolute: '{exe}'. Refusing to run for security.");
-
-            var fullPath = System.IO.Path.GetFullPath(exe);
-            if (!System.IO.File.Exists(fullPath))
-                throw new InvalidOperationException(
-                    $"Uninstall executable not found: '{exe}'. The app may have been removed already.");
-
-            var ext = System.IO.Path.GetExtension(fullPath);
-            if (!ext.Equals(".exe", StringComparison.OrdinalIgnoreCase))
-                throw new InvalidOperationException(
-                    $"Uninstall target is not an executable (.exe): '{exe}'. Refusing to run for security.");
-
-            // Validate the executable resides under a trusted directory (#401, #906).
-            // Registry uninstall keys (especially HKCU) can be modified without admin,
-            // so we must not execute arbitrary paths. Windows installation roots are always
-            // trusted; shared and per-user application-data roots are accepted only while
-            // SysManager is at standard integrity.
-            if (!IsUnderTrustedDirectory(fullPath, runningElevated))
-                throw new InvalidOperationException(
-                    $"Uninstall executable is outside trusted directories: '{exe}'. Refusing to run for security.");
-
-            // Launch the same canonical path that passed every check above. This binds
-            // validation to execution and avoids current-directory or dot-segment drift.
-            exe = fullPath;
+            // Launch the same canonical path that passed every check. This binds validation to execution and
+            // avoids current-directory or dot-segment drift.
+            exe = LocalExecutable(exe);
         }
 
         Log.Information("Uninstalling local app '{Name}' via: {Exe} {Args}", app.Name, exe, args);
@@ -389,6 +363,60 @@ public sealed partial class UninstallerService
     }
 
     /// <summary>
+    /// The full path of <paramref name="exe"/> when it names a program on one of this PC's drives, or throws what
+    /// the row shows instead.
+    /// </summary>
+    /// <param name="exe">The executable an uninstall command names.</param>
+    /// <param name="fileExists">
+    /// Replaces <see cref="System.IO.File.Exists(string)"/>, so a test can name any folder.
+    /// </param>
+    /// <remarks>
+    /// <para>Where on the drive it is does not matter. An uninstaller runs only while SysManager is not elevated
+    /// (<see cref="EnsureStandardIntegrity"/>), so it gets the user's own rights, the same as when it is
+    /// double-clicked, or started by Windows Settings from the same uninstall entry. It used to have to be under
+    /// Program Files, the Windows folder, ProgramData or Local AppData, which refused an app installed on another
+    /// drive or, as some install for one user, under Roaming AppData, and protected nothing: a user can write to
+    /// Local AppData as much as to anywhere else (#2783).</para>
+    /// <para>Still refused: a path that is not a full one, which ShellExecute would look up from another folder
+    /// than the one checked; a network path, since an uninstaller is installed on the PC and looking for one on a
+    /// share would reach the machine that entry names; and anything but an .exe, a script among them.</para>
+    /// </remarks>
+    internal static string LocalExecutable(string exe, Func<string, bool>? fileExists = null)
+    {
+        if (!System.IO.Path.IsPathFullyQualified(exe))
+            throw CannotStart($"its entry does not give the full path to the uninstaller: '{exe}'");
+
+        var fullPath = System.IO.Path.GetFullPath(exe);
+        if (!IsOnADrive(fullPath))
+            throw CannotStart($"the uninstaller is not on one of this PC's drives: '{exe}'");
+
+        if (!System.IO.Path.GetExtension(fullPath).Equals(".exe", StringComparison.OrdinalIgnoreCase))
+            throw CannotStart($"the uninstaller is not a program (.exe): '{exe}'");
+
+        if (!(fileExists ?? System.IO.File.Exists)(fullPath))
+            throw new InvalidOperationException(
+                $"Uninstall executable not found: '{exe}'. The app may have been removed already.");
+
+        return fullPath;
+
+        // "C:\" and the like. A share ("\\server\share") and a device path ("\\?\C:\") have longer roots.
+        static bool IsOnADrive(string path) =>
+            System.IO.Path.GetPathRoot(path) is [var letter, ':', '\\'] && char.IsAsciiLetter(letter);
+    }
+
+    /// <summary>
+    /// The refusal a row shows when SysManager does not start an app's uninstaller: where the app can be removed
+    /// instead, then why, for a support request.
+    /// </summary>
+    /// <remarks>
+    /// Each refusal used to end "Refusing to run for security.", which gave the user nothing to do, and which someone
+    /// this tab is for reads as a warning about the app (#2783). Windows Settings runs the same uninstall entry, the
+    /// way Windows itself handles it.
+    /// </remarks>
+    internal static InvalidOperationException CannotStart(string why) =>
+        new($"Remove it from Windows Settings ▸ Apps. SysManager does not start its uninstaller, because {why}.");
+
+    /// <summary>
     /// Parses an uninstall command string into executable and arguments.
     /// Handles: "C:\path\uninstall.exe" /S, C:\path\uninstall.exe /S,
     /// MsiExec.exe /X{GUID}, rundll32.exe ...
@@ -397,15 +425,9 @@ public sealed partial class UninstallerService
     {
         command = command.Trim();
 
-        // Reject obviously malicious patterns before parsing (#403).
-        // Commands containing shell metacharacters that could chain commands.
-        if (command.Contains('|') || command.Contains('&') ||
-            command.Contains(';') || command.Contains('`') ||
-            command.Contains("$("))
-            throw new InvalidOperationException(
-                $"Uninstall command contains shell metacharacters — refusing to parse: '{command}'");
-
-        // Case 1: Quoted executable path
+        // Case 1: Quoted executable path. Its own characters are not checked: the shell starts the file the quotes
+        // name and hands it the rest, and no command interpreter reads the path, so "Smith & Sons" in a folder name
+        // chains nothing. It is still bound to a real file before it starts (#2783).
         if (command.StartsWith('"'))
         {
             var endQuote = command.IndexOf('"', 1);
@@ -415,9 +437,14 @@ public sealed partial class UninstallerService
                 var args = endQuote + 1 < command.Length
                     ? command[(endQuote + 1)..].TrimStart()
                     : "";
+                RefuseChaining(args, command);
                 return (exe, args);
             }
         }
+
+        // Reject obviously malicious patterns before parsing the other forms (#403): with no quotes, nothing tells
+        // the executable from its arguments until the parse below has guessed.
+        RefuseChaining(command, command);
 
         // Case 2: MsiExec — common pattern: MsiExec.exe /I{GUID} or /X{GUID}
         if (command.StartsWith("MsiExec", StringComparison.OrdinalIgnoreCase))
@@ -471,8 +498,19 @@ public sealed partial class UninstallerService
         // No fallback — if we can't parse it safely, reject it (#403).
         // The old fallback treated the entire string as an executable, which
         // could execute arbitrary commands if the string was crafted.
-        throw new InvalidOperationException(
-            $"Cannot safely parse uninstall command — no valid executable found: '{command}'");
+        throw CannotStart($"its uninstall command names no program: '{command}'");
+    }
+
+    /// <summary>
+    /// Refuses <paramref name="text"/> when it holds a shell metacharacter that could chain a second command, should
+    /// a command interpreter be what reads it (#403).
+    /// </summary>
+    private static void RefuseChaining(string text, string command)
+    {
+        if (text.Contains('|') || text.Contains('&') ||
+            text.Contains(';') || text.Contains('`') ||
+            text.Contains("$("))
+            throw CannotStart($"its uninstall command has characters that could start a second command: '{command}'");
     }
 
     /// <summary>
@@ -535,8 +573,7 @@ public sealed partial class UninstallerService
             var dllToken = commaIndex >= 0 ? args[..commaIndex] : args;
             var dll = dllToken.Trim().Trim('"');
             if (string.IsNullOrWhiteSpace(dll))
-                throw new InvalidOperationException(
-                    "rundll32 uninstall command has no DLL path - refusing to run for security.");
+                throw CannotStart("its rundll32 command names no DLL");
 
             string dllFullPath;
             if (System.IO.Path.IsPathFullyQualified(dll))
@@ -553,20 +590,18 @@ public sealed partial class UninstallerService
             }
             else
             {
-                throw new InvalidOperationException(
-                    $"rundll32 DLL path is not absolute: '{dll}'. Refusing to run for security.");
+                throw CannotStart($"its rundll32 command does not give the full path to its DLL: '{dll}'");
             }
 
             if (!System.IO.File.Exists(dllFullPath))
-                throw new InvalidOperationException(
-                    $"rundll32 DLL was not found: '{dllFullPath}'. Refusing to run for security.");
+                throw CannotStart($"the DLL its rundll32 command loads is not on this PC: '{dllFullPath}'");
 
-            // The same rule as the executable check (#906): a user-writable DLL path is only
-            // trusted when not elevated, so rundll32 can't load attacker-planted DLLs with
-            // our elevation.
+            // Kept to the folders apps install to, though the executable no longer is (#2783): rundll32 loads
+            // whatever file it is named, and each of the five rundll32 uninstall commands on the PC this was
+            // measured on loads its DLL from one of them. A user-writable folder among them is trusted only when not
+            // elevated (#906), so rundll32 cannot load an attacker-planted DLL with SysManager's elevation.
             if (!IsUnderTrustedDirectory(dllFullPath, isElevated))
-                throw new InvalidOperationException(
-                    $"rundll32 would load a DLL outside trusted directories: '{dll}'. Refusing to run for security.");
+                throw CannotStart($"its rundll32 command loads a DLL outside the folders apps install to: '{dll}'");
 
             var suffix = commaIndex >= 0 ? args[commaIndex..] : string.Empty;
             return $"\"{dllFullPath}\"{suffix}";
@@ -576,9 +611,7 @@ public sealed partial class UninstallerService
         {
             // Only allow a product-code uninstall (/X{GUID}); reject arbitrary packages.
             if (!MsiUninstallArgsPattern().IsMatch(args))
-                throw new InvalidOperationException(
-                    $"MsiExec uninstall arguments are not a recognized product-code uninstall: '{args}'. " +
-                    "Refusing to run for security.");
+                throw CannotStart($"its Windows Installer command is not a plain removal: '{args}'");
         }
 
         return args;

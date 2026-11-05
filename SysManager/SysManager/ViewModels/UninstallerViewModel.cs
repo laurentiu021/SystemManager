@@ -393,7 +393,12 @@ public sealed partial class UninstallerViewModel : ViewModelBase
                     (failed > 0 ? $" ({failed} failed)" : string.Empty) +
                     (cancellationRequested ? " — cancelled partway" : string.Empty));
 
-                await ShowLeftoversAsync([.. removedApps.Select(a => probes[a])]);
+                // A source of its own, which Cancel reaches: the batch's may be cancelled already, and measuring a
+                // large folder can keep the search going for a while. It was given no token, so Cancel showed and
+                // stopped nothing (#2783).
+                _cts.Dispose();
+                _cts = new CancellationTokenSource();
+                await ShowLeftoversAsync([.. removedApps.Select(a => probes[a])], _cts.Token);
             }
         }
         finally
@@ -415,20 +420,23 @@ public sealed partial class UninstallerViewModel : ViewModelBase
     /// without them, and offered again when this tab is opened in a session that runs as administrator.
     /// <para>The batch's own summary is put back on the status line afterwards: the search is a footnote to the
     /// uninstall, not its result.</para>
+    /// <para>Cancelled, the search stops and the card shows what it had found, and says it was stopped.</para>
     /// </remarks>
-    private async Task ShowLeftoversAsync(IReadOnlyList<UninstallProbe> uninstalled)
+    private async Task ShowLeftoversAsync(IReadOnlyList<UninstallProbe> uninstalled, CancellationToken ct)
     {
         var summary = StatusMessage;
         StatusMessage = "Looking for what the uninstall left behind…";
         var stillInstalled = AllApps.Select(UninstallProbe.Of).ToList();
         var groups = new List<LeftoverGroup>();
         var listed = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var stopped = false;
         try
         {
             foreach (var probe in uninstalled)
             {
                 LeftoverGroup? group;
-                try { group = await _leftovers.FindAsync(probe, stillInstalled).ConfigureAwait(true); }
+                try { group = await _leftovers.FindAsync(probe, stillInstalled, ct).ConfigureAwait(true); }
+                catch (OperationCanceledException) when (ct.IsCancellationRequested) { stopped = true; break; }
                 catch (System.IO.IOException ex) { Log.Warning("Leftover search for an app failed: {Error}", ex.Message); continue; }
                 catch (UnauthorizedAccessException ex) { Log.Warning("Leftover search for an app denied: {Error}", ex.Message); continue; }
                 if (group is null) continue;
@@ -442,7 +450,7 @@ public sealed partial class UninstallerViewModel : ViewModelBase
 
             _leftovers.RememberPending(groups);
             ShowGroups([.. groups.Where(g => g.Items.Count > 0 || g.NotOffered.Count > 0)]);
-            LeftoverIntro = DescribeFindings(uninstalled.Count, LeftoverGroups);
+            LeftoverIntro = DescribeFindings(uninstalled.Count, LeftoverGroups, stopped);
             ShowLeftovers = true;
         }
         finally
@@ -452,20 +460,31 @@ public sealed partial class UninstallerViewModel : ViewModelBase
     }
 
     /// <summary>The card's opening sentence after an uninstall, for what was found.</summary>
-    internal static string DescribeFindings(int uninstalled, IReadOnlyCollection<LeftoverGroup> groups)
+    /// <param name="uninstalled">How many apps the search was for.</param>
+    /// <param name="groups">What it found.</param>
+    /// <param name="stopped">The search was cancelled, so what it found may not be all there is.</param>
+    internal static string DescribeFindings(int uninstalled, IReadOnlyCollection<LeftoverGroup> groups,
+                                            bool stopped = false)
     {
         var one = uninstalled == 1;
+        var cut = stopped ? "The search was stopped before it finished, so this may not be everything. " : "";
         if (groups.Any(g => g.Items.Count > 0))
         {
-            return $"{uninstalled} app{(one ? " was" : "s were")} uninstalled. These were still on the PC afterwards. "
+            return cut + $"{uninstalled} app{(one ? " was" : "s were")} uninstalled. "
+                   + "These were still on the PC afterwards. "
                    + "Ticked items are certain; the rest are guesses — tick them only if you know they are not used by "
                    + "something else.";
         }
 
         var whose = one ? "the app you uninstalled" : $"the {uninstalled} apps you uninstalled";
-        return groups.Any(g => g.NotOffered.Count > 0)
-            ? $"Nothing to remove. A few things named after {whose} were found, but they are in places SysManager never "
-              + "touches, so they are only listed below."
+        if (groups.Any(g => g.NotOffered.Count > 0))
+        {
+            return cut + $"Nothing to remove. A few things named after {whose} were found, but they are in places "
+                   + "SysManager never touches, so they are only listed below.";
+        }
+
+        return stopped
+            ? $"The search was stopped before it found anything {whose} left behind."
             : $"Nothing left behind. SysManager found no folder or setting of {whose}.";
     }
 
@@ -546,9 +565,13 @@ public sealed partial class UninstallerViewModel : ViewModelBase
 
         IsBusy = true;
         IsProgressIndeterminate = true;
+        // A source of its own, which Cancel reaches: every folder is measured again before it goes, which takes a while
+        // over a large one. It was given no token, so Cancel showed and stopped nothing (#2783).
+        _cts?.Dispose();
+        _cts = new CancellationTokenSource();
         try
         {
-            var result = await _leftovers.RemoveAsync(ticked).ConfigureAwait(true);
+            var result = await _leftovers.RemoveAsync(ticked, _cts.Token).ConfigureAwait(true);
 
             var gone = result.Removed.ToHashSet();
             foreach (var group in LeftoverGroups)
@@ -578,16 +601,21 @@ public sealed partial class UninstallerViewModel : ViewModelBase
         }
     }
 
-    /// <summary>The status line after a removal: what went, and the first thing that did not, with why.</summary>
+    /// <summary>
+    /// The status line after a removal: what went, the first thing that did not, with why, and whether it was stopped.
+    /// </summary>
     internal static string DescribeRemovalResult(LeftoverRemoval result)
     {
         var n = result.Removed.Count;
         var failed = result.Errors.Count;
-        if (n == 0)
-            return failed == 0 ? "Nothing was removed." : $"Nothing was removed. {result.Errors[0]}";
+        if (n == 0 && failed == 0)
+            return result.Stopped ? "Stopped before anything was removed." : "Nothing was removed.";
+
+        var stopped = result.Stopped ? " Stopped before the rest, which are still on the list." : "";
+        if (n == 0) return $"Nothing was removed. {result.Errors[0]}{stopped}";
 
         var done = $"Removed {n} leftover item{(n == 1 ? "" : "s")} ({FormatHelper.FormatSize(result.BytesFreed)}).";
-        return failed == 0 ? done : $"{done} {failed} could not be removed. {result.Errors[0]}";
+        return (failed == 0 ? done : $"{done} {failed} could not be removed. {result.Errors[0]}") + stopped;
     }
 
     /// <summary>The activity-log line for a removal: how many, how much, and where each kind went. No names.</summary>
@@ -640,7 +668,10 @@ public sealed partial class UninstallerViewModel : ViewModelBase
         return $"{ConfirmRemovalQuestion(ticked)}\n\n{lines}\n\n{string.Join(" ", new[] { folders, keys }.Where(s => s.Length > 0))}";
     }
 
-    /// <summary>Stops a scan, or a batch before its next app: the uninstaller running now finishes.</summary>
+    /// <summary>
+    /// Stops a scan, a batch before its next app, the search for what it left behind, or a removal of that before its
+    /// next item. The uninstaller running now finishes.
+    /// </summary>
     [RelayCommand]
     private void Cancel()
     {

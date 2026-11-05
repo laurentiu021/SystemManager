@@ -301,7 +301,8 @@ to scroll.
   as `SpeedTrendChart`.
 - `UninstallerViewModel` — winget-based app uninstaller with batch support, and the Left behind card
   that follows an uninstall. Cancel and Escape stop a batch before its next app: the uninstaller already running
-  has a token of its own, which only `Dispose` cancels (#2834).
+  has a token of its own, which only `Dispose` cancels (#2834). The leftover search and the removal each get a
+  source of their own, which Cancel reaches (#2783).
 - `PerformanceViewModel` — per-tweak performance tuning with snapshot restore. Refresh is off while `IsBusy`,
   and a read leaves `NeedsReboot` alone, so a graphics change's reboot notice lasts the session (#2607). The read
   after an Apply keeps any switch that differs from the last read, and a declined or locked-out Apply puts back only
@@ -1098,7 +1099,10 @@ Key services:
   calls it removed: the exit code belongs to the launched process, and an NSIS uninstaller
   hands over to a copy of itself and exits at once. The uninstall roots it reads are
   injectable, so the check is tested against a redirected registry. The scan also records each
-  entry's `InstallLocation`, which the leftover search starts from.
+  entry's `InstallLocation`, which the leftover search starts from. `LocalExecutable` starts an uninstaller
+  anywhere on this PC's drives, since one only ever runs without elevation; a relative path, a network path
+  and anything but an .exe are refused, and `CannotStart` words each refusal with where the app can be removed
+  instead (#2783). A quoted uninstaller path is not checked for shell metacharacters, only its arguments.
 - `LeftoverService` (`ILeftoverService`) — the Uninstaller's Left behind card (#1527). `FindAsync` runs
   `LeftoverFinder` for one uninstalled app and measures each folder with `SafeFileWalk`, refusing a folder
   that holds a link; `RemoveAsync` sends folders to the Recycle Bin and deletes an app's own HKCU key only
@@ -1106,7 +1110,8 @@ Key services:
   by `ContextMenuService.PruneBackups`). Every folder is re-checked by the finder's rules just before it goes.
   Folders under Program Files or ProgramData found without administrator rights are kept in
   `uninstaller-leftovers.json` and offered again, re-checked and unticked, in an elevated session: the record
-  is user-writable, so an administrator session removes only what is ticked in it.
+  is user-writable, so an administrator session removes only what is ticked in it. A cancelled
+  `RemoveAsync` stops before its next item and returns what it removed, marked `Stopped` (#2783).
 - `LeftoverFinder` — the pure rules behind it: what an uninstalled app left, ranked Certain (the install
   folder its entry named, read before uninstalling), Probably (a folder named after the app directly under
   AppData, Local AppData or ProgramData), its own key (`HKCU\Software\<Publisher>\<App>`) and Guess (a

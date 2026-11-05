@@ -2010,7 +2010,10 @@ offers, "rate us" prompts:
   would tick more than 20 apps with no filter typed. Ticks survive a rescan, and
   applications Windows reports without a package id — most of the older ones — are matched by
   name too, so they are not treated as one entry
-- Local app support — uninstalls apps not in winget via registry UninstallString
+- Local app support — uninstalls apps not in winget via registry UninstallString, wherever the
+  app's uninstaller is on the PC's drives: on another drive too, or under Roaming AppData, where
+  some apps install for one user. One SysManager does not start, a script or one on a network
+  folder, says to remove the app from Windows Settings ▸ Apps instead
 - The list is read the same way on a winget in any of its languages: an app winget knows keeps its
   source on a Spanish, Portuguese or Russian winget, and Chinese, Japanese or Korean text does not
   shift the columns after it
@@ -2022,7 +2025,9 @@ offers, "rate us" prompts:
   A Windows Installer package is removed with its progress bar showing rather than silently, because that is
   the only way it can ask for administrator rights
 - **Cancel stops a batch between apps** — the uninstaller already running finishes first, because ending one
-  half-way can leave its program half-removed. `Escape` does the same
+  half-way can leave its program half-removed. `Escape` does the same. It also stops the search for what an
+  uninstall left behind, and a removal of what you ticked before its next item: the card shows what was found,
+  and the status line what was removed, before it stopped
 - **What it left behind** — after an uninstall, a Left behind card lists what the app left on
   the PC: the folder it was installed in, folders named after it in AppData, Local AppData and
   ProgramData, its own settings key under `HKEY_CURRENT_USER\Software`, and a folder named after

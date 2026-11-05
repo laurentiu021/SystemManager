@@ -1205,9 +1205,11 @@ Answers "what is actually using my space?" by listing the biggest files in one p
   Sortable, so everything unrecognised can be grouped together at a glance
 - **Signature column** — whether Windows can confirm who made the running program, read
   from the file's own certificate. This is a different question from Safety, and the
-  difference is the point: Safety recognises a process by **name**, so a copy of
-  `svchost.exe` sitting in a downloads folder inherits the real one's label. The
-  certificate belongs to the file. Shows **Verified** ("Windows can confirm this really
+  difference is the point: Safety recognises a process by **name**, and a part of Windows
+  also by **where it runs**. A copy of `svchost.exe` sitting in a downloads folder is **Not
+  recognised**, while Windows 11's own Notepad, Paint or Terminal, which Windows installs
+  from Microsoft's packages, is still **Windows**. The certificate belongs to the file.
+  Shows **Verified** ("Windows can confirm this really
   comes from Google LLC" on hover), **Unsigned**, or **Check failed**
   - **Unsigned is grey, not a warning** — most ordinary programs are unsigned, and so is
     SysManager itself. Amber is kept for a file that *is* signed and whose signature does
@@ -2411,7 +2413,9 @@ offers, "rate us" prompts:
   Startup Manager, Boot Analyzer. The buttons only open that tab, so nothing is changed from here.
   A program is named together with the reason it may be fine — "that may be exactly what you want
   if you are watching or playing something" — and a busy part of Windows is said to be doing a job
-  of its own. "Nothing obvious is slowing it down" appears only when all five could be looked at;
+  of its own. A copy named like a part of Windows but running from another folder is counted on its
+  own, by its process name, and the check says where it runs from. "Nothing obvious is slowing it
+  down" appears only when all five could be looked at;
   anything that could not be read is named instead. It does not start while a cleanup or a disk
   scan is running in SysManager, which would be what it found
 - **Quick Actions** — Run Quick Cleanup, Update All Apps, Check Windows Updates and Run Speed

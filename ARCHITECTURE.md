@@ -283,7 +283,8 @@ to scroll.
   and which (matched by name with no path check) would let a process merely CALLED `svchost.exe` from a profile
   folder inherit the refusal or warning meant for the real one. `ProcessCriticality` is the one copy of both
   sets and the path check, read by this view model's tiers, `ProcessDescriptionService.Lookup(name, path)`
-  (downgrades a database "System" hit the same way when the path disagrees), and `ProcessEntry.SafetyTooltip`
+  (downgrades a database "System" hit when the path is not where Windows keeps its programs, a wider set of
+  folders than the tiers' System folder, #3166), and `ProcessEntry.SafetyTooltip`
   (so the chip's tooltip never promises something the tiers above contradict). Kill passes the listed
   start time and name with the PID, so a process that closed while the confirmation was open, and whose ID
   Windows gave to another program, is reported as already closed and left alone; SysManager's own process is
@@ -731,7 +732,9 @@ Key services:
 - `SlowdownService` (`ISlowdownService`) — the Dashboard's "Why is it slow?" check (#1529). Looks at five things at
   once: the system drive, judged by `HealthScoreService.ComputeFreeSpaceScore`; the program using the most of the
   processor, from two `ProcessManagerService` snapshots a second apart, by program rather than by process, never
-  SysManager itself or the idle process; what starts with Windows (`StartupService`, a scheduled task only when its
+  SysManager itself or the idle process, with a copy of a part of Windows that runs from a folder Windows does not
+  keep its programs in counted as a program of its own (#3010); what starts with Windows (`StartupService`, a
+  scheduled task only when its
   `StartsWithWindows` is set) and what Windows blamed at its
   last timed start, if that was within 30 days (`BootAnalyzerService`); memory in use, from 90%; and the time since
   the last restart, judged by `ComputeUptimeScore`. Returns a `SlowdownReport`: the findings ranked in
@@ -1328,10 +1331,13 @@ Key services:
   it back after the delete, before the read-only rescan (#2510).
 - `ProcessDescriptionService` — the built-in process database (`ProcessDescriptions.json`, an embedded
   resource) behind the static `Instance`: `Lookup` gives a process's plain-language description, category and
-  `ProcessSafety`, for Process Manager and Startup Manager. The `Lookup(name, imagePath)` overload re-verifies
-  a "System" hit against `ProcessCriticality.IsUnderSystemRoot` and downgrades it to an unrecognised entry
-  naming the real folder when the image runs from outside `%SystemRoot%` — a database match by name alone
-  cannot tell the real `svchost.exe` from one merely called that in a profile folder.
+  `ProcessSafety`, for Process Manager, Startup Manager and Why is it slow?. The `Lookup(name, imagePath)`
+  overload re-verifies a "System" hit against `ProcessCriticality.IsWhereWindowsKeepsItsPrograms` (the System
+  folder, Microsoft's own packages under `%ProgramFiles%\WindowsApps`, Windows' folders under Program Files and
+  Defender's under ProgramData) and downgrades it to an unrecognised entry naming the real folder when the image
+  runs from anywhere else — a database match by name alone cannot tell the real `svchost.exe` from one merely
+  called that in a profile folder (#2792), and the System folder alone called Windows 11's packaged apps
+  unrecognised (#3166).
 - `SpeedTestHistoryService` — persists speed test results to JSON for
   historical charting and trend analysis. One instance, shared by the Speed Test tab and the
   Dashboard's quick test; its `Saved` event is how a result recorded from the Dashboard reaches a

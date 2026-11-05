@@ -75,6 +75,69 @@ public class ProcessCriticalityTests
     public void IsUnderSystemRoot_DefinitePathOutsideWindows_IsFalse()
         => Assert.False(ProcessCriticality.IsUnderSystemRoot(@"C:\Users\someone\AppData\Local\thing.exe"));
 
+    // ---------- where Windows keeps its programs, beyond the System folder (#3166) ----------
+
+    /// <summary>A path under one of this PC's special folders, so the cases hold wherever Windows is.</summary>
+    private static string Under(Environment.SpecialFolder root, string relative)
+        => Path.Combine(Environment.GetFolderPath(root), relative);
+
+    [Theory]
+    [InlineData(Environment.SpecialFolder.Windows, @"System32\svchost.exe")]
+    [InlineData(Environment.SpecialFolder.Windows,
+        @"SystemApps\MicrosoftWindows.Client.CBS_cw5n1h2txyewy\SearchHost.exe")]
+    // The packages Windows 11 installs its own apps as: Microsoft Corporation's publisher ID, and Microsoft Windows'.
+    [InlineData(Environment.SpecialFolder.ProgramFiles,
+        @"WindowsApps\Microsoft.WindowsTerminal_1.25.2733.0_x64__8wekyb3d8bbwe\WindowsTerminal.exe")]
+    [InlineData(Environment.SpecialFolder.ProgramFiles,
+        @"WindowsApps\Microsoft.WindowsNotepad_11.2607.14.0_x64__8wekyb3d8bbwe\Notepad\Notepad.exe")]
+    [InlineData(Environment.SpecialFolder.ProgramFiles,
+        @"WindowsApps\MicrosoftWindows.Client.WebExperience_526.21100.40.0_x64__cw5n1h2txyewy\Dashboard\Widgets.exe")]
+    [InlineData(Environment.SpecialFolder.ProgramFilesX86, @"Windows Media Player\wmplayer.exe")]
+    [InlineData(Environment.SpecialFolder.ProgramFiles, @"Windows Media Player\wmplayer.exe")]
+    [InlineData(Environment.SpecialFolder.ProgramFiles, @"Windows Defender\MsMpEng.exe")]
+    [InlineData(Environment.SpecialFolder.CommonApplicationData,
+        @"Microsoft\Windows Defender\Platform\4.18.26100.4-0\MsMpEng.exe")]
+    public void IsWhereWindowsKeepsItsPrograms_WindowsOwnFolders_AreTrue(
+        Environment.SpecialFolder root, string relative)
+        => Assert.True(ProcessCriticality.IsWhereWindowsKeepsItsPrograms(Under(root, relative)));
+
+    [Theory]
+    [InlineData(Environment.SpecialFolder.ApplicationData, @"svchost.exe")]
+    [InlineData(Environment.SpecialFolder.LocalApplicationData, @"Temp\notepad.exe")]
+    // A package someone else publishes, even with a Windows program's name in it.
+    [InlineData(Environment.SpecialFolder.ProgramFiles,
+        @"WindowsApps\SomeVendor.Notepad_1.0.0.0_x64__2247w0b46hfww\Notepad.exe")]
+    // A Microsoft publisher ID inside a package name, and not at its end, is not Microsoft's package.
+    [InlineData(Environment.SpecialFolder.ProgramFiles,
+        @"WindowsApps\Evil_8wekyb3d8bbwe_1.0.0.0_x64__2247w0b46hfww\svchost.exe")]
+    // A file straight inside WindowsApps is in no package.
+    [InlineData(Environment.SpecialFolder.ProgramFiles, @"WindowsApps\svchost.exe")]
+    // Folders whose names only begin like Windows' own.
+    [InlineData(Environment.SpecialFolder.ProgramFiles,
+        @"WindowsAppsX\Microsoft.WindowsNotepad_11.2607.14.0_x64__8wekyb3d8bbwe\Notepad.exe")]
+    [InlineData(Environment.SpecialFolder.ProgramFiles, @"Windows Media Player Extra\wmplayer.exe")]
+    // The folder of the same name in the user's own profile, which the user can write to.
+    [InlineData(Environment.SpecialFolder.LocalApplicationData,
+        @"Microsoft\WindowsApps\Microsoft.WindowsNotepad_11.2607.14.0_x64__8wekyb3d8bbwe\Notepad.exe")]
+    // Defender's data, outside its platform folder.
+    [InlineData(Environment.SpecialFolder.CommonApplicationData, @"Microsoft\Windows Defender\Scans\MsMpEng.exe")]
+    public void IsWhereWindowsKeepsItsPrograms_AnywhereElse_IsFalse(Environment.SpecialFolder root, string relative)
+        => Assert.False(ProcessCriticality.IsWhereWindowsKeepsItsPrograms(Under(root, relative)));
+
+    [Fact]
+    public void IsWhereWindowsKeepsItsPrograms_UnreadablePath_StillTrustsTheName()
+    {
+        Assert.True(ProcessCriticality.IsWhereWindowsKeepsItsPrograms(null));
+        Assert.True(ProcessCriticality.IsWhereWindowsKeepsItsPrograms(""));
+        Assert.True(ProcessCriticality.IsWhereWindowsKeepsItsPrograms("   "));
+    }
+
+    [Fact]
+    public void IsBootCritical_StillWantsTheSystemFolder_EvenInsideAMicrosoftPackage()
+        // The names it keeps run from the System folder, so a copy anywhere else is not one, however protected.
+        => Assert.False(ProcessCriticality.IsBootCritical("svchost", Under(Environment.SpecialFolder.ProgramFiles,
+            @"WindowsApps\Microsoft.WindowsTerminal_1.25.2733.0_x64__8wekyb3d8bbwe\svchost.exe")));
+
     [Fact]
     public void BootCriticalAndHighConsequence_DoNotOverlap()
     {

@@ -32,17 +32,21 @@ public partial class ThemePopup : UserControl
         Loaded += OnLoaded;
     }
 
+    /// <summary>Shows the theme as it is now, each time the panel opens.</summary>
+    /// <remarks>
+    /// The panel is built once and kept, and it read the theme only the first time it opened. Under Auto the theme
+    /// changes while the panel is closed, when Windows switches between light and dark, so the panel opened again on
+    /// the other side's presets with the old one checked, and picking one of them left Auto (#3163). The handlers are
+    /// wired once; a later read checks a pill and moves the slider under the guards that keep either from applying
+    /// anything.
+    /// </remarks>
     private void OnLoaded(object sender, RoutedEventArgs e)
     {
-        if (_initialized) return;
-        _initialized = true;
-
-        // Sync the mode radios to the persisted theme BEFORE building the preset cards:
-        // BuildPresetCards() reads DarkMode.IsChecked to decide which presets to list, and at
-        // Loaded time that is still the XAML default (Dark). A user who persisted a Light or
-        // Custom theme would otherwise see the Dark preset list until they interacted with the UI.
         SyncUiToService();
         BuildPresetCards();
+
+        if (_initialized) return;
+        _initialized = true;
 
         DarkMode.Checked += Mode_Changed;
         LightMode.Checked += Mode_Changed;

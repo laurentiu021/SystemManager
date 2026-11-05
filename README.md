@@ -196,7 +196,8 @@ with:
 - **Light mode** — 6 curated presets (Clean Indigo, Sky Breeze, Warm Sand, Mint Fresh, Soft Blossom, Lavender)
 - **Auto mode** — follow the Windows light/dark setting, and keep following it. It changes with Windows
   while the app is open, whether you flip it by hand, on a Windows schedule, or from SysManager's own
-  Dark Mode tab. Your colour family is kept across the switch: on Warm Ember, going light gives you
+  Dark Mode tab, and the panel opens on that side's presets. Your colour family is kept across the switch: on
+  Warm Ember, going light gives you
   Warm Sand rather than the default, and staying dark keeps Warm Ember. Picking any preset turns
   Auto off, and the panel then shows Dark or Light selected, whichever the preset is
 - **Custom mode** — free hex input for accent, background, surface, and text colors

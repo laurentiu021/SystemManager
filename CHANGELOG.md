@@ -10,6 +10,16 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.136.115] - 2026-11-05
+
+**Under Auto, the Appearance panel opens on the presets of the side Windows is on, after Windows switches between light and dark.**
+
+### Fixed
+- The Appearance panel read the theme only the first time it opened. Under Auto, after Windows switched between light
+  and dark while the panel was closed, it opened again on the other side's presets with the old one marked as
+  chosen, and picking one of them turned Auto off. It shows the theme as it is now each time it opens. Since Auto
+  mode first shipped, in 1.82.0.
+
 ## [1.136.114] - 2026-11-05
 
 **Resource History keeps the hour the clock repeats each autumn as two hours: in its saved history, its chart and its CSV export.**

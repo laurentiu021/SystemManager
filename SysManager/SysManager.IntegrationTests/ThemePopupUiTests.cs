@@ -200,6 +200,35 @@ public sealed class ThemePopupUiTests : IDisposable
     }
 
     [Fact]
+    public void UnderAuto_ThePanelOpensOnTheSideWindowsIsOn_AfterWindowsSwitched()
+    {
+        // The panel is built once and kept. It read the theme only the first time it opened, so after Windows switched
+        // to light under Auto it opened again on the dark presets with the old one checked (#3163).
+        var prefersDark = true;
+        var theme = new ThemeService(_dir.FullName, windowsPrefersDark: () => prefersDark, paintsTheApp: false);
+        theme.FollowWindows();
+
+        StaHelper.Run(() =>
+        {
+            AppResources.Ensure();
+            var popup = Opened(theme);
+            Assert.All(Cards(popup), c => Assert.True(ThemePreset.Defaults[(string)c.Tag].IsDark));
+
+            // What the theme service does when Windows switches sides under Auto, while the panel is closed.
+            prefersDark = false;
+            theme.FollowWindows();
+            popup.RaiseEvent(new RoutedEventArgs(FrameworkElement.UnloadedEvent));
+            popup.RaiseEvent(new RoutedEventArgs(FrameworkElement.LoadedEvent));
+
+            var cards = Cards(popup);
+            Assert.All(cards, c => Assert.False(ThemePreset.Defaults[(string)c.Tag].IsDark));
+            Assert.Equal(theme.CurrentPresetId, (string)Assert.Single(cards, c => c.IsChecked == true).Tag);
+            Assert.True(popup.FollowWindowsMode.IsChecked, "Auto is not selected when the panel opens again");
+            Assert.Equal(ThemeService.AutoMode, theme.CurrentMode);
+        });
+    }
+
+    [Fact]
     public void ClickingAPill_StillAppliesItsMode()
     {
         // The other direction is unchanged: a pill the user clicks applies the mode's companion preset.

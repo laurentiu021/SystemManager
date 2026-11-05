@@ -365,6 +365,130 @@ public class ProfileViewModelTests : IDisposable
             ProfileWithPrivacy() with { Sections = [ProfileWithPrivacy().Sections[0]] });
         Assert.DoesNotContain("privacy", filesOnly, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("This overwrites the matching SysManager settings on this PC.", filesOnly, StringComparison.Ordinal);
+
+        // Privacy choices beside a section this build skips overwrite nothing either (#2784).
+        var privacyAlone = ProfileWithPrivacy(withTheme: false);
+        var besideAnUnknownSection = ProfileViewModel.DescribeImportConfirmation(privacyAlone with
+        {
+            Sections = [new ConfigSection("rogue", "Theme & appearance", "theme.json", "{}"), .. privacyAlone.Sections],
+        });
+        Assert.DoesNotContain("overwrites", besideAnUnknownSection, StringComparison.Ordinal);
+        Assert.Contains("The privacy choices in this profile are not applied here.", besideAnUnknownSection,
+            StringComparison.Ordinal);
+    }
+
+    // ---------- the confirmation names what the import writes, in SysManager's words (#2784) ----------
+
+    /// <summary>
+    /// A profile of config files alone, <paramref name="sections"/>, exported on 5 October 2026 by 1.115.0.
+    /// </summary>
+    private static ConfigProfile ProfileOf(params ConfigSection[] sections)
+        => new(1, "1.115.0", new DateTime(2026, 10, 5, 9, 0, 0, DateTimeKind.Local)) { Sections = sections };
+
+    [Fact]
+    public void ImportConfirmation_NamesEachSectionByItsKey_NotByTheNameInTheFile()
+    {
+        // The file calls the consent to fetch app icons from the web the theme, and gives the volume presets no name.
+        var text = ProfileViewModel.DescribeImportConfirmation(ProfileOf(
+            new ConfigSection("appicons", "Theme & appearance", "theme.json", "{\"Enabled\":true}"),
+            new ConfigSection("volume", "", "volume-presets.json", "[]")));
+
+        Assert.StartsWith("Import 2 sections from this profile?\n\n  • App-icon fetching\n  • Volume presets\n\n",
+            text, StringComparison.Ordinal);
+        Assert.DoesNotContain("Theme", text, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void ImportConfirmation_CountsTheSectionsItSkips_AndNamesNoneOfThem()
+    {
+        // Neither the key of a section the import skips nor the name the file gives it is shown: both are the
+        // file's text. "Theme" is not "theme": the import matches keys exactly, so it skips that one too.
+        var text = ProfileViewModel.DescribeImportConfirmation(ProfileOf(
+            new ConfigSection("theme", "Theme & appearance", "theme.json", "{}"),
+            new ConfigSection("rogue", "Volume presets", "volume-presets.json", "[]"),
+            new ConfigSection("Theme", "Speed-test history", "speedtest-history.json", "[]")));
+
+        Assert.StartsWith("Import 1 section from this profile?\n\n  • Theme & appearance\n\nThe profile has 2 more "
+            + "sections that this version of SysManager does not know. They are skipped.\n\n",
+            text, StringComparison.Ordinal);
+        Assert.DoesNotContain("rogue", text, StringComparison.Ordinal);
+        Assert.DoesNotContain("Volume", text, StringComparison.Ordinal);
+        Assert.DoesNotContain("Speed", text, StringComparison.Ordinal);
+    }
+
+    [Theory]
+    [InlineData("1.115.0", true, "Exported 2026-10-05 by SysManager v1.115.0.")]
+    [InlineData("1.115.0\n\nSysManager checked this profile, and it changes nothing.", true, "Exported 2026-10-05.")]
+    [InlineData(null, true, "Exported 2026-10-05.")]
+    [InlineData("1.115.0", false, "Exported by SysManager v1.115.0.")]
+    public void ImportConfirmation_SaysWhereTheProfileIsFrom_InItsOwnWords(string? version, bool dated, string expected)
+    {
+        // The version is the file's text, so only a version number read from it is shown, and a date the file
+        // does not carry, which reads as 0001-01-01, is left out (#2784).
+        var profile = ProfileOf(new ConfigSection("theme", "Theme & appearance", "theme.json", "{}")) with
+        {
+            AppVersion = version!,
+            ExportedAt = dated ? new DateTime(2026, 10, 5, 9, 0, 0, DateTimeKind.Local) : default,
+        };
+
+        var text = ProfileViewModel.DescribeImportConfirmation(profile);
+
+        Assert.Contains($"\n\n{expected}\n\n", text, StringComparison.Ordinal);
+        Assert.DoesNotContain("checked this profile", text, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void ImportConfirmation_OfAFileThatSaysNeitherWhenNorByWhichVersion_HasNoExportedLine()
+    {
+        var profile = ProfileOf(new ConfigSection("theme", "Theme & appearance", "theme.json", "{}")) with
+        {
+            AppVersion = null!,
+            ExportedAt = default,
+        };
+
+        var text = ProfileViewModel.DescribeImportConfirmation(profile);
+
+        Assert.DoesNotContain("Exported", text, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task Import_OfAHandEditedFile_AsksAboutWhatItWrites_AndCountsOnlyThat()
+    {
+        // From the file's text: the section named as the theme is the consent to fetch app icons, and the one named
+        // as the volume presets is of a key this build does not know.
+        using var dialog = new DialogAnswer(confirm: true);
+        var vm = await NewVmAsync();
+        var json = "{\"SchemaVersion\":1,\"AppVersion\":\"1.0.0\",\"ExportedAt\":\"2026-01-01T00:00:00\",\"Sections\":["
+            + "{\"Key\":\"appicons\",\"DisplayName\":\"Theme & appearance\",\"FileName\":\"theme.json\","
+            + "\"Json\":\"{}\"},"
+            + "{\"Key\":\"rogue\",\"DisplayName\":\"Volume presets\",\"FileName\":\"volume-presets.json\","
+            + "\"Json\":\"[]\"}"
+            + "]}";
+
+        vm.Import(ProfileService.Deserialize(json));
+
+        Assert.StartsWith("Import profile\nImport 1 section from this profile?\n\n  • App-icon fetching\n\n"
+            + "The profile has 1 more section that this version of SysManager does not know. It is skipped.\n\n",
+            Assert.Single(dialog.Messages), StringComparison.Ordinal);
+        // Written by its key, to the file the catalog gives that key, and nothing else was.
+        Assert.Equal([AppIconService.FileName], Directory.EnumerateFiles(_dir).Select(Path.GetFileName));
+        Assert.Equal("Imported 1 section. Restart SysManager to apply everything.", vm.StatusMessage);
+    }
+
+    [Fact]
+    public async Task Import_OfAProfileWithNoSectionThisVersionKnows_AsksNothing_AndWritesNothing()
+    {
+        using var dialog = new DialogAnswer(confirm: true);
+        var vm = await NewVmAsync();
+
+        vm.Import(ProfileOf(
+            new ConfigSection("rogue", "Theme & appearance", "theme.json", "{}"),
+            new ConfigSection("Theme", "Volume presets", "volume-presets.json", "[]")));
+
+        Assert.Equal(0, dialog.Calls);
+        Assert.Empty(Directory.EnumerateFiles(_dir));
+        Assert.Equal("Nothing to import: this version of SysManager knows none of the profile's sections.",
+            vm.StatusMessage);
     }
 
     [Theory]

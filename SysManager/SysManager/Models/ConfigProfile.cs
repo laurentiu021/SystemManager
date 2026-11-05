@@ -7,7 +7,7 @@ namespace SysManager.Models;
 /// <summary>
 /// A portable export of SysManager's configuration — a versioned bundle of the app's
 /// settings files (theme, speed-test history, …) that can be carried to another PC and
-/// selectively re-applied, plus the Privacy &amp; Telemetry choices as one more section.
+/// imported there, plus the Privacy &amp; Telemetry choices as one more section.
 /// Importing it writes only SysManager's own config files. The privacy choices are a
 /// desired state the Privacy &amp; Telemetry tab stages for review, never a write.
 /// </summary>
@@ -28,7 +28,10 @@ public sealed record ConfigProfile(
     public IReadOnlyList<ConfigSection> Sections { get; init; } = [];
 }
 
-/// <summary>One exported config file: its logical key, file name, and raw JSON content.</summary>
+/// <summary>
+/// One exported config file: its logical key, display name, file name, and raw JSON content. An import reads only
+/// the key and the content, and names and writes the section as SysManager's catalog gives that key (#2784).
+/// </summary>
 public sealed record ConfigSection(
     string Key,
     string DisplayName,

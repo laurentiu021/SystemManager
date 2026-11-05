@@ -2583,10 +2583,12 @@ offers, "rate us" prompts:
   offered for export once at least one protection is on
 - **Selective export** — tick which sections to include. Your ticks survive a refresh, so a
   section you excluded cannot quietly reappear in the export
-- **One question per import** — an import lists what the profile contains and asks once, then
-  writes every section except the privacy choices, which wait on their own tab as described
-  above. Restart SysManager afterwards for those settings to take effect. It says how many of
-  the profile's sections could not be applied, rather than only how many were applied
+- **One question per import** — an import lists the sections it will write, each by the name
+  SysManager gives it rather than the name in the file, says how many it does not know and will
+  skip, and asks once. It then writes every section it listed except the privacy choices, which
+  wait on their own tab as described above. Restart SysManager afterwards for those settings to
+  take effect. It says how many of the listed sections could not be applied, rather than only how
+  many were applied. A profile with nothing this version knows imports nothing and asks nothing
 - **Exports what is saved now** — each ticked section is read from disk at the moment you
   export, and the list is re-read whenever you come back to the tab, so a theme, preset or
   speed test you changed since the tab first opened goes into the file

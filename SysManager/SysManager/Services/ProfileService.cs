@@ -192,6 +192,22 @@ public sealed class ProfileService
         string.Equals(section.Key, PrivacySectionKey, StringComparison.Ordinal);
 
     /// <summary>
+    /// What this build calls the section of <paramref name="key"/>, or null for a key it does not know. An import
+    /// confirmation lists each section by this name, not by the one the file gives it.
+    /// </summary>
+    /// <remarks>
+    /// The name in a file is text anyone can edit, and <see cref="ApplySections"/> writes by key. Listed by the
+    /// file's names, a profile could show "Theme &amp; appearance" for the section that lets the Bulk Installer fetch
+    /// icons from the web, an empty line for a section with no name, and a section this build skips as if it would
+    /// be imported (#2784). A key other than the privacy section's has a name here exactly when
+    /// <see cref="ApplySections"/> takes it, as both look it up in <see cref="Catalog"/> the same way.
+    /// </remarks>
+    public static string? DisplayNameOf(string key) =>
+        string.Equals(key, PrivacySectionKey, StringComparison.Ordinal)
+            ? PrivacySectionName
+            : Array.Find(Catalog, c => c.Key == key).DisplayName;
+
+    /// <summary>
     /// Builds a profile from the config files as they are on disk now: every available section, or only those
     /// whose key is in <paramref name="keys"/>.
     /// </summary>

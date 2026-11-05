@@ -14,11 +14,11 @@ using SysManager.Services;
 namespace SysManager.ViewModels;
 
 /// <summary>
-/// ViewModel for the Profile Export/Import tab. Exports SysManager's configuration (theme,
-/// speed-test history, …, and the Privacy &amp; Telemetry choices) to a portable JSON file and
-/// imports it on another PC, with selective per-section apply. An import writes only
-/// SysManager's own config files: the privacy choices go to the Privacy &amp; Telemetry tab as
-/// pending changes, so Windows changes only when the user presses Apply there (#1530).
+/// ViewModel for the Profile Export/Import tab. Exports the ticked sections of SysManager's
+/// configuration (theme, speed-test history, …, and the Privacy &amp; Telemetry choices) to a
+/// portable JSON file, and imports such a file on another PC after one confirmation. An import
+/// writes only SysManager's own config files: the privacy choices go to the Privacy &amp; Telemetry
+/// tab as pending changes, so Windows changes only when the user presses Apply there (#1530).
 /// </summary>
 public sealed partial class ProfileViewModel : ViewModelBase
 {
@@ -97,9 +97,9 @@ public sealed partial class ProfileViewModel : ViewModelBase
     /// <remarks>
     /// This method used to rebuild every row with <c>IsSelected = true</c> hard-coded, so a refresh did not
     /// merely forget which sections the user had chosen — it re-ticked all of them. The ticks decide what
-    /// gets written into an export and what gets applied on an import, so an untick that came back meant
-    /// carrying over settings the user had deliberately left behind. <c>RefreshOnF5</c> is
-    /// <c>RefreshCommand</c>, which calls straight through to here, so pressing F5 was enough (#2304).
+    /// gets written into an export, so an untick that came back meant carrying over settings the user had
+    /// deliberately left behind. <c>RefreshOnF5</c> is <c>RefreshCommand</c>, which calls straight through
+    /// to here, so pressing F5 was enough (#2304).
     /// <para>An empty <paramref name="previous"/> is the first population, the only time every section
     /// being ticked is the answer. A list that is present with nothing selected is a DECISION and is
     /// honoured, which is why this tests the collection being empty rather than whether anything is
@@ -226,6 +226,15 @@ public sealed partial class ProfileViewModel : ViewModelBase
             return;
         }
 
+        // The confirmation lists only the sections this build knows, and the status counts only those. With none,
+        // the import would write nothing, so there is nothing to ask (#2784).
+        var known = profile.Sections.Count(s => ProfileService.DisplayNameOf(s.Key) is not null);
+        if (known == 0)
+        {
+            StatusMessage = "Nothing to import: this version of SysManager knows none of the profile's sections.";
+            return;
+        }
+
         if (!DialogService.Instance.Confirm(DescribeImportConfirmation(profile), "Import profile"))
         {
             StatusMessage = "Import cancelled.";
@@ -239,7 +248,7 @@ public sealed partial class ProfileViewModel : ViewModelBase
             _privacyChoices.Offer(privacy);
 
         RefreshSections();
-        StatusMessage = DescribeImport(applied + (privacy is null ? 0 : 1), profile.Sections.Count,
+        StatusMessage = DescribeImport(applied + (privacy is null ? 0 : 1), known,
             privacyHandedOver: privacy is not null);
         // Only an import that changed something is announced (#2454), and privacy choices change nothing yet.
         if (applied > 0)
@@ -252,14 +261,26 @@ public sealed partial class ProfileViewModel : ViewModelBase
     /// The confirmation an import asks before it changes anything: what the profile holds, where it came from,
     /// and what happens to each kind of section.
     /// </summary>
+    /// <remarks>
+    /// None of the file's own text reaches it. Each section is named as this build names its key, because the
+    /// import writes by key and the name in the file is anyone's to edit. A section this build does not know is
+    /// counted, not named, since its key is the file's text too, and the import skips it (#2784).
+    /// </remarks>
     internal static string DescribeImportConfirmation(ConfigProfile profile)
     {
-        var count = profile.Sections.Count;
-        var preview = string.Join("\n", profile.Sections.Select(s => $"  • {s.DisplayName}"));
-        var text = $"Import {count} section{(count == 1 ? "" : "s")} from this profile?\n\n{preview}\n\n"
-            + $"Exported {profile.ExportedAt.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture)} by SysManager v{profile.AppVersion}.";
+        List<string> names = [.. profile.Sections.Select(s => ProfileService.DisplayNameOf(s.Key)).OfType<string>()];
+        var unknown = profile.Sections.Count - names.Count;
+        var preview = string.Join("\n", names.Select(name => $"  • {name}"));
+        var text = $"Import {names.Count} section{(names.Count == 1 ? "" : "s")} from this profile?\n\n{preview}";
+        if (unknown > 0)
+            text += $"\n\nThe profile has {unknown} more section{(unknown == 1 ? "" : "s")} that this version of "
+                + $"SysManager does not know. {(unknown == 1 ? "It is" : "They are")} skipped.";
+        if (DescribeOrigin(profile) is { Length: > 0 } origin)
+            text += $"\n\n{origin}";
 
-        if (profile.Sections.Any(s => !ProfileService.IsPrivacySection(s)))
+        var overwrites = profile.Sections.Any(s =>
+            !ProfileService.IsPrivacySection(s) && ProfileService.DisplayNameOf(s.Key) is not null);
+        if (overwrites)
             text += "\n\nThis overwrites the matching SysManager settings on this PC. Restart SysManager afterwards for "
                 + "all changes to take effect.";
         if (profile.Sections.Any(ProfileService.IsPrivacySection))
@@ -269,12 +290,31 @@ public sealed partial class ProfileViewModel : ViewModelBase
     }
 
     /// <summary>
-    /// The status after an import. <see cref="ProfileService.ApplySections"/> skips a section it does not
-    /// know, one whose content fails the import check, and one it cannot write, and only logs each skip. The
-    /// confirm dialog listed all of them, so the status says how many did not land (#2454).
+    /// When the profile was exported, and by which version, as far as the file says: a date or version it does not
+    /// carry is left out rather than shown as "0001-01-01" or a "v" with nothing after it, and with neither there is
+    /// no line.
+    /// </summary>
+    /// <remarks>
+    /// The version is shown only as the version number read from the file's text. Shown as written, it could carry
+    /// sentences of its own into the confirmation (#2784).
+    /// </remarks>
+    private static string DescribeOrigin(ConfigProfile profile)
+    {
+        var on = profile.ExportedAt == default
+            ? ""
+            : " " + profile.ExportedAt.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
+        var by = Version.TryParse(profile.AppVersion, out var version) ? $" by SysManager v{version}" : "";
+        return on.Length + by.Length == 0 ? "" : $"Exported{on}{by}.";
+    }
+
+    /// <summary>
+    /// The status after an import. <see cref="ProfileService.ApplySections"/> skips a section whose content
+    /// fails the import check, and one it cannot write, and only logs each skip. The confirm dialog listed
+    /// them, so the status says how many did not land (#2454). A section this build does not know is not
+    /// counted: the confirmation did not list it, and said it is skipped (#2784).
     /// </summary>
     /// <param name="applied">The sections that landed, counting privacy choices that were handed over.</param>
-    /// <param name="total">Every section the profile held.</param>
+    /// <param name="total">The sections the confirmation listed: those of the profile this build knows.</param>
     /// <param name="privacyHandedOver">Whether privacy choices went to the Privacy &amp; Telemetry tab.</param>
     /// <remarks>
     /// Privacy choices are counted with the sections because the confirmation listed them with the rest, but

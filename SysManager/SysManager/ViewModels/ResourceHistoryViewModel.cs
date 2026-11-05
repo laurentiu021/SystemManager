@@ -52,6 +52,9 @@ public sealed partial class ResourceHistoryViewModel : ViewModelBase
 
     [ObservableProperty] private HistoryRange _selectedRange;
     [ObservableProperty] private int _retentionDays;
+
+    // Set while a refused or unsaved Keep choice is put back, so putting it back is not taken for another choice.
+    private bool _puttingRetentionBack;
     [ObservableProperty] private bool _hasData;
     [ObservableProperty] private bool _hasTemperatureData;
     [ObservableProperty] private string _summary = "";
@@ -129,10 +132,54 @@ public sealed partial class ResourceHistoryViewModel : ViewModelBase
 
     partial void OnSelectedRangeChanged(HistoryRange value) => _ = ReloadAsync();
 
-    partial void OnRetentionDaysChanged(int value)
+    partial void OnRetentionDaysChanged(int oldValue, int newValue)
     {
-        _service.RetentionDays = value;
-        StatusMessage = $"Keeping {value} days of history.";
+        if (_puttingRetentionBack) return;
+        RetentionChange = ChangeRetentionAsync(oldValue, newValue);
+    }
+
+    /// <summary>The last Keep choice's work, so a test can wait for it.</summary>
+    internal Task RetentionChange { get; private set; } = Task.CompletedTask;
+
+    /// <summary>
+    /// Asks before a shorter window removes samples, then keeps <paramref name="chosen"/> days if the choice can be
+    /// saved, and puts the choice back when the user declines or it cannot be.
+    /// </summary>
+    /// <remarks>
+    /// Going from 30 days to 7 rewrote the file at once without the 23 days before, for good, and the tab only said
+    /// "Keeping 7 days of history."; choosing 30 again brought nothing back. And a choice whose save failed was
+    /// announced as kept all the same (#2790). Speed Test asks before the same kind of loss, in the same words.
+    /// </remarks>
+    private async Task ChangeRetentionAsync(int previous, int chosen)
+    {
+        if (chosen < previous && await _service.OldestSampleOutsideAsync(chosen) is { } oldest
+            && !_dialog.Confirm(
+                $"Keep only the last {chosen} days of history?\n\n"
+                + "The samples older than that, back to "
+                + $"{oldest.ToString("d MMM yyyy", CultureInfo.InvariantCulture)}, are removed from disk and cannot be "
+                + "recovered.",
+                "Resource History — Confirm"))
+        {
+            PutRetentionBack(previous);
+            StatusMessage = $"Keeping {previous} days of history.";
+            return;
+        }
+
+        if (!await _service.ChangeRetentionAsync(chosen))
+        {
+            PutRetentionBack(previous);
+            StatusMessage = $"SysManager could not save the change, so it still keeps {previous} days of history.";
+            return;
+        }
+
+        StatusMessage = $"Keeping {chosen} days of history.";
+    }
+
+    private void PutRetentionBack(int days)
+    {
+        _puttingRetentionBack = true;
+        try { RetentionDays = days; }
+        finally { _puttingRetentionBack = false; }
     }
 
     [RelayCommand]

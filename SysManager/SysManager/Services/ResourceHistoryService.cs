@@ -45,6 +45,7 @@ public sealed class ResourceHistoryService : IDisposable
     private readonly string _dataDir;
     private readonly string _dataPath;
     private readonly string _configPath;
+    private readonly TimeProvider _time;
 
     private CancellationTokenSource? _cts;
     private Task? _loopTask;
@@ -67,9 +68,10 @@ public sealed class ResourceHistoryService : IDisposable
     /// process could redirect it away from the real profile.</para>
     /// </summary>
     public ResourceHistoryService(SystemInfoService sys, TemperatureService temps, string? configDir = null,
-        IGpuTelemetry? gpu = null)
+        IGpuTelemetry? gpu = null, TimeProvider? time = null)
     {
         _sys = sys;
+        _time = time ?? TimeProvider.System;
         _temps = temps;
         _gpu = gpu;
         _dataDir = configDir ?? AppDataFolders.Local;
@@ -78,19 +80,65 @@ public sealed class ResourceHistoryService : IDisposable
         (_retentionDays, _retentionKnown) = LoadRetention() is { } days ? (days, true) : (7, false);
     }
 
-    /// <summary>Days of history to keep. Persisted; shrinking it prunes the file.</summary>
-    public int RetentionDays
+    /// <summary>Days of history to keep. Changed through <see cref="ChangeRetentionAsync"/>.</summary>
+    public int RetentionDays => _retentionDays;
+
+    /// <summary>
+    /// Keeps <paramref name="days"/> days of history from now on, once the choice is saved, and prunes to it.
+    /// </summary>
+    /// <returns>
+    /// Whether the choice was saved. When it was not, nothing changed: the window stays and nothing is pruned.
+    /// </returns>
+    /// <remarks>
+    /// The setter this replaces saved the choice, swallowed a failed save, and pruned with the new window either way,
+    /// while the tab said "Keeping 14 days of history." The next start read the file as it was and pruned the samples
+    /// that choice was meant to keep, after the tab had promised them (#2790). A choice that cannot be saved is not
+    /// made at all, so no sample goes for a window that will not last, and the tab can say so.
+    /// </remarks>
+    public async Task<bool> ChangeRetentionAsync(int days)
     {
-        get => _retentionDays;
-        set
+        var clamped = RetentionOptions.Contains(days) ? days : 7;
+        if (clamped == _retentionDays && _retentionKnown) return true;
+        if (!SaveRetention(clamped)) return false;
+        _retentionDays = clamped;
+        _retentionKnown = true;
+        await PruneAsync(_cts?.Token ?? CancellationToken.None).ConfigureAwait(false);
+        return true;
+    }
+
+    /// <summary>The oldest sample's time if keeping <paramref name="days"/> days would remove it, else null.</summary>
+    /// <remarks>
+    /// What a shorter window costs, for the tab to ask about before it is chosen. The file is oldest-first, so its
+    /// first readable line is the oldest sample.
+    /// </remarks>
+    public async Task<DateTime?> OldestSampleOutsideAsync(int days, CancellationToken ct = default)
+    {
+        try { await _fileLock.WaitAsync(ct).ConfigureAwait(false); }
+        catch (OperationCanceledException) { return null; }
+        try
         {
-            var clamped = RetentionOptions.Contains(value) ? value : 7;
-            if (clamped == _retentionDays && _retentionKnown) return;
-            _retentionDays = clamped;
-            _retentionKnown = true;
-            SaveRetention(clamped);
-            _ = PruneAsync(_cts?.Token ?? CancellationToken.None);
+            if (!File.Exists(_dataPath)) return null;
+            var cutoff = _time.GetLocalNow().DateTime - TimeSpan.FromDays(days);
+            // Read asynchronously: the tab asks from the UI thread, and only the first readable line is needed.
+            using var reader = new StreamReader(_dataPath);
+            while (await reader.ReadLineAsync(ct).ConfigureAwait(false) is { } line)
+            {
+                if (!TryParse(line, out var sample)) continue;
+                return sample!.Timestamp < cutoff ? sample.Timestamp : null;
+            }
+            return null;
         }
+        catch (IOException ex)
+        {
+            Log.Debug("Resource history oldest sample read failed: {Error}", ex.Message);
+            return null;
+        }
+        catch (UnauthorizedAccessException ex)
+        {
+            Log.Debug("Resource history oldest sample read denied: {Error}", ex.Message);
+            return null;
+        }
+        finally { if (!_disposed) _fileLock.Release(); }
     }
 
     public DateTime? LastSampleAt { get; private set; }
@@ -217,7 +265,7 @@ public sealed class ResourceHistoryService : IDisposable
         {
             if (!File.Exists(_dataPath)) return [];
             var lines = await File.ReadAllLinesAsync(_dataPath, ct).ConfigureAwait(false);
-            var cutoff = DateTime.Now - range;
+            var cutoff = _time.GetLocalNow().DateTime - range;
             // The file is append-only and time-ordered, so the requested range is a suffix:
             // walk from the END and stop at the first line older than the cutoff. This bounds
             // work to the window (e.g. ~360 lines for "last hour") instead of parsing the whole
@@ -251,7 +299,7 @@ public sealed class ResourceHistoryService : IDisposable
         {
             if (!File.Exists(_dataPath)) return;
             var lines = await File.ReadAllLinesAsync(_dataPath, ct).ConfigureAwait(false);
-            var kept = Prune(lines, DateTime.Now, TimeSpan.FromDays(PruneWindowDays));
+            var kept = Prune(lines, _time.GetLocalNow().DateTime, TimeSpan.FromDays(PruneWindowDays));
             // Only rewrite when something actually changed, to avoid needless disk churn.
             if (kept.Count == lines.Length) return;
             // Atomic rewrite through AtomicFile: it names the temp, flushes it onto the device and
@@ -398,15 +446,18 @@ public sealed class ResourceHistoryService : IDisposable
         }
     }
 
-    private void SaveRetention(int days)
+    /// <summary>Saves the retention choice, and says whether it was.</summary>
+    private bool SaveRetention(int days)
     {
         try
         {
             Directory.CreateDirectory(_dataDir);
             AtomicFile.WriteAllText(_configPath, JsonSerializer.Serialize(new RetentionConfig(days)));
+            return true;
         }
         catch (IOException ex) { Log.Debug("Resource history config save failed: {Error}", ex.Message); }
         catch (UnauthorizedAccessException ex) { Log.Debug("Resource history config save denied: {Error}", ex.Message); }
+        return false;
     }
 
     public void Dispose()

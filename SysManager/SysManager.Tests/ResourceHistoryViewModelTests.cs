@@ -3,6 +3,7 @@
 // License: MIT
 
 using System;
+using System.Globalization;
 using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
@@ -133,6 +134,99 @@ public class ResourceHistoryViewModelReloadTests : IDisposable
             .Distinct()
             .ToList();
         Assert.Single(lengths);
+    }
+
+    // ── A shorter Keep asks first, and a choice that could not be saved says so (#2790) ──
+    // Going from 30 days to 7 removed 23 days of history for good, with no question, and a choice whose save failed
+    // was announced as kept.
+
+    private string HistoryPath => Path.Combine(_dir, "resource-history.ndjson");
+
+    private static ResourceSample Point(DateTime at) => new(at, 10, 20, null, null, null);
+
+    /// <summary>A tab over history kept for 30 days, answering the question with <paramref name="yes"/>.</summary>
+    private async Task<(ResourceHistoryService Service, ResourceHistoryViewModel Vm, IDialogService Dialog)>
+        KeptForThirty(bool yes, DateTime oldest)
+    {
+        var service = SeededService(Point(oldest), Point(DateTime.Now.AddMinutes(-5)));
+        Assert.True(await service.ChangeRetentionAsync(30));
+        var dialog = Substitute.For<IDialogService>();
+        dialog.Confirm(Arg.Any<string>(), Arg.Any<string>()).Returns(yes);
+        var vm = new ResourceHistoryViewModel(service, dialog);
+        await vm.InitializationComplete;
+        return (service, vm, dialog);
+    }
+
+    [Fact]
+    public async Task AShorterKeep_AsksFirst_AndKeepsEverythingWhenTheAnswerIsNo()
+    {
+        var oldest = DateTime.Now.AddDays(-20);
+        var (service, vm, dialog) = await KeptForThirty(yes: false, oldest);
+        using var history = service;
+        using var tab = vm;
+
+        vm.RetentionDays = 7;
+        await vm.RetentionChange;
+
+        dialog.Received(1).Confirm(
+            Arg.Is<string>(m => m.StartsWith("Keep only the last 7 days of history?", StringComparison.Ordinal)
+                                && m.Contains(oldest.ToString("d MMM yyyy", CultureInfo.InvariantCulture),
+                                              StringComparison.Ordinal)
+                                && m.Contains("cannot be recovered", StringComparison.Ordinal)),
+            "Resource History — Confirm");
+        Assert.Equal((30, 30), (vm.RetentionDays, service.RetentionDays));
+        Assert.Equal(2, File.ReadAllLines(HistoryPath).Length);
+        Assert.Equal("Keeping 30 days of history.", vm.StatusMessage);
+    }
+
+    [Fact]
+    public async Task AShorterKeep_AnsweredYes_RemovesTheOlderSamples()
+    {
+        var (service, vm, _) = await KeptForThirty(yes: true, DateTime.Now.AddDays(-20));
+        using var history = service;
+        using var tab = vm;
+
+        vm.RetentionDays = 7;
+        await vm.RetentionChange;
+
+        Assert.Equal((7, 7), (vm.RetentionDays, service.RetentionDays));
+        Assert.Single(File.ReadAllLines(HistoryPath));
+        Assert.Equal("Keeping 7 days of history.", vm.StatusMessage);
+    }
+
+    [Fact]
+    public async Task AShorterKeep_ThatRemovesNothing_AndALongerOne_DoNotAsk()
+    {
+        var (service, vm, dialog) = await KeptForThirty(yes: false, DateTime.Now.AddDays(-3));
+        using var history = service;
+        using var tab = vm;
+
+        vm.RetentionDays = 7;
+        await vm.RetentionChange;
+        vm.RetentionDays = 14;
+        await vm.RetentionChange;
+
+        dialog.DidNotReceiveWithAnyArgs().Confirm(default!, default!);
+        Assert.Equal(14, service.RetentionDays);
+        Assert.Equal(2, File.ReadAllLines(HistoryPath).Length);
+    }
+
+    [Fact]
+    public async Task AKeepThatCannotBeSaved_IsPutBack_AndTheTabSaysSo()
+    {
+        var (service, vm, _) = await KeptForThirty(yes: true, DateTime.Now.AddDays(-20));
+        using var history = service;
+        using var tab = vm;
+        var config = Path.Combine(_dir, "resource-history-config.json");
+        File.Delete(config);
+        Directory.CreateDirectory(config);   // a folder where the setting's file goes, so its save fails
+
+        vm.RetentionDays = 7;
+        await vm.RetentionChange;
+
+        Assert.Equal((30, 30), (vm.RetentionDays, service.RetentionDays));
+        Assert.Equal(2, File.ReadAllLines(HistoryPath).Length);
+        Assert.Equal("SysManager could not save the change, so it still keeps 30 days of history.", vm.StatusMessage);
     }
 
     [Fact]

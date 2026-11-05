@@ -35,6 +35,10 @@ public sealed class ResourceHistoryService : IDisposable
     private static readonly JsonSerializerOptions SampleJson = new() { WriteIndented = false };
 
     private readonly SystemInfoService _sys;
+
+    // The sampling loop's own CPU baseline, so each point is the load over its own 10 seconds, whichever tab is open
+    // (#2790). Seeded when the loop starts.
+    private CpuLoadSampler? _cpu;
     private readonly TemperatureService _temps;
     private readonly IGpuTelemetry? _gpu;
     private readonly SemaphoreSlim _fileLock = new(1, 1);
@@ -105,8 +109,14 @@ public sealed class ResourceHistoryService : IDisposable
         // Prune stale/malformed lines from a previous session before accruing new ones.
         _ = PruneAsync(ct);
 
+        _cpu = _sys.NewCpuSampler();
         _loopTask = Task.Run(async () =>
         {
+            // One interval before the first point, so it too is the load over 10 seconds rather than over the instant
+            // since the sampler was seeded.
+            try { await Task.Delay(TimeSpan.FromSeconds(SampleIntervalSeconds), ct).ConfigureAwait(false); }
+            catch (OperationCanceledException) { return; }
+
             while (!ct.IsCancellationRequested)
             {
                 try
@@ -138,7 +148,7 @@ public sealed class ResourceHistoryService : IDisposable
 
     private async Task<ResourceSample> CaptureSampleAsync(CancellationToken ct)
     {
-        var snap = await _sys.CaptureAsync(ct).ConfigureAwait(false);
+        var snap = await _sys.CaptureAsync(_cpu ??= _sys.NewCpuSampler(), ct).ConfigureAwait(false);
         double? gpuPercent = ReadGpuUsage();
 
         double? cpuTemp = null, gpuTemp = null;

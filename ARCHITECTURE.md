@@ -681,9 +681,9 @@ Key services:
 - `SystemInfoService` — OS / CPU / RAM / uptime snapshot. Static hardware (OS caption,
   CPU model, disk models, DIMM inventory) is queried once via `Helpers/Wmi` and cached; the three
   DYNAMIC values are syscalls, because the Landing tab polls this every 300 ms —
-  `GetSystemTimes` deltas for CPU load, `GlobalMemoryStatusEx` for memory,
-  `Environment.TickCount64` for uptime. The syscalls are constructor-injected, so the
-  delta arithmetic is unit-testable without a real machine. The first caller after launch to find the
+  `GetSystemTimes` deltas for CPU load, measured by the `CpuLoadSampler` each caller that shows it holds,
+  `GlobalMemoryStatusEx` for memory, `Environment.TickCount64` for uptime. The syscalls are constructor-injected,
+  so the delta arithmetic is unit-testable without a real machine. The first caller after launch to find the
   static cache empty is the one that runs the four WMI queries, claimed so nobody else joins it; every
   OTHER concurrent caller — the Dashboard's poll, the tray tooltip, the Resource History sampler all start
   by awaiting the same first snapshot — reads whatever is cached right now and moves straight to its own
@@ -691,6 +691,10 @@ Key services:
   cache: their list carries each disk's health, so one caller at a time reads it again every
   `DiskRefreshInterval`, five minutes, timed through an injected `TimeProvider`, and a read that faults keeps
   the disks as last read (#2732).
+- `CpuLoadSampler` — CPU load over one caller's own intervals, from `SystemInfoService.NewCpuSampler()`: the busy
+  share of the `GetSystemTimes` ticks since that caller's previous sample. The Dashboard's vitals, the Resource
+  History sampler and the tray tooltip each hold one, so no caller's sample moves another's baseline; a capture
+  without one shows the latest load any sampler measured (#2790).
 - `BiosService` — read-only BIOS/firmware + motherboard info (Win32_BIOS,
   Win32_BaseBoard, UEFI/Secure-Boot registry) plus a pure manufacturer
   support-URL resolver for BIOS updates; never flashes firmware. Consumed by

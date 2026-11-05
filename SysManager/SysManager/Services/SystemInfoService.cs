@@ -21,7 +21,8 @@ namespace SysManager.Services;
 /// <list type="bullet">
 ///   <item>CPU load — <c>GetSystemTimes</c> deltas instead of <c>Win32_Processor.LoadPercentage</c>, which is
 ///   a WMI-throttled one-second average. At a 300 ms poll the chart was redrawing a value that had not
-///   changed; the delta is a true average over the interval actually elapsed.</item>
+///   changed; the delta is a true average over the interval actually elapsed, each caller's own: a caller that
+///   shows the load measures it with a <see cref="CpuLoadSampler"/> of its own (#2790).</item>
 ///   <item>Physical memory — <c>GlobalMemoryStatusEx</c>, one syscall, instead of
 ///   <c>Win32_OperatingSystem.TotalVisibleMemorySize</c>/<c>FreePhysicalMemory</c>.</item>
 ///   <item>Uptime — <c>Environment.TickCount64</c>, no query at all, and monotonic: the old
@@ -67,12 +68,9 @@ public sealed partial class SystemInfoService
     private readonly Func<List<DiskInfo>?> _queryDisks;
     private readonly Func<IReadOnlyList<MemoryModule>?> _queryMemoryModules;
 
-    // Guards the CPU delta's previous sample. Separate from _cacheLock, and safe to hold across the work it
-    // covers because that work is one cheap syscall — the reason the CPU query was moved OUT of _cacheLock
-    // was that a WMI round-trip under a shared lock stalls every other caller.
-    private readonly Lock _sampleLock = new();
-    private SystemTimes? _previousTimes;
-    private double _lastLoad = double.NaN;
+    // The load a sampler from NewCpuSampler last measured over a real interval, which is what a capture without a
+    // sampler of its own shows. NaN until one has. Written by whichever thread sampled, hence Volatile.
+    private double _latestLoad = double.NaN;
 
     public SystemInfoService()
         : this(QuerySystemTimes, QueryPhysicalMemory, static () => Environment.TickCount64) { }
@@ -86,11 +84,6 @@ public sealed partial class SystemInfoService
     /// <param name="queryDisks">Replaces the real disk enumeration.</param>
     /// <param name="queryMemoryModules">Replaces the real <c>Win32_PhysicalMemory</c> read.</param>
     /// <param name="time">Times the disks' refresh; the real clock when null.</param>
-    /// <remarks>
-    /// The CPU baseline is seeded HERE rather than on the first capture, so the first number the user sees is
-    /// a real measurement over the interval between construction and that capture. Seeding lazily would have
-    /// made the first reading the since-boot average — correct, but not what the machine is doing right now.
-    /// </remarks>
     internal SystemInfoService(Func<SystemTimes?> systemTimes, Func<PhysicalMemory?> physicalMemory,
                               Func<long> millisecondsSinceBoot,
                               Func<OsInfo?>? queryOsStatic = null,
@@ -103,7 +96,6 @@ public sealed partial class SystemInfoService
         _systemTimes = systemTimes;
         _physicalMemory = physicalMemory;
         _millisecondsSinceBoot = millisecondsSinceBoot;
-        _previousTimes = systemTimes();
         _queryOsStatic = queryOsStatic ?? QueryOsStatic;
         _queryCpuStatic = queryCpuStatic ?? QueryCpuStatic;
         _queryDisks = queryDisks ?? QueryDisks;
@@ -120,10 +112,30 @@ public sealed partial class SystemInfoService
     /// <summary>Total and available physical memory, in bytes.</summary>
     internal readonly record struct PhysicalMemory(ulong TotalBytes, ulong AvailableBytes);
 
-    public Task<SystemSnapshot> CaptureAsync(CancellationToken ct = default)
-        => Task.Run(() => Capture(), ct);
+    /// <summary>A CPU load sampler with a baseline of its own, seeded now.</summary>
+    /// <remarks>
+    /// One per caller that shows the load, kept for as long as it samples: its first sample then measures the interval
+    /// from here, and each one after it the interval since its own previous sample, whoever else captures meanwhile.
+    /// </remarks>
+    public CpuLoadSampler NewCpuSampler() => new(_systemTimes, load => Volatile.Write(ref _latestLoad, load));
 
-    private SystemSnapshot Capture()
+    /// <summary>A snapshot whose CPU load is the latest any sampler measured, without taking a sample.</summary>
+    /// <remarks>
+    /// For a caller that shows no load of its own, such as the static details or a report: taking a sample here would
+    /// measure nothing of interest, and it is no one's baseline to move. Before any sampler has measured, the load is
+    /// the average since Windows started.
+    /// </remarks>
+    public Task<SystemSnapshot> CaptureAsync(CancellationToken ct = default)
+        => Task.Run(() => Capture(cpu: null), ct);
+
+    /// <summary>A snapshot whose CPU load is <paramref name="cpu"/>'s next sample.</summary>
+    public Task<SystemSnapshot> CaptureAsync(CpuLoadSampler cpu, CancellationToken ct = default)
+    {
+        ArgumentNullException.ThrowIfNull(cpu);
+        return Task.Run(() => Capture(cpu), ct);
+    }
+
+    private SystemSnapshot Capture(CpuLoadSampler? cpu)
     {
         OsInfo? osStatic;
         CpuInfo? cpuStatic;
@@ -197,59 +209,21 @@ public sealed partial class SystemInfoService
 
         // CPU name/cores/threads/clock are static; only the load is dynamic, and it comes from
         // GetSystemTimes rather than a second Win32_Processor query — and never waits on the lock above.
-        var cpu = (cpuStatic ?? new CpuInfo("Unknown", 0, 0, 0, 0)) with { LoadPercent = SampleCpuLoad() };
-        return new SystemSnapshot(os, cpu, SampleMemory(modules ?? []), disks ?? [], DateTime.Now);
+        var processor = (cpuStatic ?? new CpuInfo("Unknown", 0, 0, 0, 0)) with { LoadPercent = CpuLoad(cpu) };
+        return new SystemSnapshot(os, processor, SampleMemory(modules ?? []), disks ?? [], DateTime.Now);
     }
 
-    /// <summary>
-    /// CPU load as the busy share of the ticks elapsed since the previous sample.
-    /// </summary>
-    /// <remarks>
-    /// Three cases have to answer with something honest rather than zero, because zero is a legible number
-    /// that means "idle machine":
-    /// <list type="bullet">
-    ///   <item>the syscall failed — hold the last known value instead of flashing 0 into the chart;</item>
-    ///   <item>no previous sample at all (the constructor's seeding syscall failed too) — report the
-    ///   since-boot average, which is what a delta measured from zero actually is;</item>
-    ///   <item>two samples inside one timer tick, so the delta is 0 ticks wide — hold the last value, since
-    ///   0/0 is not 0% busy.</item>
-    /// </list>
-    /// </remarks>
-    internal double SampleCpuLoad()
+    /// <summary><paramref name="cpu"/>'s next sample, or without one the latest a sampler measured.</summary>
+    private double CpuLoad(CpuLoadSampler? cpu)
     {
-        lock (_sampleLock)
-        {
-            var current = _systemTimes();
-            if (current is null) return double.IsNaN(_lastLoad) ? 0 : _lastLoad;
+        if (cpu is not null) return cpu.Sample();
 
-            var now = current.Value;
-            var previous = _previousTimes;
-            _previousTimes = now;
-
-            if (previous is { } was)
-            {
-                // Unsigned subtraction: these counters only ever advance, but a spurious backwards step
-                // would wrap to an enormous delta and produce a nonsense percentage, so the arithmetic is
-                // done in doubles after an explicit ordering check.
-                if (now.Idle >= was.Idle && now.Kernel >= was.Kernel && now.User >= was.User)
-                {
-                    var busyTicks = (now.Kernel - was.Kernel) + (now.User - was.User);
-                    if (busyTicks > 0)
-                    {
-                        _lastLoad = BusyPercent(now.Idle - was.Idle, busyTicks);
-                        return _lastLoad;
-                    }
-                }
-            }
-
-            if (double.IsNaN(_lastLoad)) _lastLoad = BusyPercent(now.Idle, now.Kernel + now.User);
-            return _lastLoad;
-        }
+        var latest = Volatile.Read(ref _latestLoad);
+        if (!double.IsNaN(latest)) return latest;
+        return _systemTimes() is { } sinceBoot
+            ? CpuLoadSampler.BusyPercent(sinceBoot.Idle, sinceBoot.Kernel + sinceBoot.User)
+            : 0;
     }
-
-    /// <summary>Busy share of <paramref name="total"/> ticks, clamped to a percentage.</summary>
-    private static double BusyPercent(ulong idle, ulong total)
-        => total == 0 ? 0 : Math.Clamp((1.0 - (double)idle / total) * 100.0, 0, 100);
 
     /// <summary>
     /// Physical memory totals from one syscall. The static DIMM inventory is passed through unchanged.

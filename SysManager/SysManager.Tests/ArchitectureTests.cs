@@ -18931,13 +18931,61 @@ public partial class ArchitectureTests
             + "syscall equivalents, and the Landing tab polls the snapshot every 300 ms, so a WMI round-trip "
             + "here costs 3.3 of them a second: " + string.Join(", ", dynamicColumns));
 
-        foreach (var seam in new[] { "SampleCpuLoad()", "SampleMemory(", "_millisecondsSinceBoot()" })
+        // The CPU load is a sampler's, or the latest one measured (#2790): CpuLoad(cpu) is where a snapshot takes it.
+        foreach (var seam in new[] { "CpuLoad(cpu)", "SampleMemory(", "_millisecondsSinceBoot()" })
         {
             Assert.True(source.Contains(seam, StringComparison.Ordinal),
                 $"'{seam}' is gone from SystemInfoService, so the dynamic value it produced is no longer "
                 + "being refreshed at all — which would satisfy the no-WMI rule for the wrong reason.");
         }
     }
+
+    /// <summary>
+    /// Every class that shows a CPU load captures it with a sampler of its own.
+    /// </summary>
+    /// <remarks>
+    /// One baseline for every caller made each reading the load since whichever caller sampled last (#2790): with the
+    /// Dashboard open, a Resource History point was the load of the last fraction of a second, and each Resource
+    /// History or tray sample cut a Dashboard interval down to a few clock ticks. A class that reads
+    /// <c>Cpu.LoadPercent</c> holds a <c>CpuLoadSampler</c> from <c>NewCpuSampler()</c> and passes it to the capture.
+    /// A capture without one
+    /// shows the latest load another sampler measured: right for a report, and wrong for a figure that is meant to be
+    /// this class's own interval.
+    /// </remarks>
+    [Fact]
+    public void EveryReaderOfTheCpuLoad_CapturesWithASamplerOfItsOwn()
+    {
+        var appDir = TestPaths.AppProject();
+        var readers = new List<string>();
+        var offenders = new List<string>();
+        foreach (var file in Directory.EnumerateFiles(appDir, "*.cs", SearchOption.AllDirectories)
+                     .Where(f => !Path.GetRelativePath(appDir, f).Split(Path.DirectorySeparatorChar)
+                         .Any(s => s.Equals("obj", StringComparison.OrdinalIgnoreCase)
+                                   || s.Equals("bin", StringComparison.OrdinalIgnoreCase))))
+        {
+            var name = Path.GetFileName(file);
+            if (name is "SystemInfoService.cs" or "CpuLoadSampler.cs") continue;
+            var code = WithoutComments(File.ReadAllText(file));
+            if (!code.Contains(".Cpu.LoadPercent", StringComparison.Ordinal)) continue;
+            readers.Add(name);
+
+            var sampler = HeldCpuSampler().Match(code);
+            if (!sampler.Success)
+                offenders.Add($"{name} reads the CPU load and holds no sampler from NewCpuSampler()");
+            else if (!Regex.IsMatch(code, $@"\.CaptureAsync\(\s*{Regex.Escape(sampler.Groups["field"].Value)}\b"))
+                offenders.Add($"{name} holds {sampler.Groups["field"].Value} and captures without it");
+        }
+
+        // Known answers: the Dashboard's vitals, the tray tooltip and Resource History.
+        Assert.True(readers.Count >= 3,
+            $"only {readers.Count} classes were found reading Cpu.LoadPercent, of the three that show it.");
+        Assert.True(offenders.Count == 0,
+            "these show a CPU load measured over someone else's interval:\n  " + string.Join("\n  ", offenders));
+    }
+
+    /// <summary>A field set from <c>NewCpuSampler()</c>, by its name.</summary>
+    [GeneratedRegex(@"\b(?<field>_\w+)\s*(?:\?\?)?=\s*\w+\.NewCpuSampler\(\)")]
+    private static partial Regex HeldCpuSampler();
 
     /// <summary>
     /// No view model calls the Tune-Up's static temp sweep: each reaches it through <c>ITuneUpService</c> (#2766).

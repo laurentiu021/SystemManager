@@ -178,6 +178,42 @@ public class ProcessDescriptionServiceTests
         Assert.Contains(profile, entry.Description, StringComparison.Ordinal);
     }
 
+    [Theory]
+    [InlineData("WindowsTerminal", Environment.SpecialFolder.ProgramFiles,
+        @"WindowsApps\Microsoft.WindowsTerminal_1.25.2733.0_x64__8wekyb3d8bbwe\WindowsTerminal.exe")]
+    [InlineData("notepad", Environment.SpecialFolder.ProgramFiles,
+        @"WindowsApps\Microsoft.WindowsNotepad_11.2607.14.0_x64__8wekyb3d8bbwe\Notepad\Notepad.exe")]
+    [InlineData("Widgets", Environment.SpecialFolder.ProgramFiles,
+        @"WindowsApps\MicrosoftWindows.Client.WebExperience_526.21100.40.0_x64__cw5n1h2txyewy\Dashboard\Widgets.exe")]
+    [InlineData("wmplayer", Environment.SpecialFolder.ProgramFilesX86, @"Windows Media Player\wmplayer.exe")]
+    [InlineData("MsMpEng", Environment.SpecialFolder.CommonApplicationData,
+        @"Microsoft\Windows Defender\Platform\4.18.26100.4-0\MsMpEng.exe")]
+    public void LookupWithPath_AWindowsProgramWhereWindowsInstallsIt_KeepsTheSystemEntry(
+        string name, Environment.SpecialFolder root, string relative)
+    {
+        // Windows 11 installs Notepad, Terminal and Widgets as Microsoft packages, outside the System folder, and those
+        // were all called "Not recognised" (#3166).
+        var entry = Sut.Lookup(name, Path.Combine(Environment.GetFolderPath(root), relative));
+
+        Assert.NotNull(entry);
+        Assert.Equal(ProcessSafety.System, entry!.Safety);
+    }
+
+    [Fact]
+    public void LookupWithPath_APackageSomeoneElsePublishes_IsDowngraded()
+    {
+        var path = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles),
+            @"WindowsApps\SomeVendor.Notepad_1.0.0.0_x64__2247w0b46hfww\Notepad.exe");
+
+        var entry = Sut.Lookup("notepad", path);
+
+        Assert.NotNull(entry);
+        Assert.Equal(ProcessSafety.Unknown, entry!.Safety);
+        Assert.Equal(
+            $"Not recognised — named like a Windows component, but running from {Path.GetDirectoryName(path)}, "
+            + "where Windows does not keep its programs.", entry.Description);
+    }
+
     [Fact]
     public void LookupWithPath_UnreadablePath_StillTrustsTheName()
     {

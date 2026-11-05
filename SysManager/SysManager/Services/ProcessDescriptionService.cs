@@ -88,10 +88,10 @@ public sealed class ProcessDescriptionService
 
     /// <summary>
     /// Looks up a process by name, then verifies a "System" database entry against where the image
-    /// actually runs from. A process named like a known Windows component but running outside
-    /// <c>%SystemRoot%</c> is not that component — the database match is downgraded to an unrecognised
-    /// entry naming the real folder, instead of handing out the Windows component's description and
-    /// "safe to end" reputation (see <see cref="Helpers.ProcessCriticality"/>, #2792).
+    /// actually runs from. A process named like a known Windows component but running from a folder
+    /// Windows does not keep its programs in is not that component — the database match is downgraded
+    /// to an unrecognised entry naming the real folder, instead of handing out the Windows component's
+    /// description and "safe to end" reputation (see <see cref="Helpers.ProcessCriticality"/>, #2792).
     /// </summary>
     /// <remarks>
     /// Only "System" entries are re-verified: "Trusted" third-party entries have no fixed install
@@ -99,6 +99,9 @@ public sealed class ProcessDescriptionService
     /// to misattribute. <paramref name="imagePath"/> null/blank/unreadable passes through unchanged,
     /// the same fail-open rule <see cref="Helpers.ProcessCriticality.IsUnderSystemRoot"/> applies, since
     /// most real system processes cannot be read without elevation.
+    /// <para>Where Windows keeps its programs is the System folder and the few places outside it that
+    /// <see cref="Helpers.ProcessCriticality.IsWhereWindowsKeepsItsPrograms"/> names. The System folder
+    /// alone called Windows 11's packaged Notepad, Paint, Terminal and Widgets "Not recognised" (#3166).</para>
     /// </remarks>
     public ProcessDescriptionEntry? Lookup(string processName, string? imagePath)
     {
@@ -106,14 +109,15 @@ public sealed class ProcessDescriptionService
         if (entry is null || entry.Safety != ProcessSafety.System)
             return entry;
 
-        if (ProcessCriticality.IsUnderSystemRoot(imagePath))
+        if (ProcessCriticality.IsWhereWindowsKeepsItsPrograms(imagePath))
             return entry;
 
         var folder = Path.GetDirectoryName(imagePath) is { Length: > 0 } dir ? dir : "an unexpected location";
         return entry with
         {
             Safety = ProcessSafety.Unknown,
-            Description = $"Not recognised — named like a Windows component, but running from {folder} instead of the System folder."
+            Description = $"Not recognised — named like a Windows component, but running from {folder}, "
+                          + "where Windows does not keep its programs."
         };
     }
 

@@ -10,6 +10,22 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.136.117] - 2026-11-05
+
+**Process Manager and Startup Manager call Windows 11's own Notepad, Paint, Terminal and Widgets part of Windows again, and Why is it slow? no longer calls a copy of a Windows program part of Windows.**
+
+### Fixed
+- Windows 11 installs Notepad, Paint, the Snipping Tool, Terminal and Widgets as Microsoft Store packages, outside
+  the System folder, and Process Manager and Startup Manager labelled each of them "Not recognised — named like a
+  Windows component, but running from …". So did Windows Media Player, which runs from Program Files, and Defender
+  whenever its path could be read. A program named like a part of Windows is now trusted where Windows keeps its
+  programs: the System folder, Microsoft's own packages, Windows' folders under Program Files and Defender's under
+  ProgramData. Anywhere else it is still "Not recognised". Since 1.131.11.
+- Why is it slow? on the Dashboard decided whether the busiest program was part of Windows by its name alone, and
+  added a copy running from another folder to Windows' own processes of that name. A copy of `svchost.exe` in a
+  profile folder was called "Windows service host" and "part of Windows". It is now counted on its own, goes by its
+  process name, and the check says which folder it runs from. Since Why is it slow? first shipped, in 1.127.0.
+
 ## [1.136.116] - 2026-11-05
 
 **On Windows Update, Cancel stops a PSWindowsUpdate install or check that is stuck, and the Dashboard's update check no longer writes into the tab's console.**

@@ -46,7 +46,7 @@ public sealed class SlowdownServiceTests
         ct => _startup(ct),
         _ => Task.FromResult(_lastStart),
         _ => Task.FromResult(_blamed),
-        name => ProcessDescriptionService.Instance.Lookup(name),
+        (name, imagePath) => ProcessDescriptionService.Instance.Lookup(name, imagePath),
         OwnPid,
         _clock);
 
@@ -55,8 +55,12 @@ public sealed class SlowdownServiceTests
     private static FixedDriveService.FixedDrive Drive(string letter, double sizeGB, double freeGB) =>
         new(letter, "Local Disk", "NTFS", sizeGB, freeGB, "", "");
 
-    private static ProcessEntry Proc(int pid, string name, double cpu, string description = "") =>
-        new() { Pid = pid, Name = name, CpuPercent = cpu, Description = description };
+    private static ProcessEntry Proc(int pid, string name, double cpu, string description = "", string path = "") =>
+        new() { Pid = pid, Name = name, CpuPercent = cpu, Description = description, FilePath = path };
+
+    /// <summary>A path under one of this PC's special folders, so the cases hold wherever Windows is.</summary>
+    private static string Under(Environment.SpecialFolder root, string relative) =>
+        Path.Combine(Environment.GetFolderPath(root), relative);
 
     private static SystemSnapshot Vitals(double usedPercent = 50, double totalGB = 16, double uptimeDays = 1) => new(
         new OsInfo("Windows 11", "10.0", "26100", TimeSpan.FromDays(uptimeDays), "64-bit"),
@@ -315,6 +319,62 @@ public sealed class SlowdownServiceTests
         Assert.Equal("Microsoft Defender Antimalware is using 50% of the processor", busy.Title);
         Assert.Equal("Right now, and not just for a moment. It is part of Windows, and that usually means it is busy with a "
                      + "job of its own, such as a scan or an update, that finishes by itself.", busy.Detail);
+    }
+
+    // A copy of a part of Windows, somewhere Windows does not keep its programs, is a program of its own (#3010).
+    // It was added to Windows' own processes of that name, and the check said it was part of Windows.
+
+    [Fact]
+    public async Task ACopyOfAPartOfWindows_GoesByItsProcessName_AndSaysWhereItRunsFrom()
+    {
+        var copy = Under(Environment.SpecialFolder.ApplicationData, @"Updater\svchost.exe");
+        // Its file calls itself what the real one does, so that name is not the one to go by either.
+        _first = [Proc(20, "svchost", 50, "Host Process for Windows Services", copy)];
+        _second = [Proc(20, "svchost", 55, "Host Process for Windows Services", copy)];
+
+        var busy = Assert.Single((await CheckAsync()).Findings);
+
+        Assert.Equal("svchost is using 50% of the processor", busy.Title);
+        Assert.Equal($"Right now, and not just for a moment. It is named like a part of Windows, but it runs from "
+                     + $"{Path.GetDirectoryName(copy)}, where Windows does not keep its programs. Process Manager "
+                     + "shows more about it.", busy.Detail);
+    }
+
+    [Fact]
+    public async Task ACopy_IsCountedApartFromWindowsOwnProcessesOfThatName()
+    {
+        var real = Under(Environment.SpecialFolder.Windows, @"System32\svchost.exe");
+        var copy = Under(Environment.SpecialFolder.ApplicationData, @"Updater\svchost.exe");
+        IReadOnlyList<ProcessEntry> Sample() =>
+        [
+            Proc(20, "svchost", 30, path: real),
+            Proc(21, "svchost", 30, path: real),
+            Proc(22, "svchost", 45, path: copy),
+        ];
+        _first = Sample();
+        _second = Sample();
+
+        var busy = Assert.Single((await CheckAsync()).Findings);
+
+        Assert.Equal("Windows service host is using 60% of the processor", busy.Title);
+        Assert.Equal("Across its 2 processes, right now. It is part of Windows, and that usually means it is busy "
+                     + "with a job of its own, such as a scan or an update, that finishes by itself.", busy.Detail);
+    }
+
+    [Fact]
+    public async Task AWindowsAppRunningFromItsPackage_IsStillPartOfWindows()
+    {
+        // Widgets is a Microsoft package outside the System folder on Windows 11 (#3166).
+        var widgets = Under(Environment.SpecialFolder.ProgramFiles, Path.Combine("WindowsApps",
+            "MicrosoftWindows.Client.WebExperience_526.21100.40.0_x64__cw5n1h2txyewy", "Dashboard", "Widgets.exe"));
+        _first = [Proc(30, "Widgets", 50, path: widgets)];
+        _second = [Proc(30, "Widgets", 50, path: widgets)];
+
+        var busy = Assert.Single((await CheckAsync()).Findings);
+
+        Assert.Equal("Widgets is using 50% of the processor", busy.Title);
+        Assert.Equal("Right now, and not just for a moment. It is part of Windows, and that usually means it is busy "
+                     + "with a job of its own, such as a scan or an update, that finishes by itself.", busy.Detail);
     }
 
     [Theory]

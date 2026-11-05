@@ -79,7 +79,7 @@ public sealed class SlowdownService : ISlowdownService
     private readonly Func<CancellationToken, Task<StartupScan>> _startup;
     private readonly Func<CancellationToken, Task<BootRecord?>> _lastTimedStart;
     private readonly Func<CancellationToken, Task<IReadOnlyList<BootDegradation>?>> _blamed;
-    private readonly Func<string, ProcessDescriptionEntry?> _describe;
+    private readonly Func<string, string?, ProcessDescriptionEntry?> _describe;
     private readonly int _ownProcessId;
     private readonly TimeProvider _clock;
 
@@ -94,7 +94,7 @@ public sealed class SlowdownService : ISlowdownService
                LastTimedStart(boot ?? throw new ArgumentNullException(nameof(boot))),
                Blamed(boot),
                // Deferred, so building the service does not load the database before anything asks it a question.
-               name => ProcessDescriptionService.Instance.Lookup(name),
+               (name, imagePath) => ProcessDescriptionService.Instance.Lookup(name, imagePath),
                Environment.ProcessId,
                TimeProvider.System)
     {
@@ -108,7 +108,10 @@ public sealed class SlowdownService : ISlowdownService
     /// <param name="startup">What starts with Windows.</param>
     /// <param name="lastTimedStart">The newest start Windows timed, or null when its log could not be read or holds none.</param>
     /// <param name="blamed">What Windows blamed for slow starts, newest first, or null when its log could not be read.</param>
-    /// <param name="describe">SysManager's own record of a program, by process name, or null when it has none.</param>
+    /// <param name="describe">
+    /// SysManager's own record of a program by its process name, checked against the folder the program runs from when
+    /// that is given, or null when it has none.
+    /// </param>
     /// <param name="ownProcessId">SysManager's own process, which is doing the measuring and is never named.</param>
     /// <param name="clock">The time now, and the wait between the two processor samples.</param>
     internal SlowdownService(
@@ -119,7 +122,7 @@ public sealed class SlowdownService : ISlowdownService
         Func<CancellationToken, Task<StartupScan>> startup,
         Func<CancellationToken, Task<BootRecord?>> lastTimedStart,
         Func<CancellationToken, Task<IReadOnlyList<BootDegradation>?>> blamed,
-        Func<string, ProcessDescriptionEntry?> describe,
+        Func<string, string?, ProcessDescriptionEntry?> describe,
         int ownProcessId,
         TimeProvider clock)
     {
@@ -307,36 +310,48 @@ public sealed class SlowdownService : ISlowdownService
     /// <remarks>
     /// By program because a browser runs as a dozen processes, and none of them alone is the answer. Each process's share
     /// is of the whole processor, every core counted, as Process Manager shows it.
+    /// <para>A copy of a part of Windows that runs from a folder Windows does not keep its programs in is a program of
+    /// its own (<see cref="Program"/>). Grouped by the name alone, it was added to Windows' own processes of that name,
+    /// and the check said it was part of Windows (#3010).</para>
     /// </remarks>
     internal static ProbeOutcome Processor(IReadOnlyList<ProcessEntry> first, IReadOnlyList<ProcessEntry> second,
-                                           int ownProcessId, Func<string, ProcessDescriptionEntry?> describe)
+                                           int ownProcessId, Func<string, string?, ProcessDescriptionEntry?> describe)
     {
         // An empty list is the snapshot's own answer when Windows would not list the processes at all.
         if (first.Count == 0 || second.Count == 0) return ProbeOutcome.Unread(SlowdownProbe.Processor);
 
-        var before = ByProgram(first, ownProcessId);
-        var after = ByProgram(second, ownProcessId);
+        var before = ByProgram(first, ownProcessId, describe);
+        var after = ByProgram(second, ownProcessId, describe);
         var busiest = before.Keys
             .Where(after.ContainsKey)
             .Select(program => (Program: program, Percent: Math.Min(before[program], after[program])))
             .OrderByDescending(b => b.Percent)
-            .ThenBy(b => b.Program, StringComparer.OrdinalIgnoreCase)
+            .ThenBy(b => b.Program.Name, StringComparer.OrdinalIgnoreCase)
+            .ThenBy(b => b.Program.Folder, StringComparer.OrdinalIgnoreCase)
             .FirstOrDefault();
 
-        if (busiest.Program is null || busiest.Percent < ProcessorBusyPercent)
+        if (busiest.Program.Name is null || busiest.Percent < ProcessorBusyPercent)
             return ProbeOutcome.Of(SlowdownProbe.Processor, "nothing unusual");
 
-        var name = DisplayName(busiest.Program, describe, first);
+        var (program, folder) = busiest.Program;
+        // A copy goes by its process name: SysManager's name for the real program, and the one the copy's file gives
+        // itself, are both the name it borrows.
+        var name = folder is null ? DisplayName(program, describe, first) : program;
         // Capped, because two readings of a whole processor's worth, each rounded, can add up to a hair over all of it.
         var percent = string.Create(CultureInfo.InvariantCulture, $"{Math.Min(busiest.Percent, 100):F0}%");
-        var processes = second.Count(p => Counts(p, ownProcessId) && IsProgram(p, busiest.Program));
-        var partOfWindows = describe(busiest.Program)?.Safety == ProcessSafety.System;
+        var processes = second.Count(p => Counts(p, ownProcessId)
+                                          && SameProgram.Instance.Equals(ProgramOf(p, describe), busiest.Program));
+        // Every process of a program with no folder runs where Windows keeps it, or could not be read.
+        var partOfWindows = folder is null && describe(program, null)?.Safety == ProcessSafety.System;
         var detail = (processes > 1 ? $"Across its {processes} processes, right now. " : "Right now, and not just for a moment. ")
-            + (partOfWindows
-                ? "It is part of Windows, and that usually means it is busy with a job of its own, such as a scan or an "
-                  + "update, that finishes by itself."
-                : "That may be exactly what you want if you are watching or playing something. It is only worth acting on "
-                  + "if the PC feels slow while you are not.");
+            + (folder is not null
+                ? $"It is named like a part of Windows, but it runs from {folder}, where Windows does not keep its "
+                  + "programs. Process Manager shows more about it."
+                : partOfWindows
+                    ? "It is part of Windows, and that usually means it is busy with a job of its own, such as a scan "
+                      + "or an update, that finishes by itself."
+                    : "That may be exactly what you want if you are watching or playing something. It is only worth "
+                      + "acting on if the PC feels slow while you are not.");
 
         return ProbeOutcome.Of(SlowdownProbe.Processor, $"{name} {percent}", new SlowdownFinding(
             SlowdownKind.ProcessorBusy,
@@ -345,13 +360,48 @@ public sealed class SlowdownService : ISlowdownService
             [new("See what is running", "nav-processes", "Process Manager")]));
     }
 
-    private static Dictionary<string, double> ByProgram(IReadOnlyList<ProcessEntry> processes, int ownProcessId)
+    /// <summary>
+    /// A program as the processor check counts it: its process name, and the folder it runs from when the name is that
+    /// of a part of Windows and the folder is not one Windows keeps its programs in. No folder for any other program.
+    /// </summary>
+    private readonly record struct Program(string Name, string? Folder);
+
+    /// <summary>The same program: the same name in any case, and the same folder or none.</summary>
+    private sealed class SameProgram : IEqualityComparer<Program>
     {
-        var byProgram = new Dictionary<string, double>(StringComparer.OrdinalIgnoreCase);
+        internal static readonly SameProgram Instance = new();
+
+        public bool Equals(Program x, Program y) =>
+            string.Equals(x.Name, y.Name, StringComparison.OrdinalIgnoreCase)
+            && string.Equals(x.Folder, y.Folder, StringComparison.OrdinalIgnoreCase);
+
+        public int GetHashCode(Program program) => HashCode.Combine(
+            StringComparer.OrdinalIgnoreCase.GetHashCode(program.Name),
+            program.Folder is null ? 0 : StringComparer.OrdinalIgnoreCase.GetHashCode(program.Folder));
+    }
+
+    private static Dictionary<Program, double> ByProgram(IReadOnlyList<ProcessEntry> processes, int ownProcessId,
+                                                         Func<string, string?, ProcessDescriptionEntry?> describe)
+    {
+        var byProgram = new Dictionary<Program, double>(SameProgram.Instance);
         foreach (var p in processes.Where(p => Counts(p, ownProcessId)))
-            byProgram[p.Name] = byProgram.GetValueOrDefault(p.Name) + p.CpuPercent;
+        {
+            var program = ProgramOf(p, describe);
+            byProgram[program] = byProgram.GetValueOrDefault(program) + p.CpuPercent;
+        }
         return byProgram;
     }
+
+    /// <summary>The program <paramref name="p"/> counts toward.</summary>
+    /// <remarks>
+    /// A copy is what SysManager's record calls a part of Windows by its name and not by where this process runs from
+    /// (<see cref="ProcessDescriptionService.Lookup(string, string?)"/>). An unreadable folder is read as the real one.
+    /// </remarks>
+    private static Program ProgramOf(ProcessEntry p, Func<string, string?, ProcessDescriptionEntry?> describe) =>
+        describe(p.Name, null)?.Safety == ProcessSafety.System
+        && describe(p.Name, p.FilePath)?.Safety != ProcessSafety.System
+            ? new Program(p.Name, Path.GetDirectoryName(p.FilePath) is { Length: > 0 } folder ? folder : p.FilePath)
+            : new Program(p.Name, null);
 
     /// <summary>
     /// Whether a process counts: not the idle process, which is the processor doing nothing, and not SysManager, which is
@@ -366,10 +416,10 @@ public sealed class SlowdownService : ISlowdownService
     /// The name a person knows a program by: SysManager's own record of it first ("Google Chrome"), then the name its file
     /// gives itself, then the process name.
     /// </summary>
-    internal static string DisplayName(string program, Func<string, ProcessDescriptionEntry?> describe,
+    internal static string DisplayName(string program, Func<string, string?, ProcessDescriptionEntry?> describe,
                                        IEnumerable<ProcessEntry> seen)
     {
-        if (describe(program)?.ShortName is { Length: > 0 } known) return known;
+        if (describe(program, null)?.ShortName is { Length: > 0 } known) return known;
 
         var fromFile = seen
             .Where(p => IsProgram(p, program))
@@ -380,7 +430,7 @@ public sealed class SlowdownService : ISlowdownService
 
     /// <summary>What starts with Windows, and what Windows blamed for slowing its last timed start.</summary>
     internal static ProbeOutcome Startup(StartupScan? scan, BootRecord? lastTimedStart, IReadOnlyList<BootDegradation>? blamed,
-                                         DateTime now, Func<string, ProcessDescriptionEntry?> describe)
+                                         DateTime now, Func<string, string?, ProcessDescriptionEntry?> describe)
     {
         if (scan is null) return ProbeOutcome.Unread(SlowdownProbe.Startup);
 
@@ -418,7 +468,8 @@ public sealed class SlowdownService : ISlowdownService
     }
 
     /// <summary>The two Windows blamed most, with the delay Windows says each added: "Steam (7.7 s) and OneDrive (3.1 s)".</summary>
-    private static string Blame(IReadOnlyList<BootDegradation> slowed, Func<string, ProcessDescriptionEntry?> describe) =>
+    private static string Blame(
+        IReadOnlyList<BootDegradation> slowed, Func<string, string?, ProcessDescriptionEntry?> describe) =>
         FormatHelper.JoinForSentence([.. slowed.Take(2).Select(d => $"{DisplayName(d.Name, describe, [])} ({d.DurationDisplay})")]);
 
     /// <summary>

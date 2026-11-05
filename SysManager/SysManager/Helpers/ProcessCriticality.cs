@@ -3,6 +3,8 @@
 // Author: laurentiu021 · https://github.com/laurentiu021/SystemManager
 // License: MIT
 
+using System.IO;
+
 namespace SysManager.Helpers;
 
 /// <summary>
@@ -90,5 +92,68 @@ internal static class ProcessCriticality
         if (string.IsNullOrWhiteSpace(imagePath)) return true;
         var systemRoot = Environment.GetFolderPath(Environment.SpecialFolder.Windows);
         return SystemPaths.IsInsideSubtree(imagePath, systemRoot);
+    }
+
+    /// <summary>
+    /// The publisher IDs that end the folder name of a package Microsoft publishes: those of "Microsoft Corporation"
+    /// and of "Microsoft Windows".
+    /// </summary>
+    /// <remarks>
+    /// A package's folder under WindowsApps ends in its publisher's ID, a hash of the name of the publisher that signed
+    /// the package, so nobody else can install a package that ends in either. Read off this PC's own packages: Notepad,
+    /// Paint, the Snipping Tool and Terminal end in the first, Widgets in the second.
+    /// </remarks>
+    private static readonly string[] MicrosoftPublisherIds = ["8wekyb3d8bbwe", "cw5n1h2txyewy"];
+
+    /// <summary>
+    /// True when <paramref name="imagePath"/> is where Windows keeps its own programs, OR is null/blank/unreadable.
+    /// </summary>
+    /// <remarks>
+    /// The System folder, and three places outside it that only Windows or an administrator can write to: a package
+    /// Microsoft publishes under <c>%ProgramFiles%\WindowsApps</c>, Windows' own folders under Program Files, and
+    /// Defender's platform folder under ProgramData. Windows 11 installs Notepad, Paint, the Snipping Tool, Terminal
+    /// and Widgets as Microsoft packages, Windows Media Player runs from Program Files, and Defender updates itself
+    /// into ProgramData, so checking the System folder alone called each of them "Not recognised" (#3166).
+    /// Unreadable fails toward the name, as <see cref="IsUnderSystemRoot"/> does.
+    /// <para>For the description database's Windows entries. <see cref="IsBootCritical"/> keeps the System folder:
+    /// every name it holds runs from there.</para>
+    /// </remarks>
+    internal static bool IsWhereWindowsKeepsItsPrograms(string? imagePath) =>
+        IsUnderSystemRoot(imagePath)
+        || IsMicrosoftPackage(imagePath!)
+        || SystemPaths.IsInsideAnySubtree(imagePath!, WindowsProgramFolders());
+
+    /// <summary>Whether <paramref name="imagePath"/> is in a package Microsoft publishes, in WindowsApps.</summary>
+    private static bool IsMicrosoftPackage(string imagePath)
+    {
+        var programFiles = Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles);
+        if (programFiles.Length == 0) return false;
+
+        var packages = Path.Combine(programFiles, "WindowsApps");
+        if (!SystemPaths.IsInsideSubtree(imagePath, packages)) return false;
+
+        // The first folder under WindowsApps is the package's own. A file straight inside WindowsApps belongs to none.
+        var relative = Path.GetRelativePath(packages, Path.GetFullPath(imagePath));
+        var separator = relative.IndexOf(Path.DirectorySeparatorChar);
+        if (separator <= 0) return false;
+
+        var package = relative[..separator];
+        return MicrosoftPublisherIds.Any(id => package.EndsWith("_" + id, StringComparison.OrdinalIgnoreCase));
+    }
+
+    /// <summary>Windows' own folders, outside the System folder, that the database's programs run from.</summary>
+    private static string?[] WindowsProgramFolders()
+    {
+        static string? Under(Environment.SpecialFolder folder, string child) =>
+            Environment.GetFolderPath(folder) is { Length: > 0 } root ? Path.Combine(root, child) : null;
+
+        return
+        [
+            Under(Environment.SpecialFolder.ProgramFiles, "Windows Media Player"),
+            Under(Environment.SpecialFolder.ProgramFilesX86, "Windows Media Player"),
+            Under(Environment.SpecialFolder.ProgramFiles, "Windows Defender"),
+            Under(Environment.SpecialFolder.CommonApplicationData,
+                Path.Combine("Microsoft", "Windows Defender", "Platform")),
+        ];
     }
 }

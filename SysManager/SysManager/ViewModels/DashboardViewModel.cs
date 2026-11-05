@@ -28,6 +28,9 @@ public sealed partial class DashboardViewModel : ElevatedViewModelBase
         : null;
 
     private readonly SystemInfoService _sys;
+
+    // The live vitals' own CPU baseline, so each reading is the load since this tab's previous one (#2790).
+    private readonly CpuLoadSampler _cpu;
     private readonly ITuneUpService _tuneUp;
     private readonly HealthScoreService _healthScore;
     private readonly TemperatureService _temps;
@@ -290,6 +293,7 @@ public sealed partial class DashboardViewModel : ElevatedViewModelBase
         _slowdown = slowdown;
         _gaming = gaming;
         _sys = sys;
+        _cpu = sys.NewCpuSampler();
         _tuneUp = tuneUp;
         _healthScore = healthScore;
         _temps = temps;
@@ -398,7 +402,7 @@ public sealed partial class DashboardViewModel : ElevatedViewModelBase
             {
                 try
                 {
-                    var snapshot = await _sys.CaptureAsync();
+                    var snapshot = await _sys.CaptureAsync(_cpu);
                     System.Windows.Application.Current?.Dispatcher.BeginInvoke(() => ShowVitals(snapshot));
 
                     UpdateGpuUsage();

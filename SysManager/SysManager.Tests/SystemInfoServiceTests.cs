@@ -41,8 +41,8 @@ public class SystemInfoServiceTests
     [Fact]
     public void CpuLoad_IsTheBusyShareOfTheTicksSinceThePreviousSample()
     {
-        var service = NewService(Times(At(1000, 2000, 1000), At(1050, 2100, 1100)));
-        Assert.Equal(75.0, service.SampleCpuLoad(), precision: 6);
+        var sampler = NewService(Times(At(1000, 2000, 1000), At(1050, 2100, 1100))).NewCpuSampler();
+        Assert.Equal(75.0, sampler.Sample(), precision: 6);
     }
 
     [Theory]
@@ -54,8 +54,8 @@ public class SystemInfoServiceTests
     [InlineData(100ul, 100ul, 100ul, 50.0)]
     public void CpuLoad_CoversTheEndsOfTheRange(ulong idleDelta, ulong kernelDelta, ulong userDelta, double expected)
     {
-        var service = NewService(Times(At(0, 0, 0), At(idleDelta, kernelDelta, userDelta)));
-        Assert.Equal(expected, service.SampleCpuLoad(), precision: 6);
+        var sampler = NewService(Times(At(0, 0, 0), At(idleDelta, kernelDelta, userDelta))).NewCpuSampler();
+        Assert.Equal(expected, sampler.Sample(), precision: 6);
     }
 
     /// <summary>
@@ -65,9 +65,9 @@ public class SystemInfoServiceTests
     [Fact]
     public void CpuLoad_WhenTheSyscallFails_HoldsTheLastKnownValue()
     {
-        var service = NewService(Times(At(1000, 2000, 1000), At(1050, 2100, 1100), null));
-        Assert.Equal(75.0, service.SampleCpuLoad(), precision: 6);
-        Assert.Equal(75.0, service.SampleCpuLoad(), precision: 6);
+        var sampler = NewService(Times(At(1000, 2000, 1000), At(1050, 2100, 1100), null)).NewCpuSampler();
+        Assert.Equal(75.0, sampler.Sample(), precision: 6);
+        Assert.Equal(75.0, sampler.Sample(), precision: 6);
     }
 
     /// <summary>
@@ -77,15 +77,15 @@ public class SystemInfoServiceTests
     [Fact]
     public void CpuLoad_WithNoBaseline_ReportsTheSinceBootAverage()
     {
-        var service = NewService(Times(null, At(250, 1000, 0)));
-        Assert.Equal(75.0, service.SampleCpuLoad(), precision: 6);
+        var sampler = NewService(Times(null, At(250, 1000, 0))).NewCpuSampler();
+        Assert.Equal(75.0, sampler.Sample(), precision: 6);
     }
 
     [Fact]
     public void CpuLoad_WhenTheSyscallNeverSucceeds_ReportsZeroRatherThanNaN()
     {
-        var service = NewService(Times(null, null));
-        var load = service.SampleCpuLoad();
+        var sampler = NewService(Times(null, null)).NewCpuSampler();
+        var load = sampler.Sample();
         Assert.False(double.IsNaN(load));
         Assert.Equal(0.0, load, precision: 6);
     }
@@ -97,9 +97,10 @@ public class SystemInfoServiceTests
     [Fact]
     public void CpuLoad_WhenTwoSamplesLandInTheSameTick_HoldsTheLastValue()
     {
-        var service = NewService(Times(At(1000, 2000, 1000), At(1050, 2100, 1100), At(1050, 2100, 1100)));
-        Assert.Equal(75.0, service.SampleCpuLoad(), precision: 6);
-        Assert.Equal(75.0, service.SampleCpuLoad(), precision: 6);
+        var sampler = NewService(Times(At(1000, 2000, 1000), At(1050, 2100, 1100), At(1050, 2100, 1100)))
+            .NewCpuSampler();
+        Assert.Equal(75.0, sampler.Sample(), precision: 6);
+        Assert.Equal(75.0, sampler.Sample(), precision: 6);
     }
 
     /// <summary>
@@ -109,27 +110,104 @@ public class SystemInfoServiceTests
     [Fact]
     public void CpuLoad_WhenTheCountersStepBackwards_HoldsTheLastValueInsteadOfWrapping()
     {
-        var service = NewService(Times(At(1000, 2000, 1000), At(1050, 2100, 1100), At(900, 1900, 900)));
-        Assert.Equal(75.0, service.SampleCpuLoad(), precision: 6);
-        Assert.Equal(75.0, service.SampleCpuLoad(), precision: 6);
+        var sampler = NewService(Times(At(1000, 2000, 1000), At(1050, 2100, 1100), At(900, 1900, 900))).NewCpuSampler();
+        Assert.Equal(75.0, sampler.Sample(), precision: 6);
+        Assert.Equal(75.0, sampler.Sample(), precision: 6);
     }
 
     /// <summary>Idle can never exceed the total, but if it did the result must stay a percentage.</summary>
     [Fact]
     public void CpuLoad_StaysWithinAPercentageEvenIfIdleExceedsTheTotal()
     {
-        var service = NewService(Times(At(0, 0, 0), At(500, 100, 0)));
-        var load = service.SampleCpuLoad();
+        var sampler = NewService(Times(At(0, 0, 0), At(500, 100, 0))).NewCpuSampler();
+        var load = sampler.Sample();
         Assert.InRange(load, 0.0, 100.0);
+    }
+
+    // ---- a baseline per caller (#2790) ----
+    // One baseline for every caller made each reading the load since whichever caller sampled last: with the
+    // Dashboard sampling every 300 ms, a Resource History point covered the last fraction of a second.
+
+    /// <summary>The service over <paramref name="times"/>, with the static queries answered and nothing read.</summary>
+    private static SystemInfoService ServiceOverTimes(Func<SystemInfoService.SystemTimes?> times) => new(
+        times,
+        () => new SystemInfoService.PhysicalMemory(8UL * 1024 * 1024 * 1024, 2UL * 1024 * 1024 * 1024),
+        () => 1234,
+        queryOsStatic: () => new OsInfo("Windows 11", "10.0", "22631", TimeSpan.Zero, "64-bit"),
+        queryCpuStatic: () => new CpuInfo("Test CPU", 8, 16, 3600, 0),
+        queryDisks: () => [],
+        queryMemoryModules: () => []);
+
+    /// <summary>
+    /// Two samplers interleaved: each reading is the busy share since that sampler's own previous one.
+    /// </summary>
+    /// <remarks>
+    /// The readings go in the order the calls take them. A is seeded at 0 ticks and B at 100; A samples at 200 (50
+    /// idle of 200, 75%), B at 400 (50 idle of its 300, 83.3%), A again at 600 (250 idle of its 400, 37.5%). One
+    /// shared baseline would have given 75, 50 and 50: each the interval since the other's sample.
+    /// </remarks>
+    [Fact]
+    public void TwoSamplers_EachMeasureTheirOwnInterval()
+    {
+        var service = NewService(Times(At(0, 0, 0), At(50, 100, 0), At(50, 200, 0), At(100, 400, 0), At(300, 600, 0)));
+        var a = service.NewCpuSampler();
+        var b = service.NewCpuSampler();
+
+        Assert.Equal(75.0, a.Sample(), precision: 6);
+        Assert.Equal(83.333333, b.Sample(), precision: 5);
+        Assert.Equal(37.5, a.Sample(), precision: 6);
+    }
+
+    /// <summary>A capture with another sampler, or with none, leaves a sampler's baseline where it was.</summary>
+    [Fact]
+    public async Task ACaptureWithAnotherSamplerOrNone_LeavesASamplersBaselineAlone()
+    {
+        // A seeded at 0; B seeded at 20 ticks and sampled through a capture at 60, 20 idle of 40; a capture with no
+        // sampler shows that 50% and reads nothing; A then samples 100 idle of the 400 since its own seed. One shared
+        // baseline would have measured A from B's sample instead: 70 idle of 340.
+        var service = ServiceOverTimes(Times(At(0, 0, 0), At(10, 20, 0), At(30, 60, 0), At(100, 400, 0)));
+        var a = service.NewCpuSampler();
+        var b = service.NewCpuSampler();
+
+        Assert.Equal(50.0, (await service.CaptureAsync(b)).Cpu.LoadPercent, precision: 6);
+        Assert.Equal(50.0, (await service.CaptureAsync()).Cpu.LoadPercent, precision: 6);
+
+        Assert.Equal(75.0, a.Sample(), precision: 6);
+    }
+
+    /// <summary>
+    /// A capture without a sampler shows the latest load a sampler measured, and before any has, the since-boot one.
+    /// </summary>
+    [Fact]
+    public async Task ACaptureWithoutASampler_ShowsTheLatestMeasuredLoad()
+    {
+        var service = ServiceOverTimes(Times(At(250, 1000, 0), At(0, 0, 0), At(50, 200, 0), At(999, 999, 999)));
+
+        // Nothing measured yet: 250 of the 1000 ticks since boot were idle.
+        Assert.Equal(75.0, (await service.CaptureAsync()).Cpu.LoadPercent, precision: 6);
+
+        var sampler = service.NewCpuSampler();
+        Assert.Equal(75.0, (await service.CaptureAsync(sampler)).Cpu.LoadPercent, precision: 6);
+        Assert.Equal(75.0, (await service.CaptureAsync()).Cpu.LoadPercent, precision: 6);
+    }
+
+    [Fact]
+    public async Task ACaptureWithASampler_ShowsItsNextSample()
+    {
+        var service = ServiceOverTimes(Times(At(0, 0, 0), At(100, 100, 0), At(100, 200, 0)));
+        var sampler = service.NewCpuSampler();
+
+        Assert.Equal(0.0, (await service.CaptureAsync(sampler)).Cpu.LoadPercent, precision: 6);
+        Assert.Equal(100.0, (await service.CaptureAsync(sampler)).Cpu.LoadPercent, precision: 6);
     }
 
     /// <summary>Each pass measures the interval just elapsed, not a running average of every interval.</summary>
     [Fact]
     public void CpuLoad_MeasuresEachIntervalIndependently()
     {
-        var service = NewService(Times(At(0, 0, 0), At(100, 100, 0), At(100, 200, 0)));
-        Assert.Equal(0.0, service.SampleCpuLoad(), precision: 6);
-        Assert.Equal(100.0, service.SampleCpuLoad(), precision: 6);
+        var sampler = NewService(Times(At(0, 0, 0), At(100, 100, 0), At(100, 200, 0))).NewCpuSampler();
+        Assert.Equal(0.0, sampler.Sample(), precision: 6);
+        Assert.Equal(100.0, sampler.Sample(), precision: 6);
     }
 
     // ---- memory ----

@@ -10,6 +10,20 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.136.112] - 2026-11-05
+
+**Resource History's CPU readings are the average over each 10 seconds again while the Dashboard is open, and the Dashboard's CPU figure no longer jumps every 10 seconds.**
+
+### Fixed
+- Every CPU reading measured the time since anyone's last reading, since the Dashboard, Resource History and the tray
+  icon shared one starting point. With the Dashboard open, which is the tab SysManager opens on, each Resource History
+  point was the CPU use of the last fraction of a second rather than of its 10 seconds, so a short burst was stored as
+  a 10-second value and a spike could be missed. The other way round, each Resource History or tray reading cut one of
+  the Dashboard's 300-millisecond readings short, which put an odd number on its CPU figure every 10 seconds. Each of
+  them measures over its own interval now, and Resource History takes its first point 10 seconds after SysManager
+  starts, so that one covers 10 seconds as well. Since 1.76.24.
+- A test refuses a tab or service that shows the CPU load without measuring it over its own interval.
+
 ## [1.136.111] - 2026-11-05
 
 **Performance Mode's Current State card says each setting as On, Off, Reduced or Normal, instead of True and False.**

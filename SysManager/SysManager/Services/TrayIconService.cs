@@ -20,6 +20,9 @@ namespace SysManager.Services;
 public sealed class TrayIconService : INotificationArea, IDisposable
 {
     private readonly SystemInfoService _sysInfo;
+
+    // The tooltip's own CPU baseline, so its figure is the load over the minute since its previous one (#2790).
+    private readonly CpuLoadSampler _cpu;
     private readonly DispatcherTimer _timer;
     private TaskbarIcon? _trayIcon;
     // The GDI Icon handle we created (via ExtractAssociatedIcon or new Icon(stream)) and
@@ -116,6 +119,7 @@ public sealed class TrayIconService : INotificationArea, IDisposable
                              Action<string, string>? inform = null)
     {
         _sysInfo = sysInfo;
+        _cpu = sysInfo.NewCpuSampler();
         _time = timeProvider ?? TimeProvider.System;
         _notify = notify ?? ShowTrayNotification;
         _inform = inform ?? ShowTrayInformation;
@@ -358,7 +362,7 @@ public sealed class TrayIconService : INotificationArea, IDisposable
             return;
         try
         {
-            var snapshot = await _sysInfo.CaptureAsync();
+            var snapshot = await _sysInfo.CaptureAsync(_cpu);
             if (_trayIcon is null) return;
 
             var tooltip = $"SysManager\n" +

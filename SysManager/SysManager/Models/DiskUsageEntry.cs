@@ -2,6 +2,7 @@
 // Author: laurentiu021 · https://github.com/laurentiu021/SystemManager
 // License: MIT
 
+using System.Globalization;
 using CommunityToolkit.Mvvm.ComponentModel;
 using SysManager.Helpers;
 
@@ -25,4 +26,13 @@ public sealed partial class DiskUsageEntry : ObservableObject
 
     /// <summary>Formatted size for display.</summary>
     public string SizeDisplay => FormatHelper.FormatSize(SizeBytes);
+
+    /// <summary>
+    /// What the folder list's row shows, as a screen reader says it: "AppData, 38.0 GB, 1,204 files, 61 folders". The
+    /// class's own was its type name (#2785). Invariant, as the row's own figures are.
+    /// </summary>
+    public override string ToString() =>
+        string.Create(CultureInfo.InvariantCulture,
+            $"{Name}, {SizeDisplay}, {FileCount:N0} files, {FolderCount:N0} folders")
+        + (IsAccessDenied ? ", partly unreadable" : "");
 }

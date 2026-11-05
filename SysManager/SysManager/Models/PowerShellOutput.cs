@@ -12,6 +12,12 @@ public sealed record PowerShellLine(OutputKind Kind, string Text, DateTime Times
     public static PowerShellLine Output(string text) => new(OutputKind.Output, text, DateTime.Now);
     public static PowerShellLine Warn(string text) => new(OutputKind.Warning, text, DateTime.Now);
     public static PowerShellLine Err(string text) => new(OutputKind.Error, text, DateTime.Now);
+
+    /// <summary>
+    /// The line's text, which a screen reader says as the live output is arrowed through. The record's own read
+    /// "PowerShellLine { Kind = Output, Text = …, Timestamp = … }" for every line (#2785).
+    /// </summary>
+    public override string ToString() => Text;
 }
 
 /// <summary>

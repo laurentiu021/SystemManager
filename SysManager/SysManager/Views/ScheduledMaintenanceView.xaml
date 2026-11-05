@@ -104,6 +104,13 @@
                              memory" — two names for one thing, one step apart. -->
                         <ComboBox ItemsSource="{Binding Actions}" SelectedItem="{Binding SelectedAction}"
                                   Width="200" Margin="0,4,0,0" AutomationProperties.Name="Maintenance action">
+                            <!-- An enum's own words are its identifier, "Cleanup", so each item is named as shown (#2785). -->
+                            <ComboBox.ItemContainerStyle>
+                                <Style TargetType="ComboBoxItem" BasedOn="{StaticResource {x:Type ComboBoxItem}}">
+                                    <Setter Property="AutomationProperties.Name"
+                                            Value="{Binding Converter={StaticResource MaintenanceActionText}}"/>
+                                </Style>
+                            </ComboBox.ItemContainerStyle>
                             <ComboBox.ItemTemplate>
                                 <DataTemplate>
                                     <TextBlock Text="{Binding Converter={StaticResource MaintenanceActionText}}"/>

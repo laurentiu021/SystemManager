@@ -26,6 +26,9 @@ public sealed record AudioDevice(
         ? KindText(Kind) is { Length: > 0 } kind ? $"{kind} · in use now" : "In use now"
         : KindText(Kind);
 
+    /// <summary>The device's name, which a screen reader says for it in either picker (#2785).</summary>
+    public override string ToString() => FriendlyName;
+
     /// <summary>The kind in plain words, or empty when the driver did not say.</summary>
     internal static string KindText(AudioDeviceKind kind) => kind switch
     {

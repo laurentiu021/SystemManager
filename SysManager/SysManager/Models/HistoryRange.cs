@@ -20,4 +20,7 @@ public sealed record HistoryRange(string Label, TimeSpan Range)
     /// loading stored samples. Only Bandwidth Monitor offers it — Resource History is always stored.
     /// </summary>
     public bool IsLive => Range <= TimeSpan.Zero;
+
+    /// <summary>The label, which is also what a screen reader says for the picker's entry (#2785).</summary>
+    public override string ToString() => Label;
 }

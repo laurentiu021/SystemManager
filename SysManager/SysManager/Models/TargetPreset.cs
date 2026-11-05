@@ -11,7 +11,11 @@ namespace SysManager.Models;
 public sealed record TargetPreset(
     string Name,
     string Description,
-    IReadOnlyList<(string Name, string Host)> Targets);
+    IReadOnlyList<(string Name, string Host)> Targets)
+{
+    /// <summary>The preset's name, which a screen reader says for it in the picker (#2785).</summary>
+    public override string ToString() => Name;
+}
 
 public static class TargetPresets
 {

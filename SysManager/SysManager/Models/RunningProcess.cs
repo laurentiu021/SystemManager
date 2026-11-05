@@ -19,6 +19,12 @@ public sealed record RunningProcess(int ProcessId, string Name, long AffinityMas
     public string Display => $"{Name} ({ProcessId})";
 
     /// <summary>
+    /// <see cref="Display"/>, which a screen reader says for the process in Gaming Profile's picker; the record's own
+    /// read every field (#2785). CPU Core Affinity's picker names its items by <see cref="PinnedDisplay"/> itself.
+    /// </summary>
+    public override string ToString() => Display;
+
+    /// <summary>
     /// Like <see cref="Display"/>, but appends how many cores the process is pinned to when its
     /// affinity is a real subset — e.g. <c>"chrome (1234) — 4 of 16 cores"</c>. The tab already reads
     /// the mask and then discarded it; this surfaces it so the user can see at a glance which

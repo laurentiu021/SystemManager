@@ -3,6 +3,7 @@
 // License: MIT
 
 using System.Collections.ObjectModel;
+using System.Globalization;
 using CommunityToolkit.Mvvm.ComponentModel;
 
 namespace SysManager.Models;
@@ -26,6 +27,13 @@ public sealed partial class DuplicateFileGroup : ObservableObject
 
     /// <summary>Wasted space = (count - 1) * fileSize.</summary>
     public long WastedBytes => Math.Max(Count - 1, 0) * FileSize;
+
+    /// <summary>
+    /// The group's header as a screen reader says it: "3 files, 1,048,576 bytes each". The class's own was its type
+    /// name (#2785).
+    /// </summary>
+    public override string ToString() =>
+        string.Create(CultureInfo.InvariantCulture, $"{Count} files, {FileSize:N0} bytes each");
 
     /// <summary>
     /// Marks exactly one file in the group as the suggested keeper, so five identical photos are not

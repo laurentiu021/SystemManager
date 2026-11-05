@@ -278,4 +278,8 @@ public sealed partial class LargeFilesViewModel : ViewModelBase
 }
 
 /// <summary>Labelled location the user can pick in the large-files finder.</summary>
-public sealed record ScanLocation(string Label, string Path);
+public sealed record ScanLocation(string Label, string Path)
+{
+    /// <summary>The label, which a screen reader says for the location in the picker (#2785).</summary>
+    public override string ToString() => Label;
+}

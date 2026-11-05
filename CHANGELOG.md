@@ -10,6 +10,22 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.136.108] - 2026-11-05
+
+**A screen reader reads each line of a tab's live output, and each entry of a picker, by the words on it.**
+
+### Fixed
+- Arrowing through the live output on Quick Cleanup, System Fixes, System Health, App Updates and Windows Update read
+  every line as "PowerShellLine { Kind = Output, Text = …, Timestamp = … }". Each line is read by its text now. Since
+  the first release, 0.3.0.
+- The pickers on Display Profiles, CPU Core Affinity, Gaming Profile, Volume Control, Bandwidth Monitor, Resource
+  History, Large Files and Ping, and the folder list on Disk Analyzer and the groups on Duplicate Finder, read each entry
+  out as all its fields, or as a type name such as "SysManager.Models.DiskUsageEntry". Each is read by the words it
+  shows: the display's name, the process and how many cores it is pinned to, the preset, the device, the range, the
+  location, "AppData, 38.0 GB, 1,204 files, 61 folders", "3 files, 1,048,576 bytes each". Scheduled Maintenance's
+  action read as "Cleanup" and is read as shown, "Clean temporary files".
+- A test refuses a list that draws its entries through a template unless each entry has words of its own.
+
 ## [1.136.107] - 2026-11-05
 
 **Screen readers hear "Unmute" on a muted app's button on Volume Control, and the buttons and checkboxes on a list row say which row they act on.**

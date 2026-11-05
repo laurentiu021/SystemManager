@@ -31,6 +31,9 @@ public sealed record ScheduledTaskInfo(
     DateTime? LastRun,
     DateTime? NextRun)
 {
+    /// <summary>What a screen reader calls the grid row, rather than the record's fields (#2785).</summary>
+    public override string ToString() => Name;
+
     public bool IsEnabled => !string.Equals(State, "Disabled", StringComparison.OrdinalIgnoreCase);
     public bool IsSystem => Category == TaskCategory.System;
 

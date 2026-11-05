@@ -12170,18 +12170,20 @@ public partial class ArchitectureTests
     }
 
     /// <summary>
-    /// Every item of a ListBox, ComboBox or ListView that draws its items through a template or a member path is
-    /// announced by words: not by its record's fields, and not by its type name.
+    /// Every row of a DataGrid, and every item of a ListBox, ComboBox or ListView that draws its items through a
+    /// template or a member path, is announced by words: not by its record's fields, and not by its type name.
     /// </summary>
     /// <remarks>
     /// <para>A list item is announced by its container's name, and a container with no name of its own takes its
     /// content's <c>ToString()</c>. When the list draws the item through an ItemTemplate or a DisplayMemberPath, that
     /// content is the item object, so a record read out every field and a class its type name. The live output read
     /// "PowerShellLine { Kind = Output, Text = …, Timestamp = … }" for every line, and the Display Profiles and CPU
-    /// Core Affinity pickers read their records the same way (#2785).</para>
+    /// Core Affinity pickers read their records the same way. A DataGrid row is named the same way, so every row of
+    /// every grid was announced as its type, "SysManager.Models.InstalledApp" (#2785).</para>
     /// <para>So the item type overrides ToString with the words a person hears, as ChartWindowOption, DnsPreset and
     /// ExtensionRow already do, or the list names its containers with an AutomationProperties.Name setter in its
-    /// ItemContainerStyle. The item type is read from the view model a view is named after, following ItemsSource
+    /// ItemContainerStyle, or a grid in its RowStyle. The item type is read from the view model a view is named after,
+    /// following ItemsSource
     /// paths, DataContext bindings and the item template of an enclosing list. A list whose items this cannot
     /// resolve fails here rather than pass unread.</para>
     /// </remarks>
@@ -12230,8 +12232,19 @@ public partial class ArchitectureTests
         static Type? TypeAt(Type? type, string? path)
         {
             if (path is null) return null;
+            Type? owner = null;
+            var last = "";
             foreach (var part in path.Split('.', StringSplitOptions.RemoveEmptyEntries))
+            {
+                owner = type;
+                last = part;
                 type = type?.GetProperty(part, BindingFlags.Public | BindingFlags.Instance)?.PropertyType;
+            }
+
+            // A view over a list carries no item type of its own: System Logs binds EntriesView, over Entries.
+            if (type == typeof(System.ComponentModel.ICollectionView)
+                && last.EndsWith("View", StringComparison.Ordinal))
+                type = owner?.GetProperty(last[..^4], BindingFlags.Public | BindingFlags.Instance)?.PropertyType;
             return type;
         }
 
@@ -12247,7 +12260,8 @@ public partial class ArchitectureTests
                                      && (string?)d.Attribute("Property") == "AutomationProperties.Name");
 
         static bool DrawsItsItems(XElement list) =>
-            list.Attribute("DisplayMemberPath") is not null
+            list.Name.LocalName == "DataGrid"
+            || list.Attribute("DisplayMemberPath") is not null
             || list.Attribute("ItemTemplate") is not null
             || list.Elements().Any(c => c.Name.LocalName.EndsWith(".ItemTemplate", StringComparison.Ordinal));
 
@@ -12304,10 +12318,11 @@ public partial class ArchitectureTests
 
             bool NamesItsContainers(XElement list)
             {
+                var styleOf = list.Name.LocalName == "DataGrid" ? "RowStyle" : "ItemContainerStyle";
                 var inline = list.Elements()
-                    .FirstOrDefault(c => c.Name.LocalName.EndsWith(".ItemContainerStyle", StringComparison.Ordinal));
+                    .FirstOrDefault(c => c.Name.LocalName.EndsWith("." + styleOf, StringComparison.Ordinal));
                 if (inline is not null && SetsAName(inline)) return true;
-                if ((string?)list.Attribute("ItemContainerStyle") is not { } keyed
+                if ((string?)list.Attribute(styleOf) is not { } keyed
                     || !keyed.StartsWith("{StaticResource ", StringComparison.Ordinal))
                     return false;
                 var key = keyed["{StaticResource ".Length..^1].Trim();
@@ -12317,7 +12332,8 @@ public partial class ArchitectureTests
                     .Any(SetsAName);
             }
 
-            var lists = doc.Descendants().Where(d => d.Name.LocalName is "ListBox" or "ComboBox" or "ListView");
+            var lists = doc.Descendants()
+                .Where(d => d.Name.LocalName is "ListBox" or "ComboBox" or "ListView" or "DataGrid");
             foreach (var list in lists)
             {
                 if (!DrawsItsItems(list)) continue;
@@ -12347,15 +12363,15 @@ public partial class ArchitectureTests
             + "items in the list's ItemContainerStyle, or teach the guard the context they bind to:\n  "
             + string.Join("\n  ", unresolved));
         Assert.True(unworded.Count == 0,
-            "these lists draw their items through a template or a member path, so each item is announced by its "
-            + "ToString, which for these types reads out a record's fields, an enum's identifier or a type name. "
-            + "Override ToString with the words the item shows, or name the items in the list's "
-            + "ItemContainerStyle:\n  " + string.Join("\n  ", unworded));
+            "these grids, and lists that draw their items through a template or a member path, announce each item "
+            + "by its ToString, which for these types reads out a record's fields, an enum's identifier or a type "
+            + "name. Override ToString with the words the item shows, or name the items in the list's "
+            + "ItemContainerStyle or the grid's RowStyle:\n  " + string.Join("\n  ", unworded));
 
-        // Vacuity floors: 16 lists draw their items in 2026-11, 2 of them naming the items themselves.
-        Assert.True(listsSeen >= 15,
+        // Vacuity floors: 16 lists and 35 grids draw their items in 2026-11, 2 lists naming the items themselves.
+        Assert.True(listsSeen >= 48,
             $"only {listsSeen} lists draw their items, so the element test has stopped matching.");
-        Assert.True(resolved >= 13,
+        Assert.True(resolved >= 46,
             $"only {resolved} item types were read, so the type lookup has stopped matching.");
         Assert.True(namedByTheList >= 2,
             $"only {namedByTheList} lists name their items, so the style lookup has stopped matching.");

@@ -16,6 +16,9 @@ namespace SysManager.Models;
 /// </summary>
 public sealed partial class ProcessNetworkUsage : ObservableObject
 {
+    /// <summary>What a screen reader calls the grid row, rather than the class's type name (#2785).</summary>
+    public override string ToString() => ProcessName;
+
     /// <summary>Owning process id. Also the stable identity used to reconcile rows in place.</summary>
     public required int ProcessId { get; init; }
 

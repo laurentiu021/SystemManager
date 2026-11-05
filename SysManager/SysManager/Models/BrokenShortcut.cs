@@ -11,6 +11,9 @@ namespace SysManager.Models;
 /// </summary>
 public sealed partial class BrokenShortcut : ObservableObject, Helpers.ISelectableRow
 {
+    /// <summary>What a screen reader calls the grid row, rather than the class's type name (#2785).</summary>
+    public override string ToString() => Name;
+
     /// <summary>Display name of the shortcut (without .lnk extension).</summary>
     [ObservableProperty] private string _name = "";
 

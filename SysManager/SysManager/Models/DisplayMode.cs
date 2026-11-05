@@ -7,6 +7,9 @@ namespace SysManager.Models;
 /// <summary>A selectable display mode: resolution + refresh rate.</summary>
 public sealed record DisplayMode(int Width, int Height, int RefreshHz, int BitsPerPixel)
 {
+    /// <summary>What a screen reader calls the grid row, rather than the record's fields (#2785).</summary>
+    public override string ToString() => Display;
+
     /// <summary>e.g. "2560 × 1440 @ 165 Hz".</summary>
     public string Display => $"{Width} × {Height} @ {RefreshHz} Hz";
 

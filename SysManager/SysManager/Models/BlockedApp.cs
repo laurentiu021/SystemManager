@@ -11,6 +11,9 @@ namespace SysManager.Models;
 /// </summary>
 public sealed partial class BlockedApp : ObservableObject, Helpers.ISelectableRow
 {
+    /// <summary>What a screen reader calls the grid row, rather than the class's type name (#2785).</summary>
+    public override string ToString() => ExecutableName;
+
     /// <summary>Executable file name (e.g., "notepad.exe").</summary>
     /// <remarks>
     /// A name, not a path, and deliberately so: an IFEO key is per executable NAME, which is why a block

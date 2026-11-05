@@ -35,6 +35,9 @@ public enum ContextMenuEntryKind
 /// </summary>
 public sealed partial class ContextMenuEntry : ObservableObject
 {
+    /// <summary>What a screen reader calls the grid row, rather than the class's type name (#2785).</summary>
+    public override string ToString() => Name;
+
     [ObservableProperty] private bool _isEnabled = true;
 
     /// <summary>Which registration shape this row came from. See <see cref="ContextMenuEntryKind"/>.</summary>

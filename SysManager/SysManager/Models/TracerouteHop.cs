@@ -12,6 +12,9 @@ namespace SysManager.Models;
 /// </summary>
 public sealed partial class TracerouteHop : ObservableObject
 {
+    /// <summary>What a screen reader calls the grid row, rather than the class's type name (#2785).</summary>
+    public override string ToString() => $"Hop {HopNumber}, {Address}";
+
     [ObservableProperty] private int _hopNumber;
     [ObservableProperty] private string _address = "*";
     [ObservableProperty] private double? _latencyMs;

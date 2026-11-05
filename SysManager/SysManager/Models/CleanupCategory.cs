@@ -154,6 +154,9 @@ public sealed record CleanupResult
 /// <summary>Single large file surfaced by the size scanner.</summary>
 public sealed record LargeFileEntry
 {
+    /// <summary>What a screen reader calls the grid row, rather than the record's fields (#2785).</summary>
+    public override string ToString() => Name;
+
     public required string Path { get; init; }
     public required string Name { get; init; }
     public required long SizeBytes { get; init; }

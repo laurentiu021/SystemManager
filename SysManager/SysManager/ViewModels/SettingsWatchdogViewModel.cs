@@ -281,6 +281,9 @@ public sealed partial class SettingsWatchdogViewModel : ElevatedViewModelBase
     /// <summary>One drifted setting, wrapping the immutable <see cref="SettingDrift"/> for binding.</summary>
     public sealed partial class DriftRow(SettingDrift drift) : ObservableObject
     {
+        /// <summary>What a screen reader calls the grid row, rather than the class's type name (#2785).</summary>
+        public override string ToString() => Name;
+
         public SettingDrift Drift { get; } = drift;
         public string Name => Drift.Setting.Name;
         public string Category => Drift.Setting.Category;
@@ -305,6 +308,9 @@ public sealed partial class SettingsWatchdogViewModel : ElevatedViewModelBase
     public sealed partial class WatchedRow(WatchedSetting setting, int? currentValue, bool hasDrifted)
         : ObservableObject
     {
+        /// <summary>What a screen reader calls the grid row, rather than the class's type name (#2785).</summary>
+        public override string ToString() => Name;
+
         public WatchedSetting Setting { get; } = setting;
         public string Name => Setting.Name;
         public string Category => Setting.Category;

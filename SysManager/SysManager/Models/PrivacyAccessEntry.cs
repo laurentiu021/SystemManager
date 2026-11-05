@@ -18,6 +18,9 @@ public sealed record PrivacyAccessEntry(
     DateTime? LastUsed,    // local time of the most recent access, or null if unknown
     bool InUse)
 {
+    /// <summary>What a screen reader calls the grid row, rather than the record's fields (#2785).</summary>
+    public override string ToString() => $"{AppName}, {Capability}";
+
     /// <summary>Human-readable last-used timestamp, or "In use now" / "—".</summary>
     public string LastUsedDisplay =>
         InUse ? "In use now"

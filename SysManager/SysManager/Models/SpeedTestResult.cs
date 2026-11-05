@@ -23,6 +23,11 @@ public sealed record SpeedTestResult(
     string Server,
     DateTime CompletedAt)
 {
+    /// <summary>What a screen reader calls the grid row, rather than the record's fields (#2785).</summary>
+    public override string ToString() =>
+        CompletedAt.ToString("dd MMM HH:mm", CultureInfo.InvariantCulture) + ", "
+        + DownloadMbps.ToString("F1", CultureInfo.InvariantCulture) + " Mbps down";
+
     /// <summary>Upload for a result card, e.g. "41.7 Mbps", or "—" when it was not measured.</summary>
     public string UploadDisplay => UploadMbps is { } u ? u.ToString("F1", CultureInfo.InvariantCulture) + " Mbps" : "—";
 

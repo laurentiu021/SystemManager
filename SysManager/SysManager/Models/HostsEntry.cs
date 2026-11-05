@@ -11,6 +11,9 @@ namespace SysManager.Models;
 /// </summary>
 public sealed partial class HostsEntry : ObservableObject
 {
+    /// <summary>What a screen reader calls the grid row, rather than the class's type name (#2785).</summary>
+    public override string ToString() => $"{Hostname}, {IpAddress}";
+
     [ObservableProperty] private bool _isEnabled = true;
     public required string IpAddress { get; init; }
     public required string Hostname { get; init; }

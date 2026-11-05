@@ -17,6 +17,9 @@ public sealed record BootRecord(
     long MainPathBootTimeMs,
     long PostBootTimeMs)
 {
+    /// <summary>What a screen reader calls the grid row, rather than the record's fields (#2785).</summary>
+    public override string ToString() => $"{WhenDisplay}, {BootSecondsDisplay}";
+
     /// <summary>Total boot time as whole seconds, one decimal.</summary>
     public string BootSecondsDisplay => string.Create(CultureInfo.InvariantCulture, $"{BootTimeMs / 1000.0:F1} s");
 
@@ -35,6 +38,9 @@ public sealed record BootDegradation(
     string Name,
     long DurationMs)
 {
+    /// <summary>What a screen reader calls the grid row, rather than the record's fields (#2785).</summary>
+    public override string ToString() => Name;
+
     public string DurationDisplay => DurationMs >= 1000 ? string.Create(CultureInfo.InvariantCulture, $"{DurationMs / 1000.0:F1} s") : $"{DurationMs} ms";
     public string WhenDisplay => When.ToString("yyyy-MM-dd HH:mm", CultureInfo.InvariantCulture);
 

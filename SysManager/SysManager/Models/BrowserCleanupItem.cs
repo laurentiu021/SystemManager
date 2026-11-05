@@ -14,6 +14,9 @@ namespace SysManager.Models;
 /// </summary>
 public sealed partial class BrowserCleanupItem : ObservableObject, Helpers.ISelectableRow
 {
+    /// <summary>What a screen reader calls the grid row, rather than the class's type name (#2785).</summary>
+    public override string ToString() => $"{Category} in {Browser}";
+
     [ObservableProperty] private bool _isSelected;
 
     // SizeDisplay is computed from this, so a change here has to announce that one too or a row keeps

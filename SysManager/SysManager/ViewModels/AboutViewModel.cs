@@ -577,6 +577,16 @@ public sealed partial class AboutViewModel : ViewModelBase
     internal const string NewerReleaseBeforeInstallLine =
         "A newer version was found, so this one was not installed. Press Download to get it.";
 
+    /// <summary>
+    /// Whether the card still names <paramref name="release"/>. A check that runs while it downloads, or while
+    /// Install verifies its file, can find another (#2728).
+    /// </summary>
+    /// <remarks>
+    /// By tag, as the check compares: a check that found this release again with its notes edited since gets a
+    /// record that differs, and the file is still this release's.
+    /// </remarks>
+    private bool IsOnTheCard(UpdateService.ReleaseInfo release) => release.Tag == _latest?.Tag;
+
     /// <summary>Lets go of the download for a release the card no longer names, so Download is offered again.</summary>
     private void ForgetDownload()
     {
@@ -641,9 +651,7 @@ public sealed partial class AboutViewModel : ViewModelBase
                 return;
             }
 
-            // By tag, as the check compares: a check that found this release again with its notes edited since gets a
-            // record that differs, and the file is still this release's.
-            if (release.Tag != _latest?.Tag)
+            if (!IsOnTheCard(release))
             {
                 // A check found another release while this one downloaded, so the file is not the one the card names.
                 DownloadStatus = NewerReleaseWhileDownloadingLine;
@@ -1186,7 +1194,7 @@ public sealed partial class AboutViewModel : ViewModelBase
 
             // A check that found another release while the hash was fetched has let this file go, and the card names
             // that release now, so the file is not installed under its name (#2728).
-            if (release.Tag != _latest?.Tag)
+            if (!IsOnTheCard(release))
             {
                 DownloadStatus = NewerReleaseBeforeInstallLine;
                 return;

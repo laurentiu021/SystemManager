@@ -1490,6 +1490,29 @@ public class DnsServiceTests
         Assert.Contains("could not be captured completely", ex.Message);
     }
 
+    /// <summary>
+    /// A static source names the servers it uses, so one that names none is a read that went wrong. Kept, Undo would
+    /// put the adapter back on a static setting with no server at all.
+    /// </summary>
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task CaptureSnapshotAsync_AStaticSourceThatNamesNoServer_Throws(bool ipv4)
+    {
+        var runner = Substitute.For<IPowerShellRunner>();
+        runner.RunAsync(Arg.Any<string>(), Arg.Any<IDictionary<string, object?>?>(), Arg.Any<CancellationToken>())
+              .Returns(ipv4
+                  ? CaptureResult(12, DnsService.DnsConfigurationSource.Static,
+                      DnsService.DnsConfigurationSource.Automatic, "IPv6=2606:4700:4700::1111")
+                  : CaptureResult(12, DnsService.DnsConfigurationSource.Automatic,
+                      DnsService.DnsConfigurationSource.Static, "IPv4=8.8.8.8"));
+        using var svc = new DnsService(runner);
+
+        var ex = await Assert.ThrowsAsync<InvalidOperationException>(() => svc.CaptureSnapshotAsync());
+
+        Assert.Contains("could not be captured completely", ex.Message);
+    }
+
     [Theory]
     [InlineData("2", true, false)]
     [InlineData("2,23", true, true)]

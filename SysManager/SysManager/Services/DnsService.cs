@@ -448,6 +448,11 @@ public sealed class DnsService : IDisposable
             {
                 throw new InvalidOperationException("No active network adapter could be captured.");
             }
+            // A source the servers contradict: static with none, or IPv6 absent with some.
+            var staticWithoutServers =
+                (v4Source == DnsConfigurationSource.Static && v4.Count == 0) ||
+                (v6Source == DnsConfigurationSource.Static && v6.Count == 0);
+            var absentWithServers = v6Source == DnsConfigurationSource.Absent && v6.Count > 0;
             if (!capturedV4 ||
                 !capturedV6 ||
                 !identityVerified ||
@@ -456,9 +461,8 @@ public sealed class DnsService : IDisposable
                 !addressMetadataValid ||
                 v4Source == DnsConfigurationSource.Unknown ||
                 v6Source == DnsConfigurationSource.Unknown ||
-                (v4Source == DnsConfigurationSource.Static && v4.Count == 0) ||
-                (v6Source == DnsConfigurationSource.Static && v6.Count == 0) ||
-                (v6Source == DnsConfigurationSource.Absent && v6.Count > 0))
+                staticWithoutServers ||
+                absentWithServers)
             {
                 throw new InvalidOperationException(
                     "The network adapter's DNS configuration could not be captured completely.");

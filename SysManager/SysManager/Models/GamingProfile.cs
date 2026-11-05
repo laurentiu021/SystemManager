@@ -70,10 +70,13 @@ public sealed record GamingProfile
     /// </remarks>
     /// <param name="withGame">Whether a game is picked.</param>
     /// <param name="elevated">Whether SysManager runs as administrator.</param>
-    public bool HasAnyThatCanRun(bool withGame, bool elevated) =>
-        UltimatePerformancePlan || DisableVisualEffects || FinestTimerResolution || SilenceNotifications
-        || (withGame && (HighGameCpuPriority || PinGameToPerformanceCores))
-        || (elevated && (PurgeStandbyMemory || PauseSearchIndexing));
+    public bool HasAnyThatCanRun(bool withGame, bool elevated)
+    {
+        var forTheGame = withGame && (HighGameCpuPriority || PinGameToPerformanceCores);
+        var asAdministrator = elevated && (PurgeStandbyMemory || PauseSearchIndexing);
+        return UltimatePerformancePlan || DisableVisualEffects || FinestTimerResolution || SilenceNotifications
+            || forTheGame || asAdministrator;
+    }
 }
 
 /// <summary>

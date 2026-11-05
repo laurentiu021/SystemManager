@@ -28,10 +28,14 @@ public sealed partial class PerformanceProfile : ObservableObject
     private bool _isUltimateCopy;
 
     // ── Visual effects ──
-    [ObservableProperty] private bool _visualEffectsReduced;
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(VisualEffectsDisplay))]
+    private bool _visualEffectsReduced;
 
     // ── Game Mode ──
-    [ObservableProperty] private bool _gameModeEnabled;
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(GameModeDisplay))]
+    private bool _gameModeEnabled;
 
     // ── Xbox Game Bar / DVR overlay ──
     // Two values that can differ: the overlay (AppCaptureEnabled) and per-game recording (GameDVR_Enabled). Read as
@@ -39,10 +43,12 @@ public sealed partial class PerformanceProfile : ObservableObject
     // selected state", so the value still on was never written (#2836).
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(XboxGameBarDisabled), nameof(XboxGameBarPartlyOn))]
+    [NotifyPropertyChangedFor(nameof(XboxGameBarState), nameof(XboxGameBarDisplay))]
     private bool _xboxGameBarOn = true;
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(XboxGameBarDisabled), nameof(XboxGameBarPartlyOn))]
+    [NotifyPropertyChangedFor(nameof(XboxGameBarState), nameof(XboxGameBarDisplay))]
     private bool _xboxGameDvrOn = true;
 
     /// <summary>Both the overlay and per-game recording are off.</summary>
@@ -52,13 +58,41 @@ public sealed partial class PerformanceProfile : ObservableObject
     public bool XboxGameBarPartlyOn => XboxGameBarOn != XboxGameDvrOn;
 
     // ── NVIDIA GPU ──
-    [ObservableProperty] private bool _gpuMaxPerformance;
-    [ObservableProperty] private bool _hasNvidiaGpu;
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(GpuMaxPerformanceDisplay))]
+    private bool _gpuMaxPerformance;
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(GpuMaxPerformanceDisplay))]
+    private bool _hasNvidiaGpu;
+
     [ObservableProperty] private string _nvidiaGpuName = "";
 
     // ── Processor state ──
     [ObservableProperty] private bool _processorMaxState;
     [ObservableProperty] private int _processorMinPercent;
+
+    // What the Current State card and the summary line say for each setting. The card bound the raw values into fixed
+    // prefixes, so it read "Reduced: True" and "Enabled: False", and a Game Bar that is on read "Disabled: False", a
+    // double negative to undo before it said anything, while the summary line said "ON" and "OFF" (#2786).
+
+    /// <summary>"Reduced" when Windows' animations, fades and shadows are off, "Normal" when they are not.</summary>
+    public string VisualEffectsDisplay => VisualEffectsReduced ? "Reduced" : "Normal";
+
+    /// <summary>"On" or "Off".</summary>
+    public string GameModeDisplay => GameModeEnabled ? "On" : "Off";
+
+    /// <summary>"On", "Off", or "Partly on" when one of the overlay and game recording is on and one off.</summary>
+    public string XboxGameBarState => XboxGameBarDisabled ? "Off" : XboxGameBarPartlyOn ? "Partly on" : "On";
+
+    /// <summary>The state, and which part is on when it is partly on.</summary>
+    public string XboxGameBarDisplay => !XboxGameBarPartlyOn ? XboxGameBarState
+        : XboxGameBarOn ? "Partly on: the overlay is on, game recording is off"
+        : "Partly on: game recording is on, the overlay is off";
+
+    /// <summary>"On" or "Off", or that there is no NVIDIA graphics card for the setting to apply to.</summary>
+    public string GpuMaxPerformanceDisplay => !HasNvidiaGpu ? "No NVIDIA GPU detected"
+        : GpuMaxPerformance ? "On" : "Off";
 
     /// <summary>Friendly summary of the active profile.</summary>
     /// <remarks>

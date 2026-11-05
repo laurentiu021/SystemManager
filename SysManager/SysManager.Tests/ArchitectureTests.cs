@@ -6396,6 +6396,88 @@ public partial class ArchitectureTests
     }
 
     /// <summary>
+    /// No text on screen is a bool as it is, which WPF writes out as "True" or "False".
+    /// </summary>
+    /// <remarks>
+    /// Performance Mode's Current State card bound four settings' raw values into fixed prefixes: "Reduced:
+    /// True", "Enabled: False", and for a Game Bar that is on, "Disabled: False", a double negative to undo
+    /// before it says anything (#2786). True and False are the program's words. A bool reaches the screen
+    /// through words the model chooses, or through a converter.
+    /// <para>The bools are read from the app's source by name: a public bool property, an
+    /// <c>[ObservableProperty]</c> bool field, and a bool parameter of a positional record. A text, content,
+    /// header or tooltip binding whose path ends in one of those names, and has no converter, fails. A name
+    /// match can only over-report, when a bool shares its name with a string elsewhere, and the failure
+    /// names the binding, so that would show.</para>
+    /// </remarks>
+    [Fact]
+    public void NoText_ShowsABoolAsTrueOrFalse()
+    {
+        var appDir = TestPaths.AppProject();
+        bool InSource(string file) => !Path.GetRelativePath(appDir, file).Split(Path.DirectorySeparatorChar)
+            .Any(s => s.Equals("obj", StringComparison.OrdinalIgnoreCase)
+                      || s.Equals("bin", StringComparison.OrdinalIgnoreCase));
+
+        var bools = new HashSet<string>(StringComparer.Ordinal);
+        foreach (var file in Directory.EnumerateFiles(appDir, "*.cs", SearchOption.AllDirectories).Where(InSource))
+        {
+            var code = WithoutComments(File.ReadAllText(file));
+            foreach (Match property in BoolProperty().Matches(code))
+                bools.Add(property.Groups["name"].Value);
+            foreach (Match field in BoolObservableField().Matches(code))
+            {
+                var name = field.Groups["name"].Value;
+                bools.Add(char.ToUpperInvariant(name[0]) + name[1..]);
+            }
+            foreach (Match record in PositionalRecord().Matches(code))
+            {
+                foreach (Match parameter in BoolParameter().Matches(record.Groups["parameters"].Value))
+                    bools.Add(parameter.Groups["name"].Value);
+            }
+        }
+
+        string[] shown = ["Text", "Content", "Header", "ToolTip"];
+        var offenders = new List<string>();
+        var bindingsRead = 0;
+        foreach (var file in Directory.EnumerateFiles(appDir, "*.xaml", SearchOption.AllDirectories).Where(InSource))
+        {
+            foreach (var attribute in XDocument.Load(file).Descendants().Attributes()
+                         .Where(a => shown.Contains(a.Name.LocalName, StringComparer.Ordinal)))
+            {
+                var binding = BindingPath().Match(attribute.Value);
+                if (!binding.Success) continue;
+                bindingsRead++;
+                if (attribute.Value.Contains("Converter=", StringComparison.Ordinal)) continue;
+                if (bools.Contains(binding.Groups["path"].Value.Split('.')[^1]))
+                    offenders.Add($"{Path.GetFileName(file)}: {attribute.Name.LocalName}=\"{attribute.Value}\"");
+            }
+        }
+
+        // Vacuity floors: 411 bool names and 532 text bindings when this was written. A collapse in either
+        // means the matching broke, and a pass would check nothing.
+        Assert.True(bools.Count >= 350, $"only {bools.Count} bool names were read from the app's source.");
+        Assert.True(bindingsRead >= 450, $"only {bindingsRead} text bindings were read from the views.");
+        Assert.True(offenders.Count == 0,
+            "these show a bool as True or False. Bind words the model chooses, such as \"On\" or \"Off\", or "
+            + "put a converter on the binding:\n  " + string.Join("\n  ", offenders));
+    }
+
+    /// <summary>A public bool property, by its name.</summary>
+    [GeneratedRegex(@"\bpublic\s+(?:(?:override|virtual|required|static|new)\s+)*bool\??\s+(?<name>\w+)\s*(?:\{|=>)")]
+    private static partial Regex BoolProperty();
+
+    /// <summary>An <c>[ObservableProperty]</c> bool field, by its name without the underscore.</summary>
+    [GeneratedRegex(@"\[ObservableProperty\][^;]*?\bprivate\s+bool\??\s+_(?<name>\w+)")]
+    private static partial Regex BoolObservableField();
+
+    /// <summary>A positional record's parameter list.</summary>
+    [GeneratedRegex(@"\brecord\s+(?:struct\s+|class\s+)?\w+(?:<[^>]*>)?\s*\((?<parameters>[^)]*)\)")]
+    private static partial Regex PositionalRecord();
+
+    /// <summary>A bool parameter, by its name.</summary>
+    [GeneratedRegex(@"\bbool\??\s+(?<name>\w+)")]
+    private static partial Regex BoolParameter();
+
+    /// <summary>
     /// Nothing but a control takes a click: a mouse handler on a <c>Border</c> or a panel is refused.
     /// </summary>
     /// <remarks>

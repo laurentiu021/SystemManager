@@ -2209,6 +2209,8 @@ offers, "rate us" prompts:
 - **Processor State**: force CPU min state to 100%. Under the High Performance and Ultimate
   Performance plans it is already 100%, so the switch is locked and says so
 - **Overlays info**: manual instructions for Discord, Steam, NVIDIA GFE, EA App
+- **Current State** says each setting in words: On or Off, Reduced or Normal for visual effects, and for the
+  Xbox Game Bar which part is on when only one is
 - **Your original settings are recorded before the first change** and kept on disk, so Restore All still
   works after a restart. Restore All puts back seven settings — the power plan, visual effects, Game
   Mode, the Xbox Game Bar, Game DVR, the NVIDIA setting and the processor minimum, plugged in and on

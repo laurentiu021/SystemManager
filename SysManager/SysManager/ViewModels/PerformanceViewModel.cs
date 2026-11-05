@@ -365,11 +365,11 @@ public sealed partial class PerformanceViewModel : ElevatedViewModelBase
 
     private void UpdateSummary()
     {
+        // The same words as the Current State card below it (#2786).
         Summary = $"Active plan: {Profile.ProfileSummary} · "
-                + $"Visual FX: {(Profile.VisualEffectsReduced ? "Reduced" : "Normal")} · "
-                + $"Game Mode: {(Profile.GameModeEnabled ? "ON" : "OFF")} · "
-                + $"Xbox Bar: {(Profile.XboxGameBarDisabled ? "OFF"
-                    : Profile.XboxGameBarPartlyOn ? "PARTLY ON" : "ON")}";
+                + $"Visual effects: {Profile.VisualEffectsDisplay} · "
+                + $"Game Mode: {Profile.GameModeDisplay} · "
+                + $"Xbox Game Bar: {Profile.XboxGameBarState}";
     }
 
     // ═══════════════════════════════════════════════════════════════

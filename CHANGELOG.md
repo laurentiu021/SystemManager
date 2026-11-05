@@ -10,6 +10,19 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.136.111] - 2026-11-05
+
+**Performance Mode's Current State card says each setting as On, Off, Reduced or Normal, instead of True and False.**
+
+### Fixed
+- The Current State card on Performance Mode read "Reduced: True" and "Enabled: False", and for an Xbox Game Bar that
+  is on, "Disabled: False", a double negative to work out before it said anything. Each setting is said in words now:
+  visual effects "Reduced" or "Normal", Game Mode and the NVIDIA setting "On" or "Off", and the Xbox Game Bar "On",
+  "Off", or which part is on when only one is. On a PC without an NVIDIA graphics card the NVIDIA setting says so.
+  The summary line at the top of the tab uses the same words. Since Performance Mode first shipped, in 0.12.0.
+- The card no longer has a row for the active power plan's GUID, a code that told the person reading it nothing.
+- A test refuses text anywhere in the app that shows a true-or-false value as it is.
+
 ## [1.136.110] - 2026-11-05
 
 **A screen reader finds and presses the Help and Appearance buttons and each theme in the Appearance panel, and hears which theme is in use.**

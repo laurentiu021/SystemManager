@@ -98,7 +98,7 @@ public sealed class AudioMixerViewUiTests : IDisposable
         StaHelper.Run(() =>
         {
             var view = Laid(vm);
-            var card = Named<Border>(view, "This PC");
+            var card = (Border)view.FindName("ThisPcCard");
             var apps = Named<ItemsControl>(view, "Application volume mixer");
 
             Assert.True(card.TranslatePoint(default, view).Y < apps.TranslatePoint(default, view).Y,
@@ -146,7 +146,7 @@ public sealed class AudioMixerViewUiTests : IDisposable
         StaHelper.Run(() =>
         {
             var view = Laid(vm);
-            var card = Named<Border>(view, "This PC");
+            var card = (Border)view.FindName("ThisPcCard");
 
             Assert.False(Shown(Named<ComboBox>(card, "Sound plays through")));
             var shown = ShownTexts(card);
@@ -167,7 +167,7 @@ public sealed class AudioMixerViewUiTests : IDisposable
         StaHelper.Run(() =>
         {
             var view = Laid(vm);
-            var card = Named<Border>(view, "This PC");
+            var card = (Border)view.FindName("ThisPcCard");
 
             Assert.False(Shown(Named<Slider>(card, "Volume for all sound on this PC")));
             Assert.Contains("No speakers or headphones were found. Connect some and they appear here.", ShownTexts(card));

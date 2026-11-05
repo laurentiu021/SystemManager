@@ -3,6 +3,14 @@
              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              Width="340">
+    <UserControl.Resources>
+        <!-- A preset card is a RadioButton, so a screen reader finds it by name, picks it, and hears which one is
+             chosen. As a focusable Border it had no automation peer (#2785). This template adds no look of its
+             own: the card is still drawn by the Border it carries, built in CreatePresetCard. -->
+        <ControlTemplate x:Key="PresetCardChrome" TargetType="RadioButton">
+            <ContentPresenter/>
+        </ControlTemplate>
+    </UserControl.Resources>
     <Border Background="{DynamicResource Surface1}" BorderBrush="{DynamicResource Border1}"
             BorderThickness="1" CornerRadius="16">
         <Border.Effect>

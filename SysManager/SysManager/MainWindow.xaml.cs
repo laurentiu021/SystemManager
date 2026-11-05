@@ -306,7 +306,7 @@ public partial class MainWindow : Window
         base.OnClosed(e);
     }
 
-    private void ThemeBtn_Click(object sender, MouseButtonEventArgs e) => ToggleThemePopup();
+    private void ThemeBtn_Click(object sender, RoutedEventArgs e) => ToggleThemePopup();
 
     /// <summary>
     /// The help chip opens the About tab, which is where every support route already lives.
@@ -323,30 +323,7 @@ public partial class MainWindow : Window
         vm.ShellAcceleratorCommand(Key.F1)?.Execute(null);
     }
 
-    private void HelpBtn_Click(object sender, MouseButtonEventArgs e) => OpenHelp();
-
-    // Enter/Space activate the help chip for keyboard users, for the same reason the theme chip needs
-    // them: it is a Border, so it gets neither for free.
-    private void HelpBtn_KeyDown(object sender, KeyEventArgs e)
-    {
-        if (e.Key is Key.Enter or Key.Space)
-        {
-            OpenHelp();
-            e.Handled = true;
-        }
-    }
-
-    // Enter/Space activate the theme chip for keyboard users. The chip is a Border, so it gets
-    // neither for free — and a Button would only have given it Space, since ButtonBase treats Enter
-    // as a click only where KeyboardNavigation.AcceptsReturn is set.
-    private void ThemeBtn_KeyDown(object sender, KeyEventArgs e)
-    {
-        if (e.Key is Key.Enter or Key.Space)
-        {
-            ToggleThemePopup();
-            e.Handled = true;
-        }
-    }
+    private void HelpBtn_Click(object sender, RoutedEventArgs e) => OpenHelp();
 
     private void ToggleThemePopup()
     {

@@ -6396,19 +6396,17 @@ public partial class ArchitectureTests
     }
 
     /// <summary>
-    /// Anything clickable by mouse that is not a <c>Button</c> must also be operable by keyboard — focusable,
-    /// a tab stop, and activated by BOTH Enter and Space.
+    /// Nothing but a control takes a click: a mouse handler on a <c>Border</c> or a panel is refused.
     /// </summary>
     /// <remarks>
     /// A <c>Border</c> with a <c>MouseLeftButtonUp</c> handler is a button to a mouse and furniture to a
-    /// keyboard: it gets no focus, no tab stop and no Enter/Space for free. Two such controls exist and both
-    /// were given all of it by hand — the theme chip in the shell, and each preset card in the Appearance
-    /// popup. That hand-written support is the fragile kind: three attributes and an event handler that a
-    /// template edit removes without a compiler noticing, and nothing pinned it.
-    /// <para><b>Enter AND Space, checked in the handler body.</b> "Has a KeyDown handler" is not the contract —
-    /// a handler testing only <c>Key.Enter</c> would satisfy it while leaving Space dead, and Space is what
-    /// most keyboard users press on something that looks like a button. Both handlers are read for both keys.
-    /// </para>
+    /// keyboard: it gets no focus, no tab stop and no Enter/Space for free. Three such controls existed, the Help
+    /// and Appearance chips in the shell and each preset card in the Appearance popup, and all three had been given
+    /// focus, a tab stop and an Enter/Space handler by hand. That still left a screen reader with nothing: WPF gives
+    /// a Border no automation peer, so Tab landed on each and Narrator read nothing, and UI Automation could not
+    /// press them (#2785). They are a <c>Button</c> and a <c>RadioButton</c> now, which bring the peer, focus and
+    /// both keys with them, so this guard no longer accepts the hand-made kind: any mouse handler outside the
+    /// exemptions below fails.
     /// <para><b>Why the four colour swatches are exempt rather than fixed.</b> Their handler is
     /// <c>FocusHex</c>: it focuses and selects the hex box immediately beside them, and that box is already
     /// the next tab stop with its own accessible name. A tab stop on the swatch would focus the control you
@@ -6455,66 +6453,142 @@ public partial class ArchitectureTests
                 if (mouseOnlyByDesign.ContainsKey(handler)) continue;
 
                 var name = (string?)element.Attribute(xamlNs + "Name") ?? handler;
-                var where = $"{Path.GetFileName(file)}: <{element.Name.LocalName} {name}>";
-
-                if ((string?)element.Attribute("Focusable") != "True")
-                    offenders.Add($"{where} is clickable by mouse but not Focusable");
-                if ((string?)element.Attribute("KeyboardNavigation.IsTabStop") != "True")
-                    offenders.Add($"{where} is clickable by mouse but not a tab stop");
-                if (element.Attribute("KeyDown") is null)
-                    offenders.Add($"{where} is clickable by mouse but has no KeyDown handler");
+                offenders.Add($"{Path.GetFileName(file)}: <{element.Name.LocalName} {name}> takes a click from the "
+                              + "mouse alone");
             }
         }
 
-        // Vacuity floor: five mouse-clickable elements in XAML, plus one attached in code-behind. A collapse
-        // means the attribute match broke and every absence below is an absence of scanning.
-        Assert.True(clickables >= 5,
-            $"only {clickables} mouse-clickable elements were found, out of 5 in XAML — the attribute match is "
+        // And none attached in code, as the preset cards' was. The tray icon's is not WPF's: Windows gives the
+        // notification area icon no automation peer to fix.
+        foreach (var file in Directory
+                     .EnumerateFiles(appDir, "*.cs", SearchOption.AllDirectories)
+                     .Where(f => !f.Contains($"{Path.DirectorySeparatorChar}obj{Path.DirectorySeparatorChar}",
+                                             StringComparison.Ordinal)))
+        {
+            var code = File.ReadAllText(file);
+            foreach (Match attach in Regex.Matches(code, @"\.(MouseLeftButtonUp|MouseLeftButtonDown)\s*\+="))
+                offenders.Add($"{Path.GetFileName(file)}: a {attach.Groups[1].Value} handler attached in code");
+        }
+
+        // Vacuity floor: the four colour swatches are the mouse-clickable elements left in XAML. A collapse means
+        // the attribute match broke and every absence below is an absence of scanning.
+        Assert.True(clickables >= 4,
+            $"only {clickables} mouse-clickable elements were found, out of 4 in XAML — the attribute match is "
             + "out of date, so a pass proves nothing.");
 
-        // The handlers themselves: both keys, not just Enter.
-        foreach (var (source, handler) in new[]
-                 {
-                     (Path.Combine(appDir, "MainWindow.xaml.cs"), "ThemeBtn_KeyDown"),
-                     (Path.Combine(appDir, "Views", "ThemePopup.xaml.cs"), "Preset_KeyDown"),
-                 })
-        {
-            Assert.True(File.Exists(source),
-                $"{Path.GetFileName(source)} is gone — this guard cannot read {handler}, so it would pass "
-                + "without checking it.");
-
-            var body = KeyHandlerBody(File.ReadAllText(source), handler);
-            Assert.True(body.Length > 0,
-                $"{handler} was not found in {Path.GetFileName(source)}. It is the only thing that makes that "
-                + "Border activatable from the keyboard; if it was renamed, update this guard rather than "
-                + "letting it check nothing.");
-
-            foreach (var key in new[] { "Key.Enter", "Key.Space" })
-            {
-                Assert.True(body.Contains(key, StringComparison.Ordinal),
-                    $"{handler} does not handle {key}. A keyboard user pressing it on something that looks "
-                    + "like a button gets nothing, and \"has a KeyDown handler\" would still be satisfied — "
-                    + "which is why both keys are checked in the body rather than on the attribute.");
-            }
-        }
-
         Assert.True(offenders.Count == 0,
-            "these elements are buttons to a mouse and furniture to a keyboard. A Border gets no focus, no "
-            + "tab stop and no Enter/Space for free, so each has to be given all three — or listed in this "
-            + "test with a reason why keyboard support would add nothing:\n  " + string.Join("\n  ", offenders));
+            "these take a click from the mouse alone. Make each a Button, or a RadioButton for one of a set: a "
+            + "Border or a panel has no automation peer, so a screen reader can neither find nor press it, and its "
+            + "focus and keys have to be written by hand. Or list it in this test with a reason why keyboard and "
+            + "screen reader support would add nothing:\n  " + string.Join("\n  ", offenders));
     }
 
     /// <summary>
-    /// The body of a key handler, sliced from its declaration to the next member. Empty when not found, so
-    /// the caller can tell "renamed" apart from "present but wrong".
+    /// No accessible name is set on an element that has no automation peer to carry it.
     /// </summary>
-    private static string KeyHandlerBody(string source, string methodName)
+    /// <remarks>
+    /// WPF creates no automation peer for a <c>Border</c> or a layout panel, so an
+    /// <c>AutomationProperties.Name</c> on one reaches nothing: UI Automation walks past it to its children. The
+    /// Help and Appearance chips, the theme preset cards, System Logs' four count cards and Volume Control's This
+    /// PC card all carried names no screen reader ever heard (#2785). A name belongs on the control a person
+    /// operates, or on the text that says the thing.
+    /// <para>The list is measured, not assumed: each type below, given a name, returned no peer from
+    /// <c>UIElementAutomationPeer.CreatePeerForElement</c> on .NET 10, and that includes a bare
+    /// <c>ContentControl</c> and every shape. A TextBlock, an Image, a Label and a UserControl do get one. Read from
+    /// the markup, from a name setter in a style for one of these types, and from <c>SetName</c> calls on a variable
+    /// declared or built as one of them in the same file.</para>
+    /// </remarks>
+    [Fact]
+    public void NoNameIsSet_WhereNoAutomationPeerCanCarryIt()
     {
-        var declaration = Regex.Match(source, $@"\b{Regex.Escape(methodName)}\s*\([^)]*\)\s*\r?\n?\s*\{{");
-        if (!declaration.Success) return "";
-        var rest = source[declaration.Index..];
-        var end = NextMemberDeclaration().Match(rest, 1);
-        return end.Success ? rest[..end.Index] : rest;
+        var peerless = new HashSet<string>(StringComparer.Ordinal)
+        {
+            "Border", "Decorator", "Viewbox", "AdornerDecorator",
+            "Grid", "StackPanel", "DockPanel", "WrapPanel", "Canvas", "UniformGrid", "VirtualizingStackPanel",
+            "TabPanel", "ToolBarTray",
+            "Ellipse", "Rectangle", "Path", "Line", "Polygon", "Polyline",
+            "ContentPresenter", "ItemsPresenter", "ScrollContentPresenter", "ContentControl", "HeaderedContentControl",
+        };
+        var appDir = TestPaths.AppProject();
+        var files = Directory.EnumerateFiles(appDir, "*.*", SearchOption.AllDirectories)
+            .Where(f => f.EndsWith(".xaml", StringComparison.Ordinal) || f.EndsWith(".cs", StringComparison.Ordinal))
+            .Where(f => !Path.GetRelativePath(appDir, f).Split(Path.DirectorySeparatorChar)
+                .Any(s => s.Equals("obj", StringComparison.OrdinalIgnoreCase)
+                          || s.Equals("bin", StringComparison.OrdinalIgnoreCase)))
+            .ToArray();
+        var xamlNs = XNamespace.Get("http://schemas.microsoft.com/winfx/2006/xaml");
+
+        // What a name setter lands on: the template part it names, or else the type its style is for, through any
+        // trigger. Without a prefix, so "local:Foo" and "{x:Type Border}" read as Foo and Border.
+        string SetterTarget(XElement setter)
+        {
+            string target;
+            if ((string?)setter.Attribute("TargetName") is { } part)
+            {
+                target = setter.Ancestors()
+                    .FirstOrDefault(a => a.Name.LocalName.EndsWith("Template", StringComparison.Ordinal))
+                    ?.Descendants().FirstOrDefault(d => (string?)d.Attribute(xamlNs + "Name") == part)
+                    ?.Name.LocalName ?? "";
+            }
+            else
+            {
+                var style = setter.Ancestors().FirstOrDefault(a => a.Name.LocalName == "Style");
+                target = ((string?)style?.Attribute("TargetType") ?? "")
+                    .Replace("{x:Type", "", StringComparison.Ordinal).Trim('{', '}', ' ');
+            }
+            return target[(target.IndexOf(':') + 1)..];
+        }
+
+        var offenders = new List<string>();
+        var namesRead = 0;
+        foreach (var path in files)
+        {
+            var file = Path.GetFileName(path);
+            if (path.EndsWith(".xaml", StringComparison.Ordinal))
+            {
+                foreach (var element in XDocument.Load(path).Descendants())
+                {
+                    if (element.Name.LocalName == "Setter"
+                        && (string?)element.Attribute("Property") == "AutomationProperties.Name")
+                    {
+                        namesRead++;
+                        var target = SetterTarget(element);
+                        if (peerless.Contains(target))
+                            offenders.Add($"{file} — a setter puts an AutomationProperties.Name on a {target}");
+                        continue;
+                    }
+
+                    var named = element.Attributes().Any(a => a.Name.LocalName == "AutomationProperties.Name")
+                                || element.Elements().Any(c => c.Name.LocalName == "AutomationProperties.Name");
+                    if (!named) continue;
+                    namesRead++;
+                    if (peerless.Contains(element.Name.LocalName))
+                        offenders.Add($"{file} — <{element.Name.LocalName}> carries an AutomationProperties.Name");
+                }
+                continue;
+            }
+
+            var code = File.ReadAllText(path);
+            foreach (Match call in Regex.Matches(code, @"AutomationProperties\.SetName\(\s*(\w+)\s*,"))
+            {
+                namesRead++;
+                // Its declared type, or the type it is built as when declared with var: "var card = new RadioButton"
+                // and "Border face = new()" both say what the name lands on.
+                var variable = call.Groups[1].Value;
+                var declared = Regex.Match(code, $@"\b(\w+)\s+{Regex.Escape(variable)}\s*=\s*new\b\s*(\w*)");
+                var type = declared.Groups[1].Value == "var" ? declared.Groups[2].Value : declared.Groups[1].Value;
+                if (peerless.Contains(type))
+                    offenders.Add($"{file} — SetName on {variable}, a {type}");
+            }
+        }
+
+        Assert.True(namesRead >= 500,
+            $"only {namesRead} accessible names were read across the app, so the name lookup has stopped matching.");
+        Assert.True(offenders.Count == 0,
+            "these names reach no screen reader: a Border or a panel has no automation peer, so UI Automation walks "
+            + "past it. Put the name on the control a person operates, make the element one (a Button, or a "
+            + "RadioButton for one of a set), or name the text that says the thing:\n  "
+            + string.Join("\n  ", offenders));
     }
 
     /// <summary>

@@ -27,6 +27,48 @@
     </Window.TaskbarItemInfo>
 
     <Window.Resources>
+        <!-- The Help and Appearance chips at the foot of the sidebar: real Buttons, so a screen reader finds each by
+             its name and can press it. They were focusable Borders, which WPF gives no automation peer, so Tab
+             landed on them and Narrator had nothing to read (#2785). The look, hover and focus are the Borders'
+             own: the chip's colours, the accent edge on hover and on keyboard focus, and the default focus
+             rectangle a Border was drawn with. ButtonBase's semibold weight, edge snapping and focus ring are
+             set back to what the Borders had, so the glyphs and edges draw as they did. -->
+        <Style x:Key="ShellChipButton" TargetType="Button" BasedOn="{StaticResource ButtonBase}">
+            <Setter Property="FontWeight" Value="Normal"/>
+            <Setter Property="SnapsToDevicePixels" Value="False"/>
+            <Setter Property="Width" Value="28"/>
+            <Setter Property="Height" Value="28"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="Background" Value="{DynamicResource Surface3}"/>
+            <Setter Property="BorderBrush" Value="{DynamicResource Border1}"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="FocusVisualStyle" Value="{DynamicResource {x:Static SystemParameters.FocusVisualStyleKey}}"/>
+            <!-- Enter as well as Space, as the Borders' own key handlers took both. A Button takes Enter by default;
+                 this pins it, as SidebarNavButton does, so a base style that turned Enter off would not reach the
+                 chips. -->
+            <Setter Property="KeyboardNavigation.AcceptsReturn" Value="True"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="Chip" CornerRadius="{StaticResource RadiusMd}"
+                                Background="{TemplateBinding Background}"
+                                BorderBrush="{TemplateBinding BorderBrush}"
+                                BorderThickness="{TemplateBinding BorderThickness}">
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Chip" Property="BorderBrush" Value="{DynamicResource Accent}"/>
+                            </Trigger>
+                            <Trigger Property="IsKeyboardFocused" Value="True">
+                                <Setter TargetName="Chip" Property="BorderBrush" Value="{DynamicResource Accent}"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
         <!-- Each leaf is a real Button so it exposes one invokable UIA peer and remains
              keyboard-operable without inheriting the app's command-button chrome. -->
         <Style x:Key="SidebarNavButton" TargetType="Button"
@@ -37,10 +79,13 @@
             <Setter Property="Padding" Value="0"/>
             <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
             <Setter Property="VerticalContentAlignment" Value="Center"/>
-            <!-- WPF's ButtonBase activates on Space, and on Enter ONLY when this attached property is
-                 set. In a list of navigation rows Enter is the key people reach for first — it is what
-                 opens a folder in Explorer and an entry in the Start menu — so without this the sidebar
-                 answered Space and silently ignored Enter. -->
+            <!-- Enter opens a row as Space does. In a list of navigation rows Enter is the key people reach for
+                 first: it opens a folder in Explorer and an entry in the Start menu. A Button already takes it,
+                 since WPF turns this attached property on for ButtonBase and off only for RadioButton and
+                 CheckBox, so the setter pins Enter rather than adding it: a base style that turned Enter off
+                 would not reach the rows. This comment used to say the opposite, that ButtonBase takes Enter
+                 only where the property is set; measured on .NET 10, a Button and a ToggleButton take it
+                 without it (#2785). -->
             <Setter Property="KeyboardNavigation.AcceptsReturn" Value="True"/>
             <Setter Property="Template">
                 <Setter.Value>
@@ -521,66 +566,23 @@
                              collapsed. So the help was there and unreachable: a confused user had to
                              expand a group they had no reason to open (#1640). This and F1 are the two
                              ways in that do not require knowing where to look.
-                             Same 28x28 Border construction as the Appearance chip beside it, including
-                             the explicit accessibility a Border needs and a Button would partly supply. -->
-                        <Border x:Name="HelpBtn" Width="28" Height="28" CornerRadius="{StaticResource RadiusMd}"
-                                Background="{DynamicResource Surface3}"
-                                BorderThickness="1" Cursor="Hand" MouseLeftButtonUp="HelpBtn_Click"
-                                KeyDown="HelpBtn_KeyDown"
-                                Focusable="True" KeyboardNavigation.IsTabStop="True"
+                             The same 28x28 chip as the Appearance one beside it (ShellChipButton). -->
+                        <Button x:Name="HelpBtn" Style="{StaticResource ShellChipButton}" Click="HelpBtn_Click"
                                 AutomationProperties.Name="Help and support"
                                 ToolTip="Help and support (F1) — version, release notes, report a problem, ask a question"
                                 Margin="0,0,6,0" VerticalAlignment="Center">
-                            <Border.Style>
-                                <Style TargetType="Border">
-                                    <!-- A setter, not a local value: a local BorderBrush outranks both triggers, so
-                                         neither the hover nor keyboard focus ever showed the accent border (#2610). -->
-                                    <Setter Property="BorderBrush" Value="{DynamicResource Border1}"/>
-                                    <Style.Triggers>
-                                        <Trigger Property="IsMouseOver" Value="True">
-                                            <Setter Property="BorderBrush" Value="{DynamicResource Accent}"/>
-                                        </Trigger>
-                                        <Trigger Property="IsKeyboardFocused" Value="True">
-                                            <Setter Property="BorderBrush" Value="{DynamicResource Accent}"/>
-                                        </Trigger>
-                                    </Style.Triggers>
-                                </Style>
-                            </Border.Style>
                             <TextBlock Text="&#xE897;" FontFamily="Segoe Fluent Icons,Segoe MDL2 Assets"
                                        FontSize="13" Foreground="{DynamicResource TextSecondary}"
                                        HorizontalAlignment="Center" VerticalAlignment="Center"/>
-                        </Border>
-                        <!-- Theme button — a Border rather than a Button (to keep the compact
-                             28x28 chip visual), so it needs explicit accessibility: a UIA name,
-                             a tab stop, keyboard focus, and Enter/Space activation.
-                             A Button would supply the peer and Space, but NOT Enter: ButtonBase
-                             honours Enter only where KeyboardNavigation.AcceptsReturn is set, which
-                             is why the nav rows set it explicitly. -->
-                        <Border x:Name="ThemeBtn" Width="28" Height="28" CornerRadius="{StaticResource RadiusMd}"
-                                Background="{DynamicResource Surface3}"
-                                BorderThickness="1" Cursor="Hand" MouseLeftButtonUp="ThemeBtn_Click"
-                                KeyDown="ThemeBtn_KeyDown"
-                                Focusable="True" KeyboardNavigation.IsTabStop="True"
+                        </Button>
+                        <!-- The Appearance chip, the only way into the theme popup. -->
+                        <Button x:Name="ThemeBtn" Style="{StaticResource ShellChipButton}" Click="ThemeBtn_Click"
                                 AutomationProperties.Name="Appearance"
                                 ToolTip="Appearance" VerticalAlignment="Center">
-                            <Border.Style>
-                                <Style TargetType="Border">
-                                    <!-- As on the help button beside it (#2610). -->
-                                    <Setter Property="BorderBrush" Value="{DynamicResource Border1}"/>
-                                    <Style.Triggers>
-                                        <Trigger Property="IsMouseOver" Value="True">
-                                            <Setter Property="BorderBrush" Value="{DynamicResource Accent}"/>
-                                        </Trigger>
-                                        <Trigger Property="IsKeyboardFocused" Value="True">
-                                            <Setter Property="BorderBrush" Value="{DynamicResource Accent}"/>
-                                        </Trigger>
-                                    </Style.Triggers>
-                                </Style>
-                            </Border.Style>
                             <TextBlock Text="&#xE790;" FontFamily="Segoe Fluent Icons,Segoe MDL2 Assets"
                                        FontSize="13" Foreground="{DynamicResource TextSecondary}"
                                        HorizontalAlignment="Center" VerticalAlignment="Center"/>
-                        </Border>
+                        </Button>
                         </StackPanel>
                     </Grid>
                     <!-- Theme popup -->
@@ -603,7 +605,6 @@
         <Border Grid.Column="1"
                 Background="{DynamicResource Surface0}"
                 AutomationProperties.AutomationId="ContentHost"
-                AutomationProperties.Name="ContentHost"
                 IsEnabled="{Binding Welcome.IsVisible, Converter={StaticResource BoolInvert}}">
             <Grid>
                 <Grid.RowDefinitions>

@@ -233,7 +233,9 @@ public sealed class ThemeSwitchColourTests : IDisposable
             InAWindow(new ThemePopup(panelTheme), panel =>
             {
                 panel.RaiseEvent(new RoutedEventArgs(FrameworkElement.LoadedEvent));
-                var cards = panel.PresetPanel.Children.OfType<Border>().ToList();
+                // Each card is a RadioButton drawn by the Border it carries (#2785), and the Border's edge is what
+                // takes the theme's colours.
+                var cards = panel.PresetPanel.Children.OfType<RadioButton>().ToList();
                 var chosen = cards.Single(c => (string)c.Tag == ThemeService.DefaultPresetId);
                 var other = cards.First(c => !ReferenceEquals(c, chosen));
                 var name = Logical(other).OfType<TextBlock>().Single(t => t.Text.Length > 0);
@@ -243,8 +245,8 @@ public sealed class ThemeSwitchColourTests : IDisposable
                     check: () =>
                     {
                         Painted(name.Foreground, "TextPrimary");
-                        Painted(chosen.BorderBrush, "Accent");
-                        Painted(other.BorderBrush, "Border1");
+                        Painted(((Border)chosen.Content).BorderBrush, "Accent");
+                        Painted(((Border)other.Content).BorderBrush, "Border1");
                     });
             });
         });

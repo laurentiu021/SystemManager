@@ -330,11 +330,9 @@ public partial class UiAutomationContractTests
             .Elements()
             .Single();
 
-        // A screen reader needs a name on the cell content, and a colour-blind sighted user needs
-        // the word rendered. The coloured dot may accompany them; it must not replace them.
-        Assert.Equal(
-            "{Binding SeverityLabel}",
-            (string?)cellRoot.Attribute("AutomationProperties.Name"));
+        // The word is rendered, so a colour-blind sighted user reads it and a screen reader reads it as the cell's
+        // text. The coloured dot may accompany it; it must not replace it. A name on the cell's panel reached
+        // no one, since a StackPanel has no automation peer (#2785).
         Assert.Contains(
             cellRoot.Descendants(Presentation + "TextBlock"),
             text => (string?)text.Attribute("Text") == "{Binding SeverityLabel}");

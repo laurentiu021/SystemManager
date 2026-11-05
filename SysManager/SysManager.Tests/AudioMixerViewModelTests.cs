@@ -1054,6 +1054,27 @@ public class AudioMixerViewModelTests
         Assert.Equal("AppB", row.DisplayName);
     }
 
+    [Fact]
+    public void ARowsMuteButton_IsNamedForWhatPressingItDoesNow_AndForItsApp()
+    {
+        // Only the glyph followed the state, so a muted app's button was still announced "Mute Spotify" (#2785).
+        var vm = NewVm(ServiceWith(Session("k", name: "Spotify")));
+        var row = vm.Sessions.Single();
+        Assert.Equal("Mute Spotify", row.MuteName);
+        List<string?> changed = [];
+        row.PropertyChanged += (_, e) => changed.Add(e.PropertyName);
+
+        vm.MergeInto([Session("k", name: "Spotify", muted: true)]);
+        Assert.Equal("Unmute Spotify", row.MuteName);
+        Assert.Contains(nameof(AudioSessionRowViewModel.MuteName), changed);
+
+        // The row kept for another app on the same session takes that app's name.
+        changed.Clear();
+        vm.MergeInto([Session("k", pid: 200, name: "AppB", muted: true)]);
+        Assert.Equal("Unmute AppB", row.MuteName);
+        Assert.Contains(nameof(AudioSessionRowViewModel.MuteName), changed);
+    }
+
     // ── Deterministic disposal ─────────────────────────────────────────────
 
     [Fact]

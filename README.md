@@ -307,6 +307,11 @@ plus the button on each Undo Changes row, which says before you press it that it
 cannot be pressed yet. An explanation on every button in the app would make it slower to navigate, not
 clearer.
 
+A control that changes with its state is named for what pressing it does now, so a muted app's button on Volume
+Control is announced "Unmute Spotify". A control on a list row names its row: each of the PATH editor's buttons says
+which folder it moves or removes, and a Browser Cleaner checkbox says whose data it ticks, as in "Select Cookies in
+Chrome (Work)".
+
 Every tab also reads out what it is doing as it works. The line that says so — "Scanning…",
 "Removed 1,204 files", "Scan complete." — is announced on all 60 tabs, at the bottom of most of them and
 beside the work on the rest, as are the SFC and DISM results when a system repair finishes and Deep Cleanup's

@@ -84,6 +84,22 @@ public class PcVolumeViewModelTests
     }
 
     [Fact]
+    public void TheMuteButton_IsNamedForWhatPressingItDoesNow()
+    {
+        // Only the glyph followed the state, so the button of a muted PC was still announced "Mute" (#2785).
+        var card = new Card();
+        card.Vm.ApplyUpdate(new PcVolumeInfo(0.38f, IsMuted: false));
+        Assert.Equal("Mute all sound on this PC", card.Vm.MuteName);
+        List<string?> changed = [];
+        card.Vm.PropertyChanged += (_, e) => changed.Add(e.PropertyName);
+
+        card.Vm.ApplyUpdate(new PcVolumeInfo(0.38f, IsMuted: true));
+
+        Assert.Equal("Unmute all sound on this PC", card.Vm.MuteName);
+        Assert.Contains(nameof(PcVolumeViewModel.MuteName), changed);
+    }
+
+    [Fact]
     public void ARefreshThatReadNothing_SaysThereIsNoDevice_AndDarkensTheMeter()
     {
         var card = new Card();

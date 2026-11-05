@@ -150,7 +150,7 @@
                         <Button Grid.Column="2" Style="{StaticResource GhostButton}"
                                 Margin="14,0,0,0" Padding="10,6" VerticalAlignment="Center"
                                 Command="{Binding ToggleMuteCommand}"
-                                AutomationProperties.Name="Mute all sound on this PC">
+                                AutomationProperties.Name="{Binding MuteName}" ToolTip="{Binding MuteName}">
                             <TextBlock FontFamily="Segoe Fluent Icons,Segoe MDL2 Assets" FontSize="15"
                                        Style="{StaticResource MuteGlyph}"/>
                         </Button>
@@ -308,7 +308,8 @@
                                         <Button Grid.Column="2" Style="{StaticResource GhostButton}"
                                                 Margin="14,0,0,0" Padding="10,6" VerticalAlignment="Center"
                                                 Command="{Binding ToggleMuteCommand}"
-                                                AutomationProperties.Name="{Binding DisplayName, StringFormat='Mute {0}'}">
+                                                AutomationProperties.Name="{Binding MuteName}"
+                                                ToolTip="{Binding MuteName}">
                                             <TextBlock FontFamily="Segoe Fluent Icons,Segoe MDL2 Assets" FontSize="15"
                                                        Style="{StaticResource MuteGlyph}"/>
                                         </Button>

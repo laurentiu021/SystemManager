@@ -10,6 +10,22 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.136.107] - 2026-11-05
+
+**Screen readers hear "Unmute" on a muted app's button on Volume Control, and the buttons and checkboxes on a list row say which row they act on.**
+
+### Fixed
+- Volume Control's mute buttons were announced as "Mute Spotify" and "Mute all sound on this PC" whether the sound was
+  muted or not, since only the glyph changed with the state. Each is named, and tipped, for what pressing it does now:
+  "Unmute Spotify" while Spotify is muted. Since the per-app mixer first shipped, in 1.52.38, and the This PC card,
+  in 1.121.0.
+- Every directory's buttons in the PATH editor on Environment Variables were announced "Move directory up", "Move
+  directory down" and "Remove directory", so tabbing through a long PATH gave the same three names on every row. Each
+  names its directory now, as in "Move C:\Tools up". Since 1.22.0.
+- Browser Cleaner's checkboxes were announced "Select Cookies" for every browser and profile, since all of them have
+  the same four categories. Each says whose data it ticks now: "Select Cookies in Chrome (Work)". Since 1.31.0.
+- A test refuses a button on a list row whose name is the same on every row, as it already did for a table row.
+
 ## [1.136.106] - 2026-11-05
 
 **Importing a profile asks about the settings it will overwrite, by SysManager's own names for them, and says how many sections it will skip.**

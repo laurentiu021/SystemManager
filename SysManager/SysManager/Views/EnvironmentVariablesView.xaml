@@ -207,17 +207,17 @@
                                                 <Button Content="&#xE74A;" FontFamily="Segoe Fluent Icons,Segoe MDL2 Assets"
                                                         Command="{Binding DataContext.MoveDirectoryUpCommand, RelativeSource={RelativeSource AncestorType=ItemsControl}}"
                                                         CommandParameter="{Binding}"
-                                                        AutomationProperties.Name="Move directory up"
+                                                        AutomationProperties.Name="{Binding Directory, StringFormat='Move {0} up'}"
                                                         Style="{StaticResource GhostButton}" Padding="6,2"/>
                                                 <Button Content="&#xE74B;" FontFamily="Segoe Fluent Icons,Segoe MDL2 Assets"
                                                         Command="{Binding DataContext.MoveDirectoryDownCommand, RelativeSource={RelativeSource AncestorType=ItemsControl}}"
                                                         CommandParameter="{Binding}"
-                                                        AutomationProperties.Name="Move directory down"
+                                                        AutomationProperties.Name="{Binding Directory, StringFormat='Move {0} down'}"
                                                         Style="{StaticResource GhostButton}" Padding="6,2"/>
                                                 <Button Content="&#xE711;" FontFamily="Segoe Fluent Icons,Segoe MDL2 Assets"
                                                         Command="{Binding DataContext.RemoveDirectoryCommand, RelativeSource={RelativeSource AncestorType=ItemsControl}}"
                                                         CommandParameter="{Binding}"
-                                                        AutomationProperties.Name="Remove directory"
+                                                        AutomationProperties.Name="{Binding Directory, StringFormat='Remove {0}'}"
                                                         Style="{StaticResource GhostButton}" Padding="6,2"/>
                                             </StackPanel>
                                         </Grid>

@@ -37,4 +37,11 @@ public sealed partial class BrowserCleanupItem : ObservableObject, Helpers.ISele
     public bool IsSensitive { get; init; }
 
     public string SizeDisplay => FormatHelper.FormatSize(SizeBytes);
+
+    /// <summary>
+    /// The row's checkbox as a screen reader says it: the category and whose it is, "Select Cookies in Chrome (Work)".
+    /// Every browser and profile has the same four categories, so the category alone sounded the same on all of them,
+    /// for the one that signs you out as much as the rest (#2785).
+    /// </summary>
+    public string SelectName => $"Select {Category} in {Browser}";
 }

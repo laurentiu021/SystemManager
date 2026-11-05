@@ -248,6 +248,26 @@ public sealed class BrowserCleanerViewUiTests : IDisposable
         });
     }
 
+    [Fact]
+    public async Task EachRowsCheckbox_SaysWhoseDataItTicks()
+    {
+        // Every browser and profile has the same four categories, so "Select Cookies" was said on all of them (#2785).
+        var vm = await VmAsync(new FakeExtensions(), look: false);
+        vm.Section = BrowserCleanerSection.BrowsingData;
+        static BrowserCleanupItem Cookies(string browser) =>
+            new() { Browser = browser, Category = "Cookies", Description = "", Paths = [] };
+        vm.Items.Add(Cookies("Chrome"));
+        vm.Items.Add(Cookies("Chrome (Work)"));
+
+        StaHelper.Run(() =>
+        {
+            var grid = Named<DataGrid>(Laid(vm), "Browser data categories");
+
+            Assert.Equal(["Select Cookies in Chrome", "Select Cookies in Chrome (Work)"],
+                Descendants<CheckBox>(grid).Select(AutomationProperties.GetName));
+        });
+    }
+
     /// <summary>What a screen reader is told each item of <paramref name="list"/> is called.</summary>
     private static List<string> Names(ItemsControl list) =>
         [.. (UIElementAutomationPeer.CreatePeerForElement(list).GetChildren() ?? []).Select(p => p.GetName())];

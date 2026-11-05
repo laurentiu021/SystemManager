@@ -82,4 +82,71 @@ public class WindowsUpdateServiceTests
     public void AnyOtherOverallCode_StandsWithoutAskingTheUpdate(int overall)
         => Assert.Equal(overall, WindowsUpdateService.EffectiveResultCode(overall,
             () => throw new InvalidOperationException("the update's own result must not be read")));
+
+    // ---------- the pill from what Windows Update says the update is, in any language (#2791) ----------
+    //
+    // Public, because the dynamic calls that read them are made from the app's own assembly.
+
+    /// <summary>A category as ClassifyCategory reads one off a WUA update.</summary>
+    public sealed class FakeCategory(string name, string categoryId)
+    {
+        public string Name { get; } = name;
+        public string CategoryID { get; } = categoryId;
+    }
+
+    /// <summary>A WUA update's Categories collection.</summary>
+    public sealed class FakeCategories(FakeCategory[] items)
+    {
+        public int Count => items.Length;
+        public FakeCategory Item(int index) => items[index];
+    }
+
+    /// <summary>A WUA update, as far as ClassifyCategory reads one: its type and its categories.</summary>
+    public sealed class FakeUpdate(int type, params FakeCategory[] categories)
+    {
+        public int Type { get; } = type;
+        public FakeCategories Categories { get; } = new(categories);
+    }
+
+    private const int SoftwareUpdate = 1;
+    private const int DriverUpdate = 2;
+
+    /// <summary>The product category every update also carries, with an ID that names no classification.</summary>
+    private static FakeCategory Product => new("A product", "00000000-0000-0000-0000-000000000001");
+
+    [Theory]
+    // German Windows: the driver classification is "Treiber", and a driver's title has no English word in it.
+    [InlineData("Intel Corporation - Chipsatz - 10.1.19913.8607", "Treiber", WindowsUpdateService.DriversClassification,
+        "Driver")]
+    // French Windows: a feature upgrade's classification is not called "Upgrades" either.
+    [InlineData("Windows 11, version 25H2", "Mises à niveau", WindowsUpdateService.UpgradesClassification,
+        "Feature upgrade")]
+    // Romanian Windows: a definition update whose title does not name Defender.
+    [InlineData("Actualizare de definiții - 1.441.10.0", "Actualizări de definiții",
+        WindowsUpdateService.DefinitionUpdatesClassification, "Defender")]
+    public void TheClassificationsId_DecidesThePill_WhateverItIsCalled(
+        string title, string categoryName, string categoryId, string expected)
+    {
+        var update = new FakeUpdate(SoftwareUpdate, Product,
+            new FakeCategory(categoryName, categoryId));
+
+        Assert.Equal(expected, WindowsUpdateService.ClassifyCategory(title, update));
+    }
+
+    [Fact]
+    public void ADriverUpdate_IsADriver_EvenWithNoClassificationToGoBy()
+    {
+        var update = new FakeUpdate(DriverUpdate, Product);
+
+        Assert.Equal("Driver", WindowsUpdateService.ClassifyCategory("Realtek - Extension - 10.0.26100.1", update));
+    }
+
+    [Fact]
+    public void AnUpdateWithNothingToGoBy_FallsBackToItsTitle()
+    {
+        var update = new FakeUpdate(SoftwareUpdate, Product);
+
+        Assert.Equal("Cumulative",
+            WindowsUpdateService.ClassifyCategory("2026-10 Cumulative Update for Windows 11", update));
+    }
 }

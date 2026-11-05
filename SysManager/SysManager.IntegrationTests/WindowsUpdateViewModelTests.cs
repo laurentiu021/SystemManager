@@ -2,8 +2,11 @@
 // Author: laurentiu021 · https://github.com/laurentiu021/SystemManager
 // License: MIT
 
+using System.Collections.Concurrent;
 using System.Reflection;
+using System.Text.Json;
 using SysManager.Helpers;
+using SysManager.Models;
 using SysManager.Services;
 using SysManager.ViewModels;
 
@@ -267,5 +270,49 @@ public class WindowsUpdateViewModelTests
 
         del!.DynamicInvoke(75);
         Assert.Equal(75, vm.Progress);
+    }
+
+    /// <summary>
+    /// The history's KB column takes the entry's own KB, and the KB number in its title when that is empty (#2791).
+    /// </summary>
+    /// <remarks>
+    /// Run on entries shaped like PSWindowsUpdate's: on version 2.2.1.5 a history entry carries its number in
+    /// <c>KB</c> and leaves <c>KBArticleIDs</c> empty, so the column, which read <c>KBArticleIDs</c>, was blank on
+    /// every row. Real Windows PowerShell reads the columns, as it does for the History view, without the module.
+    /// </remarks>
+    [Fact]
+    public async Task TheHistoryColumns_TakeTheEntrysKb_ThenTheOneInItsTitle()
+    {
+        const string Entries = """
+            $hist = @(
+                [pscustomobject]@{
+                    Title = 'Update for Windows Security platform - KB5007651 (Version 10.0.29510.1001)'
+                    KB = 'KB5007651'; KBArticleIDs = @(); Result = 'Succeeded'; Date = [datetime]'2026-10-14'
+                },
+                [pscustomobject]@{
+                    Title = 'Security Intelligence Update for Microsoft Defender Antivirus - KB2267602 (Version 1.441)'
+                    KB = ''; KBArticleIDs = @(); Result = 'Succeeded'; Date = [datetime]'2026-10-15'
+                },
+                [pscustomobject]@{
+                    Title = 'Intel - System - 10.1.1.44'
+                    KB = $null; KBArticleIDs = @(); Result = 'Failed'; Date = $null
+                }
+            )
+            """;
+        using var runner = new PowerShellRunner();
+        var output = new ConcurrentQueue<string>();
+        runner.LineReceived += line =>
+        {
+            if (line.Kind == OutputKind.Output) output.Enqueue(line.Text);
+        };
+
+        var exitCode = await runner.RunScriptViaPwshAsync(
+            Entries + "\n" + WindowsUpdateViewModel.PsWindowsUpdateHistoryColumns);
+
+        Assert.Equal(0, exitCode);
+        using var json = JsonDocument.Parse(string.Concat(output));
+        Assert.Equal(
+            ["KB5007651", "KB2267602", ""],
+            json.RootElement.EnumerateArray().Select(entry => entry.GetProperty("KB").GetString()));
     }
 }

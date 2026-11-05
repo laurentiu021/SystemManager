@@ -10,6 +10,21 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.136.118] - 2026-11-05
+
+**On Windows Update, drivers and feature upgrades get their pills on Windows in any language, and the history's KB column is filled in.**
+
+### Fixed
+- The Driver and Feature upgrade pills were decided by the English names of Windows Update's classifications and by
+  English words in the title. Windows Update names both in the display language, so on German, French or Romanian
+  Windows a driver or a feature upgrade got the plain "Update" pill, and, ticked like every other row, looked like
+  any other update. The pill now comes first from the classification's ID and the update's type, which are the same
+  in every language. Since the tab started reading Windows Update directly, in 1.18.0.
+- Update history's KB column was empty on every row. It read `KBArticleIDs`, which only an update in a scan has;
+  PSWindowsUpdate keeps a history entry's number in `KB`. It reads that now, and the KB number in the title when
+  that is empty. On my PC, 21 of the 30 entries now show their number. Since the history first had a table, in
+  0.28.0.
+
 ## [1.136.117] - 2026-11-05
 
 **Process Manager and Startup Manager call Windows 11's own Notepad, Paint, Terminal and Widgets part of Windows again, and Why is it slow? no longer calls a copy of a Windows program part of Windows.**

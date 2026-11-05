@@ -829,7 +829,8 @@ Across the tab:
   your PC, is left out of the scan and the install, so it is never ticked or installed again
 - Categorized with colored pills: Security, Cumulative, Defender, Driver,
   Servicing, .NET, Feature upgrade, and Update for everything else — click headers to sort,
-  with Size in the order of the download size
+  with Size in the order of the download size. Driver, Feature upgrade and Defender come from what
+  Windows Update says the update is, so they show on Windows in any language
 - Per-update checkbox selection with Select all / Deselect all — every update the scan lists
   starts ticked, optional drivers and feature upgrades included, so untick what you don't want
   before Install selected. **What you untick stays unticked**: listing again, with F5 or after a
@@ -846,7 +847,7 @@ Across the tab:
   `Installed X/Y. Failed: Z. Not applied: W.`
 - Reboot detection — toast notification if any update requires reboot
 - Pending-reboot check, the same one the Dashboard's alert makes, and update history (last 30 — via
-  PSWindowsUpdate)
+  PSWindowsUpdate), with each entry's KB number
 - Admin banner with a one-click "Run as administrator" relaunch. Installing needs it, and so
   does changing when updates are installed — deferring, pausing or restoring the default;
   without it the tab says so before asking you to approve anything

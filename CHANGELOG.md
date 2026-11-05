@@ -10,6 +10,23 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.136.106] - 2026-11-05
+
+**Importing a profile asks about the settings it will overwrite, by SysManager's own names for them, and says how many sections it will skip.**
+
+### Fixed
+- The import confirmation listed each section by the name written in the profile, but the import writes by the
+  section's key. A shared or hand-edited profile could show "Theme & appearance" for the section that lets the Bulk
+  Installer fetch app icons from the web, an empty line for a section with no name, and a section SysManager does not
+  know as if it would be imported, though the import skips it. Each section is listed by SysManager's own name for it
+  now, the ones the import skips are counted but not named, and the status afterwards counts only the sections the
+  confirmation listed. Since Profile Export / Import first shipped, in 1.28.0.
+- The confirmation's "Exported … by SysManager v…" line showed the version as the file wrote it, so a profile could
+  put text of its own there. It shows only a version number read from the file now, and leaves out a date or version
+  the file does not carry instead of showing "0001-01-01" or a bare "v". Since 1.28.0.
+- A profile with no section SysManager knows asked to be imported and then imported nothing. It says there is nothing
+  to import now, without asking.
+
 ## [1.136.105] - 2026-11-05
 
 **Uninstaller removes apps installed on another drive or for one user in Roaming AppData, and Cancel stops the search for what an uninstall left behind.**

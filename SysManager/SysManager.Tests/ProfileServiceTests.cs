@@ -176,6 +176,39 @@ public class ProfileServiceTests : IDisposable
         Assert.True(File.Exists(Path.Combine(_dir, "theme.json")));
     }
 
+    // ---------- DisplayNameOf: what an import confirmation calls each section (#2784) ----------
+
+    [Fact]
+    public void DisplayNameOf_NamesEverySectionAsTheExportListsIt()
+    {
+        // Every catalog file planted, and a protection on so the privacy section is offered too.
+        foreach (var entry in CatalogEntries())
+            WriteConfig(Assert.IsType<string>(Assert.IsAssignableFrom<ITuple>(entry)[2]), "{}");
+        var sections = new ProfileService(FakePrivacy.Returning(FakePrivacy.Toggle("tips", on: true)), _gaming, _dir)
+            .AvailableSections();
+
+        Assert.True(sections.Count >= 10, $"Only {sections.Count} sections were offered, so their names prove little.");
+        Assert.All(sections, section => Assert.Equal(section.DisplayName, ProfileService.DisplayNameOf(section.Key)));
+    }
+
+    /// <summary>
+    /// A key has a name exactly when an import writes its section, so the confirmation lists what lands and
+    /// nothing else. Keys match exactly, as <see cref="ProfileService.ApplySections"/> matches them.
+    /// </summary>
+    [Theory]
+    [InlineData("theme")]
+    [InlineData("Theme")]
+    [InlineData("THEME")]
+    [InlineData(" theme")]
+    [InlineData("rogue")]
+    [InlineData("")]
+    public void DisplayNameOf_NamesAKey_ExactlyWhenAnImportWritesIt(string key)
+    {
+        var applied = _svc.ApplySections([new ConfigSection(key, "Theme & appearance", "theme.json", "{}")]);
+
+        Assert.Equal(applied == 1, ProfileService.DisplayNameOf(key) is not null);
+    }
+
     [Fact]
     public void Theme_UsesRoamingBase_Speedtest_UsesLocalBase()
     {
@@ -315,6 +348,21 @@ public class ProfileServiceTests : IDisposable
     }
 
     /// <summary>
+    /// The catalog's entries, read off the private field itself, each a (Key, DisplayName, FileName, Base) tuple.
+    /// </summary>
+    private static Array CatalogEntries()
+    {
+        var field = typeof(ProfileService).GetField("Catalog", BindingFlags.NonPublic | BindingFlags.Static);
+        Assert.True(field is not null,
+            "ProfileService has no Catalog field. If the section list moved, point CatalogEntries at it: the "
+            + "uniqueness of a section key is load-bearing for import sanitising and for tick carry-over.");
+
+        var entries = field!.GetValue(null) as Array;
+        Assert.True(entries is { Length: > 0 }, "The catalog is empty, so this guard would measure nothing.");
+        return entries!;
+    }
+
+    /// <summary>
     /// No two catalog entries may share a Key or a FileName.
     /// </summary>
     /// <remarks>
@@ -331,17 +379,11 @@ public class ProfileServiceTests : IDisposable
     [Fact]
     public void TheCatalog_HasNoDuplicateKeyOrFileName()
     {
-        var field = typeof(ProfileService).GetField("Catalog", BindingFlags.NonPublic | BindingFlags.Static);
-        Assert.True(field is not null,
-            "ProfileService has no Catalog field. If the section list moved, point this guard at it — the "
-            + "uniqueness of a section key is load-bearing for import sanitising and for tick carry-over.");
-
-        var entries = field!.GetValue(null) as Array;
-        Assert.True(entries is { Length: > 0 }, "The catalog is empty, so this guard would measure nothing.");
+        var entries = CatalogEntries();
 
         // Read positionally through ITuple: the tuple carries a private enum, so its type is not nameable
         // here, and the field order (Key, DisplayName, FileName, …) is what ProfileService itself destructures.
-        var keys = new List<string>(entries!.Length);
+        var keys = new List<string>(entries.Length);
         var fileNames = new List<string>(entries.Length);
         foreach (var entry in entries)
         {

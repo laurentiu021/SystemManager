@@ -138,6 +138,22 @@ public class PerformanceViewModelTests
     }
 
     [Fact]
+    public async Task TheSummary_SaysEachSettingInTheCardsWords()
+    {
+        // The line said "ON" and "OFF" above a card that said "Enabled: False" (#2786). Both take the profile's words
+        // now. Whatever this PC's settings are, the line reads one of these.
+        using var vm = NewVm(completeInitialization: true);
+        await vm.InitializationComplete;
+
+        Assert.Matches(
+            "^Active plan: .* · Visual effects: (Reduced|Normal) · Game Mode: (On|Off) · "
+            + "Xbox Game Bar: (On|Off|Partly on)$",
+            vm.Summary);
+        Assert.EndsWith($"Game Mode: {vm.Profile.GameModeDisplay} · Xbox Game Bar: {vm.Profile.XboxGameBarState}",
+            vm.Summary, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void Constructor_NeedsReboot_DefaultFalse()
     {
         var vm = NewVm();

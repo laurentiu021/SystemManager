@@ -175,4 +175,63 @@ public class PerformanceProfileTests
 
         Assert.Equal((disabled, partlyOn), (p.XboxGameBarDisabled, p.XboxGameBarPartlyOn));
     }
+
+    // ---------- Current State says each setting in words (#2786) ----------
+    // The card bound the raw values into fixed prefixes: "Reduced: True", "Enabled: False", and for a Game Bar that is
+    // on, "Disabled: False".
+
+    [Theory]
+    [InlineData(true, "Reduced")]
+    [InlineData(false, "Normal")]
+    public void VisualEffects_AreSaidAsReducedOrNormal(bool reduced, string said) =>
+        Assert.Equal(said, new PerformanceProfile { VisualEffectsReduced = reduced }.VisualEffectsDisplay);
+
+    [Theory]
+    [InlineData(true, "On")]
+    [InlineData(false, "Off")]
+    public void GameMode_IsSaidAsOnOrOff(bool enabled, string said) =>
+        Assert.Equal(said, new PerformanceProfile { GameModeEnabled = enabled }.GameModeDisplay);
+
+    [Theory]
+    [InlineData(true, true, "On", "On")]
+    [InlineData(false, false, "Off", "Off")]
+    [InlineData(true, false, "Partly on", "Partly on: the overlay is on, game recording is off")]
+    [InlineData(false, true, "Partly on", "Partly on: game recording is on, the overlay is off")]
+    public void TheXboxGameBar_SaysWhichPartIsOn(bool overlay, bool recording, string state, string said)
+    {
+        var p = new PerformanceProfile { XboxGameBarOn = overlay, XboxGameDvrOn = recording };
+
+        Assert.Equal((state, said), (p.XboxGameBarState, p.XboxGameBarDisplay));
+    }
+
+    [Theory]
+    [InlineData(true, true, "On")]
+    [InlineData(true, false, "Off")]
+    [InlineData(false, true, "No NVIDIA GPU detected")]
+    [InlineData(false, false, "No NVIDIA GPU detected")]
+    public void TheGpuSetting_IsOnOrOff_OnlyWithAnNvidiaCard(bool nvidia, bool maximum, string said) =>
+        Assert.Equal(said,
+            new PerformanceProfile { HasNvidiaGpu = nvidia, GpuMaxPerformance = maximum }.GpuMaxPerformanceDisplay);
+
+    [Fact]
+    public void EachSettingsWords_ChangeWithIt()
+    {
+        var p = new PerformanceProfile();
+        var changed = p.RecordPropertyChanges();
+
+        p.VisualEffectsReduced = true;
+        p.GameModeEnabled = true;
+        p.XboxGameBarOn = false;
+        p.XboxGameDvrOn = false;
+        p.HasNvidiaGpu = true;
+        p.GpuMaxPerformance = true;
+
+        Assert.Equal(1, changed.Count(n => n == nameof(PerformanceProfile.VisualEffectsDisplay)));
+        Assert.Equal(1, changed.Count(n => n == nameof(PerformanceProfile.GameModeDisplay)));
+        Assert.Equal(2, changed.Count(n => n == nameof(PerformanceProfile.XboxGameBarState)));
+        Assert.Equal(2, changed.Count(n => n == nameof(PerformanceProfile.XboxGameBarDisplay)));
+        Assert.Equal(2, changed.Count(n => n == nameof(PerformanceProfile.GpuMaxPerformanceDisplay)));
+        Assert.Equal(("Reduced", "On", "Off", "On"),
+            (p.VisualEffectsDisplay, p.GameModeDisplay, p.XboxGameBarDisplay, p.GpuMaxPerformanceDisplay));
+    }
 }

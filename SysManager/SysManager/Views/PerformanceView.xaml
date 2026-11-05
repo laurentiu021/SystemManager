@@ -262,43 +262,39 @@
                                 <RowDefinition Height="Auto"/>
                                 <RowDefinition Height="Auto"/>
                                 <RowDefinition Height="Auto"/>
-                                <RowDefinition Height="Auto"/>
                             </Grid.RowDefinitions>
 
+                            <!-- Each setting in words the profile chooses, not a bool through a format: these read
+                                 "Reduced: True" and, for a Game Bar that is on, "Disabled: False" (#2786). The plan's
+                                 GUID had a row of its own, which told the person using this tab nothing. -->
                             <TextBlock Grid.Row="0" Grid.Column="0" Text="Active power plan"
                                        Style="{StaticResource Subtle}" Margin="0,0,0,8"/>
                             <TextBlock Grid.Row="0" Grid.Column="1"
                                        Text="{Binding Profile.ActivePlanName}" Style="{StaticResource Body}" Margin="0,0,0,8"/>
 
-                            <TextBlock Grid.Row="1" Grid.Column="0" Text="Plan GUID"
+                            <TextBlock Grid.Row="1" Grid.Column="0" Text="Visual effects"
                                        Style="{StaticResource Subtle}" Margin="0,0,0,8"/>
-                            <TextBlock Grid.Row="1" Grid.Column="1"
-                                       Text="{Binding Profile.ActivePlanGuid}" Style="{StaticResource Body}"
-                                       TextTrimming="CharacterEllipsis" Margin="0,0,0,8"/>
+                            <TextBlock Grid.Row="1" Grid.Column="1" Margin="0,0,0,8"
+                                       Text="{Binding Profile.VisualEffectsDisplay}" Style="{StaticResource Body}"/>
 
-                            <TextBlock Grid.Row="2" Grid.Column="0" Text="Visual effects"
+                            <TextBlock Grid.Row="2" Grid.Column="0" Text="Game Mode"
                                        Style="{StaticResource Subtle}" Margin="0,0,0,8"/>
                             <TextBlock Grid.Row="2" Grid.Column="1" Margin="0,0,0,8"
-                                       Text="{Binding Profile.VisualEffectsReduced, StringFormat='Reduced: {0}'}" Style="{StaticResource Body}"/>
+                                       Text="{Binding Profile.GameModeDisplay}" Style="{StaticResource Body}"/>
 
-                            <TextBlock Grid.Row="3" Grid.Column="0" Text="Game Mode"
+                            <TextBlock Grid.Row="3" Grid.Column="0" Text="Xbox Game Bar"
                                        Style="{StaticResource Subtle}" Margin="0,0,0,8"/>
-                            <TextBlock Grid.Row="3" Grid.Column="1" Margin="0,0,0,8"
-                                       Text="{Binding Profile.GameModeEnabled, StringFormat='Enabled: {0}'}" Style="{StaticResource Body}"/>
+                            <TextBlock Grid.Row="3" Grid.Column="1" Margin="0,0,0,8" TextWrapping="Wrap"
+                                       Text="{Binding Profile.XboxGameBarDisplay}" Style="{StaticResource Body}"/>
 
-                            <TextBlock Grid.Row="4" Grid.Column="0" Text="Xbox Game Bar"
+                            <TextBlock Grid.Row="4" Grid.Column="0" Text="GPU max performance"
                                        Style="{StaticResource Subtle}" Margin="0,0,0,8"/>
                             <TextBlock Grid.Row="4" Grid.Column="1" Margin="0,0,0,8"
-                                       Text="{Binding Profile.XboxGameBarDisabled, StringFormat='Disabled: {0}'}" Style="{StaticResource Body}"/>
+                                       Text="{Binding Profile.GpuMaxPerformanceDisplay}" Style="{StaticResource Body}"/>
 
-                            <TextBlock Grid.Row="5" Grid.Column="0" Text="GPU max performance"
+                            <TextBlock Grid.Row="5" Grid.Column="0" Text="Processor min state"
                                        Style="{StaticResource Subtle}" Margin="0,0,0,8"/>
-                            <TextBlock Grid.Row="5" Grid.Column="1" Margin="0,0,0,8"
-                                       Text="{Binding Profile.GpuMaxPerformance, StringFormat='Enabled: {0}'}" Style="{StaticResource Body}"/>
-
-                            <TextBlock Grid.Row="6" Grid.Column="0" Text="Processor min state"
-                                       Style="{StaticResource Subtle}" Margin="0,0,0,8"/>
-                            <TextBlock Style="{StaticResource Body}" Grid.Row="6" Grid.Column="1" Margin="0,0,0,8">
+                            <TextBlock Style="{StaticResource Body}" Grid.Row="5" Grid.Column="1" Margin="0,0,0,8">
                                 <Run Text="{Binding Profile.ProcessorMinPercent, Mode=OneWay}"/><Run Text="%"/>
                             </TextBlock>
                         </Grid>

@@ -35,6 +35,9 @@ public sealed record MemoryModule(
     uint ConfiguredSpeedMHz,
     string PartNumber)
 {
+    /// <summary>What a screen reader calls the grid row, rather than the record's fields (#2785).</summary>
+    public override string ToString() => Slot;
+
     /// <summary>
     /// True when the module is running below its rated speed and both figures are known — the
     /// condition worth telling the user about.
@@ -51,7 +54,11 @@ public sealed record DiskInfo(
     string HealthStatus,
     string OperationalStatus,
     double? TemperatureC,
-    int? WearPercent);
+    int? WearPercent)
+{
+    /// <summary>What a screen reader calls the grid row, rather than the record's fields (#2785).</summary>
+    public override string ToString() => FriendlyName;
+}
 
 public sealed record CpuInfo(
     string Name,

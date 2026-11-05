@@ -11,6 +11,9 @@ namespace SysManager.Models;
 /// </summary>
 public sealed partial class ServiceEntry : ObservableObject
 {
+    /// <summary>What a screen reader calls the grid row, rather than the class's type name (#2785).</summary>
+    public override string ToString() => DisplayName;
+
     public string Name { get; init; } = "";
     public string DisplayName { get; init; } = "";
     public string Description { get; init; } = "";

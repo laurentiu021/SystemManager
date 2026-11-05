@@ -10,6 +10,18 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.136.109] - 2026-11-05
+
+**A screen reader names each row of every table by what it is, such as the app, the service or the file, instead of by the program's internal type name.**
+
+### Fixed
+- Every row of every table in the app, 35 tables on 31 tabs, was announced by its type, as in
+  "SysManager.Models.InstalledApp" for a row on Uninstaller, since a row with no name of its own takes its item's.
+  Each row is announced by what it is: the app, service, driver, task, update, feature, file or setting by
+  its name, a hosts entry by its host and address, a process by its name and ID, a speed test by its time and download
+  speed, and an event by its severity and message. Since the first release, 0.3.0.
+- The test that holds list entries to having words of their own checks every table's rows as well.
+
 ## [1.136.108] - 2026-11-05
 
 **A screen reader reads each line of a tab's live output, and each entry of a picker, by the words on it.**

@@ -17,6 +17,9 @@ public sealed record RestorePoint(
     string RestorePointType,
     string EventType)
 {
+    /// <summary>What a screen reader calls the grid row, rather than the record's fields (#2785).</summary>
+    public override string ToString() => Description;
+
     /// <summary>Human-readable creation timestamp for the grid.</summary>
     public string CreatedDisplay => CreationTime.ToString("yyyy-MM-dd HH:mm", CultureInfo.InvariantCulture);
 

@@ -8,6 +8,9 @@ namespace SysManager.Models;
 
 public sealed partial class AppPackage : ObservableObject, Helpers.ISelectableRow
 {
+    /// <summary>What a screen reader calls the grid row, rather than the class's type name (#2785).</summary>
+    public override string ToString() => Name;
+
     [ObservableProperty] private bool _isSelected = true;
     [ObservableProperty] private string _name = string.Empty;
     [ObservableProperty] private string _id = string.Empty;

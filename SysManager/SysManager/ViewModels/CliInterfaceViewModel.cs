@@ -19,7 +19,11 @@ namespace SysManager.ViewModels;
 /// </summary>
 public sealed partial class CliInterfaceViewModel : ViewModelBase
 {
-    public sealed record CommandRow(string Flags, string Description);
+    public sealed record CommandRow(string Flags, string Description)
+    {
+        /// <summary>What a screen reader calls the grid row, rather than the record's fields (#2785).</summary>
+        public override string ToString() => Flags;
+    }
 
     public BulkObservableCollection<CommandRow> Commands { get; } = new();
 

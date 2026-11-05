@@ -11,6 +11,9 @@ namespace SysManager.Models;
 /// </summary>
 public sealed partial class WindowsFeature : ObservableObject
 {
+    /// <summary>What a screen reader calls the grid row, rather than the class's type name (#2785).</summary>
+    public override string ToString() => DisplayName;
+
     [ObservableProperty] private string _name = "";
     [ObservableProperty] private string _displayName = "";
     [ObservableProperty] private bool _isEnabled;

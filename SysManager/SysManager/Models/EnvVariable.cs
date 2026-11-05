@@ -23,6 +23,9 @@ public enum EnvVarScope
 /// </summary>
 public sealed partial class EnvVariable : ObservableObject
 {
+    /// <summary>What a screen reader calls the grid row, rather than the class's type name (#2785).</summary>
+    public override string ToString() => $"{Name}, {ScopeLabel}";
+
     [ObservableProperty] private string _value = "";
 
     public required string Name { get; init; }

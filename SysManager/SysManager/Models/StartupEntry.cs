@@ -14,6 +14,9 @@ namespace SysManager.Models;
 /// </summary>
 public sealed partial class StartupEntry : ObservableObject
 {
+    /// <summary>What a screen reader calls the grid row, rather than the class's type name (#2785).</summary>
+    public override string ToString() => Name;
+
     [ObservableProperty] private string _name = "";
     [ObservableProperty] private string _command = "";
     [ObservableProperty] private string _location = "";      // e.g. "HKCU\...\Run"

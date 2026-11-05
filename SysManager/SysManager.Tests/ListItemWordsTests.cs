@@ -73,6 +73,36 @@ public class ListItemWordsTests
     }
 
     [Fact]
+    public void AGridRow_IsWhatItIsCalled_NotItsType()
+    {
+        // Every grid row was announced as its type, "SysManager.Models.InstalledApp" (#2785).
+        Assert.Equal("7-Zip 24.08 (x64)", new InstalledApp { Name = "7-Zip 24.08 (x64)" }.ToString());
+        Assert.Equal("chrome (1234)", new ProcessEntry { Name = "chrome", Pid = 1234 }.ToString());
+        Assert.Equal("Hop 3, 10.0.0.1", new TracerouteHop { HopNumber = 3, Address = "10.0.0.1" }.ToString());
+        Assert.Equal("Cookies in Chrome (Work)",
+            new BrowserCleanupItem { Browser = "Chrome (Work)", Category = "Cookies", Description = "", Paths = [] }
+                .ToString());
+    }
+
+    [Fact]
+    public void ASpeedTestRow_IsItsTimeAndDownload_InTheGridsOwnFigures()
+    {
+        var result = new SpeedTestResult("HTTP", 95.24, 41.7, 12, "Cloudflare", new DateTime(2026, 11, 5, 18, 30, 0));
+
+        // German writes "95,2" and "Nov.", and the grid draws "05 Nov 18:30" and "95.2" whatever the PC's region.
+        var previous = CultureInfo.CurrentCulture;
+        CultureInfo.CurrentCulture = new CultureInfo("de-DE");
+        try
+        {
+            Assert.Equal("05 Nov 18:30, 95.2 Mbps down", result.ToString());
+        }
+        finally
+        {
+            CultureInfo.CurrentCulture = previous;
+        }
+    }
+
+    [Fact]
     public void ADuplicateGroup_IsItsHeader()
         => Assert.Equal("3 files, 1,048,576 bytes each",
             new DuplicateFileGroup { Count = 3, FileSize = 1_048_576 }.ToString());

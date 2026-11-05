@@ -13,6 +13,9 @@ namespace SysManager.Models;
 /// </summary>
 public sealed partial class StoreApp : ObservableObject, Helpers.ISelectableRow
 {
+    /// <summary>What a screen reader calls the grid row, rather than the class's type name (#2785).</summary>
+    public override string ToString() => DisplayName;
+
     [ObservableProperty] private bool _isSelected;
     [ObservableProperty] private string _status = "";
 

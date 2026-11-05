@@ -15,6 +15,9 @@ namespace SysManager.Models;
 /// </summary>
 public sealed partial class FriendlyEventEntry : ObservableObject
 {
+    /// <summary>What a screen reader calls the grid row, rather than the class's type name (#2785).</summary>
+    public override string ToString() => $"{SeverityLabel}: {Message}";
+
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(RelativeTime))]
     [NotifyPropertyChangedFor(nameof(FullTimestamp))]

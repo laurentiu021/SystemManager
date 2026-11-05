@@ -310,8 +310,8 @@ clearer.
 A control that changes with its state is named for what pressing it does now, so a muted app's button on Volume
 Control is announced "Unmute Spotify". A control on a list row names its row: each of the PATH editor's buttons says
 which folder it moves or removes, and a Browser Cleaner checkbox says whose data it ticks, as in "Select Cookies in
-Chrome (Work)". Each line of a tab's live output, and each entry of a picker or a list, is read by the words on it,
-not by how the app stores it.
+Chrome (Work)". Each line of a tab's live output, each entry of a picker or a list, and each row of a table is read by
+the words on it, not by how the app stores it.
 
 Every tab also reads out what it is doing as it works. The line that says so — "Scanning…",
 "Removed 1,204 files", "Scan complete." — is announced on all 60 tabs, at the bottom of most of them and

@@ -15,6 +15,9 @@ namespace SysManager.Models;
 /// </summary>
 public sealed partial class ProcessEntry : ObservableObject
 {
+    /// <summary>What a screen reader calls the grid row, rather than the class's type name (#2785).</summary>
+    public override string ToString() => $"{Name} ({Pid})";
+
     [ObservableProperty] private int _pid;
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(SafetyTooltip))]

@@ -11,6 +11,9 @@ namespace SysManager.Models;
 /// </summary>
 public sealed record DriverEntry
 {
+    /// <summary>What a screen reader calls the grid row, rather than the record's fields (#2785).</summary>
+    public override string ToString() => DeviceName;
+
     public string DeviceName { get; init; } = "";
     public string Manufacturer { get; init; } = "";
     public string DriverVersion { get; init; } = "";

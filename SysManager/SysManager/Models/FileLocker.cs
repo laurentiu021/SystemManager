@@ -16,6 +16,9 @@ public sealed record FileLocker(
     string AppType,
     DateTime? StartTime)
 {
+    /// <summary>What a screen reader calls the grid row, rather than the record's fields (#2785).</summary>
+    public override string ToString() => $"{ProcessName} ({ProcessId})";
+
     /// <summary>Friendly label, e.g. "explorer.exe (12345)".</summary>
     public string Display => $"{ProcessName} ({ProcessId})";
 

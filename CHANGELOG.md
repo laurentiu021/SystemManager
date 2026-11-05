@@ -10,6 +10,19 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.136.114] - 2026-11-05
+
+**Resource History keeps the hour the clock repeats each autumn as two hours: in its saved history, its chart and its CSV export.**
+
+### Fixed
+- Resource History stamped and compared its samples as local times, so the two passes of the hour the clock repeats
+  when summer time ends read back as the same times. A "last hour" view during that hour took in the first pass as
+  well, and once the history was older than the Keep window, every hourly prune interleaved the two passes in the
+  file, so the chart for that hour jumped back and forth between them for as long as they were kept. Samples are
+  stamped as moments now, history already saved reads back as the moments it was, and the chart runs on through the
+  repeated hour. Since Resource History first shipped, in 1.47.0.
+- The CSV export has a "UTC offset" column beside each time, such as "UTC+03:00", which tells the two passes apart.
+
 ## [1.136.113] - 2026-11-05
 
 **Resource History asks before a shorter Keep deletes older history, and says so when it cannot save the choice instead of saying it kept it.**

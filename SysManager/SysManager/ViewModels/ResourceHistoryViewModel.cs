@@ -156,7 +156,8 @@ public sealed partial class ResourceHistoryViewModel : ViewModelBase
             && !_dialog.Confirm(
                 $"Keep only the last {chosen} days of history?\n\n"
                 + "The samples older than that, back to "
-                + $"{oldest.ToString("d MMM yyyy", CultureInfo.InvariantCulture)}, are removed from disk and cannot be "
+                + $"{oldest.ToLocalTime().ToString("d MMM yyyy", CultureInfo.InvariantCulture)}, are removed from disk "
+                + "and cannot be "
                 + "recovered.",
                 "Resource History — Confirm"))
         {
@@ -218,11 +219,11 @@ public sealed partial class ResourceHistoryViewModel : ViewModelBase
 
             var points = ResourceHistoryService.Downsample(_loaded, MaxChartPoints);
 
-            _cpuBuffer.ReplaceWith(points.Select(p => new DateTimePoint(p.Timestamp, p.CpuPercent)));
-            _ramBuffer.ReplaceWith(points.Select(p => new DateTimePoint(p.Timestamp, p.RamPercent)));
-            _gpuBuffer.ReplaceWith(points.Select(p => new DateTimePoint(p.Timestamp, p.GpuPercent)));
-            _cpuTempBuffer.ReplaceWith(points.Select(p => new DateTimePoint(p.Timestamp, p.CpuTempC)));
-            _gpuTempBuffer.ReplaceWith(points.Select(p => new DateTimePoint(p.Timestamp, p.GpuTempC)));
+            _cpuBuffer.ReplaceWith(points.Select(p => new DateTimePoint(p.Timestamp.UtcDateTime, p.CpuPercent)));
+            _ramBuffer.ReplaceWith(points.Select(p => new DateTimePoint(p.Timestamp.UtcDateTime, p.RamPercent)));
+            _gpuBuffer.ReplaceWith(points.Select(p => new DateTimePoint(p.Timestamp.UtcDateTime, p.GpuPercent)));
+            _cpuTempBuffer.ReplaceWith(points.Select(p => new DateTimePoint(p.Timestamp.UtcDateTime, p.CpuTempC)));
+            _gpuTempBuffer.ReplaceWith(points.Select(p => new DateTimePoint(p.Timestamp.UtcDateTime, p.GpuTempC)));
 
             HasData = _loaded.Count > 0;
             // The temperature chart is meaningful only if at least one sample carries a temp
@@ -322,7 +323,12 @@ public sealed partial class ResourceHistoryViewModel : ViewModelBase
     /// and reaching it through a constructed <c>Axis</c> would mean building the chart to assert a string. The
     /// guard itself lives in <see cref="ChartAxisLabels.Time"/>, which the Speed Test trend shares (#2371).
     /// </remarks>
-    internal static string TimeAxisLabel(double v) => ChartAxisLabels.Time(v, "MM-dd HH:mm");
+    internal static string TimeAxisLabel(double v) => TimeAxisLabel(v, TimeZoneInfo.Local);
+
+    /// <summary>A tick of the chart, which plots each sample at its instant, as a time in <paramref name="zone"/>.
+    /// </summary>
+    internal static string TimeAxisLabel(double v, TimeZoneInfo zone) =>
+        ChartAxisLabels.TimeOfUtc(v, "MM-dd HH:mm", zone);
 
     private static Axis BuildTimeAxis() => new()
     {

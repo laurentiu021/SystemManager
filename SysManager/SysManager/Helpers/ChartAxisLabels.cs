@@ -33,4 +33,19 @@ internal static class ChartAxisLabels
         ticks >= EarliestPlausibleTicks && ticks < DateTime.MaxValue.Ticks
             ? new DateTime((long)ticks).ToString(format, CultureInfo.InvariantCulture)
             : "";
+
+    /// <summary>
+    /// <paramref name="ticks"/>, an instant in UTC, as a time in <paramref name="zone"/> in <paramref name="format"/>,
+    /// or an empty string when the value cannot be a sample time.
+    /// </summary>
+    /// <remarks>
+    /// For a chart that plots at instants, so the hour the clock repeats each autumn runs on along the axis instead of
+    /// back over itself (#2790), and is labelled in the time people read.
+    /// </remarks>
+    internal static string TimeOfUtc(double ticks, string format, TimeZoneInfo zone) =>
+        // A day short of the end, so a zone ahead of UTC cannot carry the time past DateTime.MaxValue.
+        ticks >= EarliestPlausibleTicks && ticks < DateTime.MaxValue.Ticks - TimeSpan.TicksPerDay
+            ? TimeZoneInfo.ConvertTimeFromUtc(new DateTime((long)ticks, DateTimeKind.Utc), zone)
+                .ToString(format, CultureInfo.InvariantCulture)
+            : "";
 }

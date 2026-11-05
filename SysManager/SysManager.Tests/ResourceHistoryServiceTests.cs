@@ -16,7 +16,7 @@ namespace SysManager.Tests;
 
 public class ResourceHistoryServiceTests
 {
-    private static ResourceSample Sample(DateTime t, double cpu = 10, double ram = 20,
+    private static ResourceSample Sample(DateTimeOffset t, double cpu = 10, double ram = 20,
         double? gpu = null, double? cpuTemp = null, double? gpuTemp = null)
         => new(t, cpu, ram, gpu, cpuTemp, gpuTemp);
 
@@ -59,6 +59,60 @@ public class ResourceHistoryServiceTests
     {
         Assert.False(ResourceHistoryService.TryParse(line, out var s));
         Assert.Null(s);
+    }
+
+    // ── The autumn's repeated hour (#2790) ─────────────────────────────────
+    // Stamped and compared as local times, two samples an hour apart across the clock change read back as the same
+    // time. Romania's clocks went back from 04:00 to 03:00 on 25 October 2026, so 03:00 to 04:00 happened twice: first
+    // at UTC+3, then at UTC+2. Each line is written as the app wrote it, a local time with the offset it had then.
+
+    private static readonly TimeZoneInfo Bucharest = TimeZoneInfo.FindSystemTimeZoneById("GTB Standard Time");
+
+    /// <summary>A sample every ten minutes through both passes of the repeated hour, in the order taken.</summary>
+    private static string[] TheRepeatedHour() =>
+    [
+        .. new[] { TimeSpan.FromHours(3), TimeSpan.FromHours(2) }.SelectMany(offset =>
+            Enumerable.Range(0, 6).Select(i => ResourceHistoryService.Serialize(
+                Sample(new DateTimeOffset(2026, 10, 25, 3, i * 10, 0, offset))))),
+    ];
+
+    [Fact]
+    public void TheTwoPassesOfTheRepeatedHour_ReadBackAsTwoInstantsAnHourApart()
+    {
+        var lines = TheRepeatedHour();
+
+        Assert.True(ResourceHistoryService.TryParse(lines[3], out var first));
+        Assert.True(ResourceHistoryService.TryParse(lines[9], out var second));
+
+        Assert.Equal(TimeSpan.FromHours(1), second!.Timestamp - first!.Timestamp);
+    }
+
+    [Fact]
+    public void Prune_KeepsTheTwoPassesOfTheRepeatedHourApart_InOrder()
+    {
+        // Once the history is older than the window every prune rewrites the file, sorted by stamp. Compared as local
+        // times the two passes tied, and the sort interleaved them. Fed in a fixed order other than the one written.
+        var written = TheRepeatedHour();
+        var lines = written.Select((line, i) => (line, key: i * 7 % written.Length)).OrderBy(p => p.key)
+            .Select(p => p.line);
+
+        var kept = ResourceHistoryService.Prune(lines, new DateTimeOffset(2026, 10, 25, 2, 0, 0, TimeSpan.Zero),
+            TimeSpan.FromDays(7));
+
+        Assert.Equal(written, kept);
+    }
+
+    [Fact]
+    public void ToCsv_WritesEachTimeInTheZone_WithItsOffset_SoTheRepeatedHourIsTwoHours()
+    {
+        var csv = ResourceHistoryService.ToCsv(
+            [Sample(new DateTimeOffset(2026, 10, 25, 0, 30, 0, TimeSpan.Zero)),
+             Sample(new DateTimeOffset(2026, 10, 25, 1, 30, 0, TimeSpan.Zero))],
+            CultureInfo.InvariantCulture, Bucharest);
+        var rows = csv.Split(["\r\n", "\n"], StringSplitOptions.RemoveEmptyEntries);
+
+        Assert.StartsWith("2026-10-25 03:30:00,UTC+03:00,", rows[1], StringComparison.Ordinal);
+        Assert.StartsWith("2026-10-25 03:30:00,UTC+02:00,", rows[2], StringComparison.Ordinal);
     }
 
     // ── Prune ─────────────────────────────────────────────────────────────
@@ -218,21 +272,21 @@ public class ResourceHistoryServiceTests
     [Fact]
     public void ToCsv_HasHeader_AndRowPerSample_WithEmptyCellsForMissing()
     {
-        var now = new DateTime(2026, 6, 29, 8, 0, 0);
+        var now = new DateTimeOffset(2026, 6, 29, 8, 0, 0, TimeSpan.Zero);
         var samples = new[]
         {
             Sample(now, cpu: 12.3, ram: 45.6, gpu: 78.9, cpuTemp: 50, gpuTemp: 60),
             Sample(now.AddSeconds(10), cpu: 1, ram: 2, gpu: null, cpuTemp: null, gpuTemp: null),
         };
 
-        var csv = ResourceHistoryService.ToCsv(samples, CultureInfo.InvariantCulture);
+        var csv = ResourceHistoryService.ToCsv(samples, CultureInfo.InvariantCulture, TimeZoneInfo.Utc);
         var lines = csv.Trim().Split('\n').Select(l => l.TrimEnd('\r')).ToArray();
 
-        Assert.Equal("Timestamp,CPU %,RAM %,GPU %,CPU Temp °C,GPU Temp °C", lines[0]);
+        Assert.Equal("Timestamp,UTC offset,CPU %,RAM %,GPU %,CPU Temp °C,GPU Temp °C", lines[0]);
         Assert.Equal(3, lines.Length); // header + 2 rows
-        Assert.Equal("2026-06-29 08:00:00,12.3,45.6,78.9,50.0,60.0", lines[1]);
+        Assert.Equal("2026-06-29 08:00:00,UTC+00:00,12.3,45.6,78.9,50.0,60.0", lines[1]);
         // Missing GPU/temps render as empty trailing cells.
-        Assert.Equal("2026-06-29 08:00:10,1.0,2.0,,,", lines[2]);
+        Assert.Equal("2026-06-29 08:00:10,UTC+00:00,1.0,2.0,,,", lines[2]);
     }
 
     [Fact]
@@ -247,12 +301,13 @@ public class ResourceHistoryServiceTests
     public void ToCsv_InARegionThatWritesDecimalsWithAComma_SplitsOnSemicolons()
     {
         // It wrote commas and dots by hand, so a spreadsheet there opened each row as one cell (#2888).
-        var csv = ResourceHistoryService.ToCsv([Sample(new DateTime(2026, 6, 29), cpu: 12.5, ram: 40)],
-            new CultureInfo("ro-RO"));
+        var csv = ResourceHistoryService.ToCsv(
+            [Sample(new DateTimeOffset(2026, 6, 29, 0, 0, 0, TimeSpan.Zero), cpu: 12.5, ram: 40)],
+            new CultureInfo("ro-RO"), TimeZoneInfo.Utc);
 
         var lines = csv.Split("\r\n");
-        Assert.Equal("Timestamp;CPU %;RAM %;GPU %;CPU Temp °C;GPU Temp °C", lines[0]);
-        Assert.Equal("2026-06-29 00:00:00;12,5;40,0;;;", lines[1]);
+        Assert.Equal("Timestamp;UTC offset;CPU %;RAM %;GPU %;CPU Temp °C;GPU Temp °C", lines[0]);
+        Assert.Equal("2026-06-29 00:00:00;UTC+00:00;12,5;40,0;;;", lines[1]);
     }
 
     // ── Config contract ─────────────────────────────────────────────────────
@@ -304,6 +359,32 @@ public class ResourceHistoryServiceDiskTests : IDisposable
         => new(t, cpu, 20, null, null, null);
 
     // ── The seam itself ─────────────────────────────────────────────────────
+
+    /// <summary>A clock stopped at one instant.</summary>
+    private sealed class StoppedClock(DateTimeOffset now) : TimeProvider
+    {
+        public override DateTimeOffset GetUtcNow() => now.ToUniversalTime();
+    }
+
+    [Fact]
+    public async Task LoadAsync_ForTheLastHour_DuringTheRepeatedHour_TakesOnlyThatHour()
+    {
+        // Romania's clocks went back from 04:00 to 03:00 on 25 October 2026. At 03:45 the second time round (UTC+2),
+        // the last hour began at 03:45 the first time round (UTC+3). Compared as local times, every sample of both
+        // passes was after 02:45, so the "last hour" took in the first pass whole (#2790).
+        Seed([.. new[] { TimeSpan.FromHours(3), TimeSpan.FromHours(2) }.SelectMany(offset =>
+            Enumerable.Range(0, 6).Select(i => new ResourceSample(
+                new DateTimeOffset(2026, 10, 25, 3, i * 10, 0, offset), 10, 20, null, null, null)))]);
+        using var service = new ResourceHistoryService(
+            new SystemInfoService(), new TemperatureService(new DiskHealthService(), skipHardwareInit: true), _dir,
+            time: new StoppedClock(new DateTimeOffset(2026, 10, 25, 3, 45, 0, TimeSpan.FromHours(2))));
+
+        var loaded = await service.LoadAsync(TimeSpan.FromHours(1));
+
+        // The first pass's 03:50 and the whole second pass, which the seed runs on to 03:50.
+        Assert.Equal(7, loaded.Count);
+        Assert.Equal(new DateTimeOffset(2026, 10, 25, 3, 50, 0, TimeSpan.FromHours(3)), loaded[0].Timestamp);
+    }
 
     [Fact]
     public async Task LoadAsync_WithNoFile_ReturnsEmpty()

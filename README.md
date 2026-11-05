@@ -1253,7 +1253,8 @@ Answers "what is actually using my space?" by listing the biggest files in one p
   are pruned automatically. Choosing a shorter window asks first when it would delete
   history, and a choice that cannot be saved is not made. If the setting cannot be read,
   nothing newer than 30 days is pruned until it can be, or until you choose again
-- **Export to CSV** — save the visible range for analysis in Excel or elsewhere
+- **Export to CSV** — save the visible range for analysis in Excel or elsewhere, each time in your
+  time zone with its UTC offset beside it, so the hour the clock repeats in autumn reads as two hours
 - Strictly local: history is stored in your `%LocalAppData%\SysManager` folder
   and nothing ever leaves the machine
 

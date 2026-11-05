@@ -12,8 +12,14 @@ namespace SysManager.Models;
 /// in °C. GPU usage and temperatures are nullable because they are best-effort (NVIDIA-only
 /// usage, admin-only CPU temperature). Property names are kept short to bound the on-disk size.
 /// </summary>
+/// <remarks>
+/// The time is an instant with its offset, not a local clock time. Stamped and compared as local times, two samples an
+/// hour apart across the autumn clock change read back as the same time and compared equal: a "last hour" view during
+/// the repeated hour took in the first pass too, and every prune afterwards interleaved the two passes in the file
+/// (#2790). A line written as a local time with its offset, as every line was, reads back as the instant it was.
+/// </remarks>
 public sealed record ResourceSample(
-    [property: JsonPropertyName("t")] DateTime Timestamp,
+    [property: JsonPropertyName("t")] DateTimeOffset Timestamp,
     [property: JsonPropertyName("c")] double CpuPercent,
     [property: JsonPropertyName("r")] double RamPercent,
     [property: JsonPropertyName("g")] double? GpuPercent,

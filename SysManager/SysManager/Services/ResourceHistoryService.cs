@@ -111,14 +111,14 @@ public sealed class ResourceHistoryService : IDisposable
     /// What a shorter window costs, for the tab to ask about before it is chosen. The file is oldest-first, so its
     /// first readable line is the oldest sample.
     /// </remarks>
-    public async Task<DateTime?> OldestSampleOutsideAsync(int days, CancellationToken ct = default)
+    public async Task<DateTimeOffset?> OldestSampleOutsideAsync(int days, CancellationToken ct = default)
     {
         try { await _fileLock.WaitAsync(ct).ConfigureAwait(false); }
         catch (OperationCanceledException) { return null; }
         try
         {
             if (!File.Exists(_dataPath)) return null;
-            var cutoff = _time.GetLocalNow().DateTime - TimeSpan.FromDays(days);
+            var cutoff = _time.GetUtcNow() - TimeSpan.FromDays(days);
             // Read asynchronously: the tab asks from the UI thread, and only the first readable line is needed.
             using var reader = new StreamReader(_dataPath);
             while (await reader.ReadLineAsync(ct).ConfigureAwait(false) is { } line)
@@ -141,7 +141,7 @@ public sealed class ResourceHistoryService : IDisposable
         finally { if (!_disposed) _fileLock.Release(); }
     }
 
-    public DateTime? LastSampleAt { get; private set; }
+    public DateTimeOffset? LastSampleAt { get; private set; }
 
     /// <summary>
     /// Starts the background sampling loop. Idempotent — a second call is a no-op while a
@@ -218,7 +218,8 @@ public sealed class ResourceHistoryService : IDisposable
             Log.Debug("Resource history temperature read failed: {Error}", ex.Message);
         }
 
-        return new ResourceSample(snap.CapturedAt, snap.Cpu.LoadPercent, snap.Memory.UsedPercent,
+        // The instant from the clock, not the snapshot's local time, which repeats an hour each autumn (#2790).
+        return new ResourceSample(_time.GetUtcNow(), snap.Cpu.LoadPercent, snap.Memory.UsedPercent,
             gpuPercent, cpuTemp, gpuTemp);
     }
 
@@ -265,7 +266,7 @@ public sealed class ResourceHistoryService : IDisposable
         {
             if (!File.Exists(_dataPath)) return [];
             var lines = await File.ReadAllLinesAsync(_dataPath, ct).ConfigureAwait(false);
-            var cutoff = _time.GetLocalNow().DateTime - range;
+            var cutoff = _time.GetUtcNow() - range;
             // The file is append-only and time-ordered, so the requested range is a suffix:
             // walk from the END and stop at the first line older than the cutoff. This bounds
             // work to the window (e.g. ~360 lines for "last hour") instead of parsing the whole
@@ -299,7 +300,7 @@ public sealed class ResourceHistoryService : IDisposable
         {
             if (!File.Exists(_dataPath)) return;
             var lines = await File.ReadAllLinesAsync(_dataPath, ct).ConfigureAwait(false);
-            var kept = Prune(lines, _time.GetLocalNow().DateTime, TimeSpan.FromDays(PruneWindowDays));
+            var kept = Prune(lines, _time.GetUtcNow(), TimeSpan.FromDays(PruneWindowDays));
             // Only rewrite when something actually changed, to avoid needless disk churn.
             if (kept.Count == lines.Length) return;
             // Atomic rewrite through AtomicFile: it names the temp, flushes it onto the device and
@@ -333,7 +334,7 @@ public sealed class ResourceHistoryService : IDisposable
     }
 
     /// <summary>Returns the input lines that parse and are newer than <paramref name="now"/> minus retention, oldest-first.</summary>
-    public static List<string> Prune(IEnumerable<string> lines, DateTime now, TimeSpan retention)
+    public static List<string> Prune(IEnumerable<string> lines, DateTimeOffset now, TimeSpan retention)
     {
         var cutoff = now - retention;
 
@@ -341,7 +342,7 @@ public sealed class ResourceHistoryService : IDisposable
         // oldest-first contract while handing back the exact text that was read, so a prune no longer
         // re-serialises every line it keeps -- work the caller discards outright whenever nothing was
         // dropped, which is almost every call.
-        var kept = new List<(DateTime Stamp, string Line)>();
+        var kept = new List<(DateTimeOffset Stamp, string Line)>();
         foreach (var line in lines)
             if (TryParse(line, out var s) && s!.Timestamp >= cutoff)
                 kept.Add((s!.Timestamp, line));
@@ -397,17 +398,21 @@ public sealed class ResourceHistoryService : IDisposable
     /// Through <see cref="Csv"/>, like every other export. It wrote commas and dots by hand, so in a region that writes
     /// decimals with a comma a spreadsheet opened each row as one cell (#2888).
     /// </remarks>
-    public static string ToCsv(IEnumerable<ResourceSample> samples, CultureInfo culture)
+    public static string ToCsv(IEnumerable<ResourceSample> samples, CultureInfo culture, TimeZoneInfo? zone = null)
     {
         ArgumentNullException.ThrowIfNull(samples);
         ArgumentNullException.ThrowIfNull(culture);
 
+        // Each time in the PC's own time zone, as the chart shows it, with its offset beside it: during the autumn's
+        // repeated hour the clock time alone names two different moments (#2790).
         var sb = new StringBuilder();
-        Csv.AppendRow(sb, culture, "Timestamp", "CPU %", "RAM %", "GPU %", "CPU Temp °C", "GPU Temp °C");
+        Csv.AppendRow(sb, culture, "Timestamp", "UTC offset", "CPU %", "RAM %", "GPU %", "CPU Temp °C", "GPU Temp °C");
         foreach (var s in samples)
         {
+            var local = TimeZoneInfo.ConvertTime(s.Timestamp, zone ?? TimeZoneInfo.Local);
             Csv.AppendRow(sb, culture,
-                s.Timestamp.ToString("yyyy-MM-dd HH:mm:ss", CultureInfo.InvariantCulture),
+                local.ToString("yyyy-MM-dd HH:mm:ss", CultureInfo.InvariantCulture),
+                "UTC" + local.ToString("zzz", CultureInfo.InvariantCulture),
                 s.CpuPercent.ToString("F1", culture),
                 s.RamPercent.ToString("F1", culture),
                 s.GpuPercent?.ToString("F1", culture),

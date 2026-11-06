@@ -55,80 +55,88 @@
                        NotElevatedMessage="Blocking applications modifies system registry keys and requires administrator privileges."
                        ElevatedMessage="Running as administrator — you can block and unblock applications."/>
 
-        <!-- Block input -->
-        <StackPanel Grid.Row="3" Orientation="Horizontal" Margin="0,0,0,12">
-            <TextBox Text="{Binding NewExeName, UpdateSourceTrigger=PropertyChanged}" Width="250" Padding="6,4" MaxLength="255"
-                     VerticalAlignment="Center" Margin="0,0,8,0"
-                     AutomationProperties.Name="Executable name to block" />
-            <Button Content="Block" Command="{Binding BlockAppCommand}" Style="{StaticResource PrimaryButton}" Padding="12,6" Margin="0,0,8,0" />
-            <Button Content="Browse..." Command="{Binding BrowseForExeCommand}" Style="{StaticResource SecondaryButton}" Padding="8,6" />
-        </StackPanel>
+        <!-- Block input, and the toolbar under it: wrapping card toolbars like Uninstaller's, so both rows sit on
+             cards like the list below them (#2885). The faint divider between Refresh and Select All was the only
+             one on a toolbar in the app and is gone; the 16 px gap after Refresh still sets the two groups apart. -->
+        <Border Grid.Row="3" Style="{StaticResource Card}" Margin="0,0,0,12" Padding="12">
+            <WrapPanel>
+                <TextBox Text="{Binding NewExeName, UpdateSourceTrigger=PropertyChanged}" Width="250" Padding="6,4" MaxLength="255"
+                         VerticalAlignment="Center" Margin="0,0,8,0"
+                         AutomationProperties.Name="Executable name to block" />
+                <Button Content="Block" Command="{Binding BlockAppCommand}" Style="{StaticResource PrimaryButton}" Padding="12,6" Margin="0,0,8,0" />
+                <Button Content="Browse..." Command="{Binding BrowseForExeCommand}" Style="{StaticResource SecondaryButton}" Padding="8,6" />
+            </WrapPanel>
+        </Border>
 
-        <!-- Toolbar -->
-        <StackPanel Grid.Row="4" Orientation="Horizontal" Margin="0,0,0,12">
-            <Button Content="Unblock Selected" Command="{Binding UnblockSelectedCommand}" Style="{StaticResource SecondaryButton}" Padding="12,6" Margin="0,0,8,0" />
-            <Button Content="Refresh" Command="{Binding RefreshListCommand}" Style="{StaticResource GhostButton}" Padding="8,6" Margin="0,0,16,0" />
-            <Separator Margin="0,0,16,0" />
-            <Button Content="Select All" Command="{Binding SelectAllCommand}" Style="{StaticResource GhostButton}" Padding="8,6" Margin="0,0,4,0" />
-            <Button Content="Deselect All" Command="{Binding DeselectAllCommand}" Style="{StaticResource GhostButton}" Padding="8,6" />
-        </StackPanel>
+        <Border Grid.Row="4" Style="{StaticResource Card}" Margin="0,0,0,12" Padding="12">
+            <WrapPanel>
+                <Button Content="Unblock Selected" Command="{Binding UnblockSelectedCommand}" Style="{StaticResource SecondaryButton}" Padding="12,6" Margin="0,0,8,0" />
+                <Button Content="Refresh" Command="{Binding RefreshListCommand}" Style="{StaticResource GhostButton}" Padding="8,6" Margin="0,0,16,0" />
+                <Button Content="Select All" Command="{Binding SelectAllCommand}" Style="{StaticResource GhostButton}" Padding="8,6" Margin="0,0,4,0" />
+                <Button Content="Deselect All" Command="{Binding DeselectAllCommand}" Style="{StaticResource GhostButton}" Padding="8,6" />
+            </WrapPanel>
+        </Border>
 
         <!-- Blocked apps list -->
-        <DataGrid Grid.Row="5" ItemsSource="{Binding BlockedApps}"
-                  AutoGenerateColumns="False" IsReadOnly="False"
-                  CanUserAddRows="False" CanUserDeleteRows="False"
-                  CanUserResizeColumns="True"
-                  HeadersVisibility="Column" GridLinesVisibility="None"
-                  BorderThickness="0"
-                  Background="Transparent"
-                  AutomationProperties.Name="Blocked applications"
-                  VirtualizingPanel.IsVirtualizing="True"
-                  VirtualizingPanel.VirtualizationMode="Recycling">
-            <DataGrid.Columns>
-                <DataGridCheckBoxColumn Binding="{Binding IsSelected, UpdateSourceTrigger=PropertyChanged}" Width="40" MinWidth="40" CanUserResize="False">
-                    <!-- The name has to sit on the generated CheckBox, not on the column: a
-                         DataGridColumn is a definition, not a visual, so a name set there reaches no
-                         automation peer and a screen reader announces an unlabelled checkbox. Named
-                         per row as well, so 40 identical "Select application" checkboxes become the
-                         one the user is actually on. Same shape as AppUpdatesView. -->
-                    <DataGridCheckBoxColumn.ElementStyle>
-                        <Style TargetType="CheckBox" BasedOn="{StaticResource GridCheckBox}">
-                            <Setter Property="AutomationProperties.Name" Value="{Binding ExecutableName, StringFormat='Select {0}'}"/>
-                        </Style>
-                    </DataGridCheckBoxColumn.ElementStyle>
-                    <DataGridCheckBoxColumn.EditingElementStyle>
-                        <Style TargetType="CheckBox" BasedOn="{StaticResource GridCheckBox}">
-                            <Setter Property="AutomationProperties.Name" Value="{Binding ExecutableName, StringFormat='Select {0}'}"/>
-                        </Style>
-                    </DataGridCheckBoxColumn.EditingElementStyle>
-                </DataGridCheckBoxColumn>
-                <!-- A template column rather than a text one so the entry the banner is about is marked in
-                     the list too. Without it the row that cost someone their permission prompt looks exactly
-                     like a game launcher they chose to block (#2357). SortMemberPath keeps the column
-                     sortable, which a template column loses by default. -->
-                <DataGridTemplateColumn Header="Executable" Width="*" MinWidth="120" SortMemberPath="ExecutableName">
-                    <DataGridTemplateColumn.CellTemplate>
-                        <DataTemplate>
-                            <StackPanel Orientation="Horizontal">
-                                <TextBlock Text="&#xE7BA;" FontFamily="Segoe Fluent Icons,Segoe MDL2 Assets"
-                                           FontSize="13" Foreground="{DynamicResource WarningText}"
-                                           VerticalAlignment="Center" Margin="0,0,6,0"
-                                           ToolTip="Undoing this block needs administrator rights it may have taken away."
-                                           Visibility="{Binding IsUnrecoverable, Converter={StaticResource FlexVis}}"/>
-                                <TextBlock Text="{Binding ExecutableName}" VerticalAlignment="Center"
-                                           AutomationProperties.Name="{Binding ExecutableName}"/>
-                            </StackPanel>
-                        </DataTemplate>
-                    </DataGridTemplateColumn.CellTemplate>
-                </DataGridTemplateColumn>
-            </DataGrid.Columns>
-        </DataGrid>
+        <Border Grid.Row="5" Style="{StaticResource Card}" Padding="0">
+            <Grid>
+                <DataGrid ItemsSource="{Binding BlockedApps}"
+                          AutoGenerateColumns="False" IsReadOnly="False"
+                          CanUserAddRows="False" CanUserDeleteRows="False"
+                          CanUserResizeColumns="True"
+                          HeadersVisibility="Column" GridLinesVisibility="None"
+                          BorderThickness="0"
+                          Background="Transparent"
+                          AutomationProperties.Name="Blocked applications"
+                          VirtualizingPanel.IsVirtualizing="True"
+                          VirtualizingPanel.VirtualizationMode="Recycling">
+                    <DataGrid.Columns>
+                        <DataGridCheckBoxColumn Binding="{Binding IsSelected, UpdateSourceTrigger=PropertyChanged}" Width="40" MinWidth="40" CanUserResize="False">
+                            <!-- The name has to sit on the generated CheckBox, not on the column: a
+                                 DataGridColumn is a definition, not a visual, so a name set there reaches no
+                                 automation peer and a screen reader announces an unlabelled checkbox. Named
+                                 per row as well, so 40 identical "Select application" checkboxes become the
+                                 one the user is actually on. Same shape as AppUpdatesView. -->
+                            <DataGridCheckBoxColumn.ElementStyle>
+                                <Style TargetType="CheckBox" BasedOn="{StaticResource GridCheckBox}">
+                                    <Setter Property="AutomationProperties.Name" Value="{Binding ExecutableName, StringFormat='Select {0}'}"/>
+                                </Style>
+                            </DataGridCheckBoxColumn.ElementStyle>
+                            <DataGridCheckBoxColumn.EditingElementStyle>
+                                <Style TargetType="CheckBox" BasedOn="{StaticResource GridCheckBox}">
+                                    <Setter Property="AutomationProperties.Name" Value="{Binding ExecutableName, StringFormat='Select {0}'}"/>
+                                </Style>
+                            </DataGridCheckBoxColumn.EditingElementStyle>
+                        </DataGridCheckBoxColumn>
+                        <!-- A template column rather than a text one so the entry the banner is about is marked in
+                             the list too. Without it the row that cost someone their permission prompt looks exactly
+                             like a game launcher they chose to block (#2357). SortMemberPath keeps the column
+                             sortable, which a template column loses by default. -->
+                        <DataGridTemplateColumn Header="Executable" Width="*" MinWidth="120" SortMemberPath="ExecutableName">
+                            <DataGridTemplateColumn.CellTemplate>
+                                <DataTemplate>
+                                    <StackPanel Orientation="Horizontal">
+                                        <TextBlock Text="&#xE7BA;" FontFamily="Segoe Fluent Icons,Segoe MDL2 Assets"
+                                                   FontSize="13" Foreground="{DynamicResource WarningText}"
+                                                   VerticalAlignment="Center" Margin="0,0,6,0"
+                                                   ToolTip="Undoing this block needs administrator rights it may have taken away."
+                                                   Visibility="{Binding IsUnrecoverable, Converter={StaticResource FlexVis}}"/>
+                                        <TextBlock Text="{Binding ExecutableName}" VerticalAlignment="Center"
+                                                   AutomationProperties.Name="{Binding ExecutableName}"/>
+                                    </StackPanel>
+                                </DataTemplate>
+                            </DataGridTemplateColumn.CellTemplate>
+                        </DataGridTemplateColumn>
+                    </DataGrid.Columns>
+                </DataGrid>
 
-        <!-- Empty state, or that the block list could not be read (#2503) -->
-        <v:EmptyState Grid.Row="5" Glyph="&#xE730;"
-                      Title="{Binding EmptyTitle}"
-                      Message="{Binding EmptyMessage}"
-                      Visibility="{Binding BlockedApps.Count, Converter={StaticResource FlexVis}, ConverterParameter=Inverse}"/>
+                <!-- Empty state, or that the block list could not be read (#2503) -->
+                <v:EmptyState Glyph="&#xE730;"
+                              Title="{Binding EmptyTitle}"
+                              Message="{Binding EmptyMessage}"
+                              Visibility="{Binding BlockedApps.Count, Converter={StaticResource FlexVis}, ConverterParameter=Inverse}"/>
+            </Grid>
+        </Border>
 
         <!-- Footer -->
         <StackPanel Grid.Row="6" Orientation="Horizontal" Margin="0,8,0,0">

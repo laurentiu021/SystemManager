@@ -646,8 +646,8 @@ public partial class UiAutomationContractTests
     /// <summary>The DockPanels holding a control that takes focus: 57 when measured (#2883).</summary>
     private const int DockPanelsHoldingAControl = 55;
 
-    /// <summary>The controls Tab stops on.</summary>
-    private static readonly string[] TakesFocus =
+    /// <summary>The controls Tab stops on. Shared with the layout guards that ask whether a panel holds one.</summary>
+    internal static readonly string[] TakesFocus =
     [
         "Button", "ToggleButton", "RepeatButton", "CheckBox", "RadioButton", "TextBox", "PasswordBox", "ComboBox",
         "Slider", "DatePicker", "ListBox", "ListView", "DataGrid", "TreeView", "Hyperlink",

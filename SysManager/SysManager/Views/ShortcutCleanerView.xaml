@@ -33,7 +33,7 @@
         </StackPanel>
 
         <!-- Elevation banner -->
-        <v:AdminBanner Grid.Row="1" Margin="28,16,28,0"
+        <v:AdminBanner Grid.Row="1" Margin="28,12,28,0"
                        NotElevatedMessage="Removing broken shortcuts in shared locations requires administrator privileges."
                        ElevatedMessage="Running as administrator — you can remove broken shortcuts everywhere."/>
 
@@ -73,58 +73,61 @@
         </Border>
 
         <!-- Results DataGrid -->
-        <DataGrid Grid.Row="3" ItemsSource="{Binding BrokenShortcuts}"
-                  AutomationProperties.Name="Broken shortcuts"
-                  AutoGenerateColumns="False" IsReadOnly="False"
-                  CanUserAddRows="False" CanUserDeleteRows="False"
-                  CanUserSortColumns="True" CanUserResizeColumns="True"
-                  HeadersVisibility="Column" GridLinesVisibility="None"
-                  Background="Transparent" BorderThickness="0"
-                  Margin="28,12,28,0"
-                  VirtualizingPanel.IsVirtualizing="True"
-                  VirtualizingPanel.VirtualizationMode="Recycling">
-            <DataGrid.Columns>
-                <DataGridCheckBoxColumn Binding="{Binding IsSelected, UpdateSourceTrigger=PropertyChanged}" Width="40" MinWidth="40" CanUserResize="False">
-                    <DataGridCheckBoxColumn.ElementStyle>
-                        <Style TargetType="CheckBox" BasedOn="{StaticResource GridCheckBox}">
-                            <Setter Property="AutomationProperties.Name" Value="{Binding Name, StringFormat='Select {0} for deletion'}"/>
-                        </Style>
-                    </DataGridCheckBoxColumn.ElementStyle>
-                    <DataGridCheckBoxColumn.EditingElementStyle>
-                        <Style TargetType="CheckBox" BasedOn="{StaticResource GridCheckBox}">
-                            <Setter Property="AutomationProperties.Name" Value="{Binding Name, StringFormat='Select {0} for deletion'}"/>
-                        </Style>
-                    </DataGridCheckBoxColumn.EditingElementStyle>
-                </DataGridCheckBoxColumn>
-                <DataGridTextColumn Header="Name" Binding="{Binding Name}" Width="200" MinWidth="100" IsReadOnly="True">
-                    <DataGridTextColumn.ElementStyle>
-                        <Style TargetType="TextBlock">
-                            <Setter Property="TextTrimming" Value="CharacterEllipsis"/>
-                        </Style>
-                    </DataGridTextColumn.ElementStyle>
-                </DataGridTextColumn>
-                <DataGridTextColumn Header="Location" Binding="{Binding Location}" Width="150" MinWidth="80" IsReadOnly="True">
-                    <DataGridTextColumn.ElementStyle>
-                        <Style TargetType="TextBlock">
-                            <Setter Property="TextTrimming" Value="CharacterEllipsis"/>
-                        </Style>
-                    </DataGridTextColumn.ElementStyle>
-                </DataGridTextColumn>
-                <DataGridTextColumn Header="Target (missing)" Binding="{Binding TargetPath}" Width="*" MinWidth="120" IsReadOnly="True">
-                    <DataGridTextColumn.ElementStyle>
-                        <Style TargetType="TextBlock">
-                            <Setter Property="TextTrimming" Value="CharacterEllipsis"/>
-                        </Style>
-                    </DataGridTextColumn.ElementStyle>
-                </DataGridTextColumn>
-            </DataGrid.Columns>
-        </DataGrid>
+        <Border Grid.Row="3" Style="{StaticResource Card}" Margin="28,16,28,0" Padding="0">
+            <Grid>
+                <DataGrid ItemsSource="{Binding BrokenShortcuts}"
+                          AutomationProperties.Name="Broken shortcuts"
+                          AutoGenerateColumns="False" IsReadOnly="False"
+                          CanUserAddRows="False" CanUserDeleteRows="False"
+                          CanUserSortColumns="True" CanUserResizeColumns="True"
+                          HeadersVisibility="Column" GridLinesVisibility="None"
+                          Background="Transparent" BorderThickness="0"
+                          VirtualizingPanel.IsVirtualizing="True"
+                          VirtualizingPanel.VirtualizationMode="Recycling">
+                    <DataGrid.Columns>
+                        <DataGridCheckBoxColumn Binding="{Binding IsSelected, UpdateSourceTrigger=PropertyChanged}" Width="40" MinWidth="40" CanUserResize="False">
+                            <DataGridCheckBoxColumn.ElementStyle>
+                                <Style TargetType="CheckBox" BasedOn="{StaticResource GridCheckBox}">
+                                    <Setter Property="AutomationProperties.Name" Value="{Binding Name, StringFormat='Select {0} for deletion'}"/>
+                                </Style>
+                            </DataGridCheckBoxColumn.ElementStyle>
+                            <DataGridCheckBoxColumn.EditingElementStyle>
+                                <Style TargetType="CheckBox" BasedOn="{StaticResource GridCheckBox}">
+                                    <Setter Property="AutomationProperties.Name" Value="{Binding Name, StringFormat='Select {0} for deletion'}"/>
+                                </Style>
+                            </DataGridCheckBoxColumn.EditingElementStyle>
+                        </DataGridCheckBoxColumn>
+                        <DataGridTextColumn Header="Name" Binding="{Binding Name}" Width="200" MinWidth="100" IsReadOnly="True">
+                            <DataGridTextColumn.ElementStyle>
+                                <Style TargetType="TextBlock">
+                                    <Setter Property="TextTrimming" Value="CharacterEllipsis"/>
+                                </Style>
+                            </DataGridTextColumn.ElementStyle>
+                        </DataGridTextColumn>
+                        <DataGridTextColumn Header="Location" Binding="{Binding Location}" Width="150" MinWidth="80" IsReadOnly="True">
+                            <DataGridTextColumn.ElementStyle>
+                                <Style TargetType="TextBlock">
+                                    <Setter Property="TextTrimming" Value="CharacterEllipsis"/>
+                                </Style>
+                            </DataGridTextColumn.ElementStyle>
+                        </DataGridTextColumn>
+                        <DataGridTextColumn Header="Target (missing)" Binding="{Binding TargetPath}" Width="*" MinWidth="120" IsReadOnly="True">
+                            <DataGridTextColumn.ElementStyle>
+                                <Style TargetType="TextBlock">
+                                    <Setter Property="TextTrimming" Value="CharacterEllipsis"/>
+                                </Style>
+                            </DataGridTextColumn.ElementStyle>
+                        </DataGridTextColumn>
+                    </DataGrid.Columns>
+                </DataGrid>
 
-        <!-- Empty state -->
-        <v:EmptyState Grid.Row="3" Glyph="&#xE74D;"
-                      Title="No broken shortcuts found"
-                      Message="Run a scan to find shortcuts pointing at missing targets."
-                      Visibility="{Binding BrokenShortcuts.Count, Converter={StaticResource FlexVis}, ConverterParameter=Inverse}"/>
+                <!-- Empty state -->
+                <v:EmptyState Glyph="&#xE74D;"
+                              Title="No broken shortcuts found"
+                              Message="Run a scan to find shortcuts pointing at missing targets."
+                              Visibility="{Binding BrokenShortcuts.Count, Converter={StaticResource FlexVis}, ConverterParameter=Inverse}"/>
+            </Grid>
+        </Border>
 
         <!-- Footer -->
         <Border Grid.Row="4" Margin="28,12,28,24" Padding="8">

@@ -22,7 +22,7 @@ SystemManager/                      # the repository
 │   │   │                           #   on a first launch, and the row and chart view-models the tabs
 │   │   │                           #   build (NavItem, UndoChangeRow, …)
 │   │   ├── Views/                  # XAML views + code-behind, plus six shared controls:
-│   │   │                           #   AdminBanner (the elevation banner, 31 tabs)
+│   │   │                           #   AdminBanner (the elevation banner, 32 tabs)
 │   │   │                           #   EmptyState  (icon + title + message for an empty list)
 │   │   │                           #   DevelopmentBanner (the PREVIEW notice)
 │   │   │                           #   StatusFooter (progress bar + status line, 22 tabs)
@@ -2526,6 +2526,13 @@ still running, then starts a new copy with `runas` and the single argument
 the caller then closes this instance with `App.RequestShutdown()`. The elevated copy
 waits up to 5 seconds for the single-instance mutex to be handed over instead of exiting
 as a duplicate.
+
+Where the banner sits is checked too. It says why the controls under it need administrator
+rights, so it has to be met before them, on screen and with Tab:
+`ArchitectureTests.EveryAdminBanner_ComesStraightAfterThePageHeader` fails when a control comes
+between a tab's header and its banner (#2943), and
+`EveryPerSectionView_PutsItsAdminBannerOnTheBannerGutter` keeps it on `28,12,28,0` on the tabs
+that give each section its own 28 px sides.
 
 `ElevatedViewModelBase` (in `ViewModelBase`'s own namespace) declares `IsElevated` and
 `RelaunchAsAdminCommand` once, since `AdminBanner` binds both ambiently from its host's

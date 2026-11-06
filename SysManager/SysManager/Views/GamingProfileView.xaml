@@ -109,19 +109,21 @@
 
         <!-- Action bar -->
         <Border Grid.Row="4" Style="{StaticResource Card}" Margin="28,12,28,24" Padding="12">
+            <!-- The buttons first, docked right, so they keep their width and the status line wraps in what is
+                 left; laid out after it, they got what a long status left them (#2704). -->
             <DockPanel>
-                <ProgressBar AutomationProperties.Name="Gaming profile progress" DockPanel.Dock="Left" Width="100" Height="4"
-                             VerticalAlignment="Center" Margin="0,0,12,0"
-                             IsIndeterminate="{Binding IsProgressIndeterminate}"
-                             Visibility="{Binding IsBusy, Converter={StaticResource BoolToVis}}"/>
-                <TextBlock DockPanel.Dock="Left" VerticalAlignment="Center"
-                           Text="{Binding StatusMessage}" Style="{StaticResource StatusLine}" TextWrapping="Wrap"/>
-                <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
+                <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" DockPanel.Dock="Right" Margin="16,0,0,0">
                     <Button Content="Start game mode" Command="{Binding StartCommand}" Style="{StaticResource PrimaryButton}"
                             Margin="0,0,8,0" Padding="16,8" AutomationProperties.Name="Start game mode"/>
                     <Button Content="Stop" Command="{Binding StopCommand}" Style="{StaticResource SecondaryButton}"
                             Padding="16,8" AutomationProperties.Name="Stop game mode and restore settings"/>
                 </StackPanel>
+                <ProgressBar AutomationProperties.Name="Gaming profile progress" DockPanel.Dock="Left" Width="100" Height="4"
+                             VerticalAlignment="Center" Margin="0,0,12,0"
+                             IsIndeterminate="{Binding IsProgressIndeterminate}"
+                             Visibility="{Binding IsBusy, Converter={StaticResource BoolToVis}}"/>
+                <TextBlock VerticalAlignment="Center"
+                           Text="{Binding StatusMessage}" Style="{StaticResource StatusLine}" TextWrapping="Wrap"/>
             </DockPanel>
         </Border>
     </Grid>

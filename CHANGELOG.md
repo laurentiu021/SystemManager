@@ -10,6 +10,25 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.136.140] - 2026-11-06
+
+**On seven tabs the buttons beside a description keep their full width now, where the description took the row and
+left them a few pixels.**
+
+### Fixed
+- Seven header and card rows laid out their wrapping description first and the buttons beside it after, so the
+  description took nearly the whole row and the buttons got what was left. At the default window that was 5 px for
+  Ping's Start, Stop and Clear, 4 for Traceroute's Start auto-trace and 9 for System Health's Scan, the button the
+  Welcome screen sends people to (since 1.99.0), and it cut the buttons on all three of Network Repair's cards (since
+  1.11.0). Gaming Profile's status line did the same to Start game mode and Stop when it ran long (since 1.77.1). The
+  buttons are laid out first now, docked right, and the text wraps beside them.
+- Resource History's range, retention and export controls (since 1.47.0) and Settings Watchdog's four actions (since
+  1.48.0) sit on a toolbar card of their own under the header now, as Shortcut Cleaner's do. Beside the title they took
+  so much of the row that at the smallest window the title itself was cut. On Settings Watchdog the card comes after
+  the administrator banner, which stays straight under the header.
+- A check fails the build when a DockPanel lays wrapping text out before what is docked beside it, and the layout test
+  that builds every tab at the default and the smallest window no longer lists these rows.
+
 ## [1.136.139] - 2026-11-06
 
 **Notes, toolbars, Dashboard alert titles and toasts that a narrower window cut off at the edge wrap onto another line

@@ -18,14 +18,11 @@
         </Grid.RowDefinitions>
 
         <!-- Header -->
+        <!-- The buttons first, docked right, so they keep their width and the text beside them
+             wraps in what is left; laid out after it, they got what it left them (#2704). -->
         <DockPanel Grid.Row="0" Margin="28,24,28,0">
-            <StackPanel>
-                <TextBlock Text="Ping" Style="{StaticResource Display}"/>
-                <TextBlock Text="Watch how long this PC takes to reach a server, second by second, with a chart of the round-trip time and a plain verdict on whether the trouble is here, in your connection, or at the far end. The presets cover the game and streaming servers people ask about most."
-                           Style="{StaticResource Subtle}" Margin="0,4,0,0" TextWrapping="Wrap"/>
-            </StackPanel>
             <StackPanel Orientation="Horizontal" HorizontalAlignment="Right"
-                        DockPanel.Dock="Right" VerticalAlignment="Center">
+                        DockPanel.Dock="Right" Margin="16,0,0,0" VerticalAlignment="Center">
                 <Button Content="Start" Command="{Binding StartCommand}"
                         Style="{StaticResource PrimaryButton}"
                         AutomationProperties.AutomationId="btn-ping-start"
@@ -43,6 +40,11 @@
                         Style="{StaticResource GhostButton}" Margin="6,0,0,0"
                         AutomationProperties.AutomationId="btn-ping-clear"
                         AutomationProperties.Name="Clear ping history"/>
+            </StackPanel>
+            <StackPanel>
+                <TextBlock Text="Ping" Style="{StaticResource Display}"/>
+                <TextBlock Text="Watch how long this PC takes to reach a server, second by second, with a chart of the round-trip time and a plain verdict on whether the trouble is here, in your connection, or at the far end. The presets cover the game and streaming servers people ask about most."
+                           Style="{StaticResource Subtle}" Margin="0,4,0,0" TextWrapping="Wrap"/>
             </StackPanel>
         </DockPanel>
 

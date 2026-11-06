@@ -643,8 +643,12 @@ public partial class UiAutomationContractTests
             + $"docked panel:\n  {string.Join("\n  ", offenders)}");
     }
 
-    /// <summary>The DockPanels holding a control that takes focus: 57 when measured (#2883).</summary>
-    private const int DockPanelsHoldingAControl = 55;
+    /// <summary>
+    /// The DockPanels holding a control that takes focus: 57 when measured (#2883), 54 since Resource History's and
+    /// Settings Watchdog's headers gave their controls toolbar cards and Right-click Menu's toolbar became a Grid
+    /// (#2704, #2787).
+    /// </summary>
+    private const int DockPanelsHoldingAControl = 52;
 
     /// <summary>The controls Tab stops on. Shared with the layout guards that ask whether a panel holds one.</summary>
     internal static readonly string[] TakesFocus =

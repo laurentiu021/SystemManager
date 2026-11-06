@@ -17,8 +17,9 @@
             <RowDefinition Height="Auto"/>
             <RowDefinition Height="Auto"/>
             <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
             <RowDefinition Height="*"/>
-            <!-- Row 6: the watched-settings list. Auto rather than star so the drift list above keeps
+            <!-- Row 7: the watched-settings list. Auto rather than star so the drift list above keeps
                  the flexible space — drift is the actionable content, and this list is bounded by its
                  own MaxHeight (the catalog is a fixed eight entries). -->
             <RowDefinition Height="Auto"/>
@@ -29,39 +30,41 @@
         <v:DevelopmentBanner Grid.Row="0" Margin="28,24,28,0"/>
 
         <!-- Header -->
-        <DockPanel Grid.Row="1" Margin="28,16,28,0">
-            <StackPanel>
-                <TextBlock Text="Settings Watchdog" Style="{StaticResource Display}"/>
-                <TextBlock Text="Save a baseline of the Windows settings that feature updates tend to reset — telemetry, web search, widgets, lock-screen ads — and the watchdog will flag anything that drifts, with one-click restore."
-                           Style="{StaticResource Subtle}" Margin="0,4,0,0" TextWrapping="Wrap" MaxWidth="820" HorizontalAlignment="Left"/>
-            </StackPanel>
-            <StackPanel Orientation="Horizontal" HorizontalAlignment="Right"
-                        DockPanel.Dock="Right" VerticalAlignment="Center">
-                <Button Content="Save baseline" Command="{Binding SaveBaselineCommand}"
-                        Style="{StaticResource PrimaryButton}"
-                        AutomationProperties.Name="Save baseline — the settings baseline"/>
-                <Button Content="Check now" Command="{Binding RefreshCommand}"
-                        Style="{StaticResource SecondaryButton}" Margin="6,0,0,0"
-                        AutomationProperties.Name="Check now — for setting changes"/>
-                <!-- Before Restore, not after it. Restore overwrites the "Now" column, so this file is the
-                     only record of what Windows changed — the left-to-right order is the order to use it in. -->
-                <Button Content="Export CSV" Command="{Binding ExportCsvCommand}"
-                        Style="{StaticResource SecondaryButton}" Margin="6,0,0,0"
-                        AutomationProperties.Name="Export CSV — the settings that changed"
-                        ToolTip="Save the list of changes before restoring — Restore overwrites it."/>
-                <Button Content="Restore changed" Command="{Binding RestoreSelectedCommand}"
-                        Style="{StaticResource SecondaryButton}" Margin="6,0,0,0"
-                        AutomationProperties.Name="Restore changed settings to baseline"/>
-            </StackPanel>
-        </DockPanel>
+        <StackPanel Grid.Row="1" Margin="28,16,28,0">
+            <TextBlock Text="Settings Watchdog" Style="{StaticResource Display}"/>
+            <TextBlock Text="Save a baseline of the Windows settings that feature updates tend to reset — telemetry, web search, widgets, lock-screen ads — and the watchdog will flag anything that drifts, with one-click restore."
+                       Style="{StaticResource Subtle}" Margin="0,4,0,0" TextWrapping="Wrap" MaxWidth="820" HorizontalAlignment="Left"/>
+        </StackPanel>
 
         <!-- Elevation banner (restoring a machine-wide setting, or a policy Windows keeps for the account, needs admin) -->
         <v:AdminBanner Grid.Row="2" Margin="28,12,28,0"
                        NotElevatedMessage="Some watched settings are machine-wide or Windows policies, and need administrator to restore."
                        ElevatedMessage="Running as administrator — every watched setting can be restored."/>
 
+        <!-- The four actions, on a toolbar card of their own under the banner, as Shortcut Cleaner's are. Beside the
+             title they took 444 px, so at the smallest window the title itself was cut (#2704). -->
+        <Border Grid.Row="3" Style="{StaticResource Card}" Margin="28,16,28,0" Padding="12">
+            <WrapPanel>
+                <Button Content="Save baseline" Command="{Binding SaveBaselineCommand}"
+                        Style="{StaticResource PrimaryButton}" Margin="0,0,6,0"
+                        AutomationProperties.Name="Save baseline — the settings baseline"/>
+                <Button Content="Check now" Command="{Binding RefreshCommand}"
+                        Style="{StaticResource SecondaryButton}" Margin="0,0,6,0"
+                        AutomationProperties.Name="Check now — for setting changes"/>
+                <!-- Before Restore, not after it. Restore overwrites the "Now" column, so this file is the
+                     only record of what Windows changed — the left-to-right order is the order to use it in. -->
+                <Button Content="Export CSV" Command="{Binding ExportCsvCommand}"
+                        Style="{StaticResource SecondaryButton}" Margin="0,0,6,0"
+                        AutomationProperties.Name="Export CSV — the settings that changed"
+                        ToolTip="Save the list of changes before restoring — Restore overwrites it."/>
+                <Button Content="Restore changed" Command="{Binding RestoreSelectedCommand}"
+                        Style="{StaticResource SecondaryButton}"
+                        AutomationProperties.Name="Restore changed settings to baseline"/>
+            </WrapPanel>
+        </Border>
+
         <!-- Baseline status banner -->
-        <Border Grid.Row="3" Style="{StaticResource Card}" Margin="28,12,28,0" Padding="14,10"
+        <Border Grid.Row="4" Style="{StaticResource Card}" Margin="28,12,28,0" Padding="14,10"
                 Visibility="{Binding HasBaseline, Converter={StaticResource FlexVis}}">
             <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
                 <TextBlock Text="&#xE73E;" FontFamily="Segoe Fluent Icons,Segoe MDL2 Assets"
@@ -72,7 +75,7 @@
         </Border>
 
         <!-- Drift summary banner (warning) -->
-        <Border Grid.Row="4" Background="{DynamicResource WarningBgSubtle}" BorderBrush="{DynamicResource WarningBg}"
+        <Border Grid.Row="5" Background="{DynamicResource WarningBgSubtle}" BorderBrush="{DynamicResource WarningBg}"
                 BorderThickness="1" CornerRadius="{StaticResource RadiusLg}" Padding="12,10" Margin="28,12,28,0"
                 Visibility="{Binding HasDrift, Converter={StaticResource FlexVis}}">
             <!-- DockPanel, not a horizontal StackPanel: a StackPanel gives children infinite width along
@@ -87,7 +90,7 @@
         </Border>
 
         <!-- Drift list -->
-        <Border Grid.Row="5" Style="{StaticResource Card}" Margin="28,16,28,0">
+        <Border Grid.Row="6" Style="{StaticResource Card}" Margin="28,16,28,0">
             <Grid>
                 <DataGrid ItemsSource="{Binding Drifts}" AutoGenerateColumns="False" IsReadOnly="True"
                           HeadersVisibility="Column" GridLinesVisibility="None" Background="Transparent"
@@ -117,7 +120,7 @@
              human-readable name, a category and a plain-English reason.
              Always visible, unlike the drift list: its whole purpose is to be there BEFORE anything
              drifts. Same DataGrid settings as the drift grid above. -->
-        <Border Grid.Row="6" Style="{StaticResource Card}" Margin="28,16,28,0">
+        <Border Grid.Row="7" Style="{StaticResource Card}" Margin="28,16,28,0">
             <StackPanel>
                 <TextBlock Text="What SysManager is watching" Style="{StaticResource SectionTitle}" Margin="0,0,0,4"/>
                 <TextBlock Text="These are the settings checked against your baseline, with their values right now. Nothing here is changed unless you press Restore."
@@ -160,7 +163,7 @@
         </Border>
 
         <!-- Status -->
-        <TextBlock Grid.Row="7" Text="{Binding StatusMessage}" Style="{StaticResource StatusLine}"
+        <TextBlock Grid.Row="8" Text="{Binding StatusMessage}" Style="{StaticResource StatusLine}"
                    Margin="28,12,28,24" TextWrapping="Wrap"/>
     </Grid>
 </UserControl>

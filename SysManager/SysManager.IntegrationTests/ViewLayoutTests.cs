@@ -26,38 +26,13 @@ namespace SysManager.IntegrationTests;
 public sealed class ViewLayoutTests
 {
     /// <summary>
-    /// The rows #2704 is fixing, still cut. Each lays a description out before the buttons beside it, so the buttons
-    /// get what is left, or, on Speed Test, gives the Ookla server picker the room the card's title and Run leave. Each
-    /// must still be cut, so this empties as #2704 lands instead of outliving it.
+    /// What #2704 still has to fix, still cut: Speed Test's Ookla server picker, which a narrow card leaves only the
+    /// room its title and Run do not take. It must still be cut, so this empties as #2704 lands instead of outliving
+    /// it.
     /// </summary>
     private static readonly (int Width, string View, string Element)[] CutUntil2704 =
     [
-        (PageWidth.Default, "NetworkRepairView", "the Button \"Flush DNS resolver cache\""),
-        (PageWidth.Default, "NetworkRepairView", "a Border holding \"Flush DNS\""),
-        (PageWidth.Default, "NetworkRepairView", "the text \"Flush DNS\""),
-        (PageWidth.Default, "NetworkRepairView", "the text \"Reset Winsock\""),
-        (PageWidth.Default, "NetworkRepairView", "the text \"Reset TCP/IP\""),
-        (PageWidth.Default, "PingView", "a StackPanel holding \"Start\""),
-        (PageWidth.Default, "ResourceHistoryView", "a StackPanel holding \"Range\""),
-        (PageWidth.Default, "SettingsWatchdogView", "a StackPanel holding \"Save baseline\""),
-        (PageWidth.Default, "SystemHealthView", "the text \"Scan\""),
-        (PageWidth.Default, "TracerouteView", "a StackPanel holding \"Start auto-trace\""),
-        (PageWidth.Smallest, "NetworkRepairView", "the Button \"Flush DNS resolver cache\""),
-        (PageWidth.Smallest, "NetworkRepairView", "a Border holding \"Flush DNS\""),
-        (PageWidth.Smallest, "NetworkRepairView", "the text \"Flush DNS\""),
-        (PageWidth.Smallest, "NetworkRepairView", "the Button \"Reset Winsock catalog\""),
-        (PageWidth.Smallest, "NetworkRepairView", "a Border holding \"Reset Winsock\""),
-        (PageWidth.Smallest, "NetworkRepairView", "the text \"Reset Winsock\""),
-        (PageWidth.Smallest, "NetworkRepairView", "the Button \"Reset TCP/IP stack\""),
-        (PageWidth.Smallest, "NetworkRepairView", "a Border holding \"Reset TCP/IP\""),
-        (PageWidth.Smallest, "NetworkRepairView", "the text \"Reset TCP/IP\""),
-        (PageWidth.Smallest, "PingView", "a StackPanel holding \"Start\""),
-        (PageWidth.Smallest, "ResourceHistoryView", "a StackPanel holding \"Range\""),
-        (PageWidth.Smallest, "SettingsWatchdogView", "a StackPanel holding \"Save baseline\""),
         (PageWidth.Smallest, "SpeedTestView", "the ComboBox \"Ookla server\""),
-        (PageWidth.Smallest, "SystemHealthView", "the Button \"Scan system health\""),
-        (PageWidth.Smallest, "SystemHealthView", "the text \"Scan\""),
-        (PageWidth.Smallest, "TracerouteView", "a StackPanel holding \"Start auto-trace\""),
     ];
 
     [Theory]

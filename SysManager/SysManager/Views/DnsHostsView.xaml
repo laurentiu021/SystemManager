@@ -35,24 +35,16 @@
                                Foreground="{DynamicResource Accent}"/>
                 </DockPanel>
 
-                <DockPanel Margin="0,0,0,12">
-                    <Button Content="Reset to DHCP" Command="{Binding ResetDnsCommand}"
-                            Style="{StaticResource SecondaryButton}" DockPanel.Dock="Right"
-                            Padding="14,8" Margin="8,0,0,0"
-                            IsEnabled="{Binding IsDnsApplying, Converter={StaticResource BoolInvert}}"
-                            AutomationProperties.Name="Reset to DHCP — DNS assigned automatically"/>
-                    <Button Content="Apply" Command="{Binding ApplyDnsCommand}"
-                            Style="{StaticResource PrimaryButton}" DockPanel.Dock="Right"
-                            Padding="18,8" Margin="8,0,0,0"
-                            IsEnabled="{Binding IsDnsApplying, Converter={StaticResource BoolInvert}}"
-                            AutomationProperties.Name="Apply selected DNS servers"/>
-                    <Button Content="Undo" Command="{Binding RestorePreviousDnsCommand}"
-                            Style="{StaticResource SecondaryButton}" DockPanel.Dock="Right"
-                            Padding="14,8" Margin="8,0,0,0"
-                            Visibility="{Binding CanRestorePreviousDns, Converter={StaticResource BoolToVis}}"
-                            IsEnabled="{Binding IsDnsApplying, Converter={StaticResource BoolInvert}}"
-                            AutomationProperties.Name="Undo DNS change, restore previous DNS servers"/>
-                    <ComboBox ItemsSource="{Binding Presets}"
+                <!-- Declared in the order they are drawn, left to right, because Tab follows the declaration: docked
+                     right ahead of the picker, the three buttons were reached first and backwards (#2883). -->
+                <Grid Margin="0,0,0,12">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="Auto"/>
+                        <ColumnDefinition Width="Auto"/>
+                        <ColumnDefinition Width="Auto"/>
+                    </Grid.ColumnDefinitions>
+                    <ComboBox Grid.Column="0" ItemsSource="{Binding Presets}"
                               SelectedItem="{Binding SelectedPreset}"
                               MinWidth="200" VerticalAlignment="Center"
                               AutomationProperties.Name="DNS server preset">
@@ -62,7 +54,23 @@
                             </DataTemplate>
                         </ComboBox.ItemTemplate>
                     </ComboBox>
-                </DockPanel>
+                    <Button Grid.Column="1" Content="Undo" Command="{Binding RestorePreviousDnsCommand}"
+                            Style="{StaticResource SecondaryButton}"
+                            Padding="14,8" Margin="8,0,0,0"
+                            Visibility="{Binding CanRestorePreviousDns, Converter={StaticResource BoolToVis}}"
+                            IsEnabled="{Binding IsDnsApplying, Converter={StaticResource BoolInvert}}"
+                            AutomationProperties.Name="Undo DNS change, restore previous DNS servers"/>
+                    <Button Grid.Column="2" Content="Apply" Command="{Binding ApplyDnsCommand}"
+                            Style="{StaticResource PrimaryButton}"
+                            Padding="18,8" Margin="8,0,0,0"
+                            IsEnabled="{Binding IsDnsApplying, Converter={StaticResource BoolInvert}}"
+                            AutomationProperties.Name="Apply selected DNS servers"/>
+                    <Button Grid.Column="3" Content="Reset to DHCP" Command="{Binding ResetDnsCommand}"
+                            Style="{StaticResource SecondaryButton}"
+                            Padding="14,8" Margin="8,0,0,0"
+                            IsEnabled="{Binding IsDnsApplying, Converter={StaticResource BoolInvert}}"
+                            AutomationProperties.Name="Reset to DHCP — DNS assigned automatically"/>
+                </Grid>
 
                 <TextBlock Text="{Binding SelectedPreset.Description}" Style="{StaticResource Subtle}"
                            Margin="0,0,0,4"

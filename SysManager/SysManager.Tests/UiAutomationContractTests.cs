@@ -582,4 +582,112 @@ public partial class UiAutomationContractTests
             + string.Join("\n  ", offenders));
     }
 
+    /// <summary>
+    /// No DockPanel docks a control that takes focus right or at the bottom ahead of another one.
+    /// </summary>
+    /// <remarks>
+    /// Tab follows the order the XAML declares controls in. A DockPanel draws a child docked right to the right of
+    /// everything declared after it, and one docked at the bottom below it, so a control docked that way ahead of
+    /// another is reached first and drawn after: Tab runs against the screen. DNS &amp; Hosts docked Reset to DHCP,
+    /// Apply and Undo right ahead of the preset picker, so Tab went Reset to DHCP, Apply, Undo, then the picker, the
+    /// reverse of the row, and a keyboard user entering the card landed first on the button that changes the PC's DNS.
+    /// Bulk Installer's Search came before its box, Boot Analyzer's Refresh before the Cancel drawn left of it, the
+    /// PATH editor's add row before the folders above it, and Speed Test's Run before the server picker (#2883). Each
+    /// declares its controls in the order they are drawn now, laid out the same.
+    /// <para>Read from the XAML, so it holds in the blocking suite: where a DockPanel draws a child follows from the
+    /// declaration alone. A control hidden or disabled now counts, because it is shown at another time, and so do the
+    /// rows of a list, which are there at run time.</para>
+    /// </remarks>
+    [Fact]
+    public void NoDockPanel_DocksAFocusableControlAheadOfAnother()
+    {
+        const string Backwards = """
+            <DockPanel xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation">
+                <Button DockPanel.Dock="Right" Content="Apply"/>
+                <ComboBox/>
+            </DockPanel>
+            """;
+        const string InOrder = """
+            <DockPanel xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation">
+                <ComboBox DockPanel.Dock="Left"/>
+                <StackPanel DockPanel.Dock="Right"><Button Content="Cancel"/><Button Content="Refresh"/></StackPanel>
+                <TextBlock Text="Status"/>
+            </DockPanel>
+            """;
+        Assert.Single(BackwardsDocked(XElement.Parse(Backwards)));
+        Assert.Empty(BackwardsDocked(XElement.Parse(InOrder)));
+
+        var appDir = TestPaths.AppProject();
+        var files = Directory.EnumerateFiles(Path.Combine(appDir, "Views"), "*.xaml", SearchOption.TopDirectoryOnly)
+            .Append(Path.Combine(appDir, "MainWindow.xaml"));
+        var offenders = new List<string>();
+        var inspected = 0;
+
+        foreach (var file in files)
+        {
+            foreach (var panel in XDocument.Load(file).Descendants(Presentation + "DockPanel"))
+            {
+                if (panel.Elements().Any(child => FirstFocusable(child) is not null)) inspected++;
+                offenders.AddRange(BackwardsDocked(panel).Select(problem => $"{Path.GetFileName(file)}: {problem}"));
+            }
+        }
+
+        // Vacuity floor: the DockPanels holding a control Tab stops on, any of which a second control can turn around.
+        Assert.True(inspected >= DockPanelsHoldingAControl,
+            $"only {inspected} DockPanels holding a control that takes focus were read, from "
+            + $"{DockPanelsHoldingAControl} measured — fix this guard rather than trusting its pass.");
+
+        Assert.True(offenders.Count == 0,
+            "these DockPanels dock a control right or at the bottom ahead of another, so Tab reaches it first while "
+            + "the screen shows it after. Declare the controls in the order they are drawn, in a Grid or in one "
+            + $"docked panel:\n  {string.Join("\n  ", offenders)}");
+    }
+
+    /// <summary>The DockPanels holding a control that takes focus: 57 when measured (#2883).</summary>
+    private const int DockPanelsHoldingAControl = 55;
+
+    /// <summary>The controls Tab stops on.</summary>
+    private static readonly string[] TakesFocus =
+    [
+        "Button", "ToggleButton", "RepeatButton", "CheckBox", "RadioButton", "TextBox", "PasswordBox", "ComboBox",
+        "Slider", "DatePicker", "ListBox", "ListView", "DataGrid", "TreeView", "Hyperlink",
+    ];
+
+    /// <summary>
+    /// Each child of <paramref name="dockPanel"/> docked right or at the bottom with a control in it, followed by
+    /// another child with one.
+    /// </summary>
+    private static IEnumerable<string> BackwardsDocked(XElement dockPanel)
+    {
+        var children = dockPanel.Elements().Where(child => !child.Name.LocalName.Contains('.')).ToList();
+        for (var i = 0; i < children.Count; i++)
+        {
+            var side = (string?)children[i].Attribute("DockPanel.Dock");
+            if (side is not ("Right" or "Bottom") || FirstFocusable(children[i]) is not { } first) continue;
+
+            var later = children.Skip(i + 1).Select(FirstFocusable).FirstOrDefault(control => control is not null);
+            if (later is not null)
+                yield return $"{Described(first)}, docked {side.ToLowerInvariant()}, is ahead of {Described(later)}";
+        }
+    }
+
+    /// <summary>
+    /// The first control in <paramref name="element"/> that Tab stops on, the rows of a list's template included; not a
+    /// control template's parts, a style, resources, a context menu or a tooltip, which are not in the page's order.
+    /// </summary>
+    private static XElement? FirstFocusable(XElement element) => element.DescendantsAndSelf().FirstOrDefault(node =>
+        TakesFocus.Contains(node.Name.LocalName, StringComparer.Ordinal)
+        && (string?)node.Attribute("Focusable") != "False"
+        && (string?)node.Attribute("IsTabStop") != "False"
+        && (string?)node.Attribute("KeyboardNavigation.IsTabStop") != "False"
+        && !node.AncestorsAndSelf().TakeWhile(ancestor => ancestor != element).Any(ancestor =>
+            ancestor.Name.LocalName is "ControlTemplate" or "Style"
+            || ancestor.Name.LocalName.EndsWith(".Resources", StringComparison.Ordinal)
+            || ancestor.Name.LocalName.EndsWith(".ContextMenu", StringComparison.Ordinal)
+            || ancestor.Name.LocalName.EndsWith(".ToolTip", StringComparison.Ordinal)));
+
+    /// <summary>A control as an offender line names it: its accessible name, else its text, else its kind.</summary>
+    private static string Described(XElement control) =>
+        $"<{control.Name.LocalName}> \"{(string?)control.Attribute("AutomationProperties.Name")
+            ?? (string?)control.Attribute("Content") ?? "(no name)"}\"";
 }

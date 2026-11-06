@@ -10,6 +10,21 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.136.125] - 2026-11-06
+
+**Process Manager refreshes in a seventh of the time, measures CPU over the whole second between refreshes, and shows when every process started, the system's own included.**
+
+### Fixed
+- Each refresh opened every process three times, read its CPU time twice with a tenth of a second waited out between,
+  and built an object for every thread on the PC to count them. On my PC a refresh of about 610 processes took 121
+  to 148 ms and threw two exceptions. The whole list now comes from one query of the process list Windows keeps, a
+  process is opened only once, to find its file, when it first appears, and a refresh takes 14 to 20 ms and throws
+  none. CPU is the use over the second since the refresh before, rather than over that tenth of a second. Since
+  1.10.2.
+- The Started column showed a dash for most of the system's processes without administrator rights, because the
+  start time was read through a process handle Windows does not give for them. It comes from the same list now, so
+  every process has one. Since the column was added, in 1.89.0.
+
 ## [1.136.124] - 2026-11-06
 
 **Large Files, Duplicate Finder and Disk Analyzer read each folder once instead of twice: on my PC, Disk Analyzer's walk over Program Files took 1.7 seconds where the walk before took 2.9 to 4.1.**

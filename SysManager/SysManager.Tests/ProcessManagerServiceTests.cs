@@ -3,6 +3,8 @@
 // License: MIT
 
 using System.Diagnostics;
+using System.Runtime.InteropServices;
+using System.Text;
 using SysManager.Models;
 using SysManager.Services;
 
@@ -347,19 +349,325 @@ public class ProcessManagerServiceTests
     }
 
     // Every process running now, as a caller that shows all of them hands them over, so a snapshot reads the details of
-    // none but the one a test changes: reading them all costs seconds.
-    private static HashSet<ProcessManagerService.ProcessIdentity> AllRunning()
+    // none but the one a test changes: reading them all costs seconds. From the list a snapshot reads, so each is the
+    // identity the snapshot gives it.
+    private static HashSet<ProcessManagerService.ProcessIdentity> AllRunning() =>
+    [
+        .. new ProcessManagerService().QueryProcesses().Select(p => new ProcessManagerService.ProcessIdentity(
+            p.Pid, p.Created == 0 ? default : DateTime.FromFileTime(p.Created), p.Name)),
+    ];
+
+    // ── one read of the process list per refresh (#2854) ──
+    // Each refresh opened every process three times, waited 100 ms between two reads of its CPU time, and built an
+    // object for every thread on the PC. The system's process list gives all of it in one query.
+
+    /// <summary>A clock that moves only when told to.</summary>
+    private sealed class StepClock : TimeProvider
     {
-        HashSet<ProcessManagerService.ProcessIdentity> running = [];
-        foreach (var p in Process.GetProcesses())
+        private long _ticks;
+
+        public override long TimestampFrequency => TimeSpan.TicksPerSecond;
+        public override long GetTimestamp() => _ticks;
+
+        public void Advance(TimeSpan by) => _ticks += by.Ticks;
+    }
+
+    /// <summary>A process list that gives each read the next list a test laid out, then the last one again.</summary>
+    private sealed class Listing(params List<ProcessManagerService.ListedProcess>[] reads)
+    {
+        public int Reads { get; private set; }
+
+        public IReadOnlyList<ProcessManagerService.ListedProcess> Read() => reads[Math.Min(Reads++, reads.Length - 1)];
+    }
+
+    /// <summary>The service over <paramref name="listing"/>, whose waits move <paramref name="clock"/>.</summary>
+    private static ProcessManagerService Over(Listing listing, StepClock clock, List<TimeSpan> waits) => new(
+        () => new Dictionary<int, IntPtr>(), _ => false, clock, _ => "", listing.Read,
+        wait =>
         {
-            using (p)
+            waits.Add(wait);
+            clock.Advance(wait);
+        });
+
+    // Odd, so no real process has it: Windows gives process IDs in multiples of four, and the snapshot looks a new
+    // one's file up.
+    private const int App = 1201;
+    private const int Other = 3401;
+
+    private static ProcessManagerService.ListedProcess Listed(int pid, long cpu, long created = 1_000) =>
+        new(pid, "app", Threads: 4, WorkingSet: 4096, Created: created, CpuTime: cpu);
+
+    /// <summary>The CPU % of <paramref name="cpu"/> 100-ns units used over <paramref name="over"/>.</summary>
+    private static double Percent(long cpu, TimeSpan over) =>
+        Math.Round(cpu / (double)over.Ticks / Environment.ProcessorCount * 100, 1);
+
+    private static ProcessEntry Entry(IReadOnlyList<ProcessEntry> snapshot, int pid) =>
+        Assert.Single(snapshot, p => p.Pid == pid);
+
+    /// <summary>The first refresh reads the list, waits out the window, and measures to a second read.</summary>
+    [Fact]
+    public async Task TheFirstRefresh_MeasuresTheCpuAcrossTheWindow()
+    {
+        var clock = new StepClock();
+        var waits = new List<TimeSpan>();
+        var listing = new Listing([Listed(App, cpu: 0)], [Listed(App, cpu: 300_000)]);
+
+        var snapshot = await Over(listing, clock, waits).SnapshotAsync();
+
+        Assert.Equal([ProcessManagerService.CpuWindow], waits);
+        Assert.Equal(2, listing.Reads);
+        Assert.Equal(Percent(300_000, ProcessManagerService.CpuWindow), Entry(snapshot, App).CpuPercent);
+    }
+
+    /// <summary>A refresh a second after the last measures that second, with one read and no wait.</summary>
+    [Fact]
+    public async Task ARefreshASecondLater_MeasuresTheSecond_WithOneReadAndNoWait()
+    {
+        var clock = new StepClock();
+        var waits = new List<TimeSpan>();
+        var listing = new Listing([Listed(App, cpu: 0)], [Listed(App, cpu: 1_000_000)], [Listed(App, cpu: 6_000_000)]);
+        var service = Over(listing, clock, waits);
+        await service.SnapshotAsync();
+
+        clock.Advance(TimeSpan.FromSeconds(1));
+        var snapshot = await service.SnapshotAsync();
+
+        Assert.Equal([ProcessManagerService.CpuWindow], waits);
+        Assert.Equal(3, listing.Reads);
+        Assert.Equal(Percent(5_000_000, TimeSpan.FromSeconds(1)), Entry(snapshot, App).CpuPercent);
+    }
+
+    /// <summary>A refresh sooner than the window after the last waits out the rest of it.</summary>
+    [Fact]
+    public async Task ARefreshSoonerThanTheWindow_WaitsOutTheRest()
+    {
+        var clock = new StepClock();
+        var waits = new List<TimeSpan>();
+        var listing = new Listing([Listed(App, cpu: 0)], [Listed(App, cpu: 100_000)], [Listed(App, cpu: 150_000)]);
+        var service = Over(listing, clock, waits);
+        await service.SnapshotAsync();
+
+        clock.Advance(TimeSpan.FromMilliseconds(30));
+        var snapshot = await service.SnapshotAsync();
+
+        Assert.Equal([ProcessManagerService.CpuWindow, TimeSpan.FromMilliseconds(70)], waits);
+        Assert.Equal(Percent(50_000, ProcessManagerService.CpuWindow), Entry(snapshot, App).CpuPercent);
+    }
+
+    /// <summary>
+    /// A read older than the limit is not measured from: the figure would be the average since whoever read last.
+    /// </summary>
+    /// <remarks>
+    /// The service is the app's one, and the Dashboard's "Why is it slow?" reads it too. Measured from a read the tab
+    /// made an hour before, its figures would be the hour's average, the mistake #2790 fixed for the vitals.
+    /// </remarks>
+    [Fact]
+    public async Task ARefreshLongAfterTheLast_MeasuresAFreshWindow()
+    {
+        var clock = new StepClock();
+        var waits = new List<TimeSpan>();
+        var listing = new Listing([Listed(App, cpu: 0)], [Listed(App, cpu: 100_000)],
+            [Listed(App, cpu: 9_000_000)], [Listed(App, cpu: 9_200_000)]);
+        var service = Over(listing, clock, waits);
+        await service.SnapshotAsync();
+
+        clock.Advance(TimeSpan.FromSeconds(10));
+        var snapshot = await service.SnapshotAsync();
+
+        Assert.Equal([ProcessManagerService.CpuWindow, ProcessManagerService.CpuWindow], waits);
+        Assert.Equal(4, listing.Reads);
+        Assert.Equal(Percent(200_000, ProcessManagerService.CpuWindow), Entry(snapshot, App).CpuPercent);
+    }
+
+    /// <summary>
+    /// A process is measured only against its own earlier reading: one started since, and one that took the ID of a
+    /// process that ended, show no CPU until the next refresh.
+    /// </summary>
+    [Fact]
+    public async Task AProcessWithNoEarlierReadingOfItsOwn_ShowsNoCpuYet()
+    {
+        var clock = new StepClock();
+        var waits = new List<TimeSpan>();
+        var listing = new Listing([Listed(App, cpu: 0)],
+            [Listed(App, cpu: 900_000, created: 5_000), Listed(Other, cpu: 900_000, created: 5_000)]);
+
+        var snapshot = await Over(listing, clock, waits).SnapshotAsync();
+
+        Assert.Equal(0, Entry(snapshot, App).CpuPercent);     // the ID went to a process that started at another time
+        Assert.Equal(0, Entry(snapshot, Other).CpuPercent);   // started since the first read
+    }
+
+    /// <summary>The idle process's CPU time is the processor's idle time, shown as no CPU, as before.</summary>
+    [Fact]
+    public async Task TheIdleProcess_ShowsNoCpu()
+    {
+        var clock = new StepClock();
+        var waits = new List<TimeSpan>();
+        var listing = new Listing([Listed(0, cpu: 0)], [Listed(0, cpu: 900_000)]);
+
+        var snapshot = await Over(listing, clock, waits).SnapshotAsync();
+
+        Assert.Equal(0, Entry(snapshot, 0).CpuPercent);
+    }
+
+    /// <summary>A CPU time lower than the one before is not a negative use.</summary>
+    [Fact]
+    public async Task ACpuTimeLowerThanBefore_ShowsNoCpu()
+    {
+        var clock = new StepClock();
+        var waits = new List<TimeSpan>();
+        var listing = new Listing([Listed(App, cpu: 500_000)], [Listed(App, cpu: 400_000)]);
+
+        var snapshot = await Over(listing, clock, waits).SnapshotAsync();
+
+        Assert.Equal(0, Entry(snapshot, App).CpuPercent);
+    }
+
+    /// <summary>
+    /// A process's start time, name, threads and memory are the list's, and a process the list gives no start time
+    /// has none.
+    /// </summary>
+    [Fact]
+    public async Task ARefresh_TakesTheStartTimeNameThreadsAndMemoryFromTheList()
+    {
+        var started = new DateTime(2026, 11, 6, 9, 0, 0, DateTimeKind.Local);
+        var clock = new StepClock();
+        var waits = new List<TimeSpan>();
+        ProcessManagerService.ListedProcess[] processes =
+        [
+            new(App, "browser", Threads: 31, WorkingSet: 250_000_000, Created: started.ToFileTime(), CpuTime: 0),
+            new(Other, "agent", Threads: 2, WorkingSet: 8_000_000, Created: 0, CpuTime: 0),
+        ];
+        var listing = new Listing([.. processes]);
+
+        var snapshot = await Over(listing, clock, waits).SnapshotAsync();
+
+        var browser = Entry(snapshot, App);
+        Assert.Equal(("browser", 31, 250_000_000L, started), (browser.Name, browser.ThreadCount, browser.MemoryBytes,
+            browser.StartTime));
+        Assert.Equal(default, Entry(snapshot, Other).StartTime);
+    }
+
+    // ── the list as Windows lays it out ──
+
+    // Where the buffer was when the system filled it; the parser reads a name at its pointer less this.
+    private static readonly nint BufferAddress = 0x1000_0000;
+
+    /// <summary>
+    /// Lays one <c>SYSTEM_PROCESS_INFORMATION</c> at <paramref name="at"/>, its name at <paramref name="nameAt"/>.
+    /// </summary>
+    private static void Lay(byte[] buffer, int at, uint next, int pid, string? name, int nameAt,
+                            int threads = 1, long workingSet = 0, long created = 0, long user = 0, long kernel = 0)
+    {
+        var info = new ProcessManagerService.SystemProcessInformation
+        {
+            NextEntryOffset = next,
+            NumberOfThreads = (uint)threads,
+            CreateTime = created,
+            UserTime = user,
+            KernelTime = kernel,
+            UniqueProcessId = pid,
+            WorkingSetSize = (nuint)workingSet,
+        };
+        if (name is not null)
+        {
+            var bytes = Encoding.Unicode.GetBytes(name);
+            bytes.CopyTo(buffer, nameAt);
+            info.ImageName = new ProcessManagerService.UnicodeString
             {
-                try { running.Add(new(p.Id, ProcessManagerService.StartTimeOf(p) ?? default, p.ProcessName)); }
-                catch (InvalidOperationException) { /* exited since it was listed */ }
-            }
+                Length = (ushort)bytes.Length,
+                MaximumLength = (ushort)bytes.Length,
+                Buffer = BufferAddress + nameAt,
+            };
         }
-        return running;
+        MemoryMarshal.Write(buffer.AsSpan(at), in info);
+    }
+
+    [Fact]
+    public void ReadProcesses_ReadsEveryEntry_WithItsNameAsProcessGivesIt()
+    {
+        var buffer = new byte[1024];
+        Lay(buffer, 0, next: 256, pid: 4, "System", nameAt: 768, threads: 200, workingSet: 1_000, created: 11);
+        Lay(buffer, 256, next: 256, pid: 1200, @"C:\Tools\Tool.EXE", nameAt: 800, threads: 7, workingSet: 2_000_000,
+            created: 22, user: 30, kernel: 12);
+        Lay(buffer, 512, next: 0, pid: 1300, "Registry", nameAt: 860);
+
+        var processes = ProcessManagerService.ReadProcesses(buffer, BufferAddress);
+
+        Assert.Equal(
+        [
+            new ProcessManagerService.ListedProcess(4, "System", 200, 1_000, 11, 0),
+            new ProcessManagerService.ListedProcess(1200, "Tool", 7, 2_000_000, 22, 42),
+            new ProcessManagerService.ListedProcess(1300, "Registry", 1, 0, 0, 0),
+        ], processes);
+    }
+
+    [Fact]
+    public void ReadProcesses_NamesTheIdleProcess_AndOneTheListGivesNoNameOrABadOne_ByItsId()
+    {
+        var buffer = new byte[1024];
+        Lay(buffer, 0, next: 256, pid: 0, name: null, nameAt: 0);
+        Lay(buffer, 256, next: 256, pid: 1300, name: null, nameAt: 0);
+        Lay(buffer, 512, next: 0, pid: 1400, "far.exe", nameAt: 900);
+        // Its name points past the end of the buffer, which is not followed.
+        var info = MemoryMarshal.Read<ProcessManagerService.SystemProcessInformation>(buffer.AsSpan(512));
+        info.ImageName.Buffer = BufferAddress + 4096;
+        MemoryMarshal.Write(buffer.AsSpan(512), in info);
+
+        var names = ProcessManagerService.ReadProcesses(buffer, BufferAddress).Select(p => p.Name);
+
+        Assert.Equal(["Idle", "1300", "1400"], names);
+    }
+
+    [Fact]
+    public void ReadProcesses_StopsAtTheEntryThatSaysItIsTheLast_AndAtTheEndOfTheBuffer()
+    {
+        var buffer = new byte[600];
+        Lay(buffer, 0, next: 256, pid: 4, "System", nameAt: 520);
+        Lay(buffer, 256, next: 512, pid: 1200, "app.exe", nameAt: 540);   // points past the end
+
+        Assert.Equal([4, 1200], ProcessManagerService.ReadProcesses(buffer, BufferAddress).Select(p => p.Pid));
+    }
+
+    [Fact]
+    public void TheProcessEntry_HasTheLayoutWindowsGivesIt()
+    {
+        // SYSTEM_PROCESS_INFORMATION from winternl.h and the documented fields after it: the parser reads by position,
+        // so a field out of place reads another field's bytes.
+        var wide = IntPtr.Size == 8;
+        Assert.Equal([0, 4, 32, 40, 48, 56, wide ? 80 : 68, wide ? 144 : 104],
+        [
+            Offset(nameof(ProcessManagerService.SystemProcessInformation.NextEntryOffset)),
+            Offset(nameof(ProcessManagerService.SystemProcessInformation.NumberOfThreads)),
+            Offset(nameof(ProcessManagerService.SystemProcessInformation.CreateTime)),
+            Offset(nameof(ProcessManagerService.SystemProcessInformation.UserTime)),
+            Offset(nameof(ProcessManagerService.SystemProcessInformation.KernelTime)),
+            Offset(nameof(ProcessManagerService.SystemProcessInformation.ImageName)),
+            Offset(nameof(ProcessManagerService.SystemProcessInformation.UniqueProcessId)),
+            Offset(nameof(ProcessManagerService.SystemProcessInformation.WorkingSetSize)),
+        ]);
+        Assert.Equal(wide ? 8 : 4, (int)Marshal.OffsetOf<ProcessManagerService.UnicodeString>(
+            nameof(ProcessManagerService.UnicodeString.Buffer)));
+
+        static int Offset(string field) =>
+            (int)Marshal.OffsetOf<ProcessManagerService.SystemProcessInformation>(field);
+    }
+
+    /// <summary>
+    /// The list read from Windows names every process as <see cref="Process.ProcessName"/> does, and gives the start
+    /// time <see cref="Process.StartTime"/> gives, for this test process.
+    /// </summary>
+    [Fact]
+    public void QueryProcesses_ListsThisProcess_AsProcessDoes()
+    {
+        using var self = Process.GetCurrentProcess();
+
+        var mine = Assert.Single(new ProcessManagerService().QueryProcesses(), p => p.Pid == self.Id);
+
+        Assert.Equal(self.ProcessName, mine.Name);
+        Assert.Equal(self.StartTime, DateTime.FromFileTime(mine.Created));
+        Assert.True(mine.Threads > 0);
+        Assert.True(mine.CpuTime > 0);
     }
 
     // ── OpenFileLocation ──

@@ -1195,9 +1195,9 @@ Answers "what is actually using my space?" by listing the biggest files in one p
 - **Started column** — when each process began. "Something is eating my CPU" is usually
   answered by *when it appeared*: a process that started three minutes ago is a very
   different suspect from one that has been running since you turned the PC on, and sorting
-  by it groups everything that arrived recently. Processes whose start time Windows will
-  not reveal — most system processes, unless you run as administrator — show a dash rather
-  than a made-up date
+  by it groups everything that arrived recently. Every process has one, the system's own included, without
+  administrator rights: it comes from the list of processes Windows keeps, which also gives the CPU figures,
+  measured over the second between refreshes
 - **Built-in description database** — 108 common Windows processes and popular
   applications with plain-language descriptions and categories (System, Browser,
   Development, Communication, Media, Gaming, etc.). The description sits under each

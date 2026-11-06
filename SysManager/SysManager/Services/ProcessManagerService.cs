@@ -23,6 +23,18 @@ public sealed partial class ProcessManagerService
     private readonly Func<IntPtr, bool> _isHungWindow;
     private readonly TimeProvider _time;
     private readonly Func<string, string> _readDescription;
+    private readonly Func<IReadOnlyList<ListedProcess>> _listProcesses;
+    private readonly Action<TimeSpan> _wait;
+
+    // The CPU time each process had at the last read, by the process: its ID and when it started. Guarded by
+    // _sampleLock, which also keeps two refreshes, the tab's timer's and another caller's, from reading at once.
+    private readonly Lock _sampleLock = new();
+    private Dictionary<(int Pid, long Created), long> _cpuAtLast = [];
+    private long _lastSampledAt;
+    private bool _sampled;
+
+    // The buffer the process list is read into, kept from one read to the next. Under _sampleLock.
+    private byte[]? _listBuffer;
 
     public ProcessManagerService() : this(QueryMainWindowsByPid, IsHungAppWindow) { }
 
@@ -34,14 +46,22 @@ public sealed partial class ProcessManagerService
     /// The description in a program file's version resource, by its path: the file's own unless a test passes a read,
     /// so one can fail for a single row.
     /// </param>
+    /// <param name="listProcesses">
+    /// Every process, as the system's process list gives it: <see cref="QueryProcesses"/> unless a test passes a list.
+    /// </param>
+    /// <param name="wait">How a read waits out <see cref="CpuWindow"/>: <see cref="Thread.Sleep(TimeSpan)"/>.</param>
     internal ProcessManagerService(Func<IReadOnlyDictionary<int, IntPtr>> mainWindowsByPid,
                                    Func<IntPtr, bool> isHungWindow, TimeProvider? timeProvider = null,
-                                   Func<string, string>? readDescription = null)
+                                   Func<string, string>? readDescription = null,
+                                   Func<IReadOnlyList<ListedProcess>>? listProcesses = null,
+                                   Action<TimeSpan>? wait = null)
     {
         _mainWindowsByPid = mainWindowsByPid;
         _isHungWindow = isHungWindow;
         _time = timeProvider ?? TimeProvider.System;
         _readDescription = readDescription ?? FileDescription.Read;
+        _listProcesses = listProcesses ?? QueryProcesses;
+        _wait = wait ?? Thread.Sleep;
     }
 
     /// <summary>
@@ -68,110 +88,274 @@ public sealed partial class ProcessManagerService
     private IReadOnlyList<ProcessEntry> Snapshot(IReadOnlySet<ProcessIdentity>? known, CancellationToken ct)
     {
         List<ProcessEntry> results = [];
-        Process[] procs;
-        try { procs = Process.GetProcesses(); }
-        catch (InvalidOperationException) { return results; }
-        catch (System.ComponentModel.Win32Exception) { return results; }
+        var (processes, cpuPercent) = Sample();
 
-        try
+        // One window enumeration for the whole refresh. Both properties this replaces resolve the
+        // main window by walking every top-level window in the session, and they do NOT share the
+        // result: measured on 479 processes, reading Responding cost 41.6 ms, reading
+        // MainWindowHandle cost 43.6 ms, and reading both cost 81.4 ms — additive, so the walk ran
+        // twice per process. Responding then also sent WM_NULL through SendMessageTimeout with
+        // SMTO_ABORTIFHUNG and a 5000 ms timeout, which is most expensive in exactly the case the
+        // column exists for: an app that has genuinely stopped pumping messages. One pass plus
+        // IsHungAppWindow costs 0.4 ms for the same answers.
+        var mainWindows = processes.Count > 0 ? _mainWindowsByPid() : new Dictionary<int, IntPtr>();
+
+        foreach (var p in processes)
         {
-            // First pass: capture CPU times. A monotonic timestamp (not DateTime.UtcNow) for the elapsed
-            // calculation below: a wall-clock step during this 100ms window — daylight saving, an NTP
-            // correction — would otherwise corrupt a single refresh's CPU% for every process (#2855).
-            var cpuStart = new Dictionary<int, (TimeSpan Cpu, long Stamp)>();
-            foreach (var p in procs)
+            if (ct.IsCancellationRequested) break;
+
+            // A process with no top-level window is not hung, it simply has no message loop to
+            // stall — which is also what Responding reported for it (it returns true when the
+            // main window handle is zero).
+            var hasWindow = mainWindows.TryGetValue(p.Pid, out var mainWindow);
+
+            var entry = new ProcessEntry
             {
-                if (ct.IsCancellationRequested) break;
-                try { cpuStart[p.Id] = (p.TotalProcessorTime, _time.GetTimestamp()); }
-                catch (InvalidOperationException) { /* access denied — skip CPU for this process */ }
-                catch (System.ComponentModel.Win32Exception) { /* access denied — skip CPU for this process */ }
+                Pid = p.Pid,
+                Name = p.Name,
+                MemoryBytes = p.WorkingSet,
+                ThreadCount = p.Threads,
+                HasMainWindow = hasWindow,
+                Status = hasWindow && _isHungWindow(mainWindow) ? "Not responding" : "Running",
+                CpuPercent = cpuPercent(p),
+                // From the list, for every process. A handle's StartTime threw for most of the system's and other
+                // users' processes without administrator rights, which left them without one.
+                StartTime = p.Created == 0 ? default : DateTime.FromFileTime(p.Created),
+            };
+
+            // Identity (description/path) is static per process and the view model keeps it
+            // for a process it already shows, so only pay the expensive MainModule /
+            // FileVersionInfo / File.Exists cost for a process it doesn't.
+            if (known is null || !known.Contains(new ProcessIdentity(p.Pid, entry.StartTime, entry.Name)))
+            {
+                entry.FilePath = MainModulePath(p.Pid);
+                // Its own read, so a program whose file was renamed while it runs loses only its description,
+                // not the whole list (#2718).
+                entry.Description = FileDescription.Of(entry.FilePath, _readDescription);
+                entry.CanOpenFileLocation = !string.IsNullOrWhiteSpace(entry.FilePath)
+                                           && System.IO.File.Exists(entry.FilePath);
             }
 
-            // Brief pause to measure CPU delta (100ms is sufficient for meaningful readings)
-            Thread.Sleep(100);
-
-            int logicalCores = Environment.ProcessorCount;
-
-            // One window enumeration for the whole refresh. Both properties this replaces resolve the
-            // main window by walking every top-level window in the session, and they do NOT share the
-            // result: measured on 479 processes, reading Responding cost 41.6 ms, reading
-            // MainWindowHandle cost 43.6 ms, and reading both cost 81.4 ms — additive, so the walk ran
-            // twice per process. Responding then also sent WM_NULL through SendMessageTimeout with
-            // SMTO_ABORTIFHUNG and a 5000 ms timeout, which is most expensive in exactly the case the
-            // column exists for: an app that has genuinely stopped pumping messages. One pass plus
-            // IsHungAppWindow costs 0.4 ms for the same answers.
-            var mainWindows = _mainWindowsByPid();
-
-            foreach (var p in procs)
-            {
-                if (ct.IsCancellationRequested) break;
-                try
-                {
-                    // A process with no top-level window is not hung, it simply has no message loop to
-                    // stall — which is also what Responding reported for it (it returns true when the
-                    // main window handle is zero).
-                    var hasWindow = mainWindows.TryGetValue(p.Id, out var mainWindow);
-
-                    var entry = new ProcessEntry
-                    {
-                        Pid = p.Id,
-                        Name = p.ProcessName,
-                        MemoryBytes = p.WorkingSet64,
-                        ThreadCount = p.Threads.Count,
-                        HasMainWindow = hasWindow,
-                        Status = hasWindow && _isHungWindow(mainWindow) ? "Not responding" : "Running"
-                    };
-
-                    // Calculate CPU %
-                    if (cpuStart.TryGetValue(p.Id, out var start))
-                    {
-                        try
-                        {
-                            var cpuEnd = p.TotalProcessorTime;
-                            var elapsed = _time.GetElapsedTime(start.Stamp).TotalMilliseconds;
-                            if (elapsed > 0)
-                                entry.CpuPercent = Math.Round((cpuEnd - start.Cpu).TotalMilliseconds / elapsed / logicalCores * 100, 1);
-                        }
-                        catch (InvalidOperationException) { /* process may have exited */ }
-                        catch (System.ComponentModel.Win32Exception) { /* process may have exited */ }
-                    }
-
-                    // Read first: with the ID and the name, it is what says whether the caller shows this process.
-                    try { entry.StartTime = p.StartTime; }
-                    catch (InvalidOperationException) { /* access denied or process exited */ }
-                    catch (System.ComponentModel.Win32Exception) { /* access denied or process exited */ }
-
-                    // Identity (description/path) is static per process and the view model keeps it
-                    // for a process it already shows, so only pay the expensive MainModule /
-                    // FileVersionInfo / File.Exists cost for a process it doesn't.
-                    if (known is null || !known.Contains(new ProcessIdentity(p.Id, entry.StartTime, entry.Name)))
-                    {
-                        try
-                        {
-                            entry.FilePath = p.MainModule?.FileName ?? "";
-                        }
-                        catch (InvalidOperationException) { /* access denied or process exited */ }
-                        catch (System.ComponentModel.Win32Exception) { /* access denied or process exited */ }
-                        // Its own read, so a program whose file was renamed while it runs loses only its description,
-                        // not the whole list (#2718).
-                        entry.Description = FileDescription.Of(entry.FilePath, _readDescription);
-                        entry.CanOpenFileLocation = !string.IsNullOrWhiteSpace(entry.FilePath)
-                                                   && System.IO.File.Exists(entry.FilePath);
-                    }
-
-                    results.Add(entry);
-                }
-                catch (InvalidOperationException) { /* access denied for system processes — skip */ }
-                catch (System.ComponentModel.Win32Exception) { /* access denied for system processes — skip */ }
-            }
-        }
-        finally
-        {
-            foreach (var p in procs) p.Dispose();
+            results.Add(entry);
         }
 
         return results;
     }
+
+    /// <summary>The shortest stretch a read measures CPU over: a read sooner than this after the last waits.</summary>
+    internal static readonly TimeSpan CpuWindow = TimeSpan.FromMilliseconds(100);
+
+    /// <summary>The oldest read a new one measures CPU from. Older, it reads anew and waits out the window.</summary>
+    internal static readonly TimeSpan CpuBaselineMaxAge = TimeSpan.FromSeconds(3);
+
+    /// <summary>
+    /// One read of every process, and how much of the processor each used since the read before.
+    /// </summary>
+    /// <remarks>
+    /// <para>Each refresh opened every process three times, its CPU time twice with 100 ms between, which it waited
+    /// out on a pool thread, and its start time once, and built an object for every thread on the PC to count them
+    /// (#2854). The system's process list gives the name, the threads, the memory, the start time and the CPU time of
+    /// every process in one query, with no handle.</para>
+    /// <para>The CPU is measured from the read before, which the tab's timer makes a second ago, so it is the use over
+    /// that second rather than over a tenth of it. A read sooner than <see cref="CpuWindow"/> after the last waits out
+    /// the rest. The read before is every caller's, the tab's and the Dashboard's "Why is it slow?" alike, so it is
+    /// used only while it is at most <see cref="CpuBaselineMaxAge"/> old; past that, a figure would be the average
+    /// since whichever caller read last, the mistake #2790 fixed for the Dashboard's vitals. Without one, as on the
+    /// first refresh, a read is taken and <see cref="CpuWindow"/> waited out, as every refresh did.</para>
+    /// <para>A process is matched to its CPU time at the read before by its ID and when it started, since Windows gives
+    /// the ID of a process that ended to the next one. One with no earlier reading, started since, shows 0 until the
+    /// next read. The idle process's CPU time is the processor's idle time, so it shows 0, as before.</para>
+    /// <para>A monotonic timestamp, not the wall clock, for the stretch measured: a clock step, daylight saving or a
+    /// correction, would corrupt every process's figure for that refresh (#2855).</para>
+    /// </remarks>
+    private (IReadOnlyList<ListedProcess> Processes, Func<ListedProcess, double> CpuPercent) Sample()
+    {
+        lock (_sampleLock)
+        {
+            var since = _sampled ? _time.GetElapsedTime(_lastSampledAt) : TimeSpan.MaxValue;
+            if (since > CpuBaselineMaxAge)
+            {
+                Remember(_listProcesses(), _time.GetTimestamp());
+                _wait(CpuWindow);
+            }
+            else if (since < CpuWindow)
+            {
+                _wait(CpuWindow - since);
+            }
+
+            var before = _cpuAtLast;
+            var processes = _listProcesses();
+            var sampledAt = _time.GetTimestamp();
+            var elapsed = _time.GetElapsedTime(_lastSampledAt, sampledAt).Ticks;
+            Remember(processes, sampledAt);
+
+            var cores = Environment.ProcessorCount;
+            return (processes, p =>
+                p.Pid != 0 && elapsed > 0 && before.TryGetValue((p.Pid, p.Created), out var cpuThen)
+                && p.CpuTime >= cpuThen
+                    ? Math.Round((p.CpuTime - cpuThen) / (double)elapsed / cores * 100, 1)
+                    : 0);
+        }
+    }
+
+    // Under _sampleLock.
+    private void Remember(IReadOnlyList<ListedProcess> processes, long sampledAt)
+    {
+        var cpu = new Dictionary<(int Pid, long Created), long>(processes.Count);
+        foreach (var p in processes) cpu[(p.Pid, p.Created)] = p.CpuTime;
+        _cpuAtLast = cpu;
+        _lastSampledAt = sampledAt;
+        _sampled = true;
+    }
+
+    /// <summary>The file process <paramref name="pid"/> runs from, or "" when Windows will not say.</summary>
+    private static string MainModulePath(int pid)
+    {
+        try
+        {
+            using var p = Process.GetProcessById(pid);
+            return p.MainModule?.FileName ?? "";
+        }
+        catch (ArgumentException) { return ""; }                        // it exited
+        catch (InvalidOperationException) { return ""; }                // access denied or process exited
+        catch (System.ComponentModel.Win32Exception) { return ""; }    // access denied or process exited
+    }
+
+    // ── The system's process list ────────────────────────────────────────────
+
+    /// <summary>One process as the system's process list gives it.</summary>
+    /// <param name="Pid">The process ID.</param>
+    /// <param name="Name">Its name, as <see cref="Process.ProcessName"/> gives it.</param>
+    /// <param name="Threads">How many threads it has.</param>
+    /// <param name="WorkingSet">Its working set, in bytes.</param>
+    /// <param name="Created">When it started, as a FILETIME, or 0 when the list gives none.</param>
+    /// <param name="CpuTime">Its user and kernel time together, in 100-nanosecond units.</param>
+    internal readonly record struct ListedProcess(
+        int Pid, string Name, int Threads, long WorkingSet, long Created, long CpuTime);
+
+    // NtQuerySystemInformation's SystemProcessInformation class, and the status it gives a buffer too small.
+    private const int SystemProcessInformationClass = 5;
+    private const int StatusInfoLengthMismatch = unchecked((int)0xC0000004);
+
+    /// <summary>Every process, from one call of <c>NtQuerySystemInformation</c>, or none when it fails.</summary>
+    /// <remarks>Called under <see cref="_sampleLock"/>, which guards the buffer it reuses.</remarks>
+    internal IReadOnlyList<ListedProcess> QueryProcesses()
+    {
+        for (var attempt = 0; attempt < 4; attempt++)
+        {
+            var buffer = _listBuffer ??= new byte[1024 * 1024];
+            var pin = GCHandle.Alloc(buffer, GCHandleType.Pinned);
+            try
+            {
+                var address = pin.AddrOfPinnedObject();
+                var status = NtQuerySystemInformation(
+                    SystemProcessInformationClass, address, buffer.Length, out var length);
+                if (status == StatusInfoLengthMismatch)
+                {
+                    // More processes can start before the next call, so a little room more than it asked for.
+                    _listBuffer = new byte[Math.Max(buffer.Length * 2, length + (64 * 1024))];
+                    continue;
+                }
+
+                if (status < 0)
+                {
+                    Log.Debug("ProcessManager: NtQuerySystemInformation failed with 0x{Status:X8}", status);
+                    return [];
+                }
+
+                return ReadProcesses(buffer.AsSpan(0, Math.Min(length, buffer.Length)), address);
+            }
+            finally { pin.Free(); }
+        }
+
+        Log.Debug("ProcessManager: the process list kept outgrowing its buffer");
+        return [];
+    }
+
+    /// <summary>
+    /// The processes in a buffer <c>NtQuerySystemInformation</c> filled with <c>SYSTEM_PROCESS_INFORMATION</c>
+    /// entries, which was at <paramref name="address"/> when it did.
+    /// </summary>
+    /// <remarks>
+    /// Each entry's image name points into the same buffer, by the address the buffer had when the system filled it,
+    /// so a name is read from the buffer at that pointer less <paramref name="address"/>. A pointer outside the buffer
+    /// is not followed. Pure, so the layout is unit-tested on bytes laid out as Windows lays them.
+    /// </remarks>
+    internal static List<ListedProcess> ReadProcesses(ReadOnlySpan<byte> buffer, nint address)
+    {
+        var processes = new List<ListedProcess>(512);
+        var size = Marshal.SizeOf<SystemProcessInformation>();
+        var offset = 0;
+        while (offset + size <= buffer.Length)
+        {
+            var info = MemoryMarshal.Read<SystemProcessInformation>(buffer[offset..]);
+            var pid = (int)info.UniqueProcessId;
+            processes.Add(new ListedProcess(pid, NameOf(pid, info.ImageName, buffer, address),
+                (int)info.NumberOfThreads, (long)(ulong)info.WorkingSetSize, info.CreateTime,
+                info.UserTime + info.KernelTime));
+
+            if (info.NextEntryOffset == 0) break;
+            offset += (int)info.NextEntryOffset;
+        }
+        return processes;
+    }
+
+    /// <summary>
+    /// A process's name as <see cref="Process.ProcessName"/> gives it: its image name without the folder or a
+    /// trailing ".exe", "Idle" for the idle process, and the ID for a process the list gives no name.
+    /// </summary>
+    private static string NameOf(int pid, UnicodeString image, ReadOnlySpan<byte> buffer, nint address)
+    {
+        var start = (long)image.Buffer - address;
+        if (image.Buffer == 0 || image.Length == 0 || start < 0 || start + image.Length > buffer.Length)
+            return pid == 0 ? "Idle" : pid.ToString(CultureInfo.InvariantCulture);
+
+        ReadOnlySpan<char> name = MemoryMarshal.Cast<byte, char>(buffer.Slice((int)start, image.Length & ~1));
+        name = name[(name.LastIndexOf('\\') + 1)..];
+        if (name.EndsWith(".exe", StringComparison.OrdinalIgnoreCase)) name = name[..^4];
+        return name.ToString();
+    }
+
+    /// <summary><c>SYSTEM_PROCESS_INFORMATION</c>, field for field as far as <c>WorkingSetSize</c>.</summary>
+    [StructLayout(LayoutKind.Sequential)]
+    internal struct SystemProcessInformation
+    {
+        public uint NextEntryOffset;
+        public uint NumberOfThreads;
+        public long WorkingSetPrivateSize;
+        public uint HardFaultCount;
+        public uint NumberOfThreadsHighWatermark;
+        public ulong CycleTime;
+        public long CreateTime;
+        public long UserTime;
+        public long KernelTime;
+        public UnicodeString ImageName;
+        public int BasePriority;
+        public IntPtr UniqueProcessId;
+        public IntPtr InheritedFromUniqueProcessId;
+        public uint HandleCount;
+        public uint SessionId;
+        public UIntPtr UniqueProcessKey;
+        public UIntPtr PeakVirtualSize;
+        public UIntPtr VirtualSize;
+        public uint PageFaultCount;
+        public UIntPtr PeakWorkingSetSize;
+        public UIntPtr WorkingSetSize;
+    }
+
+    /// <summary><c>UNICODE_STRING</c>: a length in bytes and a pointer to the characters.</summary>
+    [StructLayout(LayoutKind.Sequential)]
+    internal struct UnicodeString
+    {
+        public ushort Length;
+        public ushort MaximumLength;
+        public IntPtr Buffer;
+    }
+
+    // No A/W variant (not a string function) → no EntryPoint suffix needed.
+    [LibraryImport("ntdll.dll")]
+    private static partial int NtQuerySystemInformation(int systemInformationClass, IntPtr systemInformation,
+        int systemInformationLength, out int returnLength);
 
     /// <summary>
     /// Fills <see cref="ProcessEntry.Signature"/> and <see cref="ProcessEntry.SignatureDetail"/> for every

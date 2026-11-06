@@ -10,6 +10,23 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.136.121] - 2026-11-06
+
+**The Dashboard's temperature cards and usage bars now change only when the figure they show does, rather than on every reading.**
+
+### Fixed
+- The Dashboard built every temperature card again each time it read the sensors, every 2 seconds, although a
+  temperature that moved by less than a degree shows the same figure. Each time, a screen reader was told the list
+  of cards had changed. Now a card changes only when its figure, its name or its colour does, and it is updated
+  where it stands rather than built again. Since the Dashboard's redesign in 1.17.0.
+- The processor, memory and GPU bars took each reading unrounded, three times a second, so a bar was laid out
+  again on every reading although the whole number shown above it stayed the same. They take that whole number
+  now, rounded the way the figure is. Since 1.17.0.
+
+### Changed
+- The Dashboard's live readings and Resource History's sampler take their snapshot on the thread they already run
+  on, rather than handing it to a second thread and waiting for it.
+
 ## [1.136.120] - 2026-11-06
 
 **On Windows Update, Cancel stops a check for updates and a download straight away, and an install in progress finishes before the rest is left.**

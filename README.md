@@ -2360,12 +2360,14 @@ offers, "rate us" prompts:
 - **Real-time vitals** — CPU, RAM, and GPU usage refreshed at 300 ms while
   the tab is visible (polling pauses automatically when it isn't, also when you leave it
   while SysManager is still starting), with live
-  indicator dots. GPU usage and video memory are read for every vendor — NVIDIA, AMD and Intel —
+  indicator dots. Each bar moves only when the whole-number figure above it changes. GPU usage
+  and video memory are read for every vendor — NVIDIA, AMD and Intel —
   from the counters Windows publishes and Task Manager draws, for the busiest card in the machine.
   A machine whose GPU cannot be measured at all shows "N/A" rather than 0%.
 - **Temperatures** — every sensor Windows can read, refreshed every 2 seconds while the tab is
-  visible. Without administrator rights only the NVIDIA graphics card and the disks' own (SMART)
-  temperatures are available, and the card says so. The processor and motherboard temperatures
+  visible. A card changes only when its figure, its name or its colour does, so a screen reader is not told
+  the cards changed on every refresh. Without administrator rights only the NVIDIA graphics card and the
+  disks' own (SMART) temperatures are available, and the card says so. The processor and motherboard temperatures
   also need the PawnIO driver, which SysManager does not install: without it the processor shows
   "Requires driver", as administrator too, and the card says why. A drive the sensors leave
   unnamed takes its name from the drive list System Health reads, and a read of that list that

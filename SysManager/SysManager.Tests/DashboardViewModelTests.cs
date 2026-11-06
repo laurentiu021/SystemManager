@@ -2,6 +2,9 @@
 // Author: laurentiu021 · https://github.com/laurentiu021/SystemManager
 // License: MIT
 
+using System.Collections.Concurrent;
+using System.Collections.Specialized;
+using System.Globalization;
 using System.IO;
 using NSubstitute;
 using SysManager.Helpers;
@@ -548,12 +551,105 @@ public sealed class DashboardViewModelTests : IDisposable
         Assert.Equal("Uptime 1d 2h 4m", vm.UptimeLine);
     }
 
-    private static SystemSnapshot Sample(TimeSpan uptime) => new(
+    private static SystemSnapshot Sample(TimeSpan uptime, double cpuLoad = 12, double ramUsedPercent = 50) => new(
         new OsInfo("Windows 11 Pro", "10.0.26200", "26200", uptime, "64-bit"),
-        new CpuInfo("CPU", 8, 16, 3600, 12),
-        new MemoryInfo(16, 8, 8, 50, []),
+        new CpuInfo("CPU", 8, 16, 3600, cpuLoad),
+        new MemoryInfo(16, 8, 8, ramUsedPercent, []),
         [],
         new DateTime(2026, 10, 22, 12, 0, 0, DateTimeKind.Local));
+
+    // ---------- what each sample and each sensor read changes (#2854) ----------
+    // The vitals are sampled three times a second and the sensors read every 2 seconds. The tiles took every
+    // unrounded figure, so a bar was laid out again on each sample although its figure showed the same, and the
+    // temperature cards were replaced with one Reset on each read, which built every card again.
+
+    /// <summary>
+    /// A sample whose percentages show the same whole numbers changes nothing on the processor and memory tiles,
+    /// and one that moves a figure changes that figure alone.
+    /// </summary>
+    [Fact]
+    public void ASampleThatShowsTheSameFigures_ChangesNothingOnTheTiles()
+    {
+        var vm = NewVm(QuietWinget());
+        vm.ShowVitals(Sample(TimeSpan.Zero, cpuLoad: 12.3, ramUsedPercent: 49.6));
+        Assert.Equal(12.0, vm.CpuPercent);
+        Assert.Equal(50.0, vm.RamPercent);
+
+        var changed = vm.RecordPropertyChanges();
+        vm.ShowVitals(Sample(TimeSpan.Zero, cpuLoad: 12.4, ramUsedPercent: 50.2));
+        Assert.DoesNotContain(nameof(DashboardViewModel.CpuPercent), changed);
+        Assert.DoesNotContain(nameof(DashboardViewModel.RamPercent), changed);
+
+        vm.ShowVitals(Sample(TimeSpan.Zero, cpuLoad: 12.6, ramUsedPercent: 50.4));
+        Assert.Equal(13.0, vm.CpuPercent);
+        Assert.Contains(nameof(DashboardViewModel.CpuPercent), changed);
+        Assert.DoesNotContain(nameof(DashboardViewModel.RamPercent), changed);
+    }
+
+    /// <summary>
+    /// A half goes to the even number, as the tiles' F0 format shows it, so the bar and its figure agree.
+    /// </summary>
+    [Theory]
+    [InlineData(52.5, 52.0)]
+    [InlineData(53.5, 54.0)]
+    [InlineData(0.5, 0.0)]
+    [InlineData(99.5, 100.0)]
+    public void AFigureOnAHalf_IsTheNumberTheTileShows(double load, double shown)
+    {
+        var vm = NewVm(QuietWinget());
+
+        vm.ShowVitals(Sample(TimeSpan.Zero, cpuLoad: load));
+
+        Assert.Equal(shown, vm.CpuPercent);
+        Assert.Equal(load.ToString("F0", CultureInfo.InvariantCulture),
+                     vm.CpuPercent.ToString("F0", CultureInfo.InvariantCulture));
+    }
+
+    /// <summary>A GPU reading whose load shows the same whole number changes nothing on its tile.</summary>
+    [Fact]
+    public void AGpuReadingThatShowsTheSameLoad_ChangesNothingOnItsTile()
+    {
+        var vm = NewVm(QuietWinget());
+        vm.ShowGpu(new GpuUsage("Graphics card", 41.6, 2.04, 12));
+        Assert.Equal(42.0, vm.GpuPercent);
+        Assert.Equal("42%", vm.GpuPercentDisplay);
+        Assert.Equal("2.0 / 12.0 GB VRAM", vm.GpuVram);
+
+        var changed = vm.RecordPropertyChanges();
+        vm.ShowGpu(new GpuUsage("Graphics card", 42.4, 2.04, 12));
+        Assert.DoesNotContain(nameof(DashboardViewModel.GpuPercent), changed);
+        Assert.DoesNotContain(nameof(DashboardViewModel.GpuPercentDisplay), changed);
+
+        vm.ShowGpu(new GpuUsage("Graphics card", 42.6, 2.04, 12));
+        Assert.Equal(43.0, vm.GpuPercent);
+        Assert.Contains(nameof(DashboardViewModel.GpuPercentDisplay), changed);
+    }
+
+    /// <summary>
+    /// A sensor read that shows the same keeps every reading the cards show, and one that changes a card's figure
+    /// replaces that card's reading alone, where it stands.
+    /// </summary>
+    [Fact]
+    public void ATemperatureReadThatShowsTheSame_KeepsTheCards()
+    {
+        var vm = NewVm(QuietWinget());
+        vm.ShowTemperatures([new("CPU", "CPU Package", 52.3), new("Storage", "Drive 1", 38.2)]);
+        var shown = vm.Temperatures.ToList();
+        var changes = new ConcurrentQueue<NotifyCollectionChangedEventArgs>();
+        vm.Temperatures.CollectionChanged += (_, e) => changes.Enqueue(e);
+
+        vm.ShowTemperatures([new("CPU", "CPU Package", 52.4), new("Storage", "Drive 1", 37.9)]);
+        Assert.Empty(changes);
+        Assert.Same(shown[0], vm.Temperatures[0]);
+        Assert.Same(shown[1], vm.Temperatures[1]);
+
+        vm.ShowTemperatures([new("CPU", "CPU Package", 53.6), new("Storage", "Drive 1", 38.1)]);
+        var replaced = Assert.Single(changes);
+        Assert.Equal(NotifyCollectionChangedAction.Replace, replaced.Action);
+        Assert.Equal(0, replaced.NewStartingIndex);
+        Assert.Equal("54°C", vm.Temperatures[0].DisplayValue);
+        Assert.Same(shown[1], vm.Temperatures[1]);
+    }
 
     /// <summary>
     /// While the tab is shown, Recent activity is read again each minute, so the ages it shows move; once the tab is

@@ -63,4 +63,37 @@ public sealed class BulkObservableCollection<T> : ObservableCollection<T>
         OnPropertyChanged(IndexerChanged);
         OnCollectionChanged(CollectionReset);
     }
+
+    /// <summary>
+    /// Makes the collection hold <paramref name="items"/>, in their order, replacing only an item that
+    /// <paramref name="alike"/> does not find the same as the one already in its place.
+    /// </summary>
+    /// <remarks>
+    /// For a list read again on a timer, whose items mostly come back the same. <see cref="ReplaceWith"/> raises a
+    /// Reset, so a bound ItemsControl builds every item's template again and a screen reader is told the list
+    /// changed, on every read. Here an item that is alike stays as it was, and one that is not is replaced where it
+    /// stands, with one Replace notification. A list whose length changed is replaced with one Reset, as
+    /// <see cref="ReplaceWith"/> does: items would have to be inserted or removed, and a timer's list seldom changes
+    /// its length.
+    /// <para><paramref name="items"/> is copied first, as in <see cref="ReplaceWith"/>, so this collection can be
+    /// its own source, and a source that throws part-way leaves it as it was.</para>
+    /// </remarks>
+    public void UpdateWith(IEnumerable<T> items, IEqualityComparer<T> alike)
+    {
+        ArgumentNullException.ThrowIfNull(items);
+        ArgumentNullException.ThrowIfNull(alike);
+
+        var snapshot = items.ToList();
+        if (snapshot.Count != Count)
+        {
+            ReplaceWith(snapshot);
+            return;
+        }
+
+        for (int i = 0; i < snapshot.Count; i++)
+        {
+            if (!alike.Equals(this[i], snapshot[i]))
+                this[i] = snapshot[i];
+        }
+    }
 }

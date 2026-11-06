@@ -402,7 +402,9 @@ public sealed partial class DashboardViewModel : ElevatedViewModelBase
             {
                 try
                 {
-                    var snapshot = await _sys.CaptureAsync(_cpu);
+                    // Taken here: this loop already runs on the thread pool, and CaptureAsync would hand the same work
+                    // to another pool thread and wait for it, three times a second (#2854).
+                    var snapshot = _sys.Capture(_cpu);
                     System.Windows.Application.Current?.Dispatcher.BeginInvoke(() => ShowVitals(snapshot));
 
                     UpdateGpuUsage();
@@ -435,11 +437,15 @@ public sealed partial class DashboardViewModel : ElevatedViewModelBase
     /// <remarks>
     /// The uptime line was set once, from the start's own snapshot, although every sample carries it, so it stood
     /// still while the Dashboard stayed open (#2802).
+    /// <para>The two percentages are rounded to the whole number their tiles show, so a sample that shows the same
+    /// figure changes nothing, and the bar under it is not laid out again three times a second (#2854).
+    /// <c>Math.Round</c> takes a half to the even number, as the tiles' F0 format does. The memory in GB is left as
+    /// read: it draws no bar.</para>
     /// </remarks>
     internal void ShowVitals(SystemSnapshot snapshot)
     {
-        CpuPercent = snapshot.Cpu.LoadPercent;
-        RamPercent = snapshot.Memory.UsedPercent;
+        CpuPercent = Math.Round(snapshot.Cpu.LoadPercent);
+        RamPercent = Math.Round(snapshot.Memory.UsedPercent);
         RamUsedGB = snapshot.Memory.UsedGB;
         RamTotalGB = snapshot.Memory.TotalGB;
         RamAvailableGB = snapshot.Memory.AvailableGB;
@@ -467,21 +473,28 @@ public sealed partial class DashboardViewModel : ElevatedViewModelBase
         if (gpus.Count > 0)
         {
             var gpu = gpus[0];
-            System.Windows.Application.Current?.Dispatcher.BeginInvoke(() =>
-            {
-                GpuPercent = gpu.UsagePercent;
-                GpuName = gpu.Name;
-                GpuVram = gpu.MemoryTotalGB > 0
-                    ? string.Create(CultureInfo.InvariantCulture,
-                        $"{gpu.MemoryUsedGB:F1} / {gpu.MemoryTotalGB:F1} GB VRAM")
-                    : "";
-            });
+            System.Windows.Application.Current?.Dispatcher.BeginInvoke(() => ShowGpu(gpu));
             return;
         }
 
         System.Windows.Application.Current?.Dispatcher.BeginInvoke(() => GpuPercent = null);
         if (!_gpuNameResolved)
             UpdateGpuNameFromWmi();
+    }
+
+    /// <summary>What one GPU reading shows: its load, its name and its video memory.</summary>
+    /// <remarks>
+    /// The load is rounded to the whole number the tile shows, as the processor's is in <see cref="ShowVitals"/>, so
+    /// its bar is laid out again only when that number changes (#2854).
+    /// </remarks>
+    internal void ShowGpu(GpuUsage gpu)
+    {
+        GpuPercent = Math.Round(gpu.UsagePercent);
+        GpuName = gpu.Name;
+        GpuVram = gpu.MemoryTotalGB > 0
+            ? string.Create(CultureInfo.InvariantCulture,
+                $"{gpu.MemoryUsedGB:F1} / {gpu.MemoryTotalGB:F1} GB VRAM")
+            : "";
     }
 
     private void UpdateGpuNameFromWmi()
@@ -612,9 +625,18 @@ public sealed partial class DashboardViewModel : ElevatedViewModelBase
         TemperaturesUnavailable = readings.Count == 0;
         TemperaturesNeedDriver = readings.Any(r => r.RequiresDriver);
 
-        System.Windows.Application.Current?.Dispatcher.BeginInvoke(() =>
-            Temperatures.ReplaceWith(readings));
+        System.Windows.Application.Current?.Dispatcher.BeginInvoke(() => ShowTemperatures(readings));
     }
+
+    /// <summary>The cards for one read of the sensors.</summary>
+    /// <remarks>
+    /// Only a reading that shows differently replaces the one before it, and its card takes the new one into its
+    /// bindings where it stands. The read runs every 2 seconds, and replacing the whole list built every card again
+    /// each time, although a temperature that moved by less than a degree shows the same, and told a screen reader
+    /// each time that the list had changed (#2854).
+    /// </remarks>
+    internal void ShowTemperatures(IReadOnlyList<TemperatureReading> readings) =>
+        Temperatures.UpdateWith(readings, TemperatureReading.ShownAlike.Instance);
 
     private async Task LoadTemperaturesAsync()
     {

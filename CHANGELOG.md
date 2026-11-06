@@ -10,6 +10,20 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.136.129] - 2026-11-06
+
+**SysManager no longer reads and rewrites the whole Resource History file as it starts.**
+
+### Fixed
+- The history sampler pruned its file as the app started, before its first sample: it read and parsed every line,
+  about 260,000 at the 30-day window, and wrote the file again for whatever had expired since the last prune. On my
+  PC a prune of a 30-day file took 824 ms and wrote 19 MB, and it ran in the first second of every launch. The
+  sampler's first look at the prune comes a minute in now, reads one line, and prunes only once a sample is a day
+  past the window, as its hourly look does. Since 1.47.0.
+- A crash or a power cut in the middle of writing a sample could leave the file's last line without its ending, and
+  the start's prune was what dropped that line. The first sample written after a start now begins on a line of its
+  own when the last line was cut short, so it is not lost with it.
+
 ## [1.136.128] - 2026-11-06
 
 **SysManager starts without building what the network tabs share: it is built when the first of them is opened.**

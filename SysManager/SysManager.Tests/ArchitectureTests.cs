@@ -16509,21 +16509,28 @@ public partial class ArchitectureTests
     private static partial Regex SkipWhileHidden();
 
     /// <summary>
-    /// The Resource History sampler's hourly prune goes through <c>PruneWhenDueAsync</c>, which rewrites the file once
-    /// its oldest sample is a day past the window, and not straight through <c>PruneAsync</c>, which rewrote it every
-    /// hour once an hour of samples had expired (#2853).
+    /// The Resource History sampler prunes only through <c>PruneWhenDueAsync</c>, which rewrites the file once its
+    /// oldest sample is a day past the window: not straight through <c>PruneAsync</c> each hour, which rewrote it every
+    /// hour once an hour of samples had expired (#2853), nor as it starts, which did in the first second of every
+    /// launch (#2852).
     /// </summary>
     [Fact]
-    public void TheHistorySamplersHourlyPrune_GoesThroughTheDueCheck()
+    public void TheHistorySampler_PrunesOnlyThroughTheDueCheck()
     {
         var code = WithoutComments(File.ReadAllText(
             Path.Combine(TestPaths.AppProject(), "Services", "ResourceHistoryService.cs")));
-        var at = code.IndexOf(">= PruneEverySamples)", StringComparison.Ordinal);
-        Assert.True(at >= 0, "the sampler's hourly prune was not found in ResourceHistoryService.");
-        var hourly = code[at..code.IndexOf('}', at)];
+        var start = code.IndexOf("public void Start()", StringComparison.Ordinal);
+        var startEnd = code.IndexOf("private async Task<ResourceSample> CaptureSampleAsync(", StringComparison.Ordinal);
+        var count = code.IndexOf("internal async Task CountSampleAsync(", StringComparison.Ordinal);
+        Assert.True(start >= 0 && startEnd > start && count >= 0,
+            $"the sampler was not found in ResourceHistoryService (start={start}, end={startEnd}, count={count}).");
+        var sampler = code[start..startEnd];
+        var counting = code[count..code.IndexOf("\n    }", count, StringComparison.Ordinal)];
 
-        Assert.Contains("PruneWhenDueAsync(", hourly);
-        Assert.DoesNotContain("PruneAsync(", hourly);
+        Assert.Contains("CountSampleAsync(", sampler);
+        Assert.DoesNotContain("PruneAsync(", sampler);
+        Assert.Contains("PruneWhenDueAsync(", counting);
+        Assert.DoesNotContain("PruneAsync(", counting);
     }
 
     /// <summary>

@@ -264,6 +264,9 @@ and every other list that reloads its rows the same way. If that row has gone, f
 place. It only happens when you were using the keyboard, so a list that refreshes by itself never pulls the view
 back while you scroll with the mouse.
 
+**`Tab` follows the page**, left to right and top to bottom: on DNS & Hosts it reaches the preset picker before Apply
+and Reset to DHCP, and on Bulk Installer the search box before Search.
+
 **`Ctrl+F` jumps to the search box** on the 12 tabs that have one, and selects whatever is already
 typed there so you can replace it straight away — the same thing the key does in a browser. On a tab with
 nothing to filter it does nothing at all, rather than moving your caret somewhere unexpected.

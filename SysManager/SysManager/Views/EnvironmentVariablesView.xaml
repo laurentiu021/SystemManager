@@ -157,8 +157,16 @@
             <!-- PATH editor -->
             <Border Grid.Column="1" Style="{StaticResource Card}" Padding="14" Margin="12,0,0,0" Width="380"
                     Visibility="{Binding IsPathSelected, Converter={StaticResource FlexVis}}">
-                <DockPanel>
-                    <StackPanel DockPanel.Dock="Top">
+                <!-- Header, list, add row: declared in the order they are drawn, since Tab follows the declaration.
+                     Docked at the bottom ahead of the list, the add row was reached before the folders above it
+                     (#2883). -->
+                <Grid>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="*"/>
+                        <RowDefinition Height="Auto"/>
+                    </Grid.RowDefinitions>
+                    <StackPanel Grid.Row="0">
                         <TextBlock Text="{Binding SelectedVariable.Name, StringFormat='PATH editor — {0}'}"
                                    Style="{StaticResource SectionTitle}" Foreground="{DynamicResource TextPrimary}"/>
                         <TextBlock Text="Reorder with the arrows, remove entries, or strip duplicates. Missing folders are highlighted."
@@ -168,21 +176,7 @@
                                 Style="{StaticResource SecondaryButton}" HorizontalAlignment="Left" Margin="0,0,0,8"/>
                     </StackPanel>
 
-                    <!-- Add directory row -->
-                    <Grid DockPanel.Dock="Bottom" Margin="0,8,0,0">
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="*"/>
-                            <ColumnDefinition Width="Auto"/>
-                        </Grid.ColumnDefinitions>
-                        <TextBox Grid.Column="0" Text="{Binding NewDirectory, UpdateSourceTrigger=PropertyChanged}"
-                                 AutomationProperties.Name="New PATH directory" VerticalContentAlignment="Center"
-                                 ToolTip="Directory to append to PATH."/>
-                        <Button Grid.Column="1" Content="Add" Command="{Binding AddDirectoryCommand}"
-                                AutomationProperties.Name="Add PATH directory"
-                                Style="{StaticResource SecondaryButton}" Margin="8,0,0,0"/>
-                    </Grid>
-
-                    <ScrollViewer VerticalScrollBarVisibility="Auto">
+                    <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto">
                         <ItemsControl ItemsSource="{Binding PathEntries}" helpers:RebuildFocus.Keep="True">
                             <ItemsControl.ItemTemplate>
                                 <DataTemplate>
@@ -226,7 +220,21 @@
                             </ItemsControl.ItemTemplate>
                         </ItemsControl>
                     </ScrollViewer>
-                </DockPanel>
+
+                    <!-- Add directory row -->
+                    <Grid Grid.Row="2" Margin="0,8,0,0">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+                        <TextBox Grid.Column="0" Text="{Binding NewDirectory, UpdateSourceTrigger=PropertyChanged}"
+                                 AutomationProperties.Name="New PATH directory" VerticalContentAlignment="Center"
+                                 ToolTip="Directory to append to PATH."/>
+                        <Button Grid.Column="1" Content="Add" Command="{Binding AddDirectoryCommand}"
+                                AutomationProperties.Name="Add PATH directory"
+                                Style="{StaticResource SecondaryButton}" Margin="8,0,0,0"/>
+                    </Grid>
+                </Grid>
             </Border>
         </Grid>
 

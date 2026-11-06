@@ -10,6 +10,20 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.136.135] - 2026-11-06
+
+**Tab goes through five rows in the order they are drawn, where it went backwards or skipped ahead.**
+
+### Fixed
+- On five rows Tab ran against the screen, because a control was docked right or at the bottom ahead of one drawn
+  before it. On DNS & Hosts Tab went Reset to DHCP, Apply, Undo and then the preset picker, the reverse of the row, so
+  someone entering the card from the keyboard landed first on the button that changes the PC's DNS (since 1.6.0).
+  Bulk Installer reached Search before its search box (since 1.7.5), Boot Analyzer Refresh before the Cancel to its
+  left (since 1.58.2), Environment Variables the PATH editor's add row before the folders above it (since 1.22.0), and
+  Speed Test Run before the Ookla server picker. Each row declares its controls in the order they are drawn now, laid
+  out exactly as before: every control, text and list on the five tabs sits where it did, measured at two window
+  widths. A check fails the build when a row is docked that way again.
+
 ## [1.136.134] - 2026-11-06
 
 **A screen reader and voice control now use the words each control shows, and four more buttons that cannot be undone say what they do before you press them.**

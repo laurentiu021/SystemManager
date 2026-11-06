@@ -87,10 +87,14 @@
                 <TextBlock Text="Search winget packages" Style="{StaticResource SectionTitle}"/>
                 <TextBlock Text="Find and install any app available on winget."
                            Style="{StaticResource Subtle}" Margin="0,2,0,12"/>
-                <DockPanel>
-                    <Button Content="Search" Command="{Binding SearchWingetCommand}"
-                            Style="{StaticResource PrimaryButton}" DockPanel.Dock="Right" Margin="8,0,0,0"/>
-                    <Grid>
+                <!-- The box first, as drawn: docked right ahead of it, Search was reached before the box it searches
+                     (#2883). -->
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="Auto"/>
+                    </Grid.ColumnDefinitions>
+                    <Grid Grid.Column="0">
                         <TextBox Text="{Binding SearchQuery, UpdateSourceTrigger=PropertyChanged}"
                                  AutomationProperties.Name="Search winget packages"/>
                         <TextBlock Text="Search apps…" IsHitTestVisible="False"
@@ -98,7 +102,9 @@
                                    VerticalAlignment="Center" Style="{StaticResource Subtle}"
                                    Visibility="{Binding SearchQuery, Converter={StaticResource FlexVis}, ConverterParameter=Inverse}"/>
                     </Grid>
-                </DockPanel>
+                    <Button Grid.Column="1" Content="Search" Command="{Binding SearchWingetCommand}"
+                            Style="{StaticResource PrimaryButton}" Margin="8,0,0,0"/>
+                </Grid>
 
                 <!-- Searching indicator -->
                 <ProgressBar AutomationProperties.Name="Searching for apps" IsIndeterminate="True" Height="2" Margin="0,8,0,0"

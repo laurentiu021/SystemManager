@@ -13257,7 +13257,7 @@ public partial class ArchitectureTests
 
         foreach (var path in files)
         {
-            var root = System.Xml.Linq.XDocument.Load(path).Root;
+            var root = System.Xml.Linq.XDocument.Load(path, LoadOptions.SetLineInfo).Root;
             if (root is null) continue;
             var file = Path.GetFileName(path);
 
@@ -13270,13 +13270,28 @@ public partial class ArchitectureTests
                 barsSeen++;
                 var name = bar.Attributes()
                     .FirstOrDefault(a => a.Name.LocalName == "AutomationProperties.Name")?.Value;
+                var repeats = bar.Ancestors().Any(a => a.Name.LocalName == "DataTemplate");
                 if (string.IsNullOrWhiteSpace(name))
                 {
                     unnamed++;
                 }
                 else
                 {
-                    named.Add(name.Trim());
+                    // A bar drawn once per item with a name bound to its item says that item's words, so bars in
+                    // two templates are told apart by their items even where their markup is the same: the
+                    // sidebar's grouped rows and its flat Dashboard row both say "Working on {0}" of their own
+                    // tab (#2745). Within one template the same bound name is still two bars on one item, so
+                    // it is keyed by its template.
+                    if (repeats && name.Contains("{Binding", StringComparison.Ordinal))
+                    {
+                        var line = ((System.Xml.IXmlLineInfo)bar.Ancestors()
+                            .First(a => a.Name.LocalName == "DataTemplate")).LineNumber;
+                        named.Add($"{name.Trim()} (in the template at line {line})");
+                    }
+                    else
+                    {
+                        named.Add(name.Trim());
+                    }
                     if (tooVagueToIdentify.Contains(name.Trim(), StringComparer.OrdinalIgnoreCase))
                         vague.Add($"{file} — bar announced \"{name.Trim()}\"");
                 }
@@ -13286,7 +13301,6 @@ public partial class ArchitectureTests
                 // it is scoped to the Button family inside a DataGrid column, and these sit in an
                 // ItemsControl. A mutation that replaced one of these bound names with a constant went
                 // green, which is how the gap was found.
-                var repeats = bar.Ancestors().Any(a => a.Name.LocalName == "DataTemplate");
                 if (!repeats) continue;
                 repeatingBars++;
                 if (!string.IsNullOrWhiteSpace(name)

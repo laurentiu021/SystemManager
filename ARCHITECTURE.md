@@ -77,7 +77,8 @@ the MIRRORED values and never `NavItem.Content`, because touching Content materi
 would rebuild every lazy tab the shell asked about.
 The flat Dashboard row and grouped leaf rows are invokable buttons styled
 `SidebarNavButton`. Their inner visuals consume selection through the shared `SidebarNavRow`,
-`SidebarNavText`, and `SidebarActiveMark` styles, while `ItemStatus` exposes
+`SidebarNavText`, and `SidebarActiveMark` styles, both draw the same two-pixel busy bar while their
+tab works (`SidebarSelectionContractTests` holds the two to one look), while `ItemStatus` exposes
 the same state to UI Automation, with "Preview" for a tab still being verified. Group
 headers are keyboard-focusable toggles; collapsed content is disabled so visually hidden
 leaves cannot receive focus.

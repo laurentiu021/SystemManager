@@ -133,6 +133,40 @@ public class SidebarSelectionContractTests
         }
     }
 
+    /// <summary>
+    /// Every row in the sidebar shows the same busy bar while its tab is working.
+    /// </summary>
+    /// <remarks>
+    /// The grouped rows had a two-pixel bar under the name while their tab worked; the Dashboard is a flat row of its
+    /// own, and it was built without one, so Quick Tune-Up, a quick action or the slowdown check showed nothing in the
+    /// sidebar, though the 1.127.11 notes and <c>DashboardViewModel</c> said it did (#2745). Asserted per row and
+    /// attribute for attribute, so the two cannot drift into two looks.
+    /// </remarks>
+    [Fact]
+    public void LiveRows_ShowTheSameBusyBarWhileTheirTabWorks()
+    {
+        var document = LoadProjectXaml("MainWindow.xaml");
+        var liveRows = document
+            .Descendants(Presentation + "Border")
+            .Where(element => (string?)element.Attribute("Style") == "{StaticResource SidebarNavRow}")
+            .ToList();
+        Assert.Equal(2, liveRows.Count);
+
+        const string WhileBusy = "{Binding IsBusy, Converter={StaticResource BoolToVis}}";
+        var bars = liveRows.Select(row => Assert.Single(
+                row.Descendants(Presentation + "ProgressBar"),
+                bar => (string?)bar.Attribute("Visibility") == WhileBusy))
+            .ToList();
+        foreach (var bar in bars)
+        {
+            Assert.Equal("True", (string?)bar.Attribute("IsIndeterminate"));
+            Assert.Equal("2", (string?)bar.Attribute("Height"));
+        }
+        static string Shape(XElement bar) => string.Join("; ", bar.Attributes()
+            .OrderBy(a => a.Name.ToString(), StringComparer.Ordinal).Select(a => $"{a.Name.LocalName}={a.Value}"));
+        Assert.Equal(Shape(bars[0]), Shape(bars[1]));
+    }
+
     [Fact]
     public void LiveRows_ExposeSelectionToInvokableAutomationPeers()
     {

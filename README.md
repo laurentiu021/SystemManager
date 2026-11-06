@@ -181,8 +181,7 @@ well would hide nine of the twelve. Every group header shows how many tabs it ho
 on hover, the full list; a collapsed group also shows a short written summary of what it
 covers, up to two lines. Dashboard renders as a flat top-level entry without an expander
 arrow. Each tab shows a slim progress bar under its name when performing a long-running
-operation, so you always know which tab is working; the flat Dashboard row is the
-exception.
+operation, so you always know which tab is working, the flat Dashboard row included.
 
 Pointing at a row draws a neutral bar on its left edge, a different colour from the accent
 bar of the open tab, so hovering never looks like opening. The foot of the sidebar shows

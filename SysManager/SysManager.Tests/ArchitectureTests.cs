@@ -10336,7 +10336,6 @@ public partial class ArchitectureTests
             "AboutViewModel",          // its constructor's update check feeds the shell's update banner
             "DarkModeViewModel",       // owns the always-on theme schedule poll; nothing else runs it
             "DashboardViewModel",      // the initially selected tab, built immediately regardless
-            "NetworkSharedState",      // shared by the four network tabs; starts nothing on construction
             "StandbyMemoryViewModel",  // owns the auto-purge poll, set-and-forget like the schedule (#2481)
             "WelcomeViewModel",        // not a tab: the Welcome screen, up on a first launch's first frame (#1635)
         ];

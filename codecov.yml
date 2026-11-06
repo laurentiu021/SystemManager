@@ -5,13 +5,13 @@ coverage:
         # Warn if overall coverage drops more than 2% from the base commit.
         target: auto
         threshold: 2%
-        informational: true   # don't fail CI, just warn — 24% baseline is low
+        informational: true   # warns only; the gate is Helpers/ line coverage in ci.yml (#2862)
     patch:
       default:
         # New code added in a PR should have at least 50% coverage.
         target: 50%
         threshold: 10%
-        informational: true   # warn only for now; tighten once coverage improves
+        informational: true   # warns only; the gate is Helpers/ line coverage in ci.yml (#2862)
 
 comment:
   layout: "reach,diff,flags,files"

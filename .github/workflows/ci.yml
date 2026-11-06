@@ -489,6 +489,50 @@ jobs:
             echo "coverage report: $report ($(wc -c < "$report") bytes)"
           done
 
+      # Helpers/ is pure code with nothing of the machine behind it, so its line coverage has a floor, and this is the
+      # one coverage figure that fails a run: Codecov's statuses stay informational. Each line of a file counts once,
+      # since the report lists a line again for every class the compiler generates around it. The floor sits about
+      # half a point under the figure measured when it was set (83.71%, 1,819 of 2,173 lines, on 2026-11-06); the
+      # notice below says when the figure has moved a point past it, and the floor is raised then, never lowered
+      # (#2862).
+      - name: Helpers coverage holds its floor
+        if: ${{ !cancelled() }}
+        shell: pwsh
+        env:
+          HELPERS_COVERAGE_FLOOR: '83.0'
+        run: |
+          $report = Get-ChildItem TestResults -Recurse -Filter '*.cobertura.xml' |
+                    Sort-Object Length -Descending | Select-Object -First 1
+          if (-not $report) {
+              throw "No coverage report under TestResults, so the Helpers/ floor could not be checked."
+          }
+          [xml]$xml = Get-Content -LiteralPath $report.FullName -Raw
+          $hits = @{}
+          foreach ($class in $xml.SelectNodes('//class')) {
+              $file = $class.GetAttribute('filename') -replace '\\', '/'
+              if ($file -notmatch '/SysManager/SysManager/Helpers/') { continue }
+              foreach ($line in $class.SelectNodes('lines/line')) {
+                  $key = $file + '|' + $line.GetAttribute('number')
+                  $count = [long]$line.GetAttribute('hits')
+                  if (-not $hits.ContainsKey($key) -or $hits[$key] -lt $count) { $hits[$key] = $count }
+              }
+          }
+          # Below this the report did not cover Helpers/ at all, and a percentage of it would measure nothing.
+          if ($hits.Count -lt 1000) {
+              throw "The report holds only $($hits.Count) lines of Helpers/, under the 1,000 a full run has."
+          }
+          $covered = @($hits.Values | Where-Object { $_ -gt 0 }).Count
+          $percent = [math]::Round(100.0 * $covered / $hits.Count, 2)
+          $floor = [double]::Parse($env:HELPERS_COVERAGE_FLOOR, [Globalization.CultureInfo]::InvariantCulture)
+          Write-Host "Helpers/ line coverage: $covered of $($hits.Count) lines, $percent% (floor $floor%)."
+          if ($percent -lt $floor) {
+              throw "Helpers/ line coverage is $percent%, under its floor of $floor%. Test the helper code this " +
+                    "change adds or leaves untested; the floor is not lowered to let it through."
+          }
+          if ($percent -ge $floor + 1) {
+              Write-Host "::notice::Helpers/ line coverage is $percent%, a point or more above its floor of $floor%. Raise HELPERS_COVERAGE_FLOOR in ci.yml to hold it there."
+          }
+
       # Codecov's test-analytics parser reads JUnit XML and nothing else. A TRX is accepted by the CLI,
       # uploaded, and discarded server-side without a word, which is how the upload step below stayed
       # green for months while the Tests tab held zero tests (the test-analytics API returned

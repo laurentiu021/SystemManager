@@ -7564,6 +7564,35 @@ public partial class ArchitectureTests
     }
 
     /// <summary>
+    /// The unit job holds Helpers/ line coverage at a floor, and fails under it (#2862).
+    /// </summary>
+    /// <remarks>
+    /// Coverage gated nothing: both Codecov statuses are informational, and the upload does not fail the run. The step
+    /// is the gate, so this keeps it one: it reads the report, keeps to Helpers/, counts a line once, refuses a report
+    /// that holds too few lines to mean anything, throws under the floor, and the floor is at least the 80% TESTING.md
+    /// and the test protocol set for Helpers/.
+    /// </remarks>
+    [Fact]
+    public void TheUnitJob_HoldsHelpersCoverageAtItsFloor()
+    {
+        var lines = File.ReadAllLines(Path.Combine(TestPaths.RepoRoot(), ".github", "workflows", "ci.yml"));
+        var at = ReleaseStepLine(lines, "Helpers coverage holds its floor");
+        var step = ReleaseStepCode(lines, at);
+
+        foreach (var required in new[] { "*.cobertura.xml", "/SysManager/SysManager/Helpers/", "ContainsKey($key)",
+                                          "$hits.Count -lt 1000", "$percent -lt $floor" })
+            Assert.Contains(required, step, StringComparison.Ordinal);
+        Assert.True(step.Split('\n').Count(l => l.TrimStart().StartsWith("throw ", StringComparison.Ordinal)) >= 3,
+            "the step must fail for a missing report, a report without Helpers/, and coverage under the floor.");
+        Assert.DoesNotContain("continue-on-error", step, StringComparison.Ordinal);
+
+        var floor = Regex.Match(step, @"HELPERS_COVERAGE_FLOOR: '(?<floor>[\d.]+)'");
+        Assert.True(floor.Success, "the step names no HELPERS_COVERAGE_FLOOR.");
+        var value = double.Parse(floor.Groups["floor"].Value, CultureInfo.InvariantCulture);
+        Assert.InRange(value, 80, 100);
+    }
+
+    /// <summary>
     /// Every Linux job in the workflows runs on one pinned Ubuntu image, never on <c>ubuntu-latest</c>.
     /// </summary>
     /// <remarks>

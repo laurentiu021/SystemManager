@@ -2275,6 +2275,11 @@ Key utility classes that don't fit neatly into Services or ViewModels (not an ex
   inside a change handler (in `ObservableCollectionExtensions.cs`). `UpdateWith` is for a list read again on a
   timer: it replaces only the items a comparer finds changed, one `Replace` each, and takes one `Reset` when the
   length changed (#2854).
+- `FocusWhenShown` — moves keyboard focus to a control when it appears (#2883). Display Profiles' Keep has it: Apply
+  is disabled while the panel re-trains, which leaves focus nowhere, and the previous mode comes back 15 seconds after
+  the bar appears. The attached `Take` property watches `IsVisibleChanged` and focuses the control at `Input`
+  priority, once it is laid out, only when the window is active and focus is nowhere, on the window, or on one of the
+  control's ancestors, which `RebuildFocus.IsWithin` decides as it does for a list.
 - `RebuildFocus` — keeps keyboard focus in a list across a rebuild (#2609). A `Reset` makes WPF
   discard every row, so the focused control left the tree and WPF put focus on the window. The
   attached `Keep` property gives a list a tracker that records where focus is: the row's item and

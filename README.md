@@ -265,7 +265,8 @@ place. It only happens when you were using the keyboard, so a list that refreshe
 back while you scroll with the mouse.
 
 **`Tab` follows the page**, left to right and top to bottom: on DNS & Hosts it reaches the preset picker before Apply
-and Reset to DHCP, and on Bulk Installer the search box before Search.
+and Reset to DHCP, and on Bulk Installer the search box before Search. When Display Profiles asks whether to keep a
+new mode, focus moves to **Keep**.
 
 **`Ctrl+F` jumps to the search box** on the 12 tabs that have one, and selects whatever is already
 typed there so you can replace it straight away — the same thing the key does in a browser. On a tab with
@@ -2155,7 +2156,9 @@ offers, "rate us" prompts:
 - **Safe by design** — applies for the session, so a reboot reverts; on top of
   that a **15-second auto-revert** restores the previous mode unless you confirm
   "Keep", so a bad mode can never strand you on a blank screen; **Revert now** or **Esc** goes back at once,
-  and closing SysManager before you keep a mode puts the previous one back (it asks first)
+  and closing SysManager before you keep a mode puts the previous one back (it asks first). Focus moves to **Keep**
+  when it is asked, and a screen reader is told once how long there is; the seconds count down on the bar, which is
+  not read out each time
 - **Per-display** — choose which monitor to configure; shows the current mode
 - **Sees a screen you connect later** — the list is read again when Windows reports a display
   connected, removed or changed, and on **Refresh** or **F5**. The display you picked stays picked

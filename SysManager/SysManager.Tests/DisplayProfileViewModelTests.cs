@@ -391,17 +391,33 @@ public class DisplayProfileViewModelTests
         for (var i = 0; i < count; i++) clock.FireAll();
     }
 
+    /// <summary>
+    /// The bar counts the seconds, and the status line, which a screen reader announces, says once what to do.
+    /// </summary>
+    /// <remarks>
+    /// The line was rewritten every second, "Keep these settings? Reverting in 14s…", and each rewrite was read out:
+    /// about fifteen sentences queued while the user looked for Keep, still speaking after the mode had gone back
+    /// (#2883).
+    /// </remarks>
     [Fact]
-    public async Task EachSecond_TheLineCountsDown()
+    public async Task EachSecond_TheBarCountsDown_AndTheStatusLineIsSaidOnce()
     {
         var clock = new HeldTimers();
         using var vm = await WaitingToBeKept(Applying(Laptop), clock);
         Assert.Equal(TimeSpan.FromSeconds(1), clock.OnlyDue);
+        var said = vm.StatusMessage;
+        Assert.StartsWith("Applied ", said, StringComparison.Ordinal);
+        Assert.EndsWith("Press Keep within 15 seconds, or the previous mode comes back.", said,
+            StringComparison.Ordinal);
 
-        Seconds(clock, 1);
+        var rewritten = 0;
+        vm.PropertyChanged += (_, e) => rewritten += e.PropertyName == nameof(vm.StatusMessage) ? 1 : 0;
 
-        Assert.Equal(14, vm.RevertCountdown);
-        Assert.Equal("Keep these settings? Reverting in 14s…", vm.StatusMessage);
+        Seconds(clock, 14);
+
+        Assert.Equal(1, vm.RevertCountdown);
+        Assert.Equal(0, rewritten);
+        Assert.Equal(said, vm.StatusMessage);
     }
 
     [Fact]

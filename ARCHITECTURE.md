@@ -931,6 +931,13 @@ Key services:
   leaf-only gap #2814 closed for the shared walk and Browser Cleaner (tracked separately, #3001). The
   guard fails if an exempted file stops walking a tree (a stale name nobody would remove) or stops
   guarding its root.
+- `Helpers/ScanExclusions` — what Large Files and Duplicate Finder leave out, held once so the two cannot drift
+  apart: `SystemFolders`, a `SearchValues<string>` found anywhere in a folder's path in any case, and
+  `WindowsManagedFiles`, a `FrozenSet<string>` of the page, hibernation and swap files by exact name. Neither
+  allocates on a check, where the `Any` with a lambda each scanner used cost a closure and a delegate per file and
+  folder (#2854). Disk Analyzer keeps its own folder list, without `Windows\System32\config`, since it counts what
+  that folder holds. `ArchitectureTests.BothActionableFileScanners_RefuseTheSystemManagedFiles` fails on a scanner
+  that keeps a file list of its own.
 - `Helpers/FileIdentity` — which file a handle is open on: its volume's serial number and the 128-bit ID
   `GetFileInformationByHandleEx` returns, the same for every hard link to the file, and `LinksOf`, how many
   names the file has. Duplicate Finder leaves a file's other names out of its groups with the first, and File

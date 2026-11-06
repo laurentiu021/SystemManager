@@ -98,19 +98,6 @@ public sealed class DuplicateFileService
     /// <param name="Failure"><see cref="ScanFailure.None"/> when the folder was scanned.</param>
     public sealed record DuplicateScan(IReadOnlyList<DuplicateFileGroup> Groups, ScanFailure Failure);
 
-    // Skip system subtrees that are slow, protected, or pointless.
-    private static readonly string[] SkipSegments =
-    {
-        @"\$recycle.bin", @"\system volume information", @"\windows\winsxs",
-        @"\windows\system32\config", @"\windows\csc"
-    };
-
-    // Skip known system files.
-    private static readonly string[] SkipFiles =
-    {
-        "pagefile.sys", "hiberfil.sys", "swapfile.sys"
-    };
-
     /// <summary>Minimum file size to consider (skip tiny files that are often config/metadata).</summary>
     private const long DefaultMinSize = 1024; // 1 KB
 
@@ -424,11 +411,8 @@ public sealed class DuplicateFileService
         return Convert.ToHexString(SHA256.HashData(buffer.AsSpan(0, totalRead)));
     }
 
-    private static bool ShouldSkipDir(string path)
-    {
-        return SkipSegments.Any(seg => path.Contains(seg, StringComparison.OrdinalIgnoreCase));
-    }
+    // The system folders and files Large Files leaves out too, held once in ScanExclusions.
+    private static bool ShouldSkipDir(string path) => path.AsSpan().ContainsAny(ScanExclusions.SystemFolders);
 
-    private static bool ShouldSkipFile(string name)
-        => SkipFiles.Any(skip => name.Equals(skip, StringComparison.OrdinalIgnoreCase));
+    private static bool ShouldSkipFile(string name) => ScanExclusions.WindowsManagedFiles.Contains(name);
 }

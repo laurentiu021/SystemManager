@@ -18,33 +18,6 @@ public sealed class LargeFileScanner
     /// <summary>Progress payload: files scanned, bytes scanned, current folder.</summary>
     public sealed record LargeFileProgress(long FilesScanned, long BytesScanned, string CurrentFolder);
 
-    // Skip well-known system subtrees where poking around is slow and pointless.
-    private static readonly string[] SkipSegments =
-    {
-        @"\$recycle.bin", @"\system volume information", @"\windows\winsxs",
-        @"\windows\system32\config", @"\windows\csc"
-    };
-
-    /// <summary>
-    /// Files Windows manages itself, matched by exact name. Not part of <see cref="SkipSegments"/>: that list
-    /// is asked only about a directory the walk is about to enter, so the three names used to sit in it and
-    /// never be consulted — they were listed among the biggest files on every drive that has them (#2386).
-    /// </summary>
-    /// <remarks>
-    /// These are normally the two largest files on the system drive — a hibernation file is a fraction of
-    /// installed RAM and a page file several gigabytes — so they take the top of the one list this tab exists
-    /// to produce, and neither of the actions offered beside a row ("Show in Explorer", "Copy path") can do
-    /// anything about a file Windows holds open. Disk Analyzer still counts them, which is where that space is
-    /// meant to be accounted for; this tab is the list of files a user might act on.
-    /// <para>Exact name, not a substring as the subtree list uses: <c>my-pagefile.sys.bak</c> is the user's own
-    /// file and contains one of these names. Mirrors <c>DuplicateFileService.ShouldSkipFile</c>, which has
-    /// filtered the same three since it was written.</para>
-    /// </remarks>
-    private static readonly string[] SkipFiles =
-    {
-        "pagefile.sys", "hiberfil.sys", "swapfile.sys"
-    };
-
     public Task<IReadOnlyList<LargeFileEntry>> ScanAsync(
         string rootPath,
         long minSizeBytes,
@@ -219,11 +192,8 @@ public sealed class LargeFileScanner
         public LargeFileEntry[] Largest() => [.. _heap.Reverse().Select(h => _entries[h.Path])];
     }
 
-    private static bool ShouldSkip(string path)
-    {
-        return SkipSegments.Any(seg => path.Contains(seg, StringComparison.OrdinalIgnoreCase));
-    }
+    // The system folders and files Duplicate Finder leaves out too, held once in ScanExclusions.
+    private static bool ShouldSkip(string path) => path.AsSpan().ContainsAny(ScanExclusions.SystemFolders);
 
-    private static bool ShouldSkipFile(string name)
-        => SkipFiles.Any(skip => name.Equals(skip, StringComparison.OrdinalIgnoreCase));
+    private static bool ShouldSkipFile(string name) => ScanExclusions.WindowsManagedFiles.Contains(name);
 }

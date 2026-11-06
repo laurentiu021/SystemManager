@@ -2,6 +2,7 @@
 // Author: laurentiu021 · https://github.com/laurentiu021/SystemManager
 // License: MIT
 
+using System.Buffers;
 using System.Globalization;
 using System.IO;
 using System.Text;
@@ -56,12 +57,11 @@ public sealed class DiskAnalyzerService
     /// <param name="Failure"><see cref="AnalysisFailure.None"/> when the folder was measured.</param>
     public sealed record Analysis(IReadOnlyList<DiskUsageEntry> Entries, AnalysisFailure Failure);
 
-    // Skip system subtrees that are slow or inaccessible.
-    private static readonly string[] SkipSegments =
-    {
-        @"\$recycle.bin", @"\system volume information",
-        @"\windows\winsxs", @"\windows\csc"
-    };
+    // Skip system subtrees that are slow or inaccessible. SearchValues looks for all four in one pass over a path,
+    // without the closure and delegate per folder that Any with a lambda cost (#2854).
+    private static readonly SearchValues<string> SkipSegments = SearchValues.Create(
+        [@"\$recycle.bin", @"\system volume information", @"\windows\winsxs", @"\windows\csc"],
+        StringComparison.OrdinalIgnoreCase);
 
     /// <summary>
     /// The excluded subtrees, in the form a user would recognise, so the UI can say exactly what is
@@ -305,11 +305,8 @@ public sealed class DiskAnalyzerService
         return (totalSize, fileCount, folderCount, accessDenied);
     }
 
-    private static bool ShouldSkip(string path)
-    {
-        // Use OrdinalIgnoreCase instead of allocating a lowercase copy (#296).
-        return SkipSegments.Any(seg => path.Contains(seg, StringComparison.OrdinalIgnoreCase));
-    }
+    // OrdinalIgnoreCase rather than a lowercase copy of the path (#296).
+    private static bool ShouldSkip(string path) => path.AsSpan().ContainsAny(SkipSegments);
 
     /// <summary>Renders a folder-size breakdown as CSV with a header row.</summary>
     /// <remarks>

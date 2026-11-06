@@ -275,8 +275,8 @@ public class StartupSignatureTests
     [Fact]
     public void ThePalette_KeepsUnsignedNeutral_AndWarnsOnlyOnAFailedCheck()
     {
-        Assert.Equal("#7B8396", SignatureTrustPalette.TextColor(SignatureTrust.Unsigned));
-        Assert.Equal("#7B8396", SignatureTrustPalette.TextColor(SignatureTrust.Unknown));
+        Assert.Equal("NeutralText", SignatureTrustPalette.TextColor(SignatureTrust.Unsigned));
+        Assert.Equal("NeutralText", SignatureTrustPalette.TextColor(SignatureTrust.Unknown));
 
         Assert.Equal("SuccessText", SignatureTrustPalette.TextColor(SignatureTrust.Verified));
         Assert.Equal("SuccessBgSubtle", SignatureTrustPalette.BackgroundColor(SignatureTrust.Verified));

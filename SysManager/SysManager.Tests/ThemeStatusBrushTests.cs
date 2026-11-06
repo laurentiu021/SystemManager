@@ -2,6 +2,7 @@
 // Author: laurentiu021 · https://github.com/laurentiu021/SystemManager
 // License: MIT
 
+using System.Globalization;
 using System.Windows.Media;
 using SysManager.Helpers;
 using SysManager.Models;
@@ -462,6 +463,68 @@ public class ThemeStatusBrushTests
             Assert.True(distance >= 120,
                 $"{(isDark ? "Dark" : "Light")}: Good {good} and Bad {bad} must read as different colours; RGB distance {distance}.");
         }
+    }
+
+    /// <summary>
+    /// Every status chip's words clear 4.5:1 against the chip they sit on, on every built-in theme (#2931).
+    /// </summary>
+    /// <remarks>
+    /// The words are 11 to 12 px, so they are small text. A chip is its text over its tint, and the tint is laid
+    /// over the card: its body and the top of its sheen, where the first rows of a list sit. The light
+    /// palette's success text used to be checked against white only and the grey against nothing, and on the
+    /// light themes "Known app" and "Verified" measured 3.81 to 4.24:1 and "Not recognised" 2.84 to 3.18. The
+    /// chips are read from the palettes the views bind, so a new kind of chip is covered without a line here.
+    /// </remarks>
+    [Theory]
+    [MemberData(nameof(ThemeTextContrastTests.AllPresets), MemberType = typeof(ThemeTextContrastTests))]
+    public void EveryChipText_ClearsAaOnItsTint(string presetId)
+    {
+        var preset = ThemePreset.Defaults[presetId];
+        var palette = ThemeService.StatusPalette(preset.IsDark);
+        Color Resolve(string colour) => colour.StartsWith('#')
+            ? C(colour)
+            : palette.Where(e => e.Key == colour).Select(e => (Color?)e.Color).FirstOrDefault()
+              ?? (colour == "TextMuted" ? preset.TextMuted
+                  : throw new InvalidOperationException($"{colour} is in neither the palette nor this test."));
+
+        var chips = new List<(string Name, string Text, string Tint)>();
+        foreach (var safety in new[] { "System", "Trusted", "Unknown" })
+            chips.Add(($"process {safety}", ProcessSafetyPalette.TextColor(safety),
+                ProcessSafetyPalette.BackgroundColor(safety)));
+        foreach (var trust in Enum.GetValues<SignatureTrust>())
+            chips.Add(($"signature {trust}", SignatureTrustPalette.TextColor(trust),
+                SignatureTrustPalette.BackgroundColor(trust)));
+        var safetyText = new SafetyLevelToColorConverter();
+        var safetyTint = new SafetyLevelToBackgroundColorConverter();
+        foreach (var level in Enum.GetValues<SafetyLevel>())
+            chips.Add(($"safety {level}",
+                (string)safetyText.Convert(level, typeof(string), null!, CultureInfo.InvariantCulture),
+                (string)safetyTint.Convert(level, typeof(string), null!, CultureInfo.InvariantCulture)));
+
+        var offenders = new List<string>();
+        foreach (var (name, text, tint) in chips)
+        {
+            (string Where, Color Card)[] under =
+                [("card", preset.Surface), ("card top", ThemeService.CardSheenTop(preset))];
+            foreach (var (where, card) in under)
+            {
+                var ratio = ContrastRatio(Resolve(text), Over(Resolve(tint), card));
+                if (ratio < 4.5) offenders.Add($"{name}: {text} on {tint} over the {where} is {ratio:F2}:1");
+            }
+        }
+
+        // Vacuity floor: 3 process, 4 signature and 4 safety chips when measured.
+        Assert.True(chips.Count >= 11, $"only {chips.Count} chips were read.");
+        Assert.True(offenders.Count == 0,
+            $"on {presetId}, these chips' words are under 4.5:1 against the chip:\n  " + string.Join("\n  ", offenders));
+    }
+
+    /// <summary><paramref name="top"/> composited over the opaque <paramref name="under"/>.</summary>
+    private static Color Over(Color top, Color under)
+    {
+        var a = top.A / 255.0;
+        byte Mix(byte t, byte u) => (byte)Math.Round(t * a + u * (1 - a));
+        return Color.FromRgb(Mix(top.R, under.R), Mix(top.G, under.G), Mix(top.B, under.B));
     }
 
     private static Color Lookup(IReadOnlyList<(string Key, Color Color)> palette, string key)

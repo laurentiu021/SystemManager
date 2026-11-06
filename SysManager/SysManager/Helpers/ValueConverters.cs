@@ -126,8 +126,8 @@ public sealed class SafetyLevelToColorConverter : IValueConverter
     {
         SafetyLevel.Safe => "SuccessText",
         SafetyLevel.Caution => "WarningText",
-        // The app's "no information" grey, as Process Manager's Not recognised chip uses (#1512).
-        SafetyLevel.NotRated => "TextMuted",
+        // The app's "no information" grey, as Process Manager's Not recognised chip uses (#1512, #2931).
+        SafetyLevel.NotRated => "NeutralText",
         _ => "DangerText",
     };
 
@@ -137,7 +137,7 @@ public sealed class SafetyLevelToColorConverter : IValueConverter
 
 /// <summary>
 /// Maps a <see cref="SafetyLevel"/> to its chip's tint, for <see cref="ThemeBrush"/>: a fixed colour, the same on every
-/// theme, at an eighth of full strength.
+/// theme, at an eighth of full strength, or for Not rated the neutral tint, which follows the theme.
 /// </summary>
 public sealed class SafetyLevelToBackgroundColorConverter : IValueConverter
 {
@@ -145,7 +145,7 @@ public sealed class SafetyLevelToBackgroundColorConverter : IValueConverter
     {
         SafetyLevel.Safe => "#2022C55E",
         SafetyLevel.Caution => "#20F59E0B",
-        SafetyLevel.NotRated => "#207B8396",
+        SafetyLevel.NotRated => "NeutralBgSubtle",
         _ => "#20EF4444",
     };
 
@@ -280,10 +280,11 @@ public sealed class ProcessSafetyToTooltipConverter : IValueConverter
 /// </summary>
 public static class ProcessSafetyPalette
 {
-    // TextMuted / Surface3 are the app's existing "no emphasis" pair, so an unrecognised process
-    // looks like ordinary de-emphasised text rather than a bespoke grey invented for this column.
-    private const string UnknownText = "#7B8396";
-    private const string UnknownBg = "#207B8396";
+    // The theme's neutral pair, so an unrecognised process looks like ordinary de-emphasised text rather than a
+    // bespoke grey invented for this column. It was a fixed #7B8396, which fell short of 4.5:1 on eleven of the
+    // twelve themes (#2931).
+    private const string UnknownText = "NeutralText";
+    private const string UnknownBg = "NeutralBgSubtle";
 
     /// <summary>
     /// The colour of the chip's text and dot, for <see cref="ThemeBrush"/>: the name of a theme brush, or a fixed
@@ -383,8 +384,8 @@ public static class SignatureTrustPalette
 {
     // The same "no emphasis" pair the process chip uses for an unrecognised program, so an unsigned
     // startup entry looks like ordinary de-emphasised text rather than a bespoke grey.
-    private const string NeutralText = "#7B8396";
-    private const string NeutralBg = "#207B8396";
+    private const string NeutralText = "NeutralText";
+    private const string NeutralBg = "NeutralBgSubtle";
 
     /// <summary>
     /// The colour of the pill's text and dot, for <see cref="ThemeBrush"/>: the name of a theme brush, or a fixed

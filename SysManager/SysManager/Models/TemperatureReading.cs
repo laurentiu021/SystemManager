@@ -51,4 +51,29 @@ public sealed record TemperatureReading(
             <= 80 => StatusColors.Warning,
             _ => StatusColors.Bad
         };
+
+    /// <summary>
+    /// Two readings that show the same on a temperature card: its name, its group, its value and its colour.
+    /// </summary>
+    /// <remarks>
+    /// The Dashboard reads its sensors every 2 seconds, and a temperature that moved by less than a degree shows the
+    /// same. Its card is kept rather than built again (#2854). This compares what the card binds, so a binding added to
+    /// the card belongs here too; <c>ArchitectureTests.TheTemperatureCard_BindsOnlyWhatShownAlikeCompares</c> fails
+    /// until it is.
+    /// </remarks>
+    internal sealed class ShownAlike : IEqualityComparer<TemperatureReading>
+    {
+        internal static readonly ShownAlike Instance = new();
+
+        public bool Equals(TemperatureReading? x, TemperatureReading? y) =>
+            ReferenceEquals(x, y)
+            || x is not null && y is not null
+               && x.Component == y.Component
+               && x.SensorName == y.SensorName
+               && x.DisplayValue == y.DisplayValue
+               && x.ColorHex == y.ColorHex;
+
+        public int GetHashCode(TemperatureReading reading) =>
+            HashCode.Combine(reading.Component, reading.SensorName, reading.DisplayValue, reading.ColorHex);
+    }
 }

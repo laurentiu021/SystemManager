@@ -16412,6 +16412,73 @@ public partial class ArchitectureTests
     private static partial Regex NextMemberDeclaration();
 
     /// <summary>
+    /// <c>SystemInfoService.Capture</c>, the snapshot taken on the calling thread, is taken only by the two loops that
+    /// run on the thread pool, and they take no other (#2854).
+    /// </summary>
+    /// <remarks>
+    /// <para>The Dashboard's vitals loop and Resource History's sampler both run in a <c>Task.Run</c>, and both awaited
+    /// <c>CaptureAsync</c>, a <c>Task.Run</c> of its own: a second hop to the pool for every sample, three a second on
+    /// the Dashboard. They take the snapshot where they run now.</para>
+    /// <para><c>Capture</c> reads WMI the first time and when the disks are due, so a call from the UI thread could
+    /// hold the window up. A new caller on the pool goes in the list below, with why it runs there.</para>
+    /// </remarks>
+    [Fact]
+    public void OnlyThePoolLoopsCaptureInPlace()
+    {
+        var appDir = TestPaths.AppProject();
+
+        // (file, the member that takes the snapshot, why that member runs on the thread pool)
+        (string File, string Member, string Why)[] loops =
+        [
+            ("ViewModels/DashboardViewModel.cs", "StartPollingLoop", "the vitals loop is the Task.Run it starts"),
+            ("Services/ResourceHistoryService.cs", "CaptureSampleAsync",
+             "only the sampler's loop calls it, a Task.Run whose awaits do not come back to the UI thread"),
+        ];
+
+        var offenders = new List<string>();
+        var calls = 0;
+        foreach (var path in SourceFilesUnder(appDir, ".cs"))
+        {
+            var code = WithoutComments(File.ReadAllText(path));
+            var found = InPlaceCapture().Count(code);
+            if (found == 0) continue;
+            calls += found;
+
+            var file = Path.GetRelativePath(appDir, path).Replace(Path.DirectorySeparatorChar, '/');
+            var inLoops = loops.Where(loop => loop.File == file)
+                .Sum(loop => InPlaceCapture().Count(MethodBody(code, loop.Member)));
+            if (found != inLoops)
+                offenders.Add($"{file} takes {found - inLoops} snapshot(s) in place outside the loops listed here");
+        }
+
+        foreach (var (file, member, why) in loops)
+        {
+            var body = MethodBody(WithoutComments(File.ReadAllText(Path.Combine(appDir, file))), member);
+            Assert.False(body.Length == 0, $"{file}: {member} was not found, so this guard would pass vacuously");
+
+            var inPlace = InPlaceCapture().Count(body);
+            if (inPlace != 1)
+                offenders.Add($"{file}: {member} takes {inPlace} snapshot(s) in place, where it takes one: {why}");
+            if (body.Contains("CaptureAsync(", StringComparison.Ordinal))
+                offenders.Add($"{file}: {member} awaits CaptureAsync, a second hop to the pool, though {why}");
+        }
+
+        // Vacuity floor: the two loops' calls.
+        Assert.True(calls >= 2, $"only {calls} snapshots taken in place were found, out of 2 measured.");
+        Assert.True(offenders.Count == 0,
+            "SystemInfoService.Capture reads WMI on the calling thread, and is for a loop already on the thread "
+            + "pool:\n  "
+            + string.Join("\n  ", offenders));
+    }
+
+    /// <summary>
+    /// A snapshot taken in place: <c>Capture</c> called on an instance, as the system-info service's is. A static
+    /// <c>Capture</c> called on a type, such as <c>PrivacyLedgerService.Capture</c>, is not one.
+    /// </summary>
+    [GeneratedRegex(@"\b[_a-z]\w*\.Capture\(", RegexOptions.Compiled)]
+    private static partial Regex InPlaceCapture();
+
+    /// <summary>
     /// Every kernel TCP and UDP event precise mode counts reaches the loopback filter with both of its addresses.
     /// </summary>
     /// <remarks>
@@ -17108,9 +17175,11 @@ public partial class ArchitectureTests
     /// app's DataGrid style, so a grid only has to keep that style; any other list sets it itself. A list counts when
     /// the property it binds is an <c>ObservableCollection</c> or a <c>BulkObservableCollection</c> that something
     /// refills with <c>ReplaceWith</c> or empties with <c>Clear</c>, or takes a row out of with <c>Remove</c> or
-    /// <c>RemoveAt</c>, matched by name across the view models and models, because a list inside a row binds a
-    /// property of the row's item rather than of the tab. The last two were left out until #2650: Ping's remove button
-    /// and an Audio Mixer session ending each take one row away, and focus went with it all the same. Its rows take
+    /// <c>RemoveAt</c>, or replaces a row of with <c>UpdateWith</c>, matched by name across the view models and models,
+    /// because a list inside a row binds a property of the row's item rather than of the tab. <c>Remove</c> and
+    /// <c>RemoveAt</c> were left out until #2650: Ping's remove button and an Audio Mixer session ending each take one
+    /// row away, and focus went with it all the same. <c>UpdateWith</c> came with #2854: a length that changed is one
+    /// <c>Reset</c>, as <c>ReplaceWith</c> raises, and a row it replaces holds another item. Its rows take
     /// focus when it is a ListBox or ListView, whose rows are focusable themselves, or when its row template, written
     /// inline or a keyed DataTemplate, holds a button, a checkbox, a switch, a text box, a combo box or a slider.
     /// </remarks>
@@ -17176,7 +17245,8 @@ public partial class ArchitectureTests
                 if (!binding.Success) continue;
                 var property = binding.Groups["name"].Value;
                 if (!Regex.IsMatch(code, $@"\b(?:Bulk)?ObservableCollection<[^;]*?>\s+{property}\b")
-                    || !Regex.IsMatch(code, $@"\b{property}\.(?:ReplaceWith|Clear|Remove|RemoveAt)\(")) continue;
+                    || !Regex.IsMatch(code, $@"\b{property}\.(?:ReplaceWith|UpdateWith|Clear|Remove|RemoveAt)\("))
+                    continue;
 
                 var rowsTakeFocus = list.Name.LocalName is "ListBox" or "ListView"
                                     || WithKeyedTemplates(list, templates).Any(e => focusable.Contains(e.Name.LocalName));
@@ -17185,8 +17255,8 @@ public partial class ArchitectureTests
                 kept.Add($"{Path.GetFileNameWithoutExtension(file)}.{property}");
                 if (keep != "True")
                     offenders.Add($"{where}: the {list.Name.LocalName} bound to {binding.Groups["path"].Value} loses rows "
-                                  + "to ReplaceWith, Clear, Remove or RemoveAt and its rows take focus, but it does not "
-                                  + "set helpers:RebuildFocus.Keep=\"True\"");
+                                  + "to ReplaceWith, UpdateWith, Clear, Remove or RemoveAt and its rows take focus, "
+                                  + "but it does not set helpers:RebuildFocus.Keep=\"True\"");
             }
         }
 
@@ -17207,6 +17277,49 @@ public partial class ArchitectureTests
 
         Assert.True(offenders.Count == 0,
             "a list that loses rows drops keyboard focus with them:\n  " + string.Join("\n  ", offenders));
+    }
+
+    /// <summary>
+    /// The Dashboard's temperature card binds only what <c>TemperatureReading.ShownAlike</c> compares.
+    /// </summary>
+    /// <remarks>
+    /// The sensors are read every 2 seconds, and a card whose new reading <c>ShownAlike</c> finds the same is kept
+    /// rather than built again (#2854). A card that bound something more, say the temperature to a tenth in a tooltip,
+    /// would go on showing the first reading of it.
+    /// </remarks>
+    [Fact]
+    public void TheTemperatureCard_BindsOnlyWhatShownAlikeCompares()
+    {
+        string[] compared = ["Component", "SensorName", "DisplayValue", "ColorHex"];
+        var view = XDocument.Load(Path.Combine(TestPaths.AppProject(), "Views", "DashboardView.xaml"));
+        var cards = view.Descendants()
+            .Where(e => e.Name.LocalName == "DataTemplate"
+                        && (string?)e.Attribute("DataType") == "{x:Type models:TemperatureReading}")
+            .ToList();
+        Assert.True(cards.Count == 1,
+            $"DashboardView.xaml has {cards.Count} templates for a TemperatureReading, where there was one.");
+
+        // A binding written as a markup extension, and one written as a Binding element, as a MultiBinding holds.
+        // One that names its own source binds something other than the reading.
+        var parts = cards[0].DescendantsAndSelf().ToList();
+        var bound = parts.Attributes()
+            .Select(a => a.Value)
+            .Where(v => v.StartsWith("{Binding", StringComparison.Ordinal)
+                        && !v.Contains("RelativeSource", StringComparison.Ordinal)
+                        && !v.Contains("ElementName", StringComparison.Ordinal))
+            .Select(v => BindingPath().Match(v).Groups["path"].Value)
+            .Concat(parts.Where(e => e.Name.LocalName == "Binding").Select(e => (string?)e.Attribute("Path") ?? ""))
+            .ToList();
+
+        // Vacuity floor: the card binds the four today.
+        Assert.True(bound.Count >= 4,
+            $"only {bound.Count} bindings were found on the temperature card, out of 4 measured.");
+
+        var notCompared = bound.Where(path => !compared.Contains(path.Split('.')[0])).Distinct().ToList();
+        Assert.True(notCompared.Count == 0,
+            "the Dashboard's temperature card binds what TemperatureReading.ShownAlike does not compare, so a card "
+            + "would go on showing its first value. Compare it in ShownAlike, then list it here:\n  "
+            + string.Join("\n  ", notCompared.Select(path => path.Length == 0 ? "(the whole reading)" : path)));
     }
 
     /// <summary>
@@ -19078,8 +19191,8 @@ public partial class ArchitectureTests
     /// One baseline for every caller made each reading the load since whichever caller sampled last (#2790): with the
     /// Dashboard open, a Resource History point was the load of the last fraction of a second, and each Resource
     /// History or tray sample cut a Dashboard interval down to a few clock ticks. A class that reads
-    /// <c>Cpu.LoadPercent</c> holds a <c>CpuLoadSampler</c> from <c>NewCpuSampler()</c> and passes it to the capture.
-    /// A capture without one
+    /// <c>Cpu.LoadPercent</c> holds a <c>CpuLoadSampler</c> from <c>NewCpuSampler()</c> and passes it to the capture:
+    /// <c>CaptureAsync</c>, or <c>Capture</c> for a loop already on the thread pool (#2854). A capture without one
     /// shows the latest load another sampler measured: right for a report, and wrong for a figure that is meant to be
     /// this class's own interval.
     /// </remarks>
@@ -19103,7 +19216,7 @@ public partial class ArchitectureTests
             var sampler = HeldCpuSampler().Match(code);
             if (!sampler.Success)
                 offenders.Add($"{name} reads the CPU load and holds no sampler from NewCpuSampler()");
-            else if (!Regex.IsMatch(code, $@"\.CaptureAsync\(\s*{Regex.Escape(sampler.Groups["field"].Value)}\b"))
+            else if (!Regex.IsMatch(code, $@"\.Capture(?:Async)?\(\s*{Regex.Escape(sampler.Groups["field"].Value)}\b"))
                 offenders.Add($"{name} holds {sampler.Groups["field"].Value} and captures without it");
         }
 

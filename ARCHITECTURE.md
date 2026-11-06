@@ -231,7 +231,10 @@ to scroll.
   whether it is ready and leaves out one that cannot be read (#2802). The drives and the score are read again
   (`StorageRead`) after Quick Cleanup and Quick Tune-Up, and on coming back when Recent activity's newest entry is not
   the one seen at the last read; the uptime line follows the live poll (`ShowVitals`), and Recent activity is read
-  again each minute while the tab is shown, on an optional `TimeProvider` (#2802).
+  again each minute while the tab is shown, on an optional `TimeProvider` (#2802). The vitals are rounded to the
+  whole numbers the tiles show (`ShowVitals`, `ShowGpu`), and the temperature cards are updated in place
+  (`ShowTemperatures`): a reading is replaced only when `TemperatureReading.ShownAlike` finds that what its card shows
+  changed, and the card takes the new one into its bindings rather than being built again (#2854).
   The launch's round of alerts asks winget for app updates only when About's switch allows it, read
   through the required `UpdateCheckPreferenceService` parameter (#2613); otherwise the alert is
   `AppUpdatesNotCheckedAtStartup`, `AlertSeverity.Neutral` (a grey dot) with an "Open App Updates"
@@ -696,7 +699,10 @@ Key services:
   syscalls, never waiting on someone else's round trip (#2845). The disks are the exception to the static
   cache: their list carries each disk's health, so one caller at a time reads it again every
   `DiskRefreshInterval`, five minutes, timed through an injected `TimeProvider`, and a read that faults keeps
-  the disks as last read (#2732).
+  the disks as last read (#2732). The two loops that already run on the thread pool, the Dashboard's vitals and the
+  Resource History sampler, take their snapshot with `Capture`, on their own thread, rather than through
+  `CaptureAsync`'s `Task.Run`; every other caller uses `CaptureAsync`, and
+  `ArchitectureTests.OnlyThePoolLoopsCaptureInPlace` fails on a new one that does not (#2854).
 - `CpuLoadSampler` — CPU load over one caller's own intervals, from `SystemInfoService.NewCpuSampler()`: the busy
   share of the `GetSystemTimes` ticks since that caller's previous sample. The Dashboard's vitals, the Resource
   History sampler and the tray tooltip each hold one, so no caller's sample moves another's baseline; a capture
@@ -2222,7 +2228,9 @@ Key utility classes that don't fit neatly into Services or ViewModels (not an ex
   `<name>.unreadable` (then `-2`, `-3`) before a fresh one is written, keeping its bytes.
 - `BulkObservableCollection<T>` — `ObservableCollection` subclass whose `ReplaceWith` swaps the
   whole contents with one `Reset` notification instead of one per item, and refuses to run from
-  inside a change handler (in `ObservableCollectionExtensions.cs`).
+  inside a change handler (in `ObservableCollectionExtensions.cs`). `UpdateWith` is for a list read again on a
+  timer: it replaces only the items a comparer finds changed, one `Replace` each, and takes one `Reset` when the
+  length changed (#2854).
 - `RebuildFocus` — keeps keyboard focus in a list across a rebuild (#2609). A `Reset` makes WPF
   discard every row, so the focused control left the tree and WPF put focus on the window. The
   attached `Keep` property gives a list a tracker that records where focus is: the row's item and
@@ -2238,8 +2246,9 @@ Key utility classes that don't fit neatly into Services or ViewModels (not an ex
   makes before it draws a focus outline, so a list that refreshes on a timer never scrolls a mouse
   user back. Every DataGrid has it from the implicit DataGrid style in `App.xaml`; the other lists
   whose rows take focus set it themselves when they lose rows, whether rebuilt with `ReplaceWith`,
-  emptied with `Clear` or one row at a time with `Remove` or `RemoveAt`, as Ping's targets and
-  Audio Mixer's sessions are, and `ArchitectureTests.EveryListThatLosesRows_KeepsKeyboardFocusOnItsRows`
+  emptied with `Clear`, or changed one row at a time with `Remove` or `RemoveAt`, as Ping's targets and
+  Audio Mixer's sessions are, or with `UpdateWith`, and
+  `ArchitectureTests.EveryListThatLosesRows_KeepsKeyboardFocusOnItsRows`
   fails when one does not.
 - `WheelPassThrough` — hands the mouse wheel on to the page when a list cannot use it (#2817). A
   DataGrid's template holds a plain `ScrollViewer`, which takes every turn whether or not it can

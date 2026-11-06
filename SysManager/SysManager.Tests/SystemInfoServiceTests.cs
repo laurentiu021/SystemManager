@@ -201,6 +201,26 @@ public class SystemInfoServiceTests
         Assert.Equal(100.0, (await service.CaptureAsync(sampler)).Cpu.LoadPercent, precision: 6);
     }
 
+    /// <summary>
+    /// A snapshot taken in place, as the Dashboard's and Resource History's loops take theirs, is the one
+    /// <c>CaptureAsync</c> gives: its sampler's next sample, the static details and the memory (#2854).
+    /// </summary>
+    [Fact]
+    public void ACaptureInPlace_IsTheSnapshotCaptureAsyncGives()
+    {
+        var service = ServiceOverTimes(Times(At(0, 0, 0), At(100, 100, 0), At(100, 200, 0)));
+        var sampler = service.NewCpuSampler();
+
+        var first = service.Capture(sampler);
+        Assert.Equal(0.0, first.Cpu.LoadPercent, precision: 6);
+        Assert.Equal("Test CPU", first.Cpu.Name);
+        Assert.Equal("Windows 11", first.Os.Caption);
+        Assert.Equal(TimeSpan.FromMilliseconds(1234), first.Os.Uptime);
+        Assert.Equal(6.0, first.Memory.UsedGB, precision: 6);
+
+        Assert.Equal(100.0, service.Capture(sampler).Cpu.LoadPercent, precision: 6);
+    }
+
     /// <summary>Each pass measures the interval just elapsed, not a running average of every interval.</summary>
     [Fact]
     public void CpuLoad_MeasuresEachIntervalIndependently()

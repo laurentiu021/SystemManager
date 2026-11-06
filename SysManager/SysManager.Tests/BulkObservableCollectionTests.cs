@@ -170,4 +170,104 @@ public class BulkObservableCollectionTests
         Assert.Equal([4, 5], collection);
         Assert.Equal(2, resets);
     }
+
+    // ── UpdateWith: a list read again on a timer (#2854) ──
+    // The Dashboard's temperature cards were replaced with one Reset every 2 seconds, so every card was built again,
+    // although a temperature that moved by less than a degree shows the same.
+
+    /// <summary>Strings alike when they start with the same letter: "apple" and "avocado".</summary>
+    private static readonly IEqualityComparer<string> SameInitial =
+        EqualityComparer<string>.Create((x, y) => x?[0] == y?[0], s => s[0]);
+
+    private static List<NotifyCollectionChangedEventArgs> ChangesOf<T>(BulkObservableCollection<T> collection)
+    {
+        var changes = new List<NotifyCollectionChangedEventArgs>();
+        collection.CollectionChanged += (_, e) => changes.Add(e);
+        return changes;
+    }
+
+    [Fact]
+    public void UpdateWith_ItemsThatAreAlike_StayAsTheyWereAndRaiseNothing()
+    {
+        var collection = new BulkObservableCollection<string>();
+        collection.ReplaceWith(["apple", "banana"]);
+        var changes = ChangesOf(collection);
+
+        collection.UpdateWith(["avocado", "blueberry"], SameInitial);
+
+        Assert.Empty(changes);
+        Assert.Equal(["apple", "banana"], collection);
+    }
+
+    [Fact]
+    public void UpdateWith_AnItemThatDiffers_IsReplacedWhereItStands_AndAloneIs()
+    {
+        var collection = new BulkObservableCollection<string>();
+        collection.ReplaceWith(["apple", "banana", "cherry"]);
+        var changes = ChangesOf(collection);
+
+        collection.UpdateWith(["avocado", "kiwi", "cranberry"], SameInitial);
+
+        var replaced = Assert.Single(changes);
+        Assert.Equal(NotifyCollectionChangedAction.Replace, replaced.Action);
+        Assert.Equal(1, replaced.NewStartingIndex);
+        Assert.Equal(["banana"], replaced.OldItems!.Cast<string>());
+        Assert.Equal(["kiwi"], replaced.NewItems!.Cast<string>());
+        Assert.Equal(["apple", "kiwi", "cherry"], collection);
+    }
+
+    [Theory]
+    [InlineData(2, 3)]
+    [InlineData(3, 2)]
+    [InlineData(0, 2)]
+    [InlineData(2, 0)]
+    public void UpdateWith_ALengthThatChanged_IsOneReset(int before, int after)
+    {
+        var collection = new BulkObservableCollection<int>();
+        collection.ReplaceWith(Enumerable.Range(1, before));
+        var changes = ChangesOf(collection);
+
+        collection.UpdateWith(Enumerable.Range(1, after), EqualityComparer<int>.Default);
+
+        Assert.Equal(NotifyCollectionChangedAction.Reset, Assert.Single(changes).Action);
+        Assert.Equal(Enumerable.Range(1, after), collection);
+    }
+
+    [Fact]
+    public void UpdateWith_ItsOwnContents_ChangesNothing()
+    {
+        var collection = new BulkObservableCollection<int>();
+        collection.ReplaceWith([1, 2, 3]);
+        var changes = ChangesOf(collection);
+
+        collection.UpdateWith(collection, EqualityComparer<int>.Default);
+
+        Assert.Empty(changes);
+        Assert.Equal([1, 2, 3], collection);
+    }
+
+    [Fact]
+    public void UpdateWith_AThrowingSourceLeavesTheCollectionUntouched()
+    {
+        var collection = new BulkObservableCollection<int>();
+        collection.ReplaceWith([1, 2, 3]);
+
+        static IEnumerable<int> Failing()
+        {
+            yield return 9;
+            throw new InvalidOperationException("source failed");
+        }
+
+        Assert.Throws<InvalidOperationException>(() => collection.UpdateWith(Failing(), EqualityComparer<int>.Default));
+        Assert.Equal([1, 2, 3], collection);
+    }
+
+    [Fact]
+    public void UpdateWith_NoItemsOrNoComparer_Throws()
+    {
+        var collection = new BulkObservableCollection<int>();
+
+        Assert.Throws<ArgumentNullException>(() => collection.UpdateWith(null!, EqualityComparer<int>.Default));
+        Assert.Throws<ArgumentNullException>(() => collection.UpdateWith([1], null!));
+    }
 }

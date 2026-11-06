@@ -135,7 +135,17 @@ public sealed partial class SystemInfoService
         return Task.Run(() => Capture(cpu), ct);
     }
 
-    private SystemSnapshot Capture(CpuLoadSampler? cpu)
+    /// <summary>
+    /// A snapshot taken on the calling thread, whose CPU load is <paramref name="cpu"/>'s next sample, or without one
+    /// the latest a sampler measured.
+    /// </summary>
+    /// <remarks>
+    /// For a loop that already runs on the thread pool, where
+    /// <see cref="CaptureAsync(CpuLoadSampler, CancellationToken)"/> would hand the same work to another pool thread
+    /// and wait for it (#2854). It reads WMI the first time and when the disks are due, so nothing on the UI thread
+    /// calls it: <c>ArchitectureTests.OnlyThePoolLoopsCaptureInPlace</c> names the callers.
+    /// </remarks>
+    internal SystemSnapshot Capture(CpuLoadSampler? cpu)
     {
         OsInfo? osStatic;
         CpuInfo? cpuStatic;

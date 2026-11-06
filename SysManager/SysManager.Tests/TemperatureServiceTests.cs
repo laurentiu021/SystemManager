@@ -501,4 +501,44 @@ public class TemperatureServiceTests
 
         Assert.Equal("Requires driver", reading.DisplayValue);
     }
+
+    // ---------- what a card shows (#2854) ----------
+
+    /// <summary>Two readings a fraction of a degree apart show the same card, so the Dashboard keeps it.</summary>
+    [Fact]
+    public void ShownAlike_ReadingsThatShowTheSame_AreAlike()
+    {
+        var first = new TemperatureReading("CPU", "CPU Package", 52.3);
+        var second = new TemperatureReading("CPU", "CPU Package", 52.4);
+
+        Assert.NotEqual(first, second);   // the record itself tells the tenth apart
+        Assert.True(TemperatureReading.ShownAlike.Instance.Equals(first, second));
+        Assert.Equal(TemperatureReading.ShownAlike.Instance.GetHashCode(first),
+                     TemperatureReading.ShownAlike.Instance.GetHashCode(second));
+    }
+
+    /// <summary>A reading that changes anything its card shows is not alike: the card shows the new one.</summary>
+    [Fact]
+    public void ShownAlike_ReadingsThatShowDifferently_AreNot()
+    {
+        (string What, TemperatureReading A, TemperatureReading B)[] pairs =
+        [
+            ("the degree", new("CPU", "CPU Package", 52.4), new("CPU", "CPU Package", 52.6)),
+            ("the colour alone", new("CPU", "CPU Package", 44.6), new("CPU", "CPU Package", 45.4)),
+            ("the name", new("CPU", "Hottest Core (Core #1)", 60), new("CPU", "Hottest Core (Core #2)", 60)),
+            ("the group", new("GPU Core", "Graphics card", 60), new("GPU Hot Spot", "Graphics card", 60)),
+            ("why there is no value", new("CPU", "CPU Package", null, RequiresAdmin: true),
+                new("CPU", "CPU Package", null, RequiresDriver: true)),
+        ];
+
+        // The colour pair shows the same figure, 45, on either side of the 45-degree step.
+        Assert.Equal(pairs[1].A.DisplayValue, pairs[1].B.DisplayValue);
+        Assert.NotEqual(pairs[1].A.ColorHex, pairs[1].B.ColorHex);
+
+        foreach (var (what, a, b) in pairs)
+        {
+            Assert.False(TemperatureReading.ShownAlike.Instance.Equals(a, b),
+                $"two readings that differ in {what} were alike");
+        }
+    }
 }

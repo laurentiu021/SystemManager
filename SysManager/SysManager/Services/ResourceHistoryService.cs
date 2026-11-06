@@ -196,7 +196,11 @@ public sealed class ResourceHistoryService : IDisposable
 
     private async Task<ResourceSample> CaptureSampleAsync(CancellationToken ct)
     {
-        var snap = await _sys.CaptureAsync(_cpu ??= _sys.NewCpuSampler(), ct).ConfigureAwait(false);
+        // Taken here: the sampler's loop already runs on the thread pool, and CaptureAsync would hand the same work
+        // to another pool thread and wait for it (#2854). A stop that came first still ends the sample before it is
+        // taken, as the token CaptureAsync was given did.
+        ct.ThrowIfCancellationRequested();
+        var snap = _sys.Capture(_cpu ??= _sys.NewCpuSampler());
         double? gpuPercent = ReadGpuUsage();
 
         double? cpuTemp = null, gpuTemp = null;

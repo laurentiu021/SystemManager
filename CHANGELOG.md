@@ -10,6 +10,19 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.136.124] - 2026-11-06
+
+**Large Files, Duplicate Finder and Disk Analyzer read each folder once instead of twice: on my PC, Disk Analyzer's walk over Program Files took 1.7 seconds where the walk before took 2.9 to 4.1.**
+
+### Fixed
+- The three scans listed every folder twice, its files and then its folders, and then asked Windows about each folder
+  they found to see whether it was a link, though the listing had already said so. Disk Analyzer also built an
+  object for every file only to add up its size. Each folder is read once now, and Disk Analyzer adds the sizes as
+  it reads. On my PC, Disk Analyzer's walk over Program Files, 74,332 files in 8,560 folders, took 1.7 seconds and
+  allocated 9 MB, where the walk before took 2.9 to 4.1 seconds and 38 MB. What a scan finds is the same: hidden and
+  system files are still counted, a link to a folder is still not followed, and a folder that cannot be read is still
+  left out. Since each scan was added, in 0.5.0, 0.7.0 and 0.8.0.
+
 ## [1.136.123] - 2026-11-06
 
 **Large Files, Duplicate Finder and Disk Analyzer no longer allocate memory for every file and folder they check against the system lists.**

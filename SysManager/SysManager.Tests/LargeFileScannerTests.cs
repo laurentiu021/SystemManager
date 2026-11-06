@@ -290,6 +290,30 @@ public class LargeFileScannerTests : IDisposable
         Assert.False((bool)method.Invoke(null, new object[] { @"D:\Games\Steam" })!);
     }
 
+    // ---------- one listing per folder keeps what two listed (#2854) ----------
+
+    /// <summary>A hidden or system file, and a file in a hidden folder, is listed as before.</summary>
+    /// <remarks>
+    /// A folder is listed once now, with GetFileSystemInfos, where it was listed with GetFiles and then
+    /// GetDirectories. The options are the same as theirs. A new <c>EnumerationOptions</c> leaves hidden and system
+    /// entries out, and with them much of what a profile keeps in AppData.
+    /// </remarks>
+    [Fact]
+    public async Task ScanAsync_HiddenAndSystemEntries_AreStillListed()
+    {
+        var hiddenFile = CreateFile("hidden.bin", 4096);
+        File.SetAttributes(hiddenFile, FileAttributes.Hidden | FileAttributes.System);
+        var folder = CreateSubDir("Hidden folder");
+        File.SetAttributes(folder, FileAttributes.Hidden);
+        var inside = Path.Combine(folder, "inside.bin");
+        File.WriteAllBytes(inside, new byte[4096]);
+
+        var found = await _scanner.ScanAsync(_root, minSizeBytes: 1024);
+
+        Assert.Contains(found, f => f.Path == hiddenFile);
+        Assert.Contains(found, f => f.Path == inside);
+    }
+
     // ---------- the paging files the skip list already named (#2386) ----------
 
     [Fact]
@@ -433,6 +457,33 @@ public class LargeFileScannerTests : IDisposable
             var results = await new LargeFileScanner().ScanAsync(walked, minSizeBytes: 1, top: 10);
 
             var only = Assert.Single(results);
+            Assert.Equal("real.bin", only.Name);
+        }
+        finally { Symlinks.RemoveLinkThenTree(link, root); }
+    }
+
+    /// <summary>A link to a folder inside the scanned one is not walked, so nothing it points at is listed.</summary>
+    /// <remarks>
+    /// The check reads the folder's attributes from the folder's listing now, where it asked Windows for them again
+    /// (#2854).
+    /// </remarks>
+    [Fact]
+    public async Task ScanAsync_ALinkToAFolder_IsNotWalked()
+    {
+        var root = NewRoot();
+        var outside = Path.Combine(root, "outside");
+        var walked = Path.Combine(root, "walked");
+        Directory.CreateDirectory(outside);
+        Directory.CreateDirectory(walked);
+        await File.WriteAllBytesAsync(Path.Combine(outside, "elsewhere.bin"), new byte[300_000]);
+        await File.WriteAllBytesAsync(Path.Combine(walked, "real.bin"), new byte[150_000]);
+
+        var link = Path.Combine(walked, "link");
+        Symlinks.RequireJunction(link, outside, () => Directory.Delete(root, recursive: true));
+
+        try
+        {
+            var only = Assert.Single(await new LargeFileScanner().ScanAsync(walked, minSizeBytes: 1, top: 10));
             Assert.Equal("real.bin", only.Name);
         }
         finally { Symlinks.RemoveLinkThenTree(link, root); }

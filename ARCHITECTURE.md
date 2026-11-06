@@ -800,8 +800,9 @@ Key services:
   unit-test file, and one test then asserted the walk finished inside fifteen seconds.
 - `LargeFileScanner` — read-only biggest-files discovery; skips `$Recycle.Bin`, System Volume Information,
   `Windows\WinSxS`, `Windows\System32\config` and `Windows\CSC` as subtrees, and pagefile/hiberfil/swapfile by
-  exact file name. The two are separate lists because the subtree one is only ever
-  asked about a directory, which is why the three file names sat in it unread.
+  exact file name. The two are separate lists, held in `Helpers/ScanExclusions`, because the subtree one is only ever
+  asked about a directory, which is why the three file names sat in it unread. Each folder is listed once, files and
+  folders together, with `GetFileSystemInfos`, whose entries carry the attributes the link checks need (#2854).
   `Biggest` keeps the largest files, its order and its details both by the path as
   Windows returns it, ordinally, so two files in a case-sensitive folder whose paths
   differ only in case stay two files (#2777).
@@ -1042,14 +1043,18 @@ Key services:
   groups, or why the chosen folder could not be scanned at all (`NotFound`, `IsLink`, `Unreadable`,
   `Excluded`), so a failure is never an empty scan, as with `DiskAnalyzerService`'s `Analysis` (#2823). The
   full hash asks the handle it reads for its `FileIdentity` and skips another name of a file already
-  hashed, so a hard link is not a duplicate. An internal constructor takes the file and folder listings, so a
-  test decides what a scan finds or ends it partway.
+  hashed, so a hard link is not a duplicate. An internal constructor takes the listing of a folder, its files and
+  folders together, so a test decides what a scan finds or ends it partway. Each folder is listed once, and its
+  entries carry the attributes the link checks need, where it was listed twice and each folder found asked for its
+  attributes again (#2854).
 - `DiskAnalyzerService` — folder-level space breakdown with progress
   reporting and system-path skipping. `AnalyzeAsync` returns an `Analysis`: the folders,
   or why the chosen one could not be measured at all (`NotFound`, `IsLink`, `Unreadable`),
   so a failure is never an empty scan. `LooseFilesName` names the entry for files loose in the
   folder, which the drill-in and the map both treat as not a folder. An internal constructor takes the
-  top-level listing, so a test decides what an analysis finds or ends it partway.
+  top-level listing, so a test decides what an analysis finds or ends it partway. Below the top level, each folder
+  is read in one `FileSystemEnumerable` pass that keeps a folder's path or a file's length and builds no `FileInfo`,
+  with the options `GetFiles` used, so hidden and system entries still count (#2854).
 - `ProcessManagerService` — enumerate running processes, kill by PID,
   open file location. Each new row's description is read through `Helpers/FileDescription`, from the file the
   program was started from, which a file renamed or moved since cannot give: that row has none, rather than

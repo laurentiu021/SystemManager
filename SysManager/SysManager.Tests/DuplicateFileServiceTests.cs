@@ -499,6 +499,34 @@ public class DuplicateFileServiceTests : IDisposable
         finally { Symlinks.RemoveLinkThenTree(link, root); }
     }
 
+    /// <summary>
+    /// A link to a folder inside the scanned one is not walked, so a file it points at is not offered as a copy.
+    /// </summary>
+    /// <remarks>
+    /// The check reads the folder's attributes from the folder's listing now, where it asked Windows for them again
+    /// (#2854).
+    /// </remarks>
+    [Fact]
+    public async Task ScanAsync_ALinkToAFolder_IsNotWalked()
+    {
+        var root = NewRoot();
+        var outside = Path.Combine(root, "outside");
+        var walked = Path.Combine(root, "walked");
+        Directory.CreateDirectory(outside);
+        Directory.CreateDirectory(walked);
+        await File.WriteAllTextAsync(Path.Combine(outside, "copy.txt"), new string('x', 8192));
+        await File.WriteAllTextAsync(Path.Combine(walked, "original.txt"), new string('x', 8192));
+
+        var link = Path.Combine(walked, "link");
+        Symlinks.RequireJunction(link, outside, () => Directory.Delete(root, recursive: true));
+
+        try
+        {
+            Assert.Empty((await new DuplicateFileService().ScanAsync(walked, minSizeBytes: 1)).Groups);
+        }
+        finally { Symlinks.RemoveLinkThenTree(link, root); }
+    }
+
     // ── Files stored online only are not read ─────────────────────────────────
 
     [Fact]
@@ -533,13 +561,12 @@ public class DuplicateFileServiceTests : IDisposable
 
     // ── A folder that could not be scanned says why (#2823) ──────────────────
 
-    private static FileInfo[] Files(string directory) => new DirectoryInfo(directory).GetFiles();
+    private static FileSystemInfo[] Entries(string directory) => new DirectoryInfo(directory).GetFileSystemInfos();
 
-    /// <summary>The scan, with the real listings unless a test hands it one that fails.</summary>
+    /// <summary>The scan, with the real listing unless a test hands it one that fails.</summary>
     private static DuplicateFileService.DuplicateScan ScanWith(
-        string root, CancellationToken ct = default,
-        Func<string, FileInfo[]>? listFiles = null, Func<string, string[]>? listDirectories = null) =>
-        DuplicateFileService.Scan(root, 1, null, ct, listFiles ?? Files, listDirectories ?? Directory.GetDirectories);
+        string root, CancellationToken ct = default, Func<string, FileSystemInfo[]>? list = null) =>
+        DuplicateFileService.Scan(root, 1, null, ct, list ?? Entries);
 
     public static TheoryData<Exception, DuplicateFileService.ScanFailure> RootListingFaults() => new()
     {
@@ -557,7 +584,7 @@ public class DuplicateFileServiceTests : IDisposable
     {
         // A real folder cannot be made unreadable on demand: .NET opens a directory with backup semantics, so an
         // elevated test run lists it whatever its permissions say. C:\System Volume Information is the real case.
-        var result = ScanWith(_root, listFiles: dir => dir == _root ? throw fault : Files(dir));
+        var result = ScanWith(_root, list: dir => dir == _root ? throw fault : Entries(dir));
 
         Assert.Equal(expected, result.Failure);
         Assert.Empty(result.Groups);
@@ -574,10 +601,54 @@ public class DuplicateFileServiceTests : IDisposable
         File.WriteAllBytes(Path.Combine(locked, "c.bin"), content);
 
         var result = ScanWith(_root,
-            listFiles: dir => dir == locked ? throw new UnauthorizedAccessException("denied") : Files(dir));
+            list: dir => dir == locked ? throw new UnauthorizedAccessException("denied") : Entries(dir));
 
         Assert.Equal(DuplicateFileService.ScanFailure.None, result.Failure);
         Assert.Equal(2, Assert.Single(result.Groups).Files.Count);
+    }
+
+    // ── One listing per folder (#2854) ──
+    // A folder was listed twice, its files and then its folders, with a File.GetAttributes for each folder on top.
+
+    /// <summary>Each folder is listed once, its files and its folders together.</summary>
+    [Fact]
+    public void Scan_ListsEachFolderOnce()
+    {
+        CreateFile(Path.Combine("a", "one.bin"), 2048, 1);
+        CreateFile(Path.Combine("a", "b", "two.bin"), 2048, 1);
+        var listed = new List<string>();
+
+        var result = ScanWith(_root, list: dir =>
+        {
+            listed.Add(dir);
+            return Entries(dir);
+        });
+
+        Assert.Equal(DuplicateFileService.ScanFailure.None, result.Failure);
+        Assert.Equal(2, Assert.Single(result.Groups).Files.Count);
+        Assert.Equal(3, listed.Count);   // the root, a, and a\b
+        Assert.Equal(3, listed.Distinct(StringComparer.OrdinalIgnoreCase).Count());
+    }
+
+    /// <summary>
+    /// Copies that are hidden or system files, or sit in a hidden folder, are found as before.
+    /// </summary>
+    /// <remarks>
+    /// The listing keeps the options GetFiles and GetDirectories used. A new <c>EnumerationOptions</c> leaves hidden
+    /// and system entries out, and with them much of what a profile keeps in AppData.
+    /// </remarks>
+    [Fact]
+    public async Task Scan_HiddenCopies_AreStillFound()
+    {
+        var first = CreateFile("first.bin", 2048, 7);
+        File.SetAttributes(first, FileAttributes.Hidden | FileAttributes.System);
+        var folder = Directory.CreateDirectory(Path.Combine(_root, "hidden")).FullName;
+        File.SetAttributes(folder, FileAttributes.Hidden);
+        CreateFile(Path.Combine("hidden", "second.bin"), 2048, 7);
+
+        var group = Assert.Single((await _service.ScanAsync(_root, minSizeBytes: 1)).Groups);
+
+        Assert.Equal(2, group.Files.Count);
     }
 
     [Fact]

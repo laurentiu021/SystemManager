@@ -233,6 +233,12 @@ runner, which allows 10 s, then forced it out with exit code 1 although every te
   administrator rights, so `hive: "HKLM"` gives the machine-wide case. Use it wherever the answer
   would otherwise depend on this PC's own privacy settings: a profile export carries the toggles as
   read, so a test over the real service passes or fails with the machine running it.
+- `FakeWindowsUpdateAgent.cs` — **`SysManager.Tests` only.** A Windows Update Agent made of plain objects:
+  `FakeUpdateSession`, its searcher, `FakeUpdate`, `FakeCategory` and `FakeCollection<T>`, with the
+  members `WindowsUpdateService` reads under WUA's own names. The service reads WUA late-bound, so it
+  reads these the same way: `new WindowsUpdateService(() => session, () => new FakeCollection<FakeUpdate>())`
+  runs a scan over updates the test chose, where the real session would search Microsoft's servers. The
+  types are public because the late-bound calls are made from the app's assembly.
 - `ActivityLogScope` — **`SysManager.Tests` only.** Points `ActivityLogService.Instance` at a throwaway
   folder for the scope and puts the real one back on dispose, so a test that drives an action which
   records itself does not write into the Recent activity on this PC (#1772). Requires

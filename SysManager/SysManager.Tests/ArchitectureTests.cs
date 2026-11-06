@@ -2997,12 +2997,13 @@ public partial class ArchitectureTests
                     var value = attribute.Value;
                     if (!value.StartsWith('{')) continue;
 
-                    if (value.Contains("Converter={StaticResource Format}", StringComparison.Ordinal))
+                    if (value.Contains("Converter={StaticResource Format}", StringComparison.Ordinal)
+                        || value.Contains("Converter={StaticResource MenuHeader}", StringComparison.Ordinal))
                     {
                         templated++;
                         if (!FormatTemplate().IsMatch(value))
                             offenders.Add($"{name}: {attribute.Name.LocalName}=\"{value}\" goes through the Format "
-                                          + "converter with no ConverterParameter template holding {0}");
+                                          + "or MenuHeader converter with no ConverterParameter template holding {0}");
                     }
 
                     if (!value.Contains("StringFormat=", StringComparison.Ordinal)) continue;
@@ -3026,9 +3027,60 @@ public partial class ArchitectureTests
             + "Converter={StaticResource Format}, ConverterParameter='… {0} …', or bind a view-model string:\n  "
             + string.Join("\n  ", offenders));
 
-        // 19 when written. Checked after the offenders, so a binding moved back to a StringFormat is named rather
-        // than reported only as a shorter count.
-        Assert.True(templated >= 15, $"only {templated} bindings through the Format converter were read, of 19.");
+        // 19 when written, 8 of them the row menus' headers on MenuHeader since #3199. Checked after the offenders, so
+        // a binding moved back to a StringFormat is named rather than reported only as a shorter count.
+        Assert.True(templated >= 15,
+            $"only {templated} bindings through the Format and MenuHeader converters were read, of 19.");
+    }
+
+    /// <summary>
+    /// A menu item's header made from data goes through the MenuHeader converter, so a name keeps its underscores.
+    /// </summary>
+    /// <remarks>
+    /// A menu item draws its header through an <c>AccessText</c>, which reads the first underscore as an access key:
+    /// it does not draw it, the item's automation name drops it, and the letter after it becomes the item's key. The
+    /// row menus build their headers from the names of programs, services and files, so "Kill my_app.exe" read "Kill
+    /// myapp.exe" (#3199). MenuHeader doubles the value's underscores; Format and a bare binding pass them on.
+    /// </remarks>
+    [Fact]
+    public void EveryMenuHeaderFromData_GoesThroughMenuHeader()
+    {
+        var separator = Path.DirectorySeparatorChar;
+        var offenders = new List<string>();
+        var bound = 0;
+
+        foreach (var file in Directory.GetFiles(TestPaths.AppProject(), "*.xaml", SearchOption.AllDirectories))
+        {
+            if (file.Contains($"{separator}obj{separator}", StringComparison.Ordinal)
+                || file.Contains($"{separator}bin{separator}", StringComparison.Ordinal))
+                continue;
+
+            var name = Path.GetFileName(file);
+            foreach (var item in XDocument.Parse(File.ReadAllText(file)).Descendants()
+                         .Where(e => e.Name.LocalName == "MenuItem"))
+            {
+                var headers = item.Attributes("Header").Select(a => a.Value)
+                    .Concat(item.Elements().Where(e => e.Name.LocalName == "MenuItem.Header")
+                        .SelectMany(e => e.Descendants())
+                        .Where(e => e.Name.LocalName is "Binding" or "MultiBinding")
+                        .Select(e => "{Binding " + (string?)e.Attribute("Converter") + "}"));
+                foreach (var header in headers.Where(h => h.StartsWith("{Binding", StringComparison.Ordinal)
+                                                          || h.StartsWith("{MultiBinding", StringComparison.Ordinal)))
+                {
+                    bound++;
+                    if (!header.Contains("{StaticResource MenuHeader}", StringComparison.Ordinal))
+                        offenders.Add($"{name}: <MenuItem Header=\"{header}\">");
+                }
+            }
+        }
+
+        // 8 when written: Process Manager's two, Services' five and Disk Analyzer's one.
+        Assert.True(bound >= 8, $"only {bound} menu headers bound to data were read, of 8, so this checks nothing.");
+        Assert.True(offenders.Count == 0,
+            "these menu headers come from data without the MenuHeader converter, so an underscore in the name is read "
+            + "as an access key and is neither drawn nor announced. Bind them through "
+            + "Converter={StaticResource MenuHeader}, ConverterParameter='... {0} ...':\n  "
+            + string.Join("\n  ", offenders));
     }
 
     /// <summary>

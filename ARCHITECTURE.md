@@ -2461,10 +2461,12 @@ Key utility classes that don't fit neatly into Services or ViewModels (not an ex
   synchronously, including via a short local holding the dispatcher.
 - `MarkdownTextBlock` — lightweight Markdown-to-WPF inline renderer.
 - Value converters: `EqualityConverter` and `ValueConverters` —
-  17 converters (among them visibility, inversion, the colour of a console line and of Process
+  19 converters (among them visibility, inversion, the colour of a console line and of Process
   Manager's status, the colour, tint and text of the safety, process-safety and signature pills, each
-  colour a name for `ThemeBrush`, and `Format`, which gives a chip, a button, a menu
-  item or a tooltip the words around a bound value, where a binding's `StringFormat` does nothing)
+  colour a name for `ThemeBrush`, `Format`, which gives a chip, a button, a menu
+  item or a tooltip the words around a bound value, where a binding's `StringFormat` does nothing,
+  and `MenuHeader`, the same for a menu item's header with the value's underscores doubled, so an
+  `AccessText` draws and announces them instead of taking one as an access key, #3199)
   plus the two palettes those pills share.
 - `ExtensionPermissions` — turns what a browser extension asks for into the plain-language lines the
   Extensions view shows, in a fixed order, amber for what changes what the user sees, reaches every

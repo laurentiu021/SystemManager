@@ -10,6 +10,21 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.136.144] - 2026-11-06
+
+**A name with an underscore keeps it in the right-click menus: for a program named my_app.exe the menu says "Kill
+my_app.exe", where it said "Kill myapp.exe".**
+
+### Fixed
+- The right-click menus on Process Manager and Services (since 1.104.0) and Disk Analyzer (since 1.119.0) put the
+  name of the program, service or file into each item, and a menu item reads the first underscore in its words as a
+  keyboard shortcut: it was not drawn, a screen reader was not told it, and the letter after it became the item's key.
+  For a program named my_app.exe the items read "Kill myapp.exe" and "Open file location for myapp.exe", and two
+  underscores in a row showed as one. The names are shown and read exactly now.
+- A check fails any menu item whose words come from data without going through the converter that keeps its
+  underscores, and another lays out menu items with such names and compares what they draw and announce with the
+  name.
+
 ## [1.136.143] - 2026-11-06
 
 **Buttons, filter chips and table headers show the colours they were made in: a primary button's words are black or

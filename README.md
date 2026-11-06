@@ -2494,7 +2494,7 @@ offers, "rate us" prompts:
   job finishes, rather than staying full or sitting at an empty bar
 
 ### About
-- **Version, build, license and source** in one place, with the update controls beside them
+- **Version, build, license and source** in one place, with the update controls right under them
   rather than buried in a settings page. The build is the commit the exe was built from, the
   same one the release page names
 - **What's new, pulled live from GitHub** — the ten most recent releases with their version,

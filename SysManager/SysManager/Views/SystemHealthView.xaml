@@ -364,7 +364,7 @@
                                             <Button Grid.Column="3" Content="Scan"
                                                     Command="{Binding DataContext.RunChkdskCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
                                                     CommandParameter="{Binding Letter}"
-                                                    AutomationProperties.Name="{Binding Letter, StringFormat='Run chkdsk on drive {0}'}"
+                                                    AutomationProperties.Name="{Binding Letter, StringFormat='Scan drive {0} with chkdsk'}"
                                                     Style="{StaticResource SecondaryButton}" Padding="12,6"
                                                     IsEnabled="{Binding DataContext.IsChkdskRunning, RelativeSource={RelativeSource AncestorType=UserControl}, Converter={StaticResource BoolInvert}}"/>
                                         </Grid>

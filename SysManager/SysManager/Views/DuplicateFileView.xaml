@@ -45,7 +45,7 @@
                         Style="{StaticResource GhostButton}" Margin="0,0,12,0"/>
                 <TextBlock Text="Min size (KB):" VerticalAlignment="Center" Margin="0,0,8,0"
                            Style="{StaticResource Subtle}"/>
-                <TextBox AutomationProperties.Name="Minimum file size in kilobytes"
+                <TextBox AutomationProperties.Name="Min size (KB) — smaller files are not compared"
                          Text="{Binding MinSizeKb, UpdateSourceTrigger=PropertyChanged}"
                          Width="70" Margin="0,0,12,0"/>
                 <Button Content="Scan" AutomationProperties.Name="Scan for duplicates"
@@ -136,7 +136,7 @@
                                                     <!-- Lets the user disagree with the suggestion. Hidden on the row that is
                                                          already the keeper, so there is never a button that does nothing. -->
                                                     <Button Content="Keep this one" ToolTip="Suggest keeping this copy instead"
-                                                            AutomationProperties.Name="{Binding Name, Mode=OneWay, StringFormat='Keep {0} instead'}"
+                                                            AutomationProperties.Name="{Binding Name, Mode=OneWay, StringFormat='Keep this one — {0}'}"
                                                             Command="{Binding DataContext.KeepThisCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
                                                             CommandParameter="{Binding}"
                                                             Style="{StaticResource GhostButton}" Padding="4,2" FontSize="12"

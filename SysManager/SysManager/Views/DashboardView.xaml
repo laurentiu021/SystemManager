@@ -503,7 +503,7 @@
                             <TextBlock Text="TEMPERATURES" Style="{StaticResource Caption}" FontWeight="SemiBold"
                                        Foreground="{DynamicResource TextMuted}" VerticalAlignment="Center"/>
                             <Button Command="{Binding RelaunchAsAdminCommand}" Margin="10,0,0,0"
-                                    AutomationProperties.Name="Run as administrator for more temperature sensors"
+                                    AutomationProperties.Name="Run as admin for more sensors — restart SysManager as administrator"
                                     Padding="6,3" FontSize="10" VerticalAlignment="Center"
                                     Visibility="{Binding IsElevated, Converter={StaticResource FlexVis}, ConverterParameter=Inverse}">
                                 <Button.Template>

@@ -102,7 +102,8 @@
                     ToolTip="Save this list to a CSV file you choose the location for."/>
             <Button Grid.Column="2" Content="End process" Command="{Binding KillSelectedCommand}"
                     Style="{StaticResource DangerButton}" Padding="14,8"
-                    AutomationProperties.Name="End process — the selected process"/>
+                    AutomationProperties.Name="End process — the selected process"
+                    AutomationProperties.HelpText="Ends the selected process straight away, losing anything it has not saved. SysManager asks you to confirm first."/>
         </Grid>
     </Grid>
 </UserControl>

@@ -185,7 +185,7 @@
                         <Button Margin="0,8,0,0" HorizontalAlignment="Left"
                                 Style="{StaticResource GhostButton}" FontSize="12" Padding="8,4"
                                 Command="{Binding OpenOutputSettingsCommand}"
-                                AutomationProperties.Name="Change the device this PC plays sound through, in Windows sound settings">
+                                AutomationProperties.Name="Change in Windows sound settings — the device this PC plays sound through">
                             <StackPanel Orientation="Horizontal">
                                 <TextBlock Text="&#xE7F5;" FontFamily="Segoe Fluent Icons,Segoe MDL2 Assets"
                                            FontSize="12" VerticalAlignment="Center" Margin="0,0,6,0"/>

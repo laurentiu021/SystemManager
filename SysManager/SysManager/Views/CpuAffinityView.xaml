@@ -40,7 +40,7 @@
                     <TextBlock Text="PROCESS" Style="{StaticResource SectionLabel}"/>
                     <TextBox Text="{Binding FilterText, UpdateSourceTrigger=PropertyChanged}"
                              Margin="0,4,0,0" Padding="10,8" FontSize="13" VerticalContentAlignment="Center"
-                             AutomationProperties.Name="Filter processes by name or ID"/>
+                             AutomationProperties.Name="Process — filter by name or ID"/>
                     <ComboBox ItemsSource="{Binding Processes}" SelectedItem="{Binding SelectedProcess}"
                               Margin="0,6,0,0" Padding="8,6" FontSize="13"
                               MaxDropDownHeight="320" TextSearch.TextPath="Display"

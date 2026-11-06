@@ -215,18 +215,24 @@ public partial class UiAutomationContractTests
     /// sentence above promises: 41 further names passed it while still being unsayable — "Clear History"
     /// announced as "Clear alert history", "Empty Recycle Bin" as "Empty the Recycle Bin". All 41 were
     /// repaired in the same change.</para>
-    /// <para>Two exclusions, both deliberate. A glyph-only label ("X", "▲") is a symbol rather than
-    /// text, so a descriptive name is the CORRECT treatment and flagging it would be wrong. A name
-    /// built from a <c>{Binding}</c> is produced at runtime, so the literal in the XAML is not what
-    /// gets announced.</para>
+    /// <para>A glyph-only label ("X", "▲") is a symbol rather than text, so a descriptive name is the
+    /// CORRECT treatment and flagging it would be wrong.</para>
+    /// <para>It read only a literal <c>Content</c> beside a literal name, and the same rule was broken where it did
+    /// not look (#2883). A name built from a binding is said as its <c>StringFormat</c>, so System Health's chkdsk
+    /// row showed "Scan" and was announced "Run chkdsk on drive C:". Text inside a control is its label too, so
+    /// "Run as admin for more sensors" was announced "Run as administrator for more temperature sensors". And a
+    /// control with no words of its own is labelled by the text beside it: the switch before "Disable Xbox Game Bar /
+    /// Game DVR overlay" was announced "Disable Xbox Game Bar overlay", the box after "Ping every" "Ping interval in
+    /// seconds". So it now reads all three. A format's words are compared with its values left as gaps, so a label
+    /// cannot match across a value. A name bound with no format is the value alone and is not read, nor is a label
+    /// with a bound part, which is shown at run time.</para>
     /// </summary>
     [Fact]
     public void EveryLabelledControl_IsAnnouncedWithTheWordsPrintedOnIt()
     {
         var views = TestPaths.AppDir("Views");
-        string[] controls = ["Button", "CheckBox", "RadioButton", "ToggleButton"];
         var offenders = new List<string>();
-        var checkedControls = 0;
+        var inspected = new Dictionary<LabelSource, int>();
 
         foreach (var view in Directory.EnumerateFiles(views, "*.xaml", SearchOption.TopDirectoryOnly))
         {
@@ -234,30 +240,37 @@ public partial class UiAutomationContractTests
             try { document = XDocument.Load(view); }
             catch (System.Xml.XmlException) { continue; }
 
-            foreach (var element in document.Descendants()
-                         .Where(e => controls.Contains(e.Name.LocalName, StringComparer.Ordinal)))
+            foreach (var element in document.Descendants())
             {
-                var label = ((string?)element.Attribute("Content"))?.Trim();
-                var spoken = ((string?)element.Attribute("AutomationProperties.Name"))?.Trim();
+                if (ShownLabel(element) is not { } shown) continue;
+                if (SpokenWords(element) is not { } spoken) continue;
 
-                if (string.IsNullOrEmpty(label) || label.StartsWith('{')) continue;
-                if (string.IsNullOrEmpty(spoken) || spoken.StartsWith('{')) continue;
-
-                var labelWords = LabelWords(label);
+                var labelWords = LabelWords(shown.Label);
                 if (labelWords.Count == 0 || labelWords.TrueForAll(w => w.Length <= 1)) continue;
 
-                checkedControls++;
-                if (SpeaksTheLabel(labelWords, LabelWords(spoken))) continue;
+                inspected[shown.Source] = inspected.GetValueOrDefault(shown.Source) + 1;
+                if (SpeaksTheLabel(labelWords, spoken)) continue;
 
-                offenders.Add($"{Path.GetFileName(view)}: shows \"{label}\" but announces \"{spoken}\"");
+                var name = (string?)element.Attribute("AutomationProperties.Name");
+                offenders.Add($"{Path.GetFileName(view)}: <{element.Name.LocalName}> shows \"{shown.Label}\" "
+                              + $"({shown.Source}) but announces \"{name}\"");
             }
         }
 
-        // Vacuity floor: the views carry hundreds of labelled controls, so a scan that inspected
-        // almost nothing means the parsing broke rather than the code being clean.
-        Assert.True(checkedControls >= 150,
-            $"only {checkedControls} labelled controls were inspected — fix this guard rather than "
-            + "trusting its pass.");
+        // Vacuity floors, one for each place a label is read from, so that one of them reading nothing is not hidden
+        // by the others. 289, 9 and 49 when the bound names and the other two places were added (#2883).
+        var floors = new Dictionary<LabelSource, int>
+        {
+            [LabelSource.Content] = 280,
+            [LabelSource.TextInside] = 8,
+            [LabelSource.TextBeside] = 45,
+        };
+        var thin = floors.Where(f => inspected.GetValueOrDefault(f.Key) < f.Value)
+            .Select(f => $"{f.Key}: {inspected.GetValueOrDefault(f.Key)} inspected, from {f.Value} measured")
+            .ToList();
+        Assert.True(thin.Count == 0,
+            "too few labelled controls were inspected, so part of the views is no longer read — fix this guard "
+            + $"rather than trusting its pass:\n  {string.Join("\n  ", thin)}");
 
         Assert.True(offenders.Count == 0,
             "these controls are announced with different words than they display, so voice control "
@@ -265,6 +278,149 @@ public partial class UiAutomationContractTests
             + "screen (WCAG 2.5.3). Lead the accessible name with the visible text and append any "
             + $"extra context after it:\n  {string.Join("\n  ", offenders)}");
     }
+
+    /// <summary>Where a control's visible label is read from.</summary>
+    private enum LabelSource
+    {
+        /// <summary>Its <c>Content</c>, or a menu item's <c>Header</c>.</summary>
+        Content,
+
+        /// <summary>The text elements inside it.</summary>
+        TextInside,
+
+        /// <summary>The text beside a switch or an input that shows no words of its own.</summary>
+        TextBeside,
+    }
+
+    /// <summary>The controls whose content is their label.</summary>
+    private static readonly string[] ContentLabelled =
+        ["Button", "CheckBox", "RadioButton", "ToggleButton", "RepeatButton", "Hyperlink", "MenuItem"];
+
+    /// <summary>The switches, which are labelled by the text after them when they show none.</summary>
+    private static readonly string[] Switches = ["CheckBox", "RadioButton", "ToggleButton"];
+
+    /// <summary>The inputs, which are labelled by the text before them.</summary>
+    private static readonly string[] Inputs = ["TextBox", "PasswordBox", "ComboBox", "Slider", "DatePicker"];
+
+    /// <summary>What sits beside a label without being read: a coloured dot, a glyph.</summary>
+    private static readonly string[] Decorations = ["Ellipse", "Rectangle", "Path", "Image"];
+
+    /// <summary>
+    /// The words a sighted user reads as the control's label, and where they come from, or null when the XAML does not
+    /// say them: none at all, a glyph, or a value bound at run time.
+    /// </summary>
+    private static (string Label, LabelSource Source)? ShownLabel(XElement control)
+    {
+        var tag = control.Name.LocalName;
+        if (ContentLabelled.Contains(tag, StringComparer.Ordinal))
+        {
+            var content = ((string?)control.Attribute(tag == "MenuItem" ? "Header" : "Content"))?.Trim();
+            if (content is not null) return content.StartsWith('{') ? null : (content, LabelSource.Content);
+
+            var inside = TextInside(control);
+            if (inside.Runtime) return null;
+            if (inside.Text is { } text) return (text, LabelSource.TextInside);
+        }
+
+        var beside = Switches.Contains(tag, StringComparer.Ordinal) ? TextBeside(control, after: true)
+            : Inputs.Contains(tag, StringComparer.Ordinal) ? TextBeside(control, after: false)
+            : null;
+        return beside is null ? null : (beside, LabelSource.TextBeside);
+    }
+
+    /// <summary>
+    /// The literal text of the text elements inside <paramref name="element"/>, joined; Runtime when one of them shows
+    /// a bound value. Property elements are not content, save the content and inline ones: a tooltip, a context menu
+    /// or a style holds text the control does not show.
+    /// </summary>
+    private static (string? Text, bool Runtime) TextInside(XElement element)
+    {
+        var parts = new List<string>();
+        foreach (var node in element.Nodes())
+        {
+            if (node is XText text)
+            {
+                if (!string.IsNullOrWhiteSpace(text.Value)) parts.Add(text.Value.Trim());
+                continue;
+            }
+            if (node is not XElement child) continue;
+
+            var tag = child.Name.LocalName;
+            if (tag.Contains('.') && !tag.EndsWith(".Content", StringComparison.Ordinal)
+                                  && !tag.EndsWith(".Inlines", StringComparison.Ordinal)) continue;
+            if (tag is "Style" or "DataTemplate" or "ControlTemplate") continue;
+
+            var (inner, runtime) = tag is "TextBlock" or "Run" ? TextOf(child) : TextInside(child);
+            if (runtime) return (null, true);
+            if (inner is not null) parts.Add(inner);
+        }
+        return (parts.Count == 0 ? null : string.Join(" ", parts), false);
+    }
+
+    /// <summary>The fonts the views draw glyphs with.</summary>
+    private static readonly string[] IconFonts = ["Segoe Fluent Icons", "Segoe MDL2 Assets"];
+
+    /// <summary>A TextBlock's or a Run's literal text; none for a glyph, Runtime for a bound value.</summary>
+    private static (string? Text, bool Runtime) TextOf(XElement textElement)
+    {
+        var font = (string?)textElement.Attribute("FontFamily") ?? "";
+        if (IconFonts.Any(icon => font.Contains(icon, StringComparison.Ordinal))) return (null, false);
+
+        var text = (string?)textElement.Attribute("Text");
+        if (text is null) return TextInside(textElement);
+        return text.TrimStart().StartsWith('{') ? (null, true) : (text.Trim(), false);
+    }
+
+    /// <summary>
+    /// The text of the TextBlock next to <paramref name="control"/> in its panel, after it or before it, passing over a
+    /// decoration; null when the neighbour is anything else or shows a bound value.
+    /// </summary>
+    private static string? TextBeside(XElement control, bool after)
+    {
+        if (control.Attribute("Content") is not null || TextInside(control) is (not null, _) or (_, true)) return null;
+
+        var neighbours = after ? control.ElementsAfterSelf() : control.ElementsBeforeSelf().Reverse();
+        foreach (var neighbour in neighbours)
+        {
+            var tag = neighbour.Name.LocalName;
+            if (tag.Contains('.') || Decorations.Contains(tag, StringComparer.Ordinal)) continue;
+            if (tag != "TextBlock") return null;
+
+            var (text, runtime) = TextOf(neighbour);
+            if (runtime) return null;
+            if (text is null) continue;
+            return text;
+        }
+        return null;
+    }
+
+    /// <summary>
+    /// The words a screen reader says for the control's name: the literal name, or the binding's
+    /// <c>StringFormat</c> with each value as a gap no label word matches. Null when there is no name, or the name is
+    /// a bound value with no format.
+    /// </summary>
+    private static List<string>? SpokenWords(XElement control)
+    {
+        var name = ((string?)control.Attribute("AutomationProperties.Name"))?.Trim();
+        if (string.IsNullOrEmpty(name)) return null;
+        if (!name.StartsWith('{')) return LabelWords(name);
+
+        if (NameFormat().Match(name) is not { Success: true } format) return null;
+        var pieces = FormatValue().Split(format.Groups["format"].Value.Replace("{}", "", StringComparison.Ordinal));
+        var spoken = new List<string>();
+        for (var i = 0; i < pieces.Length; i++)
+        {
+            if (i > 0) spoken.Add("{value}");
+            spoken.AddRange(LabelWords(pieces[i]));
+        }
+        return spoken;
+    }
+
+    [GeneratedRegex(@"StringFormat\s*=\s*'(?<format>[^']*)'", RegexOptions.CultureInvariant)]
+    private static partial Regex NameFormat();
+
+    [GeneratedRegex(@"\{\d+(?:,[^}]*)?(?::[^}]*)?\}", RegexOptions.CultureInvariant)]
+    private static partial Regex FormatValue();
 
     /// <summary>The words of a label, lower-cased and stripped of punctuation, for comparison.</summary>
     private static List<string> LabelWords(string text)
@@ -283,7 +439,8 @@ public partial class UiAutomationContractTests
     /// <para>Contiguity is checked over the normalised WORD lists rather than the raw strings on
     /// purpose: that keeps the existing case- and punctuation-insensitivity, so "Enable / Disable" is
     /// satisfied by "Enable / Disable — the selected task", and a name stays free to re-case the label
-    /// while continuing the sentence.</para>
+    /// while continuing the sentence. A bound value in the name is a "{value}" entry, which no word of a label
+    /// equals.</para>
     /// </summary>
     private static bool SpeaksTheLabel(List<string> label, List<string> spoken)
     {

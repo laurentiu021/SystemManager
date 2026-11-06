@@ -10,6 +10,25 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.136.134] - 2026-11-06
+
+**A screen reader and voice control now use the words each control shows, and four more buttons that cannot be undone say what they do before you press them.**
+
+### Fixed
+- 23 controls were announced with other words than the ones on screen, so saying what you could read to voice control
+  pressed nothing, and Narrator read another label than the one shown. System Health's chkdsk row showed "Scan" and was
+  announced "Run chkdsk on drive C:" (since 1.52.31), Duplicate Finder's "Keep this one" was "Keep photo.jpg instead"
+  (since 1.60.0), and the Dashboard's "Run as admin for more sensors" was "Run as administrator for more temperature
+  sensors" (since 1.130.82). The five switches on Performance Mode, the box after "Ping every" and 12 more boxes and
+  pickers were named in other words than the text beside them, the oldest since 1.20.20. Each name now starts with the
+  words shown and adds what it needs after them, such as "Scan drive C: with chkdsk" and "Ping every — seconds between
+  pings". The check that holds this compared only a button's own text with a fixed name; it also reads names built
+  around a value now, the text inside a control, and the text beside a switch or a box.
+- End process on File Lock Detector, Clear History on New App Alerts, Remove selected on Preinstalled Apps and Restore
+  selected on Restore Points wear the red of a button that cannot be undone, but said nothing about it to a screen
+  reader, which heard the warning only in the confirmation after the press. Each now says what it does when you reach
+  it, as Kill process and Shred All have since 1.77.0, where the list of those buttons left these four out.
+
 ## [1.136.133] - 2026-11-06
 
 **An app whose name starts with dashes is listed in App Updates and Uninstaller, where it could be dropped or end the list.**

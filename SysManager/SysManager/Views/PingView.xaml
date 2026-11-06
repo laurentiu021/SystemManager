@@ -203,7 +203,7 @@
                     <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" DockPanel.Dock="Right" VerticalAlignment="Center">
                         <TextBlock Text="Ping every" Style="{StaticResource Subtle}" VerticalAlignment="Center"/>
                         <TextBox Text="{Binding Shared.IntervalSeconds, UpdateSourceTrigger=PropertyChanged}" Width="48" Margin="8,0,6,0" TextAlignment="Center"
-                                 AutomationProperties.Name="Ping interval in seconds"/>
+                                 AutomationProperties.Name="Ping every — seconds between pings"/>
                         <TextBlock Text="s" Style="{StaticResource Subtle}" VerticalAlignment="Center"/>
                         <TextBlock Text="Window" Style="{StaticResource Subtle}" VerticalAlignment="Center" Margin="16,0,0,0"/>
                         <ComboBox SelectedValue="{Binding Shared.WindowSeconds}" SelectedValuePath="Seconds"

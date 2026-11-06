@@ -93,7 +93,7 @@
                     <Border Style="{StaticResource Card}" Padding="16" Margin="0,0,0,16">
                         <StackPanel>
                             <StackPanel Orientation="Horizontal" Margin="0,0,0,4">
-                                <ToggleButton Style="{StaticResource ToggleSwitch}" IsChecked="{Binding WantVisualEffectsReduced}" AutomationProperties.Name="Reduce visual effects" VerticalAlignment="Center"/>
+                                <ToggleButton Style="{StaticResource ToggleSwitch}" IsChecked="{Binding WantVisualEffectsReduced}" AutomationProperties.Name="Reduce visual effects (disable animations, fades, shadows)" VerticalAlignment="Center"/>
                                 <TextBlock Text="Reduce visual effects (disable animations, fades, shadows)" Style="{StaticResource Body}" VerticalAlignment="Center" Margin="8,0,0,0"/>
                             </StackPanel>
                             <TextBlock Text="Uses SystemParametersInfo — takes effect instantly, no logout needed."
@@ -109,7 +109,7 @@
                     <Border Style="{StaticResource Card}" Padding="16" Margin="0,0,0,16">
                         <StackPanel>
                             <StackPanel Orientation="Horizontal" Margin="0,0,0,8">
-                                <ToggleButton Style="{StaticResource ToggleSwitch}" IsChecked="{Binding WantGameModeOff}" AutomationProperties.Name="Disable Game Mode" VerticalAlignment="Center"/>
+                                <ToggleButton Style="{StaticResource ToggleSwitch}" IsChecked="{Binding WantGameModeOff}" AutomationProperties.Name="Disable Game Mode (stop Windows from prioritizing game processes)" VerticalAlignment="Center"/>
                                 <TextBlock Text="Disable Game Mode (stop Windows from prioritizing game processes)" Style="{StaticResource Body}" VerticalAlignment="Center" Margin="8,0,0,0"/>
                             </StackPanel>
                             <Button Content="Apply Game Mode" Command="{Binding ApplyGameModeCommand}"
@@ -123,7 +123,7 @@
                     <Border Style="{StaticResource Card}" Padding="16" Margin="0,0,0,16">
                         <StackPanel>
                             <StackPanel Orientation="Horizontal" Margin="0,0,0,4">
-                                <ToggleButton Style="{StaticResource ToggleSwitch}" IsChecked="{Binding WantXboxGameBarOff}" AutomationProperties.Name="Disable Xbox Game Bar overlay" VerticalAlignment="Center"/>
+                                <ToggleButton Style="{StaticResource ToggleSwitch}" IsChecked="{Binding WantXboxGameBarOff}" AutomationProperties.Name="Disable Xbox Game Bar / Game DVR overlay" VerticalAlignment="Center"/>
                                 <TextBlock Text="Disable Xbox Game Bar / Game DVR overlay" Style="{StaticResource Body}" VerticalAlignment="Center" Margin="8,0,0,0"/>
                             </StackPanel>
                             <TextBlock Text="Disables AppCaptureEnabled and GameDVR_Enabled via registry. Instant, reversible."
@@ -153,7 +153,7 @@
                     <Border Style="{StaticResource Card}" Padding="16" Margin="0,0,0,16">
                         <StackPanel>
                             <StackPanel Orientation="Horizontal" Margin="0,0,0,4">
-                                <ToggleButton Style="{StaticResource ToggleSwitch}" IsChecked="{Binding WantGpuMaxPerformance}" IsEnabled="{Binding HasNvidiaGpu}" AutomationProperties.Name="NVIDIA GPU prefer maximum performance" VerticalAlignment="Center"/>
+                                <ToggleButton Style="{StaticResource ToggleSwitch}" IsChecked="{Binding WantGpuMaxPerformance}" IsEnabled="{Binding HasNvidiaGpu}" AutomationProperties.Name="NVIDIA GPU — Prefer Maximum Performance (requires reboot)" VerticalAlignment="Center"/>
                                 <TextBlock Text="NVIDIA GPU — Prefer Maximum Performance (requires reboot)" Style="{StaticResource Body}" VerticalAlignment="Center" Margin="8,0,0,0"/>
                             </StackPanel>
                             <TextBlock Style="{StaticResource Caption}" Foreground="{DynamicResource TextSecondary}" Margin="20,0,0,4"
@@ -177,7 +177,7 @@
                     <Border Style="{StaticResource Card}" Padding="16" Margin="0,0,0,16">
                         <StackPanel>
                             <StackPanel Orientation="Horizontal" Margin="0,0,0,4">
-                                <ToggleButton Style="{StaticResource ToggleSwitch}" IsChecked="{Binding WantProcessorMaxState}" IsEnabled="{Binding IsProcessorStateEditable}" AutomationProperties.Name="Processor minimum state 100 percent" VerticalAlignment="Center"/>
+                                <ToggleButton Style="{StaticResource ToggleSwitch}" IsChecked="{Binding WantProcessorMaxState}" IsEnabled="{Binding IsProcessorStateEditable}" AutomationProperties.Name="Processor min state 100% (force max CPU frequency)" VerticalAlignment="Center"/>
                                 <TextBlock Text="Processor min state 100% (force max CPU frequency)" Style="{StaticResource Body}" VerticalAlignment="Center" Margin="8,0,0,0"/>
                             </StackPanel>
                             <TextBlock Text="Prevents CPU from downclocking. Increases power consumption."

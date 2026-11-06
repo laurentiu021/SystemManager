@@ -34,11 +34,11 @@ public sealed partial class AudioMixerViewModel : ViewModelBase
     private readonly VolumePresetService _presets;
     private CancellationTokenSource? _reconcileCts;
 
-    // Completed while the tab is visible, replaced with a fresh incomplete source when it is hidden.
-    // PeakLoopAsync awaits this BEFORE its delay, so a hidden tab costs nothing at all rather than
-    // waking 20 times a second to decide it has nothing to do. Only touched on the UI thread
-    // (OnIsActiveChanged and the loop's own continuations), so it needs no synchronisation.
-    private TaskCompletionSource _activated = new(TaskCreationOptions.RunContinuationsAsynchronously);
+    /// <summary>
+    /// Open while the tab is shown. Both loops wait at it BEFORE their delay, so a hidden tab costs nothing at all
+    /// rather than waking 20 times a second, and once a second, to decide it has nothing to do (#2853).
+    /// </summary>
+    internal ActivationGate Shown { get; } = new(open: false);
 
     public BulkObservableCollection<AudioSessionRowViewModel> Sessions { get; } = new();
 
@@ -133,7 +133,7 @@ public sealed partial class AudioMixerViewModel : ViewModelBase
     /// cadence.</para>
     /// <para>Now one <c>GetPeaks</c> call per tick does all the COM work on a worker thread and only the
     /// resulting numbers come back here. Shares the reconcile loop's token, so Dispose stops both.</para>
-    /// <para>While the tab is hidden the loop parks on <c>_activated</c> instead of ticking and skipping:
+    /// <para>While the tab is hidden the loop parks on <see cref="Shown"/> instead of ticking and skipping:
     /// at 50&#160;ms a skip-check would still queue 20 continuations a second onto the Dispatcher for the
     /// entire life of the app once the tab had been opened once — the timer this replaced was genuinely
     /// STOPPED when the tab was hidden, and parity with that matters more here than anywhere else in the
@@ -145,7 +145,7 @@ public sealed partial class AudioMixerViewModel : ViewModelBase
         {
             try
             {
-                await _activated.Task.WaitAsync(ct).ConfigureAwait(true);
+                await Shown.WaitAsync(ct).ConfigureAwait(true);
                 await Task.Delay(TimeSpan.FromMilliseconds(PeakIntervalMs), ct).ConfigureAwait(true);
                 if (!IsActive) continue;
                 await UpdatePeaksAsync(ct).ConfigureAwait(true);
@@ -163,6 +163,8 @@ public sealed partial class AudioMixerViewModel : ViewModelBase
         {
             try
             {
+                // Parked while the tab is hidden, as the meters are: it woke every second to skip the pass (#2853).
+                await Shown.WaitAsync(ct);
                 await Task.Delay(1000, ct);
                 if (!IsActive) continue;
                 await ReconcileAsync();
@@ -477,12 +479,11 @@ public sealed partial class AudioMixerViewModel : ViewModelBase
         // showing whatever level it happened to stop on.
         if (value)
         {
-            _activated.TrySetResult();
+            Shown.Open();
             return;
         }
 
-        if (_activated.Task.IsCompleted)
-            _activated = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        Shown.Close();
         Pc.PeakLevel = 0f;
         foreach (var row in Sessions) row.PeakLevel = 0f;
     }

@@ -16467,6 +16467,49 @@ public partial class ArchitectureTests
     private static partial Regex InPlaceCapture();
 
     /// <summary>
+    /// Every view model loop that sleeps and then skips its work while its tab is hidden waits at its gate first, so a
+    /// hidden tab wakes nothing (#2853).
+    /// </summary>
+    /// <remarks>
+    /// Process Manager, Volume Control and Bandwidth Monitor slept their interval and then checked <c>IsActive</c>, so
+    /// once opened each posted to the window's thread once a second for the rest of the run. A loop that checks it
+    /// after a <c>Task.Delay</c> is that shape; the wait at its <c>ActivationGate</c> must come before the delay.
+    /// </remarks>
+    [Fact]
+    public void EveryLoopThatSkipsWhileHidden_WaitsAtItsGateFirst()
+    {
+        var offenders = new List<string>();
+        var loops = 0;
+        foreach (var path in SourceFilesUnder(Path.Combine(TestPaths.AppProject(), "ViewModels"), ".cs"))
+        {
+            var code = WithoutComments(File.ReadAllText(path));
+            foreach (Match skip in SkipWhileHidden().Matches(code))
+            {
+                var loopAt = code.LastIndexOf("while (", skip.Index, StringComparison.Ordinal);
+                if (loopAt < 0) continue;
+                var body = code[loopAt..skip.Index];
+                var delay = body.LastIndexOf("Task.Delay(", StringComparison.Ordinal);
+                if (delay < 0) continue;
+
+                loops++;
+                var wait = body.IndexOf("Shown.WaitAsync(", StringComparison.Ordinal);
+                if (wait < 0 || wait > delay)
+                    offenders.Add($"{Path.GetFileName(path)}: a loop sleeps and then skips while hidden, "
+                                  + "without waiting at its gate first");
+            }
+        }
+
+        // Vacuity floor: Process Manager's refresh, Volume Control's two loops and Bandwidth Monitor's poll.
+        Assert.True(loops >= 4, $"only {loops} loops that skip while hidden were found, out of 4 measured.");
+        Assert.True(offenders.Count == 0,
+            "a hidden tab's loop wakes to skip its work:\n  " + string.Join("\n  ", offenders));
+    }
+
+    /// <summary>A loop's skip of its work while the tab is hidden.</summary>
+    [GeneratedRegex(@"if \(!IsActive\b[^)]*\) continue;", RegexOptions.Compiled)]
+    private static partial Regex SkipWhileHidden();
+
+    /// <summary>
     /// Every kernel TCP and UDP event precise mode counts reaches the loopback filter with both of its addresses.
     /// </summary>
     /// <remarks>

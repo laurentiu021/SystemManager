@@ -38,8 +38,21 @@ public sealed partial class ProcessManagerViewModel : ElevatedViewModelBase
     [ObservableProperty] private long _totalMemory;
     [ObservableProperty] private string _summary = "Click Refresh to list running processes.";
 
+    /// <summary>
+    /// Open while the tab is shown, as <see cref="IsActive"/> starts. The refresh loop waits at it before each second,
+    /// so a hidden tab wakes nothing: it slept the second and then skipped the refresh, which posted to the window's
+    /// thread once a second for the rest of the run once the tab had been opened (#2853).
+    /// </summary>
+    internal ActivationGate Shown { get; } = new(open: true);
+
     partial void OnFilterTextChanged(string value) => ApplyFilter();
     partial void OnShowOnlyAppsChanged(bool value) => ApplyFilter();
+
+    partial void OnIsActiveChanged(bool value)
+    {
+        if (value) Shown.Open();
+        else Shown.Close();
+    }
 
     public ProcessManagerViewModel(ProcessManagerService service, IDialogService? dialog = null)
         : this(service, ProcessManagerService.KillProcess, dialog) { }
@@ -82,6 +95,7 @@ public sealed partial class ProcessManagerViewModel : ElevatedViewModelBase
         {
             try
             {
+                await Shown.WaitAsync(ct);
                 await Task.Delay(1000, ct);
                 if (!IsActive) continue;
                 await RefreshListAsync(announce: false);

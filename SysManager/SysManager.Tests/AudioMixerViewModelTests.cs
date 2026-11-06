@@ -883,19 +883,16 @@ public class AudioMixerViewModelTests
         // process alive past the end of the run, locking its own output assemblies against the next build.
         using var vm = NewVm(ServiceWith(Session("s1")));
 
-        var gate = typeof(AudioMixerViewModel)
-            .GetField("_activated", BindingFlags.NonPublic | BindingFlags.Instance)!;
-
         vm.IsActive = true;
-        Assert.True(((TaskCompletionSource)gate.GetValue(vm)!).Task.IsCompleted);
+        Assert.True(vm.Shown.IsOpen);
 
         vm.IsActive = false;
-        Assert.False(((TaskCompletionSource)gate.GetValue(vm)!).Task.IsCompleted);
+        Assert.False(vm.Shown.IsOpen);
 
         // Re-showing the tab must release it again — a one-shot gate would leave the meters dead
         // after the first time the user navigated away.
         vm.IsActive = true;
-        Assert.True(((TaskCompletionSource)gate.GetValue(vm)!).Task.IsCompleted);
+        Assert.True(vm.Shown.IsOpen);
 
         vm.IsActive = false;
     }

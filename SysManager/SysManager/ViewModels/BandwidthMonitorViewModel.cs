@@ -103,6 +103,14 @@ public sealed partial class BandwidthMonitorViewModel : ElevatedViewModelBase
         : "Throughput (last ~2 minutes)";
 
     [ObservableProperty] private bool _isActive;
+
+    /// <summary>
+    /// Open while the tab is shown. The poll loop waits at it before each interval, so a hidden tab wakes nothing: it
+    /// slept the interval and then skipped the sample, which posted to the window's thread once a second for the rest
+    /// of the run once the tab had been opened (#2853).
+    /// </summary>
+    internal ActivationGate Shown { get; } = new(open: false);
+
     [ObservableProperty] private bool _hasProcesses;
 
     [ObservableProperty]
@@ -307,6 +315,7 @@ public sealed partial class BandwidthMonitorViewModel : ElevatedViewModelBase
         {
             try
             {
+                await Shown.WaitAsync(ct).ConfigureAwait(true);
                 await Task.Delay(PollIntervalMs, ct).ConfigureAwait(true);
                 if (!IsActive || _source is null) continue;
                 await PollOnceAsync(ct).ConfigureAwait(true);
@@ -798,16 +807,18 @@ public sealed partial class BandwidthMonitorViewModel : ElevatedViewModelBase
 
     partial void OnIsActiveChanged(bool value)
     {
-        // The poll loop skips sampling while hidden; clear a stale alert when leaving so it doesn't linger on the
+        // The poll loop waits at the gate while hidden; clear a stale alert when leaving so it doesn't linger on the
         // hidden tab, and stop precise mode's trace until the tab is back.
         if (!value)
         {
+            Shown.Close();
             AlertMessage = "";
             _primeNextSample = true;
             StopPreciseWhileHidden();
             return;
         }
 
+        Shown.Open();
         if (_restartPrecise)
         {
             _restartPrecise = false;

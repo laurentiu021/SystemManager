@@ -10,6 +10,17 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.136.126] - 2026-11-06
+
+**Process Manager, Volume Control and Bandwidth Monitor no longer wake up every second while you are on another tab.**
+
+### Fixed
+- Once opened, each of the three tabs kept a loop that slept a second, found the tab hidden and went back to sleep,
+  for as long as the app ran, and every wake-up was work for the window's thread. A hidden tab's loop now waits
+  until the tab is shown again, as Volume Control's meters already did, so a hidden tab costs nothing. When a tab
+  is shown again, its first refresh comes a second later, rather than at some point within that second. Since
+  1.16.1 for Process Manager, 1.52.38 for Volume Control and 1.54.0 for Bandwidth Monitor.
+
 ## [1.136.125] - 2026-11-06
 
 **Process Manager refreshes in a seventh of the time, measures CPU over the whole second between refreshes, and shows when every process started, the system's own included.**

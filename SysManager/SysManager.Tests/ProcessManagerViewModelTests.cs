@@ -565,4 +565,21 @@ public class ProcessManagerViewModelTests
         }
         finally { File.Delete(path); }
     }
+
+    /// <summary>
+    /// A hidden tab parks its refresh loop at its gate, rather than waking each second to skip the refresh (#2853).
+    /// </summary>
+    [Fact]
+    public void AHiddenTab_ParksItsRefreshLoop()
+    {
+        var service = new ProcessManagerService(() => new Dictionary<int, IntPtr>(), _ => false);
+        using var vm = new ProcessManagerViewModel(service);
+        Assert.True(vm.Shown.IsOpen);   // shown, as IsActive starts
+
+        vm.IsActive = false;
+        Assert.False(vm.Shown.IsOpen);
+
+        vm.IsActive = true;
+        Assert.True(vm.Shown.IsOpen);
+    }
 }

@@ -1058,10 +1058,15 @@ Key services:
 - `ProcessManagerService` — enumerate running processes, kill by PID,
   open file location. Each new row's description is read through `Helpers/FileDescription`, from the file the
   program was started from, which a file renamed or moved since cannot give: that row has none, rather than
-  the whole snapshot failing, and the read is a constructor seam (#2718). `Snapshot`'s CPU-delta window (capture, `Thread.Sleep(100)`, re-read) measures
-  elapsed time through an optional `TimeProvider`'s monotonic `GetTimestamp`/`GetElapsedTime`, not a
-  subtracted `DateTime.UtcNow`: a clock STEP during that 100&#160;ms window would otherwise corrupt
-  every process's CPU% for that one refresh (#2855). `KillProcess(pid, startTime)` ends that process alone, never its tree, and
+  the whole snapshot failing, and the read is a constructor seam (#2718). `Snapshot` reads every process from one
+  `NtQuerySystemInformation(SystemProcessInformation)` call per refresh (`QueryProcesses`, parsed by the pure
+  `ReadProcesses`): name, threads, working set, start time and CPU time, with no process opened (#2854). CPU % is
+  the use since the read before, matched by PID and create time, with elapsed time through an optional
+  `TimeProvider`'s monotonic `GetTimestamp`/`GetElapsedTime`, not a subtracted `DateTime.UtcNow`, so a clock step
+  cannot corrupt a refresh (#2855). A read sooner than `CpuWindow` (100 ms) after the last waits out the rest, and a
+  read older than `CpuBaselineMaxAge` (3 s) is not measured from, since the Dashboard's "Why is it slow?" shares the
+  service; without one, a read is taken and the window waited out. The list and the wait are constructor seams.
+  `KillProcess(pid, startTime)` ends that process alone, never its tree, and
   returns a `KillOutcome` (`Ended`, `NotRunning`, `Refused`) so the tab can tell a process that had
   already closed from one Windows would not end. The start time is the listed one: a process ID
   reused while the confirmation was open names a different program, which is left alone.

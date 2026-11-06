@@ -484,6 +484,41 @@ public class ConverterTests
         => Assert.Throws<NotSupportedException>(() => new FormatConverter()
             .ConvertBack("Safe (3)", typeof(int), "Safe ({0})", CultureInfo.InvariantCulture));
 
+    // ---------- MenuHeaderConverter ----------
+
+    [Theory]
+    [InlineData("my_app.exe", "Kill {0}", "Kill my__app.exe")]
+    [InlineData("a__b.exe", "Kill {0}", "Kill a____b.exe")]
+    [InlineData("_start_.exe", "Open file location for {0}", "Open file location for __start__.exe")]
+    [InlineData("notepad.exe", "Kill {0}", "Kill notepad.exe")]
+    [InlineData(3, "_Refresh {0}", "_Refresh 3")]
+    public void MenuHeader_DoublesTheValuesUnderscoresAndNotTheTemplates(object value, string template, string expected)
+    {
+        // An AccessText draws a double underscore as one and reads a single one as an access key (#3199).
+        var text = new MenuHeaderConverter().Convert(value, typeof(object), template, CultureInfo.InvariantCulture);
+        Assert.Equal(expected, Assert.IsType<string>(text));
+    }
+
+    [Fact]
+    public void MenuHeader_WithNoTemplate_DoublesTheUnderscores()
+        => Assert.Equal("my__app.exe",
+            new MenuHeaderConverter().Convert("my_app.exe", typeof(object), null!, CultureInfo.InvariantCulture));
+
+    [Fact]
+    public void MenuHeader_HandsBackAValueWpfHasNotResolved()
+        => Assert.Same(DependencyProperty.UnsetValue, new MenuHeaderConverter()
+            .Convert(DependencyProperty.UnsetValue, typeof(object), "Kill {0}", CultureInfo.InvariantCulture));
+
+    [Fact]
+    public void MenuHeader_ReadsANullValueAsNothing()
+        => Assert.Equal("Kill ",
+            new MenuHeaderConverter().Convert(null!, typeof(object), "Kill {0}", CultureInfo.InvariantCulture));
+
+    [Fact]
+    public void MenuHeader_ConvertBackThrows()
+        => Assert.Throws<NotSupportedException>(() => new MenuHeaderConverter()
+            .ConvertBack("Kill a.exe", typeof(string), "Kill {0}", CultureInfo.InvariantCulture));
+
     [Fact]
     public void App_RegistersTheProcessSafetyConverters()
     {

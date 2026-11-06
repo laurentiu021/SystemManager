@@ -215,6 +215,32 @@ public sealed class FormatConverter : IValueConverter
         => throw new NotSupportedException();
 }
 
+/// <summary>
+/// The <see cref="FormatConverter"/> for a menu item's header: puts the bound value into the template with its
+/// underscores doubled, so the header shows the value exactly.
+/// </summary>
+/// <remarks>
+/// A menu item draws its header through an <c>AccessText</c>, WPF-UI's template sets <c>RecognizesAccessKey</c>, and
+/// an <c>AccessText</c> reads the first underscore as an access key: it does not draw it, the item's automation name
+/// drops it, and the letter after it becomes the item's key. A double underscore it draws as one. The row menus build
+/// their headers from names, so for a program named <c>my_app.exe</c> they read "Kill myapp.exe" and were announced
+/// so (#3199). Doubling the value's underscores, not the template's, leaves an access key the template names working.
+/// <para>A value WPF has not resolved yet is handed back as it is, as <see cref="FormatConverter"/> does, so the
+/// binding shows its fallback.</para>
+/// </remarks>
+public sealed class MenuHeaderConverter : IValueConverter
+{
+    public object Convert(object value, Type targetType, object parameter, CultureInfo culture)
+    {
+        if (value == DependencyProperty.UnsetValue) return value;
+        var text = (System.Convert.ToString(value, culture) ?? "").Replace("_", "__", StringComparison.Ordinal);
+        return parameter is string template ? string.Format(culture, template, text) : text;
+    }
+
+    public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture)
+        => throw new NotSupportedException();
+}
+
 // ── Process provenance (Process Manager) ─────────────────────────────────────────────────────
 // Deliberately SEPARATE from the SafetyLevel* converters above. Those switch on the
 // Models.SafetyLevel enum (Safe/Caution/Critical) used by Services and Windows Features;

@@ -177,21 +177,21 @@
                     <Setter Property="ContextMenu">
                         <Setter.Value>
                             <ContextMenu>
-                                <MenuItem Header="{Binding PlacementTarget.DataContext.DisplayName, RelativeSource={RelativeSource AncestorType=ContextMenu}, Converter={StaticResource Format}, ConverterParameter='Start {0}'}"
+                                <MenuItem Header="{Binding PlacementTarget.DataContext.DisplayName, RelativeSource={RelativeSource AncestorType=ContextMenu}, Converter={StaticResource MenuHeader}, ConverterParameter='Start {0}'}"
                                           Command="{Binding PlacementTarget.Tag.StartServiceCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}"
                                           CommandParameter="{Binding PlacementTarget.DataContext, RelativeSource={RelativeSource AncestorType=ContextMenu}}"/>
-                                <MenuItem Header="{Binding PlacementTarget.DataContext.DisplayName, RelativeSource={RelativeSource AncestorType=ContextMenu}, Converter={StaticResource Format}, ConverterParameter='Stop {0}'}"
+                                <MenuItem Header="{Binding PlacementTarget.DataContext.DisplayName, RelativeSource={RelativeSource AncestorType=ContextMenu}, Converter={StaticResource MenuHeader}, ConverterParameter='Stop {0}'}"
                                           Command="{Binding PlacementTarget.Tag.StopServiceCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}"
                                           CommandParameter="{Binding PlacementTarget.DataContext, RelativeSource={RelativeSource AncestorType=ContextMenu}}"/>
                                 <Separator/>
-                                <MenuItem Header="{Binding PlacementTarget.DataContext.DisplayName, RelativeSource={RelativeSource AncestorType=ContextMenu}, Converter={StaticResource Format}, ConverterParameter='Disable {0}'}"
+                                <MenuItem Header="{Binding PlacementTarget.DataContext.DisplayName, RelativeSource={RelativeSource AncestorType=ContextMenu}, Converter={StaticResource MenuHeader}, ConverterParameter='Disable {0}'}"
                                           Command="{Binding PlacementTarget.Tag.DisableServiceCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}"
                                           CommandParameter="{Binding PlacementTarget.DataContext, RelativeSource={RelativeSource AncestorType=ContextMenu}}"/>
-                                <MenuItem Header="{Binding PlacementTarget.DataContext.DisplayName, RelativeSource={RelativeSource AncestorType=ContextMenu}, Converter={StaticResource Format}, ConverterParameter='Enable {0}'}"
+                                <MenuItem Header="{Binding PlacementTarget.DataContext.DisplayName, RelativeSource={RelativeSource AncestorType=ContextMenu}, Converter={StaticResource MenuHeader}, ConverterParameter='Enable {0}'}"
                                           Command="{Binding PlacementTarget.Tag.EnableServiceCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}"
                                           CommandParameter="{Binding PlacementTarget.DataContext, RelativeSource={RelativeSource AncestorType=ContextMenu}}"/>
                                 <Separator/>
-                                <MenuItem Header="{Binding PlacementTarget.DataContext.DisplayName, RelativeSource={RelativeSource AncestorType=ContextMenu}, Converter={StaticResource Format}, ConverterParameter='Mark or unmark this service: {0}'}"
+                                <MenuItem Header="{Binding PlacementTarget.DataContext.DisplayName, RelativeSource={RelativeSource AncestorType=ContextMenu}, Converter={StaticResource MenuHeader}, ConverterParameter='Mark or unmark this service: {0}'}"
                                           Command="{Binding PlacementTarget.Tag.ToggleHighlightCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}"
                                           CommandParameter="{Binding PlacementTarget.DataContext, RelativeSource={RelativeSource AncestorType=ContextMenu}}"/>
                             </ContextMenu>

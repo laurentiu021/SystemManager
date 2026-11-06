@@ -9,6 +9,7 @@ using System.Linq;
 using System.Security.AccessControl;
 using System.Security.Principal;
 using System.Threading.Tasks;
+using SysManager.Helpers;
 using SysManager.Models;
 using SysManager.Services;
 
@@ -626,5 +627,91 @@ public class ResourceHistoryServiceDiskTests : IDisposable
 
         Assert.Equal(oldest, await service.OldestSampleOutsideAsync(7));
         Assert.Null(await service.OldestSampleOutsideAsync(30));
+    }
+
+    // ── A long file: the load reads its end, the hourly prune rewrites it once a day (#2853) ──
+
+    private static readonly DateTimeOffset Noon = new(2026, 11, 6, 12, 0, 0, TimeSpan.Zero);
+
+    /// <summary>A service on a clock stopped at <paramref name="now"/>, keeping the default 7 days.</summary>
+    private ResourceHistoryService ServiceAt(DateTimeOffset now) => new(
+        new SystemInfoService(), new TemperatureService(new DiskHealthService(), skipHardwareInit: true), _dir,
+        time: new StoppedClock(now));
+
+    private static ResourceSample Stamped(DateTimeOffset t) => new(t, 10, 20, null, null, null);
+
+    /// <summary>
+    /// The last hour of a long file is read from its end: with the file's start locked against reading, it still
+    /// loads. The load read the whole file first, so the lock failed it and the tab showed no history.
+    /// </summary>
+    [Fact]
+    public async Task LoadAsync_ReadsOnlyTheEndOfTheFile()
+    {
+        Seed([
+            .. Enumerable.Range(1, 3_000).Reverse().Select(i => Stamped(Noon.AddHours(-2).AddSeconds(-10 * i))),
+            .. Enumerable.Range(0, 6).Select(i => Stamped(Noon.AddMinutes(-50 + 10 * i))),
+        ]);
+        using var service = ServiceAt(Noon);
+        using var head = new FileStream(DataPath, FileMode.Open, FileAccess.Read, FileShare.Read);
+        head.Lock(0, TailLines.ChunkBytes);
+        Assert.Throws<IOException>(() => File.ReadAllLines(DataPath));   // the lock holds
+
+        var loaded = await service.LoadAsync(TimeSpan.FromHours(1));
+
+        Assert.Equal(6, loaded.Count);
+    }
+
+    /// <summary>The lines a prune wrote, which end in CRLF, load with the LF lines appended after them.</summary>
+    [Fact]
+    public async Task LoadAsync_ReadsThePrunesCrlfLines_AndTheLfLinesAppendedAfter()
+    {
+        Seed(Stamped(Noon.AddDays(-8)), Stamped(Noon.AddMinutes(-40)), Stamped(Noon.AddMinutes(-30)));
+        using var service = ServiceAt(Noon);
+        await service.PruneAsync();   // rewrites the two it keeps
+        File.AppendAllText(DataPath, ResourceHistoryService.Serialize(Stamped(Noon.AddMinutes(-20))) + "\n"
+                                     + ResourceHistoryService.Serialize(Stamped(Noon.AddMinutes(-10))) + "\n");
+        var text = File.ReadAllText(DataPath);
+        Assert.Equal(2, text.Split("\r\n").Length - 1);   // the prune's two lines end in CRLF
+        Assert.Equal(4, text.Split('\n').Length - 1);     // and the appended two in LF
+
+        var loaded = await service.LoadAsync(TimeSpan.FromHours(1));
+
+        Assert.Equal([Noon.AddMinutes(-40), Noon.AddMinutes(-30), Noon.AddMinutes(-20), Noon.AddMinutes(-10)],
+            loaded.Select(s => s.Timestamp));
+    }
+
+    /// <summary>
+    /// No range reaches past the window. The file runs up to a day past it between prunes, and a 30-day range showed
+    /// that day while 7 were kept.
+    /// </summary>
+    [Fact]
+    public async Task LoadAsync_NeverReachesPastTheWindow()
+    {
+        Seed(Stamped(Noon.AddDays(-7.5)), Stamped(Noon.AddHours(-1)));
+        using var service = ServiceAt(Noon);
+
+        var loaded = await service.LoadAsync(TimeSpan.FromDays(30));
+
+        Assert.Equal([Noon.AddHours(-1)], loaded.Select(s => s.Timestamp));
+    }
+
+    /// <summary>
+    /// The sampler's hourly prune rewrites the file only once its oldest sample is a day past the window, so at most
+    /// once a day. Each hour's prune rewrote it, since an hour of samples had always expired.
+    /// </summary>
+    [Fact]
+    public async Task PruneWhenDue_RewritesTheFile_OnlyOnceItsOldestSampleIsADayPastTheWindow()
+    {
+        Seed(Stamped(Noon.AddDays(-7).AddHours(-23)), Stamped(Noon.AddHours(-1)));
+        var before = File.ReadAllBytes(DataPath);
+
+        using (var service = ServiceAt(Noon)) await service.PruneWhenDueAsync();
+        Assert.Equal(before, File.ReadAllBytes(DataPath));   // 23 hours past the window: left as it was
+
+        using (var later = ServiceAt(Noon.AddHours(2))) await later.PruneWhenDueAsync();   // a day and an hour past
+        var kept = File.ReadAllLines(DataPath);
+        Assert.Single(kept);
+        Assert.True(ResourceHistoryService.TryParse(kept[0], out var sample));
+        Assert.Equal(Noon.AddHours(-1), sample!.Timestamp);
     }
 }

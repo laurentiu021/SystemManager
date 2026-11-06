@@ -15,6 +15,7 @@
             <RowDefinition Height="Auto"/>
             <RowDefinition Height="Auto"/>
             <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
             <RowDefinition Height="*"/>
             <RowDefinition Height="Auto"/>
         </Grid.RowDefinitions>
@@ -22,49 +23,58 @@
         <!-- Preview banner -->
         <v:DevelopmentBanner Grid.Row="0" Margin="28,24,28,0"/>
 
-        <!-- Header + controls -->
-        <DockPanel Grid.Row="1" Margin="28,16,28,0">
-            <StackPanel>
-                <TextBlock Text="Resource History" Style="{StaticResource Display}"/>
-                <TextBlock Text="Historical CPU, RAM, GPU usage and temperatures. Samples are recorded every 10 seconds while the app runs — scroll back through hours or days, then export to CSV."
-                           Style="{StaticResource Subtle}" Margin="0,4,0,0" TextWrapping="Wrap" MaxWidth="820" HorizontalAlignment="Left"/>
-            </StackPanel>
-            <StackPanel Orientation="Horizontal" HorizontalAlignment="Right"
-                        DockPanel.Dock="Right" VerticalAlignment="Center">
-                <TextBlock Text="Range" Style="{StaticResource Subtle}" VerticalAlignment="Center"/>
-                <ComboBox ItemsSource="{Binding RangeOptions}"
-                          SelectedItem="{Binding SelectedRange, Mode=TwoWay}" Width="150" Margin="8,0,0,0"
-                          TextSearch.TextPath="Label"
-                          AutomationProperties.Name="History time range">
-                    <ComboBox.ItemTemplate>
-                        <DataTemplate>
-                            <TextBlock Text="{Binding Label}" TextTrimming="CharacterEllipsis"/>
-                        </DataTemplate>
-                    </ComboBox.ItemTemplate>
-                </ComboBox>
-                <TextBlock Text="Keep" Style="{StaticResource Subtle}" VerticalAlignment="Center" Margin="16,0,0,0"/>
-                <ComboBox ItemsSource="{Binding RetentionOptions}"
-                          SelectedItem="{Binding RetentionDays, Mode=TwoWay}" Width="64" Margin="8,0,0,0"
-                          AutomationProperties.Name="Keep — days of history"/>
-                <TextBlock Text="days" Style="{StaticResource Subtle}" VerticalAlignment="Center" Margin="6,0,0,0"/>
-                <Button Content="Refresh" Command="{Binding ReloadCommand}"
-                        Style="{StaticResource GhostButton}" Margin="16,0,0,0"
-                        AutomationProperties.Name="Refresh history"/>
-                <Button Content="Export CSV" Command="{Binding ExportCsvCommand}"
-                        Style="{StaticResource SecondaryButton}" Margin="6,0,0,0"
-                        AutomationProperties.Name="Export CSV — the resource history"/>
-            </StackPanel>
-        </DockPanel>
+        <!-- Header -->
+        <StackPanel Grid.Row="1" Margin="28,16,28,0">
+            <TextBlock Text="Resource History" Style="{StaticResource Display}"/>
+            <TextBlock Text="Historical CPU, RAM, GPU usage and temperatures. Samples are recorded every 10 seconds while the app runs — scroll back through hours or days, then export to CSV."
+                       Style="{StaticResource Subtle}" Margin="0,4,0,0" TextWrapping="Wrap" MaxWidth="820" HorizontalAlignment="Left"/>
+        </StackPanel>
+
+        <!-- Range, retention and export, on a toolbar card of their own under the header, as Shortcut Cleaner's are.
+             Beside the title they took 527 px, so at the smallest window the title itself was cut (#2704). The row
+             wraps, each label kept beside its control. -->
+        <Border Grid.Row="2" Style="{StaticResource Card}" Margin="28,16,28,0" Padding="12">
+            <WrapPanel>
+                <StackPanel Orientation="Horizontal" Margin="0,0,16,0">
+                    <TextBlock Text="Range" Style="{StaticResource Subtle}" VerticalAlignment="Center"/>
+                    <ComboBox ItemsSource="{Binding RangeOptions}"
+                              SelectedItem="{Binding SelectedRange, Mode=TwoWay}" Width="150" Margin="8,0,0,0"
+                              TextSearch.TextPath="Label"
+                              AutomationProperties.Name="History time range">
+                        <ComboBox.ItemTemplate>
+                            <DataTemplate>
+                                <TextBlock Text="{Binding Label}" TextTrimming="CharacterEllipsis"/>
+                            </DataTemplate>
+                        </ComboBox.ItemTemplate>
+                    </ComboBox>
+                </StackPanel>
+                <StackPanel Orientation="Horizontal" Margin="0,0,16,0">
+                    <TextBlock Text="Keep" Style="{StaticResource Subtle}" VerticalAlignment="Center"/>
+                    <ComboBox ItemsSource="{Binding RetentionOptions}"
+                              SelectedItem="{Binding RetentionDays, Mode=TwoWay}" Width="64" Margin="8,0,0,0"
+                              AutomationProperties.Name="Keep — days of history"/>
+                    <TextBlock Text="days" Style="{StaticResource Subtle}" VerticalAlignment="Center" Margin="6,0,0,0"/>
+                </StackPanel>
+                <StackPanel Orientation="Horizontal">
+                    <Button Content="Refresh" Command="{Binding ReloadCommand}"
+                            Style="{StaticResource GhostButton}" Margin="0,0,6,0"
+                            AutomationProperties.Name="Refresh history"/>
+                    <Button Content="Export CSV" Command="{Binding ExportCsvCommand}"
+                            Style="{StaticResource SecondaryButton}"
+                            AutomationProperties.Name="Export CSV — the resource history"/>
+                </StackPanel>
+            </WrapPanel>
+        </Border>
 
         <!-- Summary strip -->
-        <Border Grid.Row="2" Style="{StaticResource Card}" Margin="28,16,28,0"
+        <Border Grid.Row="3" Style="{StaticResource Card}" Margin="28,16,28,0"
                 Visibility="{Binding HasData, Converter={StaticResource FlexVis}}">
             <TextBlock Text="{Binding Summary}" Foreground="{DynamicResource TextSecondary}"
                        Style="{StaticResource Body}" TextWrapping="Wrap"/>
         </Border>
 
         <!-- Charts -->
-        <Grid Grid.Row="3" Margin="28,16,28,0">
+        <Grid Grid.Row="4" Margin="28,16,28,0">
             <Grid.RowDefinitions>
                 <RowDefinition Height="3*"/>
                 <RowDefinition Height="2*"/>
@@ -118,7 +128,7 @@
         </Grid>
 
         <!-- Status -->
-        <DockPanel Grid.Row="4" Margin="28,12,28,24">
+        <DockPanel Grid.Row="5" Margin="28,12,28,24">
             <ProgressBar AutomationProperties.Name="Resource history loading progress" DockPanel.Dock="Left" Width="120" Height="4" Margin="0,0,12,0"
                          IsIndeterminate="True"
                          Visibility="{Binding IsBusy, Converter={StaticResource BoolToVis}}"/>

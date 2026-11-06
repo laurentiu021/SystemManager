@@ -3852,6 +3852,74 @@ public partial class ArchitectureTests
         }));
 
     /// <summary>
+    /// No DockPanel lays wrapping text out before a child docked beside it.
+    /// </summary>
+    /// <remarks>
+    /// A DockPanel measures its children in the order they are declared, each with the room the ones before it left.
+    /// Text that wraps takes all the width it is given, so a description declared before the buttons docked beside it
+    /// left them what it did not use: 5 px for Start, Stop and Clear on Ping at the default window, 4 for Start
+    /// auto-trace on Traceroute and 9 for System Health's Scan, the button the Welcome screen sends people to (#2704).
+    /// Declared first and docked right, the buttons keep their width and the text wraps in what is left, as on the
+    /// Dashboard. Text counts when it is bound, or a literal long enough to wrap, and has no width of its own that fits
+    /// a card on the smallest page.
+    /// </remarks>
+    [Fact]
+    public void NoDockPanel_LaysWrappingTextOutBeforeWhatIsDockedBesideIt()
+    {
+        var appDir = TestPaths.AppProject();
+        var files = Directory.GetFiles(Path.Combine(appDir, "Views"), "*.xaml")
+            .Append(Path.Combine(appDir, "MainWindow.xaml"));
+        var offenders = new List<string>();
+        var panels = 0;
+
+        foreach (var file in files)
+        {
+            foreach (var dock in System.Xml.Linq.XDocument.Load(file).Descendants()
+                         .Where(e => e.Name.LocalName == "DockPanel"))
+            {
+                panels++;
+                var children = dock.Elements().Where(e => !e.Name.LocalName.Contains('.')).ToList();
+                // Every child after one docked to a side is laid out in the width that one left, whatever its
+                // own docking, so only the last child may hold the wrapping text.
+                for (var i = 0; i < children.Count - 1; i++)
+                {
+                    var side = (string?)children[i].Attribute("DockPanel.Dock") ?? "Left";
+                    if (side is not ("Left" or "Right")) continue;
+                    if (WrappingTextIn(children[i]) is not { } text) continue;
+                    offenders.Add($"{Path.GetFileName(file)}: \"{(text.Length > 60 ? text[..60] + "…" : text)}\" "
+                                  + "is laid out before what is docked beside it");
+                }
+            }
+        }
+
+        // Vacuity floor: 113 DockPanels in the views and the main window when measured (#2704).
+        Assert.True(panels >= 100, $"only {panels} DockPanels were read, from 113 measured.");
+        Assert.True(offenders.Count == 0,
+            "wrapping text declared before a child docked beside it takes the width that child needed. Declare the "
+            + "docked child first, docked right, and let the text fill what is left:\n  "
+            + string.Join("\n  ", offenders));
+    }
+
+    /// <summary>
+    /// The first text inside <paramref name="element"/>, outside any template, that wraps with no width of its own that
+    /// fits, and is bound or long enough to wrap; or null.
+    /// </summary>
+    private static string? WrappingTextIn(System.Xml.Linq.XElement element)
+    {
+        foreach (var tb in element.DescendantsAndSelf().Where(e => e.Name.LocalName == "TextBlock"))
+        {
+            if ((string?)tb.Attribute("TextWrapping") is not ("Wrap" or "WrapWithOverflow")) continue;
+            var path = tb.AncestorsAndSelf().TakeWhile(a => a != element.Parent).ToList();
+            if (path.Any(a => a.Name.LocalName is "DataTemplate" or "ControlTemplate" or "HierarchicalDataTemplate"))
+                continue;
+            if (path.Any(HasAWidthThatFits)) continue;
+            var text = WhitespaceRun().Replace(TextOf(tb), " ").Trim();
+            if (text.StartsWith('{') || text.Length >= 40) return text;
+        }
+        return null;
+    }
+
+    /// <summary>
     /// The toast is at most a fixed width, and its title and detail wrap inside it, so a long result makes it taller
     /// rather than running off the window (#2787).
     /// </summary>

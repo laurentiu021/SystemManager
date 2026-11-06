@@ -10,6 +10,17 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.136.133] - 2026-11-06
+
+**An app whose name starts with dashes is listed in App Updates and Uninstaller, where it could be dropped or end the list.**
+
+### Fixed
+- SysManager reads winget's tables line by line, and took a line starting with two dashes for the row of dashes under
+  the header, so an app whose name starts with "--" was left out. One starting with "---" was taken for the start of
+  a second table, which ended the list there and dropped the two apps above it. Only a row of dashes and nothing
+  else is a separator now. Found by a new check that writes random tables the way winget lays them out, wide
+  characters and all, and reads them back. Since 0.3.0 for the first, and 1.130.62 for the second.
+
 ## [1.136.132] - 2026-11-06
 
 **The log's line for SysManager's first frame now reads the way the release check looks for it, so every release records how long the start took.**

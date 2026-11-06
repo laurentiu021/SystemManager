@@ -569,4 +569,105 @@ public class CsvExportTests
             Directory.Delete(dir, recursive: true);
         }
     }
+
+    // ── A row reads back as its fields (#2862) ──
+    //
+    // A field of characters that each mean something to a sheet, a separator, a quote, CR, LF, the formula triggers,
+    // letters, digits and the culture's decimal separator, written with AppendRow and read back under RFC 4180 with
+    // the culture's own separator, is the field again, with the single quote the formula guard adds where its rule,
+    // written out here rather than borrowed, says it goes.
+
+    /// <summary>
+    /// Over 3,000 rows of up to six fields from seed 2862, in each culture, every row reads back as its fields and ends
+    /// with CRLF.
+    /// </summary>
+    [Theory]
+    [InlineData("")]
+    [InlineData("en-US")]
+    [InlineData("de-DE")]
+    [InlineData("ro-RO")]
+    [InlineData("fr-FR")]
+    [InlineData("ar-SA")]
+    public void ARowWrittenForASheet_ReadsBackAsItsFields(string name)
+    {
+        var culture = CultureInfo.GetCultureInfo(name);
+        var separator = Csv.SeparatorOf(culture);
+        string[] pieces =
+        [
+            separator, "\"", "\r", "\n", "\r\n", "=", "+", "-", "@", "\t", " ", "a", "Z", "ă", "中", "0", "7",
+            culture.NumberFormat.NumberDecimalSeparator, "'",
+        ];
+        var random = new Random(2862);
+        for (var row = 0; row < 3000; row++)
+        {
+            var fields = new string?[random.Next(1, 7)];
+            for (var f = 0; f < fields.Length; f++)
+            {
+                if (random.Next(10) == 0) { fields[f] = random.Next(2) == 0 ? null : ""; continue; }
+                var text = new StringBuilder();
+                for (var p = random.Next(1, 9); p > 0; p--) text.Append(pieces[random.Next(pieces.Length)]);
+                fields[f] = text.ToString();
+            }
+
+            var builder = new StringBuilder();
+            Csv.AppendRow(builder, culture, fields);
+            var written = builder.ToString();
+
+            Assert.EndsWith("\r\n", written, StringComparison.Ordinal);
+            var read = ReadRow(written, separator);
+            var expected = fields.Select(f => Guarded(f, culture)).ToArray();
+            Assert.True(expected.SequenceEqual(read),
+                $"row {row} in \"{name}\": wrote [{string.Join(" | ", expected.Select(Visible))}] as {Visible(written)}"
+                + $" and read [{string.Join(" | ", read.Select(Visible))}]");
+        }
+    }
+
+    /// <summary>
+    /// The field a sheet should read: one that starts with a formula trigger, unless it is a signed number, gets a
+    /// quote.
+    /// </summary>
+    private static string Guarded(string? value, CultureInfo culture)
+    {
+        if (string.IsNullOrEmpty(value)) return "";
+        var trigger = value[0] is '=' or '@' or '\t' or '\r'
+            || (value[0] is '+' or '-' && !double.TryParse(value, NumberStyles.Float, culture, out _));
+        return trigger ? "'" + value : value;
+    }
+
+    /// <summary>One CSV row under RFC 4180, split on <paramref name="separator"/>, up to its closing CRLF.</summary>
+    private static List<string> ReadRow(string text, string separator)
+    {
+        var fields = new List<string>();
+        var field = new StringBuilder();
+        var i = 0;
+        while (true)
+        {
+            if (i < text.Length && text[i] == '"')
+            {
+                for (i++; ; i++)
+                {
+                    Assert.True(i < text.Length, "a quoted field runs off the end of the row");
+                    if (text[i] != '"') { field.Append(text[i]); continue; }
+                    if (i + 1 < text.Length && text[i + 1] == '"') { field.Append('"'); i++; continue; }
+                    i++;
+                    break;
+                }
+            }
+            else
+            {
+                while (i < text.Length && !text.AsSpan(i).StartsWith(separator, StringComparison.Ordinal)
+                       && !text.AsSpan(i).StartsWith("\r\n", StringComparison.Ordinal))
+                    field.Append(text[i++]);
+            }
+            fields.Add(field.ToString());
+            field.Clear();
+            if (text.AsSpan(i).StartsWith(separator, StringComparison.Ordinal)) { i += separator.Length; continue; }
+            Assert.True(text.AsSpan(i).SequenceEqual("\r\n"), $"the row goes on after a field: {Visible(text[i..])}");
+            return fields;
+        }
+    }
+
+    private static string Visible(string? text) =>
+        (text ?? "<null>").Replace("\r", "\\r", StringComparison.Ordinal).Replace("\n", "\\n", StringComparison.Ordinal)
+            .Replace("\t", "\\t", StringComparison.Ordinal);
 }

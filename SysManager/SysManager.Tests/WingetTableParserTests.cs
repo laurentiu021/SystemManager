@@ -2,6 +2,8 @@
 // Author: laurentiu021 · https://github.com/laurentiu021/SystemManager
 // License: MIT
 
+using System.Globalization;
+using System.Text;
 using System.Text.RegularExpressions;
 using SysManager.Helpers;
 
@@ -618,5 +620,114 @@ public class WingetTableParserTests
         ], NeverMatches, NeverMatches);
 
         Assert.Equal(("A.B", "1"), (Assert.Single(rows).Id, rows[0].Version));
+    }
+
+    /// <summary>
+    /// A package whose name starts with dashes is a row: one starting with two was skipped as the separator, and one
+    /// starting with three ended the table as the start of another, taking the two rows above it (#2862).
+    /// </summary>
+    [Fact]
+    public void ARowWhoseNameStartsWithDashes_IsARow()
+    {
+        var rows = WingetTableParser.Parse(
+        [
+            "Name         Id  Version Source",
+            "-------------------------------",
+            "First        A.A 1.0     winget",
+            "--Two dashes B.B 2.0     winget",
+            "---Three     C.C 3.0     winget",
+            "Last         D.D 4.0     winget",
+            "4 packages have version numbers that cannot be determined.",
+        ], HeaderPattern, SummaryPattern);
+
+        Assert.Equal(["A.A", "B.B", "C.C", "D.D"], rows.Select(r => r.Id));
+        Assert.Equal(["First", "--Two dashes", "---Three", "Last"], rows.Select(r => r.Name));
+    }
+
+    // ── A table rendered the way winget pads it parses back to its rows (#2862) ──
+    //
+    // winget's TableOutput pads each field to its column with spaces, counting a field's width as Utility::
+    // UTF8ColumnWidth does: two columns for an East Asian Wide or Fullwidth character, one for anything else. The
+    // characters below are chosen by hand for their width, so the renderer does not lean on the parser's own table.
+
+    private static readonly (string Text, int Width)[] Pieces =
+    [
+        ("a", 1), ("Z", 1), ("7", 1), (".", 1), ("-", 1), ("é", 1), ("ß", 1), ("Ω", 1), ("ă", 1),
+        ("中", 2), ("文", 2), ("日", 2), ("한", 2), ("글", 2), ("カ", 2), ("\uFF21", 2), ("\U0001F600", 2),
+    ];
+
+    /// <summary>
+    /// A field of one to <paramref name="most"/> pieces, with spaces inside when <paramref name="spaced"/>.
+    /// </summary>
+    private static (string Text, int Width) Field(Random random, int most, bool spaced)
+    {
+        var text = new StringBuilder();
+        var width = 0;
+        var count = random.Next(1, most + 1);
+        for (var i = 0; i < count; i++)
+        {
+            if (spaced && i > 0 && random.Next(4) == 0) { text.Append(' '); width++; }
+            var (piece, cells) = Pieces[random.Next(Pieces.Length)];
+            text.Append(piece);
+            width += cells;
+        }
+        return (text.ToString(), width);
+    }
+
+    /// <summary>
+    /// Over 200 tables of up to 12 packages from seed 2862, names with spaces and wide characters among them, every
+    /// row parses back to the fields it was rendered from, in the five-column upgrade shape and the four-column list
+    /// shape.
+    /// </summary>
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public void ATableRenderedTheWayWingetPadsIt_ParsesBackToItsRows(bool withAvailable)
+    {
+        var random = new Random(withAvailable ? 2862 : 2863);
+        string[] titles = withAvailable
+            ? ["Name", "Id", "Version", "Available", "Source"]
+            : ["Name", "Id", "Version", "Source"];
+        for (var table = 0; table < 200; table++)
+        {
+            var rows = new List<(string Text, int Width)[]>();
+            for (var r = random.Next(1, 13); r > 0; r--)
+            {
+                var name = Field(random, 8, spaced: true);
+                var id = Field(random, 6, spaced: false);
+                var version = (Text: $"{random.Next(100)}.{random.Next(100)}", Width: 0);
+                version.Width = version.Text.Length;
+                var source = random.Next(3) == 0 ? ("msstore", 7) : ("winget", 6);
+                rows.Add(withAvailable
+                    ? [name, id, version, random.Next(4) == 0 ? ("", 0) : ($"{random.Next(100, 200)}.0", 5), source]
+                    : [name, id, version, source]);
+            }
+
+            var widths = titles.Select((t, c) => Math.Max(t.Length, rows.Max(row => row[c].Width))).ToArray();
+            string Line(IReadOnlyList<(string Text, int Width)> cells) => string.Join(" ", cells.Select((cell, c) =>
+                c == cells.Count - 1 ? cell.Text : cell.Text + new string(' ', widths[c] - cell.Width)));
+            var lines = new List<string>
+            {
+                Line([.. titles.Select(t => (t, t.Length))]),
+                new('-', widths.Sum() + widths.Length - 1),
+            };
+            lines.AddRange(rows.Select(Line));
+            lines.Add($"{rows.Count} packages have version numbers that cannot be determined.");
+
+            var parsed = WingetTableParser.Parse(lines, HeaderPattern, SummaryPattern);
+
+            Assert.True(rows.Count == parsed.Count,
+                $"table {table}: {parsed.Count} of {rows.Count} rows\n{string.Join("\n", lines)}");
+            for (var i = 0; i < rows.Count; i++)
+            {
+                var expected = rows[i];
+                var got = parsed[i];
+                var actual = withAvailable
+                    ? new[] { got.Name, got.Id, got.Version, got.Available, got.Source }
+                    : [got.Name, got.Id, got.Version, got.Source];
+                Assert.True(expected.Select(e => e.Text).SequenceEqual(actual),
+                    $"table {table}, row {i}: [{string.Join(" | ", actual)}]\n{string.Join("\n", lines)}");
+            }
+        }
     }
 }

@@ -844,7 +844,9 @@ Across the tab:
   Windows reported, such as `Failed (install 0x800F0922)`, the code to search for, and the failure
   is written to the log, so a diagnostics bundle carries it
 - Honest aggregate reporting:
-  `Installed X/Y. Failed: Z. Not applied: W.`
+  `Installed X/Y. Failed: Z. Not applied: W.` An install that is cancelled or stopped by a Windows
+  Update error still says how many went in and whether to restart, and the rows it did not reach say
+  **Cancelled** or **Not applied** instead of staying on **Pending…**
 - Reboot detection — toast notification if any update requires reboot
 - Pending-reboot check, the same one the Dashboard's alert makes, and update history (last 30 — via
   PSWindowsUpdate), with each entry's KB number

@@ -31,7 +31,8 @@ public interface IWindowsUpdateService
     Task<IReadOnlyList<UpdateEntry>> ScanAsync(IProgress<string>? progress = null, CancellationToken ct = default);
 
     /// <summary>
-    /// Downloads and installs the given updates, setting each entry's status as it goes.
+    /// Downloads and installs the given updates, setting each entry's status as it goes. Once it has started it returns
+    /// a report however it ends, a cancel or a Windows Update Agent error included, so what went in is counted.
     /// </summary>
     /// <param name="progress">Where this install's progress lines go, or nowhere, on a worker thread too.</param>
     Task<InstallReport> InstallAsync(

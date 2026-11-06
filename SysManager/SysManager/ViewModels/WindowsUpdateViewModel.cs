@@ -611,10 +611,11 @@ public sealed partial class WindowsUpdateViewModel : ViewModelBase
         {
             var progress = new SettlingProgress<string>(OnWuLog);
             var report = await progress.SettleAfterAsync(reporter => _wu.InstallAsync(selected, reporter, _cts.Token));
-            var notApplied = selected.Count - report.Installed - report.Failed;
-            StatusMessage = report.Failed > 0 || notApplied > 0
-                ? $"Installed {report.Installed}/{selected.Count}. Failed: {report.Failed}. Not applied: {notApplied}."
-                : $"Installed {report.Installed}/{selected.Count}.";
+            // A run that stopped early leaves the rows it did not finish as it, or this tab, last set them. They say
+            // what happened instead, and the count and the restart notice come all the same (#2791).
+            if (report.Cancelled) MarkUnfinished(selected, "Cancelled");
+            else if (report.AgentError != 0) MarkUnfinished(selected, "Not applied");
+            StatusMessage = DescribeInstall(report, selected.Count);
 
             if (report.Installed > 0)
                 ToastService.Instance.Show("Windows Update", report.RebootRequired
@@ -624,15 +625,36 @@ public sealed partial class WindowsUpdateViewModel : ViewModelBase
         catch (OperationCanceledException)
         {
             StatusMessage = "Cancelled.";
-            foreach (var u in selected.Where(s => s.Status is "Pending…" or "Downloading…" or "Installing…"))
-                u.Status = "Cancelled";
+            MarkUnfinished(selected, "Cancelled");
         }
         catch (System.Runtime.InteropServices.COMException ex)
         {
             StatusMessage = $"WUA error: 0x{ex.HResult:X8}";
+            MarkUnfinished(selected, "Not applied");
             Log.Warning(ex, "WUA install failed");
         }
         finally { IsBusy = false; IsProgressIndeterminate = false; }
+    }
+
+    /// <summary>Gives each row of <paramref name="selected"/> left unfinished <paramref name="status"/>.</summary>
+    private static void MarkUnfinished(IEnumerable<UpdateEntry> selected, string status)
+    {
+        foreach (var u in selected.Where(s => s.Status is "Pending…" or "Downloading…" or "Installing…"))
+            u.Status = status;
+    }
+
+    /// <summary>What an install did, in the status line's words. Pure, so it is testable without WPF.</summary>
+    internal static string DescribeInstall(InstallReport report, int selected)
+    {
+        var failed = report.Failed > 0 ? $", failed {report.Failed}" : "";
+        if (report.Cancelled) return $"Cancelled. Installed {report.Installed}/{selected}{failed} before it stopped.";
+        if (report.AgentError != 0)
+            return $"WUA error: 0x{report.AgentError:X8}. Installed {report.Installed}/{selected}{failed}.";
+
+        var notApplied = selected - report.Installed - report.Failed;
+        return report.Failed > 0 || notApplied > 0
+            ? $"Installed {report.Installed}/{selected}. Failed: {report.Failed}. Not applied: {notApplied}."
+            : $"Installed {report.Installed}/{selected}.";
     }
 
     [RelayCommand]

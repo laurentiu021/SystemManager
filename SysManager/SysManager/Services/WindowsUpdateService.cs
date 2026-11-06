@@ -19,8 +19,10 @@ namespace SysManager.Services;
 /// </summary>
 public sealed class WindowsUpdateService : IWindowsUpdateService
 {
-    private readonly Func<object> _createSession;
-    private readonly Func<object> _createUpdateCollection;
+    // Typed dynamic, as WUA's objects are read: a factory typed object would tell code scanning that what it makes is
+    // a bare object, which has none of the members the late-bound calls on it name.
+    private readonly Func<dynamic> _createSession;
+    private readonly Func<dynamic> _createUpdateCollection;
 
     public WindowsUpdateService() : this(CreateSession, CreateUpdateCollection)
     {
@@ -35,7 +37,7 @@ public sealed class WindowsUpdateService : IWindowsUpdateService
     /// search of Microsoft's servers and a real install. Every object is read late-bound, as WUA's are, and released
     /// through <see cref="ReleaseComObject"/>, which leaves an object that is not a COM one alone.
     /// </remarks>
-    internal WindowsUpdateService(Func<object> createSession, Func<object> createUpdateCollection)
+    internal WindowsUpdateService(Func<dynamic> createSession, Func<dynamic> createUpdateCollection)
     {
         _createSession = createSession ?? throw new ArgumentNullException(nameof(createSession));
         _createUpdateCollection =
@@ -348,13 +350,13 @@ public sealed class WindowsUpdateService : IWindowsUpdateService
         }
     }
 
-    private static object CreateSession()
+    private static dynamic CreateSession()
     {
         var t = Type.GetTypeFromProgID("Microsoft.Update.Session", throwOnError: true)!;
         return Activator.CreateInstance(t)!;
     }
 
-    private static object CreateUpdateCollection()
+    private static dynamic CreateUpdateCollection()
     {
         var t = Type.GetTypeFromProgID("Microsoft.Update.UpdateColl", throwOnError: true)!;
         return Activator.CreateInstance(t)!;

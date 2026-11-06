@@ -180,7 +180,8 @@ public class WindowsUpdateServiceTests
     [Fact]
     public void TheAgent_WantsBothFactories()
     {
-        Assert.Throws<ArgumentNullException>(() => new WindowsUpdateService(null!, () => new object()));
-        Assert.Throws<ArgumentNullException>(() => new WindowsUpdateService(() => new object(), null!));
+        Assert.Throws<ArgumentNullException>(
+            () => new WindowsUpdateService(null!, () => new FakeCollection<FakeUpdate>()));
+        Assert.Throws<ArgumentNullException>(() => new WindowsUpdateService(() => new FakeUpdateSession(), null!));
     }
 }

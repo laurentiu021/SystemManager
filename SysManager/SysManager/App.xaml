@@ -346,6 +346,11 @@
                                            HorizontalAlignment="Center" Foreground="{DynamicResource TextPrimary}"/>
                             </Border>
                             <ControlTemplate.Triggers>
+                                <!-- The purple tint under the pointer, before the chosen pill's fill so that wins
+                                     (#2882). -->
+                                <Trigger Property="IsMouseOver" Value="True">
+                                    <Setter TargetName="Bd" Property="Background" Value="{DynamicResource AccentSoft}"/>
+                                </Trigger>
                                 <Trigger Property="IsChecked" Value="True">
                                     <Setter TargetName="Bd" Property="Background" Value="{DynamicResource Accent}"/>
                                     <Setter TargetName="Txt" Property="Foreground" Value="{DynamicResource TextOnAccent}"/>
@@ -1069,6 +1074,11 @@
                                 <Trigger Property="IsKeyboardFocused" Value="True">
                                     <Setter TargetName="Bd" Property="BorderBrush" Value="{DynamicResource Accent}"/>
                                 </Trigger>
+                                <!-- Dimmed when disabled, as the checkboxes are: at full strength a disabled box
+                                     looked ready to type in and gave no caret (#2882). -->
+                                <Trigger Property="IsEnabled" Value="False">
+                                    <Setter Property="Opacity" Value="0.5"/>
+                                </Trigger>
                             </ControlTemplate.Triggers>
                         </ControlTemplate>
                     </Setter.Value>
@@ -1183,6 +1193,10 @@
                                 <!-- After the hover trigger, so the focus border wins under the pointer (#2815). -->
                                 <Trigger Property="IsKeyboardFocusWithin" Value="True">
                                     <Setter TargetName="Bd" Property="BorderBrush" Value="{DynamicResource Accent}"/>
+                                </Trigger>
+                                <!-- Dimmed when disabled, as the text box is (#2882). -->
+                                <Trigger Property="IsEnabled" Value="False">
+                                    <Setter Property="Opacity" Value="0.5"/>
                                 </Trigger>
                             </ControlTemplate.Triggers>
                         </ControlTemplate>

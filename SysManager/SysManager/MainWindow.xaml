@@ -436,8 +436,8 @@
                                                         <TextBlock Text="{Binding ChildCount, StringFormat=' ({0})'}"
                                                                    VerticalAlignment="Center"
                                                                    FontFamily="{StaticResource UiFont}"
-                                                                   Style="{StaticResource Micro}" Foreground="{DynamicResource TextSecondary}"
-                                                                   Opacity="0.7" Margin="2,0,0,0"/>
+                                                                   Style="{StaticResource Micro}" Foreground="{DynamicResource TextMuted}"
+                                                                   Margin="2,0,0,0"/>
                                                     </StackPanel>
                                                     <!-- Subtitle: visible only when collapsed. Wraps to
                                                          exactly two lines; on one it had about 26
@@ -449,8 +449,8 @@
                                                          as the backstop for copy that outgrows even two. -->
                                                     <TextBlock Text="{Binding Subtitle}"
                                                                FontFamily="{StaticResource UiFont}"
-                                                               Foreground="{DynamicResource TextSecondary}"
-                                                               Opacity="0.65" Margin="23,2,0,0"
+                                                               Foreground="{DynamicResource TextMuted}"
+                                                               Margin="23,2,0,0"
                                                                TextWrapping="Wrap"
                                                                LineHeight="14" LineStackingStrategy="BlockLineHeight"
                                                                MaxHeight="28"
@@ -557,7 +557,7 @@
                         </Grid.ColumnDefinitions>
                         <StackPanel Grid.Column="0">
                             <TextBlock Text="{Binding About.CurrentVersion, StringFormat=v{0}}" Style="{StaticResource Caption}"/>
-                            <TextBlock Text="by laurentiu021" Style="{StaticResource Caption}" Opacity="0.7" Margin="0,2,0,0"/>
+                            <TextBlock Text="by laurentiu021" Style="{StaticResource Caption}" Margin="0,2,0,0"/>
                         </StackPanel>
                         <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
                         <!-- Help chip. The About tab already carries every support route — Report a
@@ -704,9 +704,17 @@
                             Background="Transparent" BorderThickness="0" Padding="4">
                         <Button.Template>
                             <ControlTemplate TargetType="Button">
-                                <Border Background="{TemplateBinding Background}" Padding="{TemplateBinding Padding}">
+                                <Border x:Name="Bd" Background="{TemplateBinding Background}" Padding="{TemplateBinding Padding}"
+                                        CornerRadius="{StaticResource RadiusSm}">
                                     <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
                                 </Border>
+                                <!-- A tint under the pointer, so it shows it can be clicked (#2882). RowHover, the
+                                     window's hover, rather than AccentSoft, which marks the open page here. -->
+                                <ControlTemplate.Triggers>
+                                    <Trigger Property="IsMouseOver" Value="True">
+                                        <Setter TargetName="Bd" Property="Background" Value="{DynamicResource RowHover}"/>
+                                    </Trigger>
+                                </ControlTemplate.Triggers>
                             </ControlTemplate>
                         </Button.Template>
                         <TextBlock Text="&#xE711;" FontFamily="Segoe Fluent Icons,Segoe MDL2 Assets"

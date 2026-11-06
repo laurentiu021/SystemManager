@@ -140,8 +140,8 @@
 
         <!-- Footer -->
         <StackPanel Grid.Row="6" Orientation="Horizontal" Margin="0,8,0,0">
-            <TextBlock Style="{StaticResource Body}" Opacity="0.6" VerticalAlignment="Center"
-                       Foreground="{DynamicResource TextSecondary}">
+            <TextBlock Style="{StaticResource Body}" VerticalAlignment="Center"
+                       Foreground="{DynamicResource TextMuted}">
                 <Run Text="{Binding BlockedCount, Mode=OneWay}" />
                 <Run Text=" blocked" />
             </TextBlock>

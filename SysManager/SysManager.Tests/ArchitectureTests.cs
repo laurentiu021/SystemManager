@@ -17934,6 +17934,177 @@ public partial class ArchitectureTests
     }
 
     /// <summary>
+    /// No line of text is faded with an element <c>Opacity</c> below 1.
+    /// </summary>
+    /// <remarks>
+    /// <c>ThemeTextContrastTests</c> keep <c>TextMuted</c> and <c>TextSecondary</c> at 4.5:1 or better on every
+    /// surface, and an <c>Opacity</c> blends a line into what is behind it, back under that floor: Privacy &amp;
+    /// Telemetry's category line read 2.98:1 at 0.6, and the sidebar's collapsed group subtitles 4.15 at 0.65 (#2882).
+    /// A quieter line takes <c>TextMuted</c> as it is. Read on every element of the app's XAML that is a TextBlock or
+    /// holds one, and on a TextBlock style's own setters. A trigger's opacity is left alone: it is a disabled look, and
+    /// WCAG leaves disabled text out.
+    /// </remarks>
+    [Fact]
+    public void NoTextLine_IsFadedWithOpacity()
+    {
+        static bool Faded(XElement element) => element.Attribute("Opacity") is { } opacity
+            && double.TryParse(opacity.Value, NumberStyles.Float, CultureInfo.InvariantCulture, out var value)
+            && value < 1;
+        static bool HoldsText(XElement element) => element.Name.LocalName == "TextBlock"
+            || element.Descendants().Any(d => d.Name.LocalName == "TextBlock");
+
+        // Known answers first, so a reader that found nothing cannot pass.
+        var known = XElement.Parse("<Grid><StackPanel Opacity=\"0.6\"><TextBlock/></StackPanel>"
+                                   + "<TextBlock Opacity=\"0.65\"/><Border Opacity=\"0.5\"/>"
+                                   + "<TextBlock Opacity=\"1\"/></Grid>");
+        Assert.Equal(2, known.Descendants().Count(e => Faded(e) && HoldsText(e)));
+
+        var separator = Path.DirectorySeparatorChar;
+        var offenders = new List<string>();
+        var textBlocks = 0;
+        foreach (var file in Directory.GetFiles(TestPaths.AppProject(), "*.xaml", SearchOption.AllDirectories)
+                     .Where(f => !f.Contains($"{separator}obj{separator}", StringComparison.Ordinal)
+                                 && !f.Contains($"{separator}bin{separator}", StringComparison.Ordinal)))
+        {
+            var name = Path.GetFileName(file);
+            var document = XDocument.Load(file);
+            textBlocks += document.Descendants().Count(e => e.Name.LocalName == "TextBlock");
+
+            foreach (var element in document.Descendants().Where(e => !e.Name.LocalName.EndsWith("Effect",
+                         StringComparison.Ordinal)))
+            {
+                if (Faded(element) && HoldsText(element))
+                    offenders.Add($"{name}: <{element.Name.LocalName} "
+                                  + $"Opacity=\"{(string?)element.Attribute("Opacity")}\">");
+            }
+
+            foreach (var style in document.Descendants().Where(e => e.Name.LocalName == "Style"
+                         && ((string?)e.Attribute("TargetType") ?? "").Contains("TextBlock", StringComparison.Ordinal)))
+            {
+                foreach (var setter in style.Elements().Where(e => e.Name.LocalName == "Setter"
+                             && (string?)e.Attribute("Property") == "Opacity"))
+                {
+                    if (double.TryParse((string?)setter.Attribute("Value"), NumberStyles.Float,
+                            CultureInfo.InvariantCulture, out var value) && value < 1)
+                        offenders.Add($"{name}: a TextBlock style sets Opacity to {value}");
+                }
+            }
+        }
+
+        // 1,029 when written. Far fewer means the XAML was not read, and an empty list would pass.
+        Assert.True(textBlocks >= 900,
+            $"only {textBlocks} TextBlocks were read from the app's XAML, so this checks nothing.");
+        Assert.True(offenders.Count == 0,
+            "these fade a line of text with Opacity, which takes TextMuted or TextSecondary under 4.5:1. Give a "
+            + "quieter line TextMuted as it is:\n  " + string.Join("\n  ", offenders));
+    }
+
+    /// <summary>
+    /// Every template for a button-like control reacts to the pointer, or names what draws its hover instead.
+    /// </summary>
+    /// <remarks>
+    /// The Appearance panel's mode pills, which Browser Cleaner and Privacy &amp; Telemetry use for their two-way
+    /// switches, the theme cards and the toast's close button changed nothing under the pointer but the cursor (#2882),
+    /// so nothing said they could be clicked. A template for a <c>Button</c>, <c>ToggleButton</c>, <c>RadioButton</c>,
+    /// <c>CheckBox</c> or <c>RepeatButton</c> has an <c>IsMouseOver</c> trigger or condition, in its own triggers or
+    /// its style's, or is in <c>HoverDrawnElsewhere</c> with the reason. The list is exact, so a reason that stops
+    /// being true fails too.
+    /// </remarks>
+    [Fact]
+    public void EveryButtonTemplate_ReactsToThePointer()
+    {
+        var hoverDrawnElsewhere = new Dictionary<string, string>(StringComparer.Ordinal)
+        {
+            ["MainWindow.xaml SidebarNavButton"] = "each row's SidebarNavRow border draws the hover",
+            ["App.xaml SidebarExpander"] = "the group header's own border draws the hover, in MainWindow",
+            ["App.xaml ComboBoxToggleButton"] = "the ComboBox template draws the hover over the whole field",
+            ["App.xaml Slider/RepeatButton"] = "the slider's track either side of its thumb, a place to click",
+        };
+        string[] buttonLike = ["Button", "ToggleButton", "RadioButton", "CheckBox", "RepeatButton"];
+        XNamespace x = "http://schemas.microsoft.com/winfx/2006/xaml";
+
+        static bool Hovers(XElement scope) => scope.Descendants()
+            .Any(e => e.Name.LocalName is "Trigger" or "Condition"
+                      && (string?)e.Attribute("Property") == "IsMouseOver");
+        static string TypeName(string? targetType) =>
+            (targetType ?? "").Replace("{x:Type ", "", StringComparison.Ordinal).TrimEnd('}').Trim();
+
+        var separator = Path.DirectorySeparatorChar;
+        var without = new SortedSet<string>(StringComparer.Ordinal);
+        var read = 0;
+        foreach (var file in Directory.GetFiles(TestPaths.AppProject(), "*.xaml", SearchOption.AllDirectories)
+                     .Where(f => !f.Contains($"{separator}obj{separator}", StringComparison.Ordinal)
+                                 && !f.Contains($"{separator}bin{separator}", StringComparison.Ordinal)))
+        {
+            foreach (var template in XDocument.Load(file).Descendants()
+                         .Where(e => e.Name.LocalName == "ControlTemplate"))
+            {
+                var type = TypeName((string?)template.Attribute("TargetType"));
+                if (!buttonLike.Contains(type)) continue;
+                read++;
+                var style = template.Ancestors().FirstOrDefault(a => a.Name.LocalName == "Style");
+                if (Hovers(template) || (style is not null && Hovers(style))) continue;
+                var owner = (string?)template.Attribute(x + "Key")
+                            ?? (string?)style?.Attribute(x + "Key")
+                            ?? (style is null
+                                ? $"inline {type}"
+                                : $"{TypeName((string?)style.Attribute("TargetType"))}/{type}");
+                without.Add($"{Path.GetFileName(file)} {owner}");
+            }
+        }
+
+        // 24 when written. Far fewer means the templates were not read, and an empty list would pass.
+        Assert.True(read >= 20, $"only {read} button-like templates were read, so this checks nothing.");
+        var unexplained = without.Where(t => !hoverDrawnElsewhere.ContainsKey(t)).ToList();
+        var stale = hoverDrawnElsewhere.Keys.Where(t => !without.Contains(t)).Order(StringComparer.Ordinal).ToList();
+        Assert.True(unexplained.Count == 0,
+            "these button-like templates change nothing under the pointer, so nothing says they can be clicked. Give "
+            + "them an IsMouseOver trigger, the purple tint the buttons use:\n  " + string.Join("\n  ", unexplained));
+        Assert.True(stale.Count == 0,
+            "these are listed as drawing their hover elsewhere but react to the pointer now, or are gone; take "
+            + "them out of the list:\n  " + string.Join("\n  ", stale));
+    }
+
+    /// <summary>
+    /// Every text box and drop-down template dims when it is disabled, as the other controls do.
+    /// </summary>
+    /// <remarks>
+    /// The TextBox and ComboBox templates had no <c>IsEnabled</c> trigger while buttons, switches, sliders and
+    /// checkboxes all dim, so Dark Mode Scheduler's two time boxes, disabled while the schedule is off, looked ready to
+    /// type in and gave no caret, and Gaming Profile's game picker looked live while game mode was on (#2882).
+    /// </remarks>
+    [Fact]
+    public void EveryTextBoxAndComboBoxTemplate_DimsWhenDisabled()
+    {
+        var separator = Path.DirectorySeparatorChar;
+        var offenders = new List<string>();
+        var read = 0;
+        foreach (var file in Directory.GetFiles(TestPaths.AppProject(), "*.xaml", SearchOption.AllDirectories)
+                     .Where(f => !f.Contains($"{separator}obj{separator}", StringComparison.Ordinal)
+                                 && !f.Contains($"{separator}bin{separator}", StringComparison.Ordinal)))
+        {
+            foreach (var template in XDocument.Load(file).Descendants().Where(e => e.Name.LocalName == "ControlTemplate"
+                         && ((string?)e.Attribute("TargetType"))?.Replace("{x:Type ", "", StringComparison.Ordinal)
+                             .TrimEnd('}') is "TextBox" or "ComboBox" or "PasswordBox"))
+            {
+                read++;
+                var style = template.Ancestors().FirstOrDefault(a => a.Name.LocalName == "Style");
+                bool Dims(XElement scope) => scope.Descendants().Any(e => e.Name.LocalName == "Trigger"
+                    && (string?)e.Attribute("Property") == "IsEnabled" && (string?)e.Attribute("Value") == "False");
+                if (!Dims(template) && (style is null || !Dims(style)))
+                    offenders.Add($"{Path.GetFileName(file)}: the "
+                                  + $"{(string?)template.Attribute("TargetType")} template");
+            }
+        }
+
+        // 2 when written: the app's TextBox and ComboBox.
+        Assert.True(read >= 2, $"only {read} text box and drop-down templates were read, of 2.");
+        Assert.True(offenders.Count == 0,
+            "these do not dim when disabled, so a disabled field looks ready to type in:\n  "
+            + string.Join("\n  ", offenders));
+    }
+
+    /// <summary>
     /// The elements inside <paramref name="list"/>, with those of every keyed template it or a list inside it names as
     /// an <c>ItemTemplate</c> or <c>ContentTemplate</c>, so a row built from <c>{StaticResource ...}</c> is read too.
     /// </summary>

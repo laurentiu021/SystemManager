@@ -35,13 +35,36 @@
                      VirtualizingStackPanel.VirtualizationMode="Recycling">
                 <ListBox.ItemContainerStyle>
                     <Style TargetType="ListBoxItem">
-                        <Setter Property="Padding" Value="8,1"/>
+                        <!-- 7,0 inside a 1 px border is the 8,1 a line had before, so the lines keep their height. -->
+                        <Setter Property="Padding" Value="7,0"/>
                         <Setter Property="Background" Value="Transparent"/>
-                        <Setter Property="BorderThickness" Value="0"/>
                         <!-- Was {x:Null} with a transparent background and no border, so arrow-keying
                              through the output moved a selection nothing rendered. The shared ring is
                              the only cue that a log line is current. -->
                         <Setter Property="FocusVisualStyle" Value="{StaticResource FocusRing}"/>
+                        <!-- The app's hover and selection, a purple tint and an accent rim, as Duplicate Finder's
+                             groups have. With no template a line took Windows' item template, which hovers and
+                             selects in blue (#2816). -->
+                        <Setter Property="Template">
+                            <Setter.Value>
+                                <ControlTemplate TargetType="ListBoxItem">
+                                    <Border x:Name="Bd" Background="Transparent" Padding="{TemplateBinding Padding}"
+                                            BorderBrush="Transparent" BorderThickness="1"
+                                            CornerRadius="{StaticResource RadiusSm}">
+                                        <ContentPresenter/>
+                                    </Border>
+                                    <ControlTemplate.Triggers>
+                                        <Trigger Property="IsMouseOver" Value="True">
+                                            <Setter TargetName="Bd" Property="Background" Value="{DynamicResource AccentSoft}"/>
+                                        </Trigger>
+                                        <Trigger Property="IsSelected" Value="True">
+                                            <Setter TargetName="Bd" Property="Background" Value="{DynamicResource AccentSoft}"/>
+                                            <Setter TargetName="Bd" Property="BorderBrush" Value="{DynamicResource Accent}"/>
+                                        </Trigger>
+                                    </ControlTemplate.Triggers>
+                                </ControlTemplate>
+                            </Setter.Value>
+                        </Setter>
                     </Style>
                 </ListBox.ItemContainerStyle>
                 <ListBox.ItemTemplate>

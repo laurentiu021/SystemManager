@@ -368,15 +368,50 @@
                 <Setter Property="BorderThickness" Value="0"/>
             </Style>
 
+            <!-- The radio button the keyed styles do not cover, which is Performance Mode's power plans. Shaped like the
+                 app's CheckBox below: an 18 px ring in Border2, an accent dot and ring when chosen, BorderAccent on
+                 hover and the shared focus ring. It set no template, and a style with none falls back to Windows'
+                 own, so the plans were white circles with a light-blue hover and a dotted focus box (#2816). -->
             <Style TargetType="RadioButton">
                 <Setter Property="Foreground" Value="{DynamicResource TextPrimary}"/>
                 <Setter Property="FontFamily" Value="{StaticResource UiFont}"/>
                 <!-- Body's size, as the CheckBox style sets it. Without it the label took the 14 that WPF-UI gives a
                      TextBlock which names no size, a step above the text around it (#2694). -->
                 <Setter Property="FontSize" Value="13"/>
-                <Style.Resources>
-                    <SolidColorBrush x:Key="{x:Static SystemColors.HighlightBrushKey}" Color="{DynamicResource AccentColor}"/>
-                </Style.Resources>
+                <Setter Property="VerticalContentAlignment" Value="Center"/>
+                <Setter Property="Cursor" Value="Hand"/>
+                <Setter Property="Padding" Value="8,0,0,0"/>
+                <Setter Property="FocusVisualStyle" Value="{StaticResource FocusRing}"/>
+                <Setter Property="Template">
+                    <Setter.Value>
+                        <ControlTemplate TargetType="RadioButton">
+                            <StackPanel Orientation="Horizontal" Background="Transparent">
+                                <Grid Width="18" Height="18" VerticalAlignment="Center">
+                                    <Ellipse x:Name="Ring" Fill="{DynamicResource Surface2}"
+                                             Stroke="{DynamicResource Border2}" StrokeThickness="1.5"/>
+                                    <Ellipse x:Name="Dot" Width="8" Height="8" Fill="{DynamicResource Accent}"
+                                             Visibility="Collapsed"/>
+                                </Grid>
+                                <ContentPresenter Margin="{TemplateBinding Padding}"
+                                                  VerticalAlignment="Center"
+                                                  TextBlock.Foreground="{TemplateBinding Foreground}"
+                                                  TextBlock.FontSize="{TemplateBinding FontSize}"/>
+                            </StackPanel>
+                            <ControlTemplate.Triggers>
+                                <Trigger Property="IsChecked" Value="True">
+                                    <Setter TargetName="Ring" Property="Stroke" Value="{DynamicResource Accent}"/>
+                                    <Setter TargetName="Dot" Property="Visibility" Value="Visible"/>
+                                </Trigger>
+                                <Trigger Property="IsMouseOver" Value="True">
+                                    <Setter TargetName="Ring" Property="Stroke" Value="{DynamicResource BorderAccent}"/>
+                                </Trigger>
+                                <Trigger Property="IsEnabled" Value="False">
+                                    <Setter Property="Opacity" Value="0.5"/>
+                                </Trigger>
+                            </ControlTemplate.Triggers>
+                        </ControlTemplate>
+                    </Setter.Value>
+                </Setter>
             </Style>
 
             <!-- ============================================================ -->

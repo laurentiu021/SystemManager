@@ -10,6 +10,18 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.136.146] - 2026-11-06
+
+**The Dashboard's row in the sidebar shows the moving bar while the Dashboard works, as every other tab's row
+does.**
+
+### Fixed
+- The sidebar's rows show a thin moving bar under a tab's name while it works, so you can see from any tab that it
+  is still busy. The Dashboard is drawn as a flat row of its own, built without that bar, so a Quick Tune-Up running
+  from the Dashboard showed nothing in the sidebar, though the 1.127.11 notes said it would. The flat row has the same
+  bar now. It shows while the Dashboard refreshes, works out the health score, at start-up too, or runs Quick Tune-Up,
+  a quick action or the slowdown check, and a test holds both kinds of row to one bar, attribute for attribute.
+
 ## [1.136.145] - 2026-11-06
 
 **Small grey labels are easy to read, a switched-off text box or drop-down looks switched off, and the Appearance

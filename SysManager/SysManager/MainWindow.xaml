@@ -387,6 +387,11 @@
                                                     <TextBlock Text="Preview" Style="{StaticResource Micro}" FontWeight="SemiBold"
                                                                Foreground="{DynamicResource Info}" Margin="0,1,0,0"
                                                                Visibility="{Binding IsInDevelopment, Converter={StaticResource BoolToVis}}"/>
+                                                    <!-- The grouped rows' busy bar, so Quick Tune-Up, a quick action or the slowdown
+                                                         check shows on this row while you are on another tab (#2745). -->
+                                                    <ProgressBar AutomationProperties.Name="{Binding Label, StringFormat='Working on {0}'}" Height="2" Margin="0,3,0,0"
+                                                                 IsIndeterminate="True"
+                                                                 Visibility="{Binding IsBusy, Converter={StaticResource BoolToVis}}"/>
                                                 </StackPanel>
                                             </StackPanel>
                                         </Grid>

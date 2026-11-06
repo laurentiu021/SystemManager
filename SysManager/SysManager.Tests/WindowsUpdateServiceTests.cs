@@ -3,6 +3,7 @@
 // License: MIT
 
 using System.Runtime.InteropServices;
+using SysManager.Models;
 using SysManager.Services;
 
 namespace SysManager.Tests;
@@ -175,6 +176,101 @@ public class WindowsUpdateServiceTests
         var error = await Assert.ThrowsAsync<COMException>(() => AgentOver(session).ScanAsync());
 
         Assert.Equal(unchecked((int)0x8024402C), error.HResult);
+    }
+
+    // ---------- the install reports on every exit (#2791) ----------
+    //
+    // A stop on the token, or a Windows Update Agent error, ended the run as an exception: the updates already in went
+    // uncounted, their restart was never mentioned, and every row it had not finished kept saying "Pending…".
+
+    /// <summary>A session whose search finds <paramref name="ids"/>, each one downloaded already.</summary>
+    private static FakeUpdateSession SessionWith(params string[] ids)
+    {
+        var session = new FakeUpdateSession();
+        foreach (var id in ids)
+            session.Pending.Add(new FakeUpdate(Product) { Title = "Update " + id, Id = id, IsDownloaded = true });
+        return session;
+    }
+
+    /// <summary>The tab's rows for <paramref name="ids"/>, as it sets them before an install starts.</summary>
+    private static List<UpdateEntry> Rows(params string[] ids) =>
+        [.. ids.Select(id => new UpdateEntry { Title = "Update " + id, UpdateId = id, Status = "Pending…" })];
+
+    [Fact]
+    public async Task AnInstallThatRunsThrough_ReportsEachUpdate_AndTheRestart()
+    {
+        var session = SessionWith("a");
+        session.Pending.Add(new FakeUpdate(Product) { Title = "Update b", Id = "b", NeedsRestart = true });
+        var rows = Rows("a", "b");
+
+        var report = await AgentOver(session).InstallAsync(rows);
+
+        Assert.Equal(new InstallReport(2, 0, true), report);
+        Assert.Equal(["Installed", "Installed (reboot required)"], rows.Select(r => r.Status));
+    }
+
+    [Fact]
+    public async Task AnInstallCancelledBetweenUpdates_ReportsWhatWentIn_AndStops()
+    {
+        using var cts = new CancellationTokenSource();
+        var session = SessionWith("a", "b");
+        session.Installing = update =>
+        {
+            if (update.Id == "a") cts.Cancel();
+        };
+        var rows = Rows("a", "b");
+
+        var report = await AgentOver(session).InstallAsync(rows, ct: cts.Token);
+
+        Assert.Equal(new InstallReport(1, 0, false, Cancelled: true), report);
+        Assert.Equal(["a"], session.Installed);
+        Assert.Equal(["Installed", "Pending…"], rows.Select(r => r.Status));
+    }
+
+    [Fact]
+    public async Task AnInstallCancelledDuringADownload_DoesNotInstallThatUpdate()
+    {
+        using var cts = new CancellationTokenSource();
+        var session = SessionWith("a");
+        session.Pending[0].IsDownloaded = false;
+        session.Downloading = _ => cts.Cancel();
+        var rows = Rows("a");
+
+        var report = await AgentOver(session).InstallAsync(rows, ct: cts.Token);
+
+        Assert.Equal(new InstallReport(0, 0, false, Cancelled: true), report);
+        Assert.Empty(session.Installed);
+        Assert.Equal(["Downloading…"], rows.Select(r => r.Status));
+    }
+
+    [Fact]
+    public async Task AnInstallWhoseSearchFails_ReportsTheAgentsError_InsteadOfThrowing()
+    {
+        var session = SessionWith("a");
+        session.SearchFails = new COMException("offline", unchecked((int)0x8024402C));
+        var rows = Rows("a");
+
+        var report = await AgentOver(session).InstallAsync(rows);
+
+        Assert.Equal(new InstallReport(0, 0, false, AgentError: unchecked((int)0x8024402C)), report);
+        Assert.Equal(["Pending…"], rows.Select(r => r.Status));
+    }
+
+    [Fact]
+    public async Task AnInstallTheAgentStopsBetweenUpdates_StillCountsWhatWentIn()
+    {
+        var session = SessionWith("a", "b");
+        session.Installing = update =>
+        {
+            if (update.Id == "b") throw new UnauthorizedAccessException("refused");
+        };
+        var rows = Rows("a", "b");
+
+        var report = await AgentOver(session).InstallAsync(rows);
+
+        Assert.Equal(1, report.Installed);
+        Assert.NotEqual(0, report.AgentError);
+        Assert.Equal(["Installed", "Installing…"], rows.Select(r => r.Status));
     }
 
     [Fact]

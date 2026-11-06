@@ -8,7 +8,7 @@ namespace SysManager.Tests;
 // own (#2791). Each type has the members the service reads, under WUA's names, and nothing else. Public, because the
 // dynamic calls that read them are made from the app's own assembly.
 
-/// <summary>WUA's <c>Microsoft.Update.Session</c>, which a scan starts from.</summary>
+/// <summary>WUA's <c>Microsoft.Update.Session</c>, which a scan and an install start from.</summary>
 public sealed class FakeUpdateSession
 {
     /// <summary>What a search finds.</summary>
@@ -20,7 +20,73 @@ public sealed class FakeUpdateSession
     /// <summary>Thrown by a search instead of an answer, when set.</summary>
     public Exception? SearchFails { get; set; }
 
+    /// <summary>Called with each update as it downloads, before the download is done: a test cancels here.</summary>
+    public Action<FakeUpdate>? Downloading { get; set; }
+
+    /// <summary>Called with each update as it installs, before the install is done.</summary>
+    public Action<FakeUpdate>? Installing { get; set; }
+
+    /// <summary>The IDs of the updates installed, in order.</summary>
+    public List<string> Installed { get; } = [];
+
     public FakeUpdateSearcher CreateUpdateSearcher() => new(this);
+
+    public FakeUpdateDownloader CreateUpdateDownloader() => new(this);
+
+    public FakeUpdateInstaller CreateUpdateInstaller() => new(this);
+}
+
+/// <summary>WUA's update downloader: it downloads the updates it was given, every one successfully.</summary>
+public sealed class FakeUpdateDownloader(FakeUpdateSession session)
+{
+    public FakeCollection<FakeUpdate>? Updates { get; set; }
+
+    public FakeOperationResult Download()
+    {
+        for (var i = 0; i < Updates!.Count; i++)
+        {
+            var update = Updates.Item(i);
+            session.Downloading?.Invoke(update);
+            update.IsDownloaded = true;
+        }
+
+        return new FakeOperationResult(FakeOperationResult.Succeeded, 0);
+    }
+}
+
+/// <summary>WUA's update installer: it installs the updates it was given, every one successfully.</summary>
+public sealed class FakeUpdateInstaller(FakeUpdateSession session)
+{
+    public FakeCollection<FakeUpdate>? Updates { get; set; }
+
+    public FakeOperationResult Install()
+    {
+        var reboot = false;
+        for (var i = 0; i < Updates!.Count; i++)
+        {
+            var update = Updates.Item(i);
+            session.Installing?.Invoke(update);
+            session.Installed.Add(update.Id);
+            reboot |= update.NeedsRestart;
+        }
+
+        return new FakeOperationResult(FakeOperationResult.Succeeded, 0, reboot);
+    }
+}
+
+/// <summary>A download's or an install's result, which is also the one update's own when there is one update.</summary>
+public sealed class FakeOperationResult(int resultCode, int hResult, bool rebootRequired = false)
+{
+    /// <summary>WUA's <c>OperationResultCode.orcSucceeded</c>.</summary>
+    public const int Succeeded = 2;
+
+    public int ResultCode { get; } = resultCode;
+
+    public int HResult { get; } = hResult;
+
+    public bool RebootRequired { get; } = rebootRequired;
+
+    public FakeOperationResult GetUpdateResult(int index) => this;
 }
 
 /// <summary>WUA's update searcher.</summary>
@@ -69,7 +135,7 @@ public sealed class FakeCategory(string name, string categoryId)
     public string CategoryID { get; } = categoryId;
 }
 
-/// <summary>A WUA update, with what a scan and the pill read off one.</summary>
+/// <summary>A WUA update, with what a scan, an install and the pill read off one.</summary>
 public sealed class FakeUpdate(params FakeCategory[] categories)
 {
     public string Title { get; init; } = "";
@@ -92,4 +158,13 @@ public sealed class FakeUpdate(params FakeCategory[] categories)
     public FakeCollection<string> KBArticleIDs => new([.. KbNumbers]);
 
     public FakeCollection<FakeCategory> Categories => new([.. categories]);
+
+    public bool IsDownloaded { get; set; }
+
+    public bool EulaAccepted { get; set; } = true;
+
+    public void AcceptEula() => EulaAccepted = true;
+
+    /// <summary>Whether installing it needs Windows restarted, which the installer's result carries.</summary>
+    public bool NeedsRestart { get; init; }
 }

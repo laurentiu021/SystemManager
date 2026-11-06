@@ -10,6 +10,20 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.136.119] - 2026-11-06
+
+**On Windows Update, an install that is cancelled or stopped by an error still says how many updates went in and whether to restart, and no row is left saying "Pending…".**
+
+### Fixed
+- An install cancelled between two updates, or right after an update downloaded, ended as "Cancelled." alone: the
+  updates already installed went uncounted, and the notice that Windows needed restarting for them never came. It
+  says how many went in now, for example "Cancelled. Installed 1/2 before it stopped.", and the restart notice still
+  shows. Since the tab started installing through Windows Update directly, in 1.18.0.
+- When Windows Update failed during an install, in the search the install starts with (offline, or a WSUS server
+  that cannot be reached) or between two updates, the status line read "WUA error: 0x…" and every row the install
+  had not finished kept saying "Pending…" or "Downloading…" until the next check. Those rows say "Not applied" now,
+  and the status line says how many went in before the error. Since 1.18.0.
+
 ## [1.136.118] - 2026-11-05
 
 **On Windows Update, drivers and feature upgrades get their pills on Windows in any language, and the history's KB column is filled in.**

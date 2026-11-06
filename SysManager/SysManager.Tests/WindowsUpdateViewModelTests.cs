@@ -505,6 +505,77 @@ public sealed class WindowsUpdateViewModelTests : IDisposable
         Assert.Equal("Installed 1/1.", vm.StatusMessage);
     }
 
+    // ---------- an install that stops early says how far it got, and leaves no row pending (#2791) ----------
+
+    /// <summary>A view model, elevated, over an agent whose install sets the rows' statuses and returns
+    /// <paramref name="report"/>, or throws <paramref name="failure"/>.</summary>
+    private WindowsUpdateViewModel VmWhoseInstall(
+        Action<IReadOnlyList<UpdateEntry>> run, InstallReport report, Exception? failure = null)
+    {
+        var wu = Substitute.For<IWindowsUpdateService>();
+        wu.InstallAsync(
+                Arg.Any<IReadOnlyList<UpdateEntry>>(), Arg.Any<IProgress<string>?>(), Arg.Any<CancellationToken>())
+            .Returns(ci =>
+            {
+                run(ci.ArgAt<IReadOnlyList<UpdateEntry>>(0));
+                return failure is null ? Task.FromResult(report) : Task.FromException<InstallReport>(failure);
+            });
+        var vm = new WindowsUpdateViewModel(Substitute.For<IPowerShellRunner>(), wu, Policy(), () => true);
+        vm.Updates.Add(new UpdateEntry { Title = "Update a", UpdateId = "a", IsSelected = true });
+        vm.Updates.Add(new UpdateEntry { Title = "Update b", UpdateId = "b", IsSelected = true });
+        return vm;
+    }
+
+    [Fact]
+    public async Task AnInstallCancelledPartWay_SaysHowManyWentIn_AndMarksTheRest()
+    {
+        var vm = VmWhoseInstall(rows => rows[0].Status = "Installed (reboot required)",
+            new InstallReport(1, 0, true, Cancelled: true));
+        using var dialog = new DialogAnswer(confirm: true);
+
+        await vm.InstallUpdatesCommand.ExecuteAsync(null);
+
+        Assert.Equal("Cancelled. Installed 1/2 before it stopped.", vm.StatusMessage);
+        Assert.Equal(["Installed (reboot required)", "Cancelled"], vm.Updates.Select(u => u.Status));
+    }
+
+    [Fact]
+    public async Task AnInstallTheAgentStopped_SaysSo_AndLeavesNoRowPending()
+    {
+        var vm = VmWhoseInstall(rows => rows[0].Status = "Downloading…",
+            new InstallReport(0, 0, false, AgentError: unchecked((int)0x8024402C)));
+        using var dialog = new DialogAnswer(confirm: true);
+
+        await vm.InstallUpdatesCommand.ExecuteAsync(null);
+
+        Assert.Equal("WUA error: 0x8024402C. Installed 0/2.", vm.StatusMessage);
+        Assert.Equal(["Not applied", "Not applied"], vm.Updates.Select(u => u.Status));
+    }
+
+    [Fact]
+    public async Task AnInstallThatThrows_LeavesNoRowPending()
+    {
+        var vm = VmWhoseInstall(_ => { }, default,
+            new System.Runtime.InteropServices.COMException("search failed", unchecked((int)0x80240032)));
+        using var dialog = new DialogAnswer(confirm: true);
+
+        await vm.InstallUpdatesCommand.ExecuteAsync(null);
+
+        Assert.Equal("WUA error: 0x80240032", vm.StatusMessage);
+        Assert.Equal(["Not applied", "Not applied"], vm.Updates.Select(u => u.Status));
+    }
+
+    [Theory]
+    [InlineData(2, 0, false, 0, "Installed 2/2.")]
+    [InlineData(1, 1, false, 0, "Installed 1/2. Failed: 1. Not applied: 0.")]
+    [InlineData(1, 0, true, 0, "Cancelled. Installed 1/2 before it stopped.")]
+    [InlineData(0, 1, true, 0, "Cancelled. Installed 0/2, failed 1 before it stopped.")]
+    [InlineData(1, 0, false, unchecked((int)0x8024402C), "WUA error: 0x8024402C. Installed 1/2.")]
+    public void DescribeInstall_SaysHowFarTheInstallGot(
+        int installed, int failed, bool cancelled, int error, string expected)
+        => Assert.Equal(expected, WindowsUpdateViewModel.DescribeInstall(
+            new InstallReport(installed, failed, false, cancelled, error), 2));
+
     /// <summary>
     /// Runs <paramref name="command"/> under a context that delivers a progress report on the thread that made it, so
     /// every line is in the console by the time the command ends. A test has no context of its own, so a report would

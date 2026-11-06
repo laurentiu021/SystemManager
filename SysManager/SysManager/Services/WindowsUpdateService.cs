@@ -105,8 +105,14 @@ public sealed class WindowsUpdateService : IWindowsUpdateService
     /// Download + install the given updates. Per-update progress is reported
     /// to <paramref name="progress"/>; per-update result is set on the entry's
     /// <see cref="UpdateEntry.Status"/> property.
-    /// Returns aggregate counts (installed, failed, rebootRequired).
+    /// Returns aggregate counts (installed, failed, rebootRequired), and why it stopped early if it did.
     /// </summary>
+    /// <remarks>
+    /// A report on every exit once it has started. A stop on <paramref name="ct"/>, before an update or between its
+    /// download and its install, and a Windows Update Agent error, in the search the install starts with or between
+    /// updates, used to end the run as an exception: the updates already installed went uncounted, the restart they
+    /// needed was never mentioned, and every row it had not finished kept saying "Pending…" (#2791).
+    /// </remarks>
     public Task<InstallReport> InstallAsync(
         IReadOnlyList<UpdateEntry> entries,
         IProgress<string>? progress = null,
@@ -116,7 +122,7 @@ public sealed class WindowsUpdateService : IWindowsUpdateService
             if (entries is null || entries.Count == 0)
                 return new InstallReport(0, 0, false);
 
-            ct.ThrowIfCancellationRequested();
+            if (ct.IsCancellationRequested) return new InstallReport(0, 0, false, Cancelled: true);
             progress?.Report("Connecting to Windows Update…");
 
             // Declared outside the try so the finally releases every COM object even
@@ -128,6 +134,8 @@ public sealed class WindowsUpdateService : IWindowsUpdateService
             int installed = 0;
             int failed = 0;
             bool reboot = false;
+            bool cancelled = false;
+            int agentError = 0;
 
             try
             {
@@ -135,7 +143,6 @@ public sealed class WindowsUpdateService : IWindowsUpdateService
                 searcher = session.CreateUpdateSearcher();
                 search = searcher.Search(PendingCriteria);
                 liveUpdates = search.Updates;
-                ct.ThrowIfCancellationRequested();
 
                 // Build a UpdateID -> live COM object map for the requested entries.
                 var liveCount = (int)liveUpdates.Count;
@@ -156,7 +163,11 @@ public sealed class WindowsUpdateService : IWindowsUpdateService
                 foreach (var entry in entries)
                 {
                     idx++;
-                    ct.ThrowIfCancellationRequested();
+                    if (ct.IsCancellationRequested)
+                    {
+                        cancelled = true;
+                        break;
+                    }
 
                     if (string.IsNullOrWhiteSpace(entry.UpdateId) || !byId.TryGetValue(entry.UpdateId, out var u))
                     {
@@ -225,7 +236,13 @@ public sealed class WindowsUpdateService : IWindowsUpdateService
                             }
                         }
 
-                        ct.ThrowIfCancellationRequested();
+                        // Stopped between its download and its install, the update stays not installed.
+                        if (ct.IsCancellationRequested)
+                        {
+                            cancelled = true;
+                            break;
+                        }
+
                         progress?.Report("  Installing…");
                         entry.Status = "Installing…";
 
@@ -283,6 +300,15 @@ public sealed class WindowsUpdateService : IWindowsUpdateService
                         ReleaseComObject(coll);
                     }
                 }
+
+                if (cancelled) progress?.Report("Cancelled.");
+            }
+            // The search the install starts with failed, or something between two updates did. What went in stands.
+            catch (Exception ex) when (ex is COMException or UnauthorizedAccessException)
+            {
+                agentError = ex.HResult;
+                progress?.Report($"✗ Windows Update Agent error: 0x{ex.HResult:X8} {ex.Message}");
+                Serilog.Log.Warning(ex, "Windows Update install stopped after {Installed} installed", installed);
             }
             finally
             {
@@ -293,7 +319,7 @@ public sealed class WindowsUpdateService : IWindowsUpdateService
                 ReleaseComObject(session);
             }
 
-            return new InstallReport(installed, failed, reboot);
+            return new InstallReport(installed, failed, reboot, cancelled, agentError);
         }, ct);
 
     /// <summary>WUA's <c>OperationResultCode.orcSucceeded</c>.</summary>
@@ -523,4 +549,10 @@ public sealed class WindowsUpdateService : IWindowsUpdateService
 }
 
 /// <summary>Aggregate result of an install batch.</summary>
-public readonly record struct InstallReport(int Installed, int Failed, bool RebootRequired);
+/// <param name="Installed">The updates that went in.</param>
+/// <param name="Failed">The updates whose download or install failed.</param>
+/// <param name="RebootRequired">Whether an update that went in needs Windows restarted.</param>
+/// <param name="Cancelled">The run stopped on its token, before an update or before an update's install.</param>
+/// <param name="AgentError">The HRESULT of the Windows Update Agent error that stopped the run, or 0.</param>
+public readonly record struct InstallReport(
+    int Installed, int Failed, bool RebootRequired, bool Cancelled = false, int AgentError = 0);

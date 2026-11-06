@@ -39,6 +39,15 @@ public static partial class LogService
     internal const string StartupMessage = "SysManager {Version} started";
 
     /// <summary>
+    /// Logged once, when the main window has drawn its first frame: how long after the process started that was, and
+    /// the priority the process ran at (#2852). Nothing measured the start before. The release's smoke check reads
+    /// this line and writes it to the step summary with the launch's memory, so a change that slows the start shows in
+    /// the release that ships it.
+    /// </summary>
+    internal const string FirstFrameMessage =
+        "First frame {Milliseconds} ms after the process started, priority {Priority}";
+
+    /// <summary>
     /// Logged once, right after <see cref="StartupMessage"/>: a locale bug needs this round trip less
     /// often if the answer is already in the log (#2861). Two code pages because they can disagree —
     /// see <see cref="PowerShellRunner.ReadOemEncoding"/>'s remarks — and culture and display language

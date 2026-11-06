@@ -10,6 +10,17 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.136.130] - 2026-11-06
+
+**The log now says how long SysManager took to show its window, and every release records it.**
+
+### Added
+- Nothing measured how long SysManager takes to start. The log now has a line for the window's first frame: how
+  many milliseconds after the process started it was drawn, and the priority the process ran at. The release's
+  check of the published exe writes that figure to its summary, with how much memory the start used, so a change
+  that slows the start shows in the release that ships it. A release is not held back for it, and one whose log
+  has no such line gets a warning.
+
 ## [1.136.129] - 2026-11-06
 
 **SysManager no longer reads and rewrites the whole Resource History file as it starts.**

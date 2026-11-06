@@ -2,11 +2,14 @@
 // Author: laurentiu021 · https://github.com/laurentiu021/SystemManager
 // License: MIT
 
+using System.ComponentModel;
+using System.Diagnostics;
 using System.Windows;
 using System.Windows.Input;
 using System.Windows.Interop;
 using System.Windows.Media.Animation;
 using System.Windows.Threading;
+using Serilog;
 using SysManager.Helpers;
 using SysManager.Services;
 using SysManager.ViewModels;
@@ -106,6 +109,27 @@ public partial class MainWindow : Window
         base.OnStateChanged(e);
         if (DataContext is MainWindowViewModel vm)
             vm.IsWindowVisible = IsVisible && WindowState != WindowState.Minimized;
+    }
+
+    /// <summary>
+    /// Logs the window's first frame: how long after the process started it was drawn, and at what priority (#2852).
+    /// </summary>
+    /// <remarks>
+    /// WPF raises this once, after the first render. Both times are in UTC, since the process's start time reads as
+    /// local time, which an autumn's repeated hour would put an hour out. A start time or priority Windows will not
+    /// give is logged at Debug rather than left to fault the first frame.
+    /// </remarks>
+    protected override void OnContentRendered(EventArgs e)
+    {
+        base.OnContentRendered(e);
+        try
+        {
+            using var self = Process.GetCurrentProcess();
+            var sinceStart = DateTime.UtcNow - self.StartTime.ToUniversalTime();
+            Log.Information(LogService.FirstFrameMessage, (long)sinceStart.TotalMilliseconds, self.PriorityClass);
+        }
+        catch (Win32Exception ex) { Log.Debug("First frame not timed: {Error}", ex.Message); }
+        catch (InvalidOperationException ex) { Log.Debug("First frame not timed: {Error}", ex.Message); }
     }
 
     /// <summary>

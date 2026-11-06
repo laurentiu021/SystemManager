@@ -12251,6 +12251,61 @@ public partial class ArchitectureTests
     }
 
     /// <summary>
+    /// The release's smoke check writes the first frame the app logs to the step summary, with the launch's memory,
+    /// and holds no release back for it (#2852).
+    /// </summary>
+    /// <remarks>
+    /// The workflow's pattern is built here from <see cref="LogService.FirstFrameMessage"/>, as the startup line's is,
+    /// so the summary cannot go on looking for a line the app no longer writes. And the line is rendered the way
+    /// Serilog renders it, since a number or an enum written another way would match nothing.
+    /// </remarks>
+    [Fact]
+    public void TheReleaseSmokeCheck_RecordsTheFirstFrameTheAppLogs()
+    {
+        var lines = File.ReadAllLines(Path.Combine(TestPaths.RepoRoot(), ".github", "workflows", "release.yml"));
+        var smoke = ReleaseStepCode(lines, ReleaseStepLine(lines, "Smoke-check the published exe"));
+
+        var pattern = LogService.FirstFrameMessage
+            .Replace("{Milliseconds}", @"(\d+)", StringComparison.Ordinal)
+            .Replace("{Priority}", @"(\w+)", StringComparison.Ordinal);
+        Assert.Contains(pattern, smoke, StringComparison.Ordinal);
+        Assert.Contains("GITHUB_STEP_SUMMARY", smoke, StringComparison.Ordinal);
+
+        // The memory is read while the process is alive: after the kill there is nothing to read.
+        var kill = smoke.IndexOf("$app.Kill()", StringComparison.Ordinal);
+        foreach (var figure in new[] { "PrivateMemorySize64", "PeakWorkingSet64" })
+        {
+            var read = smoke.IndexOf(figure, StringComparison.Ordinal);
+            Assert.True(read >= 0 && read < kill,
+                $"the smoke check reads {figure} at {read}, not before the kill at {kill}.");
+        }
+
+        // A summary only: from the pattern to the warning for a missing line, nothing throws.
+        var from = smoke.IndexOf(pattern, StringComparison.Ordinal);
+        var to = smoke.IndexOf("::warning::The log has no first-frame line", StringComparison.Ordinal);
+        Assert.True(to > from, "the smoke check does not warn when the log has no first-frame line.");
+        Assert.DoesNotContain("throw ", smoke[from..to], StringComparison.Ordinal);
+
+        // The line as the log holds it: Serilog's rendering of the message, matched by the workflow's pattern.
+        var rendered = new Serilog.Parsing.MessageTemplateParser().Parse(LogService.FirstFrameMessage).Render(
+            new Dictionary<string, Serilog.Events.LogEventPropertyValue>
+            {
+                ["Milliseconds"] = new Serilog.Events.ScalarValue(1234L),
+                ["Priority"] = new Serilog.Events.ScalarValue(System.Diagnostics.ProcessPriorityClass.Normal),
+            },
+            CultureInfo.GetCultureInfo("de-DE"));
+        Assert.Equal("First frame 1234 ms after the process started, priority Normal", rendered);
+        Assert.Matches(pattern, rendered);
+
+        // And the app side: the main window logs it as its first frame is drawn.
+        var window = WithoutComments(File.ReadAllText(Path.Combine(TestPaths.AppProject(), "MainWindow.xaml.cs")));
+        var hook = window.IndexOf("protected override void OnContentRendered(", StringComparison.Ordinal);
+        Assert.True(hook >= 0, "MainWindow no longer overrides OnContentRendered, so nothing logs the first frame.");
+        Assert.Contains("Log.Information(LogService.FirstFrameMessage",
+            window[hook..window.IndexOf("\n    }", hook, StringComparison.Ordinal)], StringComparison.Ordinal);
+    }
+
+    /// <summary>
     /// No style may suppress the keyboard focus indicator without providing a replacement.
     /// <para><c>FocusVisualStyle="{x:Null}"</c> removes the only cue a keyboard user has, and four
     /// styles did exactly that with nothing in its place: ButtonBase, ToggleSwitch, DataGridCell and

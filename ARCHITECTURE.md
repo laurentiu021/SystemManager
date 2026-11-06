@@ -779,7 +779,10 @@ Key services:
   Serilog renders that separately from the message properties. The name ends where a path
   component does, so the rest of the line is kept, and the user's own folder is matched as the
   literal it is, spaces and apostrophes included; `BuildUserPathRegexes` builds both scrubs for a
-  profile a test chooses (#2713).
+  profile a test chooses (#2713). `MainWindow.OnContentRendered` logs `FirstFrameMessage` once, the milliseconds
+  from the process's start to the window's first frame and the process's priority, and the release's smoke check
+  writes it to the step summary with the launch's private bytes and peak working set, as a warning when it is
+  missing (#2852).
 - `FixedDriveService` — enumerate fixed NTFS/ReFS volumes. `Describe` builds each record with the sizes as read,
   not rounded, since the Health Score's free-space floors compare them (#2802).
 - `DeepCleanupService` — scan-first safe cleanup (vendor caches, gaming

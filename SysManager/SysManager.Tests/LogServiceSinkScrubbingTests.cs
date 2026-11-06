@@ -225,6 +225,25 @@ public sealed class LogServiceSinkScrubbingTests : IDisposable
     // single-file bundle (it throws), so a launch is the only place it is observable. That makes
     // the rendered shape of this one line a contract with CI, not just cosmetics.
 
+    /// <summary>
+    /// The first-frame line, as the file holds it, is one the release's smoke check finds: the pattern is read out of
+    /// release.yml, and the priority is a bare word. Written as an enum, it came out in quotes, and the check on
+    /// 1.136.130 found no line to record (#2852).
+    /// </summary>
+    [Fact]
+    public void TheFirstFrameLine_IsOneTheReleaseSmokeCheckFinds()
+    {
+        var workflow = File.ReadAllText(Path.Combine(TestPaths.RepoRoot(), ".github", "workflows", "release.yml"));
+        var pattern = System.Text.RegularExpressions.Regex.Match(workflow, @"-match '(First frame [^']+)'");
+        Assert.True(pattern.Success, "release.yml no longer looks for the first-frame line.");
+
+        var text = WriteAndRead(log => LogService.LogFirstFrame(
+            log, TimeSpan.FromMilliseconds(2915.6), System.Diagnostics.ProcessPriorityClass.BelowNormal));
+
+        Assert.Contains("First frame 2915 ms after the process started, priority BelowNormal", text);
+        Assert.Matches(pattern.Groups[1].Value, text);
+    }
+
     [Fact]
     public void TheStartupLine_RendersTheVersionUnquoted()
     {

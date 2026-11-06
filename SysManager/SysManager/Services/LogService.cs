@@ -2,6 +2,7 @@
 // Author: laurentiu021 · https://github.com/laurentiu021/SystemManager
 // License: MIT
 
+using System.Diagnostics;
 using System.Globalization;
 using System.IO;
 using System.Runtime.InteropServices;
@@ -46,6 +47,15 @@ public static partial class LogService
     /// </summary>
     internal const string FirstFrameMessage =
         "First frame {Milliseconds} ms after the process started, priority {Priority}";
+
+    /// <summary>Writes <see cref="FirstFrameMessage"/> to <paramref name="log"/>.</summary>
+    /// <remarks>
+    /// The priority goes in as text. The file's <c>{Message:lj}</c> writes a string as it is and anything else as JSON,
+    /// so the enum itself came out as <c>priority "BelowNormal"</c>, in quotes, which the release's pattern did not
+    /// match: 1.136.130 logged the line and its smoke check warned that there was none.
+    /// </remarks>
+    internal static void LogFirstFrame(ILogger log, TimeSpan sinceStart, ProcessPriorityClass priority) =>
+        log.Information(FirstFrameMessage, (long)sinceStart.TotalMilliseconds, priority.ToString());
 
     /// <summary>
     /// Logged once, right after <see cref="StartupMessage"/>: a locale bug needs this round trip less

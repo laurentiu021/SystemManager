@@ -10,6 +10,16 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.136.132] - 2026-11-06
+
+**The log's line for SysManager's first frame now reads the way the release check looks for it, so every release records how long the start took.**
+
+### Fixed
+- 1.136.130 logged the first frame with the priority in quotes, `priority "BelowNormal"`, because the log writes
+  anything that is not text as JSON. The release check looks for the priority as a bare word, so it found no line
+  and warned that the start-up time was not recorded. The priority is written as text now:
+  `priority BelowNormal`. Since 1.136.130.
+
 ## [1.136.131] - 2026-11-06
 
 **A size just under a megabyte or a gigabyte no longer reads "1024.0 KB" or "1024.0 MB", and a speed just under a megabit no longer reads "1000 Kbps".**

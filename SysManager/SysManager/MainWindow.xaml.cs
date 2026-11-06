@@ -126,7 +126,7 @@ public partial class MainWindow : Window
         {
             using var self = Process.GetCurrentProcess();
             var sinceStart = DateTime.UtcNow - self.StartTime.ToUniversalTime();
-            Log.Information(LogService.FirstFrameMessage, (long)sinceStart.TotalMilliseconds, self.PriorityClass);
+            LogService.LogFirstFrame(Log.Logger, sinceStart, self.PriorityClass);
         }
         catch (Win32Exception ex) { Log.Debug("First frame not timed: {Error}", ex.Message); }
         catch (InvalidOperationException ex) { Log.Debug("First frame not timed: {Error}", ex.Message); }

@@ -5,8 +5,8 @@
 namespace SysManager.Services;
 
 /// <summary>
-/// One System Restore point per app session, shared by every tab that changes system state, so the
-/// safety net does not depend on which door the user came through.
+/// One System Restore point per app session, shared by the tabs that try one before their first change (the
+/// README's Restore Points section names them), so the safety net does not depend on which of them comes first.
 /// <para>Before this existed, the Tweaks Hub tab (since merged into Privacy &amp; Telemetry) owned a private copy
 /// of the logic and was the only place that had it: flipping a privacy toggle there took a snapshot, while the
 /// identical registry write from the Privacy tab, or removing Edge, took none. An unpredictable

@@ -63,7 +63,7 @@ public class BulkInstallerInstalledIdsTests
     [Fact]
     public void ParseInstalledIds_SubstringId_NotFalselyMatched()
     {
-        // Regression (F20): only "Microsoft.Teams.Classic" is installed. A curated app whose Id
+        // Regression (#1231): only "Microsoft.Teams.Classic" is installed. A curated app whose Id
         // is the *substring* "Microsoft.Teams" must NOT be reported installed — the old
         // Contains() scan over the raw row flagged it.
         var output = Table(Row("Microsoft Teams classic", "Microsoft.Teams.Classic", "1.6.0"));

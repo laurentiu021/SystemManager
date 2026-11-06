@@ -384,8 +384,8 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable,
             // Muting an app that nags is the same wish as the rest of this group — make Windows behave
             // the way I want — and the same risk level: per-app Windows switches, no administrator, one
             // flip to undo. Under "Privacy & Security" it both overstated the stakes and hid the tab
-            // from where someone would look for it (#1522). Debloater stays in Privacy because it
-            // REMOVES software; this only silences it.
+            // from where someone would look for it (#1522). Preinstalled Apps stays in Privacy & Security
+            // because it REMOVES software; this only silences it.
             Tab<NotificationBlockerViewModel>("nav-notification-blocker", "Notification Blocker", typeof(Views.NotificationBlockerView), inDevelopment: true, keywords: "popups, notifications, nagging, alerts, stop bothering me")),
 
         Group("grp-info", "Info", "\uE946", "What changed, drivers, battery, logs and reports",  // Info

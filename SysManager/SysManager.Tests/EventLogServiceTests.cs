@@ -52,7 +52,7 @@ public class EventLogServiceTests
     [Fact]
     public void BuildXPath_Since_UsesInvariantTimeSeparator_OnDotSeparatorCulture()
     {
-        // Regression (F16): the SystemTime timestamp was formatted without a culture, so on a
+        // Regression (#1227): the SystemTime timestamp was formatted without a culture, so on a
         // locale whose TimeSeparator is '.' (e.g. fi-FI) the ':' in the format became '.',
         // producing an invalid SystemTime like "10.30.00" — EventLogQuery then threw and the
         // Logs tab came back empty. Force such a culture and assert the ISO ':' survives.

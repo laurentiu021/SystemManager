@@ -117,7 +117,7 @@ public class DeepCleanupServiceTests(DeepCleanupScanFixture scan) : IClassFixtur
     [Fact]
     public async Task ScanAsync_CancelledMidScan_Throws_DoesNotReturnPartial()
     {
-        // Regression (F12): a scan cancelled AFTER it starts used to `break` out of its
+        // Regression (#1225): a scan cancelled AFTER it starts used to `break` out of its
         // loops and fall through to report "Done" + return the partial category list, so
         // the ViewModel showed a success toast for a cancelled scan. It must now throw
         // OperationCanceledException instead. Deterministic (no wall-clock): the progress

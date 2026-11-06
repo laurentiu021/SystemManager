@@ -1355,7 +1355,7 @@ Key services:
   restoring the hosts file takes no lock, from DNS & Hosts or from Undo Changes: both write it only through
   `HostsFileService`, which swaps a finished copy into place (#2553).
   `SystemModification` covers everything that services or restarts the running Windows image: the SFC and
-  DISM repairs, the component-store cleanup, Windows feature changes, Windows Update installs, Reset
+  DISM repairs, the component-store check and cleanup, Windows feature changes, Windows Update installs, Reset
   Windows Update, and creating or restoring a restore point, besides every tab that writes a system-wide
   registry value or changes a Windows service (Performance Mode, Gaming Profile, Environment Variables,
   Preinstalled Apps, Privacy & Telemetry, Defender Tweaks, Edge/OneDrive Remover, Services, and Settings

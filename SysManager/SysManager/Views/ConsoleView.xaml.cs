@@ -40,7 +40,7 @@ public partial class ConsoleView : UserControl
         {
             // Scroll the internal ScrollViewer directly instead of using
             // ScrollIntoView, which fires RequestBringIntoView and causes
-            // the parent page ScrollViewer to jump to the bottom (#102).
+            // the parent page ScrollViewer to jump to the bottom.
             var sv = FindVisualChild<ScrollViewer>(ListBox_Output);
             sv?.ScrollToEnd();
         }));

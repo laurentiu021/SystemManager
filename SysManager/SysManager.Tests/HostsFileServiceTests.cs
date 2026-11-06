@@ -301,7 +301,7 @@ public class HostsFileServiceTests
     [Fact]
     public async Task SaveHosts_PreservesStandaloneComments_ThroughReadEditSaveRoundTrip()
     {
-        // Regression (F40): editing one entry through the UI rewrote the whole file from the
+        // Regression (#1235): editing one entry through the UI rewrote the whole file from the
         // parsed entries only, silently deleting the user's hand-written comments. A read →
         // (edit) → save round trip must keep those comment lines.
         const string original =

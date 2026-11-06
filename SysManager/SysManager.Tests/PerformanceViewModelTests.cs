@@ -250,7 +250,7 @@ public class PerformanceViewModelTests
         Assert.Contains("SelectedPlan", changed);
     }
 
-    // ── Processor state lock (#113) ──
+    // ── Processor state lock ──
 
     [Fact]
     public void IsProcessorStateLocked_DefaultFalse()

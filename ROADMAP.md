@@ -68,10 +68,10 @@ so text stays readable. What is left:
 - **Keyboard operability under test.** Source-level guards exist; driving real key presses
   through the UI does not ([#1552](https://github.com/laurentiu021/SystemManager/issues/1552)).
 
-## One design system rather than 59 views that resemble each other
+## One design system rather than views that resemble each other
 
 Corner radii now come from the `RadiusSm/Md/Lg` scale, held by a test, the status footer
-that 37 views used to copy is one shared control, and body text uses the named text styles
+the views used to copy is one shared control, and body text uses the named text styles
 rather than sizes of its own ([#1634](https://github.com/laurentiu021/SystemManager/issues/1634)).
 
 Spacing has no token scale, on purpose: every view uses one of three documented layout

@@ -165,7 +165,7 @@ public sealed class SpeedTestService : ISpeedTestService, IDisposable
         IProgress<(int, string)>? progress, CancellationToken ct)
     {
         // Use multiple parallel connections to saturate the link, similar to
-        // how Ookla and fast.com measure throughput (#212).
+        // how Ookla and fast.com measure throughput.
         var perStream = PayloadBytes / DownloadConnections;
         long totalBytes = 0;
         var sw = Stopwatch.StartNew();

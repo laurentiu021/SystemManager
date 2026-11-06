@@ -12256,8 +12256,10 @@ public partial class ArchitectureTests
     /// </summary>
     /// <remarks>
     /// The workflow's pattern is built here from <see cref="LogService.FirstFrameMessage"/>, as the startup line's is,
-    /// so the summary cannot go on looking for a line the app no longer writes. And the line is rendered the way
-    /// Serilog renders it, since a number or an enum written another way would match nothing.
+    /// so the summary cannot go on looking for a line the app no longer writes. Whether the line the log file holds
+    /// matches it is <c>LogServiceSinkScrubbingTests.TheFirstFrameLine_IsOneTheReleaseSmokeCheckFinds</c>'s to say:
+    /// rendered here through a bare message template, the priority read as a word, while the file's sink put it in
+    /// quotes, and 1.136.130 recorded nothing.
     /// </remarks>
     [Fact]
     public void TheReleaseSmokeCheck_RecordsTheFirstFrameTheAppLogs()
@@ -12286,22 +12288,12 @@ public partial class ArchitectureTests
         Assert.True(to > from, "the smoke check does not warn when the log has no first-frame line.");
         Assert.DoesNotContain("throw ", smoke[from..to], StringComparison.Ordinal);
 
-        // The line as the log holds it: Serilog's rendering of the message, matched by the workflow's pattern.
-        var rendered = new Serilog.Parsing.MessageTemplateParser().Parse(LogService.FirstFrameMessage).Render(
-            new Dictionary<string, Serilog.Events.LogEventPropertyValue>
-            {
-                ["Milliseconds"] = new Serilog.Events.ScalarValue(1234L),
-                ["Priority"] = new Serilog.Events.ScalarValue(System.Diagnostics.ProcessPriorityClass.Normal),
-            },
-            CultureInfo.GetCultureInfo("de-DE"));
-        Assert.Equal("First frame 1234 ms after the process started, priority Normal", rendered);
-        Assert.Matches(pattern, rendered);
-
-        // And the app side: the main window logs it as its first frame is drawn.
+        // And the app side: the main window logs it, through the one method the sink test writes it with, as its first
+        // frame is drawn.
         var window = WithoutComments(File.ReadAllText(Path.Combine(TestPaths.AppProject(), "MainWindow.xaml.cs")));
         var hook = window.IndexOf("protected override void OnContentRendered(", StringComparison.Ordinal);
         Assert.True(hook >= 0, "MainWindow no longer overrides OnContentRendered, so nothing logs the first frame.");
-        Assert.Contains("Log.Information(LogService.FirstFrameMessage",
+        Assert.Contains("LogService.LogFirstFrame(",
             window[hook..window.IndexOf("\n    }", hook, StringComparison.Ordinal)], StringComparison.Ordinal);
     }
 

@@ -412,8 +412,9 @@ public class DuplicateFileViewModelTests
             File.WriteAllBytes(Path.Combine(Folder, "a.bin"), content);
             File.WriteAllBytes(Path.Combine(Folder, "b.bin"), content);
             Service = new Services.DuplicateFileService(
-                folder => EndEarly ? throw new OperationCanceledException() : new DirectoryInfo(folder).GetFiles(),
-                folder => EndEarly ? throw new OperationCanceledException() : Directory.GetDirectories(folder));
+                folder => EndEarly
+                    ? throw new OperationCanceledException()
+                    : new DirectoryInfo(folder).GetFileSystemInfos());
         }
 
         public void Dispose() => Directory.Delete(Folder, recursive: true);

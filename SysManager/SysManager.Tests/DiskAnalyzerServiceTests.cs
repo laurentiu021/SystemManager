@@ -111,6 +111,42 @@ public class DiskAnalyzerServiceTests : IDisposable
         Assert.Equal(1, result[0].FolderCount); // "child" subfolder
     }
 
+    /// <summary>Hidden and system files, and a hidden folder, count toward their folder as before (#2854).</summary>
+    /// <remarks>
+    /// A folder is read in one pass now, through a <c>FileSystemEnumerable</c>, where it was listed with GetFiles and
+    /// then GetDirectories. Its options are theirs. A new <c>EnumerationOptions</c> leaves hidden and system entries
+    /// out, which would leave the space they take out of the total.
+    /// </remarks>
+    [Fact]
+    public async Task Analyze_HiddenAndSystemEntries_StillCount()
+    {
+        var file = CreateFile(Path.Combine("parent", "hidden.bin"), 4096);
+        File.SetAttributes(file, FileAttributes.Hidden | FileAttributes.System);
+        var folder = CreateDir(Path.Combine("parent", "hidden folder"));
+        File.SetAttributes(folder, FileAttributes.Hidden);
+        File.WriteAllBytes(Path.Combine(folder, "inside.bin"), new byte[1024]);
+
+        var parent = Assert.Single((await _service.AnalyzeAsync(_root)).Entries);
+
+        Assert.Equal(4096 + 1024, parent.SizeBytes);
+        Assert.Equal(2, parent.FileCount);
+        Assert.Equal(1, parent.FolderCount);
+    }
+
+    /// <summary>A folder the scan leaves out, inside a measured one, adds none of its bytes and is no folder.</summary>
+    [Fact]
+    public async Task Analyze_AFolderLeftOutInside_AddsNothing()
+    {
+        CreateFile(Path.Combine("top", "f.bin"), 1024);
+        CreateFile(Path.Combine("top", "$Recycle.Bin", "deleted.bin"), 2048);
+
+        var top = Assert.Single((await _service.AnalyzeAsync(_root)).Entries);
+
+        Assert.Equal(1024, top.SizeBytes);
+        Assert.Equal(1, top.FileCount);
+        Assert.Equal(0, top.FolderCount);
+    }
+
     [Fact]
     public async Task Analyze_RootFiles_ShownSeparately()
     {
@@ -243,6 +279,48 @@ public class DiskAnalyzerServiceTests : IDisposable
 
             Assert.Empty(result.Entries);
             Assert.Equal(DiskAnalyzerService.AnalysisFailure.Unreadable, result.Failure);
+        }
+        finally
+        {
+            acl.RemoveAccessRule(deny);
+            info.SetAccessControl(acl);
+        }
+    }
+
+    /// <summary>
+    /// A folder inside a measured one that cannot be listed marks its top folder as not read in full, and the rest of
+    /// it still counts (#2854).
+    /// </summary>
+    /// <remarks>
+    /// The folder is read through a <c>FileSystemEnumerable</c> now, where it was listed with GetFiles and then
+    /// GetDirectories, and a folder that refuses the listing must still say so rather than read as empty.
+    /// </remarks>
+    [Fact]
+    public async Task Analyze_AFolderInsideThatCannotBeListed_MarksItsTopFolder()
+    {
+        CreateFile(Path.Combine("top", "f.bin"), 1024);
+        var locked = CreateDir(Path.Combine("top", "locked"));
+        File.WriteAllBytes(Path.Combine(locked, "inside.bin"), new byte[2048]);
+        var identity = WindowsIdentity.GetCurrent().User;
+        Assert.NotNull(identity);
+        var info = new DirectoryInfo(locked);
+        var acl = info.GetAccessControl(AccessControlSections.Access);
+        var deny = new FileSystemAccessRule(identity, FileSystemRights.ListDirectory, AccessControlType.Deny);
+        acl.AddAccessRule(deny);
+        info.SetAccessControl(acl);
+        try
+        {
+            if (CanStillList(locked))
+            {
+                Assert.Skip("This process lists folders through backup semantics, so a deny entry cannot make one "
+                            + "unreadable here.");
+            }
+
+            var top = Assert.Single((await _service.AnalyzeAsync(_root)).Entries);
+
+            Assert.True(top.IsAccessDenied);
+            Assert.Equal(1024, top.SizeBytes);
+            Assert.Equal(1, top.FileCount);
         }
         finally
         {
@@ -480,5 +558,45 @@ public class DiskAnalyzerServiceTests : IDisposable
             Assert.Equal(1, folder.FileCount);
         }
         finally { Symlinks.RemoveLinkThenTree(link, root); }
+    }
+
+    /// <summary>
+    /// A link to a folder inside a measured folder adds none of its target's bytes, and is no folder.
+    /// </summary>
+    /// <remarks>
+    /// The check reads the folder's attributes from the folder's listing now, where it asked Windows for them again
+    /// (#2854).
+    /// </remarks>
+    [Fact]
+    public async Task AnalyzeAsync_ALinkToAFolder_IsNotWalked()
+    {
+        var root = NewRoot();
+        var measured = Path.Combine(root, "measured");
+        var outside = Path.Combine(NewRoot(), "outside");
+        Directory.CreateDirectory(measured);
+        Directory.CreateDirectory(outside);
+        await File.WriteAllBytesAsync(Path.Combine(measured, "here.bin"), new byte[10_000]);
+        await File.WriteAllBytesAsync(Path.Combine(outside, "elsewhere.bin"), new byte[50_000]);
+
+        var link = Path.Combine(measured, "link");
+        Symlinks.RequireJunction(link, outside, () =>
+        {
+            Directory.Delete(root, recursive: true);
+            Directory.Delete(Path.GetDirectoryName(outside)!, recursive: true);
+        });
+
+        try
+        {
+            var folder = Assert.Single((await new DiskAnalyzerService().AnalyzeAsync(root)).Entries);
+
+            Assert.Equal(10_000, folder.SizeBytes);
+            Assert.Equal(1, folder.FileCount);
+            Assert.Equal(0, folder.FolderCount);
+        }
+        finally
+        {
+            Symlinks.RemoveLinkThenTree(link, root);
+            Symlinks.RemoveTree(Path.GetDirectoryName(outside)!);
+        }
     }
 }

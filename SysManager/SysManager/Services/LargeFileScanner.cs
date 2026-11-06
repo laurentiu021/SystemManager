@@ -74,22 +74,19 @@ public sealed class LargeFileScanner
             var cur = stack.Pop();
             if (ShouldSkip(cur)) continue;
 
-            // DirectoryInfo.GetFiles, not Directory.GetFiles: it returns FileInfo objects whose attributes
-            // and length are already populated from the listing the OS returned, so the reparse check below
-            // is free and the `new FileInfo(f)` that used to follow — a second stat per file — is gone.
-            FileInfo[] files = [];
-            string[] dirs = [];
-            var curDir = new DirectoryInfo(cur);
+            // One listing of the folder, its files and its folders together, each with the attributes and length the
+            // OS listed it with, so neither a file's reparse check nor a folder's costs a stat. The folder was listed
+            // twice, files then folders, with a File.GetAttributes for every folder on top (#2854). The options are
+            // the ones GetFiles used: hidden and system entries are listed.
+            FileSystemInfo[] entries = [];
             // A folder that cannot be listed, for either reason, is skipped and the scan goes on.
-            try { files = curDir.GetFiles(); }
-            catch (IOException) { /* unreadable: skipped */ }
-            catch (UnauthorizedAccessException) { /* denied: skipped */ }
-            try { dirs = Directory.GetDirectories(cur); }
+            try { entries = new DirectoryInfo(cur).GetFileSystemInfos(); }
             catch (IOException) { /* unreadable: skipped */ }
             catch (UnauthorizedAccessException) { /* denied: skipped */ }
 
-            foreach (var fi in files)
+            foreach (var entry in entries)
             {
+                if (entry is not FileInfo fi) continue;
                 if (ct.IsCancellationRequested) break;
 
                 // A link is not a big file. FileInfo.Length reports its TARGET's size, so a link would be
@@ -131,15 +128,11 @@ public sealed class LargeFileScanner
                 lastReport = now;
             }
 
-            foreach (var d in dirs)
+            // A link to a folder is not walked: what it holds lives where it points (#2381).
+            foreach (var entry in entries)
             {
-                try
-                {
-                    if ((File.GetAttributes(d) & FileAttributes.ReparsePoint) != 0) continue;
-                }
-                catch (IOException) { continue; }
-                catch (UnauthorizedAccessException) { continue; }
-                stack.Push(d);
+                if (entry is DirectoryInfo && (entry.Attributes & FileAttributes.ReparsePoint) == 0)
+                    stack.Push(entry.FullName);
             }
         }
 

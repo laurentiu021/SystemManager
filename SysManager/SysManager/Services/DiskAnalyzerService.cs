@@ -5,6 +5,7 @@
 using System.Buffers;
 using System.Globalization;
 using System.IO;
+using System.IO.Enumeration;
 using System.Text;
 using Serilog;
 using SysManager.Helpers;
@@ -254,51 +255,35 @@ public sealed class DiskAnalyzerService
         {
             var current = stack.Pop();
 
-            // DirectoryInfo.GetFiles: see the root-files loop above — one listing instead of a listing plus
-            // a stat per file, and the link check below costs nothing.
-            FileInfo[] files = [];
-            string[] dirs = [];
-            try { files = new DirectoryInfo(current).GetFiles(); }
-            catch (UnauthorizedAccessException) { accessDenied = true; }
-            catch (IOException) { /* skip inaccessible folder */ }
-            try { dirs = Directory.GetDirectories(current); }
-            catch (UnauthorizedAccessException) { accessDenied = true; }
-            catch (IOException) { /* skip inaccessible folder */ }
+            // One pass over the folder for its files and its folders, each with the attributes and length the OS
+            // listed it with: no FileInfo is built for a file whose size is all this needs, and no folder costs a
+            // stat. The folder was listed twice, files then folders, with a FileInfo for every file and a
+            // File.GetAttributes for every folder (#2854). The pass is read to the end inside the try, so a listing
+            // that fails part-way is skipped whole, as a failed GetFiles was.
+            List<Listed> entries;
+            try { entries = [.. new FileSystemEnumerable<Listed>(current, ToListed, ListingOptions)]; }
+            catch (UnauthorizedAccessException) { accessDenied = true; continue; }
+            catch (IOException) { continue; /* skip inaccessible folder */ }
 
-            foreach (var fi in files)
+            foreach (var entry in entries)
             {
                 if (ct.IsCancellationRequested) break;
 
-                // A link's Length is its target's, so counting one reports bytes that are not in this
-                // folder — and double-counts them when the target is inside the tree being measured. The
-                // directory walk below has always skipped junctions for exactly that reason (#2381).
-                if ((fi.Attributes & FileAttributes.ReparsePoint) != 0) continue;
+                // A link's Length is its target's, so counting one reports bytes that are not in this folder, and
+                // double-counts them when the target is inside the tree being measured. A link to a folder is not
+                // walked, for the same reason (#2381).
+                if ((entry.Attributes & FileAttributes.ReparsePoint) != 0) continue;
 
-                try
+                if (entry.Folder is null)
                 {
-                    totalSize += fi.Length;
+                    totalSize += entry.Length;
                     fileCount++;
+                    continue;
                 }
-                catch (UnauthorizedAccessException) { accessDenied = true; }
-                catch (IOException) { /* skip inaccessible file */ }
-            }
 
-            foreach (var d in dirs)
-            {
-                if (ShouldSkip(d)) continue;
-
-                // Skip junctions, symbolic links, and mount points to avoid
-                // double-counting the same files through multiple paths.
-                try
-                {
-                    var attr = File.GetAttributes(d);
-                    if ((attr & FileAttributes.ReparsePoint) != 0) continue;
-                }
-                catch (UnauthorizedAccessException) { accessDenied = true; continue; }
-                catch (IOException) { continue; }
-
+                if (ShouldSkip(entry.Folder)) continue;
                 folderCount++;
-                stack.Push(d);
+                stack.Push(entry.Folder);
             }
         }
 
@@ -307,6 +292,23 @@ public sealed class DiskAnalyzerService
 
     // OrdinalIgnoreCase rather than a lowercase copy of the path (#296).
     private static bool ShouldSkip(string path) => path.AsSpan().ContainsAny(SkipSegments);
+
+    /// <summary>
+    /// One entry of a folder as <see cref="MeasureFolder"/> reads it: a folder's path, or a file's length.
+    /// </summary>
+    private readonly record struct Listed(string? Folder, long Length, FileAttributes Attributes);
+
+    private static Listed ToListed(ref FileSystemEntry entry) => entry.IsDirectory
+        ? new Listed(entry.ToSpecifiedFullPath(), 0, entry.Attributes)
+        : new Listed(null, entry.Length, entry.Attributes);
+
+    // What GetFiles and GetDirectories did: hidden and system entries are listed, and a folder that cannot be read
+    // throws rather than reading as empty. The path is the one GetDirectories gave, from the folder as it was named.
+    private static readonly EnumerationOptions ListingOptions = new()
+    {
+        AttributesToSkip = 0,
+        IgnoreInaccessible = false,
+    };
 
     /// <summary>Renders a folder-size breakdown as CSV with a header row.</summary>
     /// <remarks>

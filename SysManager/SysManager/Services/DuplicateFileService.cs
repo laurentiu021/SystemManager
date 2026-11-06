@@ -111,26 +111,22 @@ public sealed class DuplicateFileService
         long minSizeBytes = DefaultMinSize,
         IProgress<ScanProgress>? progress = null,
         CancellationToken ct = default)
-        => Task.Run(() => Scan(rootPath, minSizeBytes, progress, ct, _listFiles, _listDirectories), ct);
+        => Task.Run(() => Scan(rootPath, minSizeBytes, progress, ct, _list), ct);
 
-    private readonly Func<string, FileInfo[]> _listFiles;
-    private readonly Func<string, string[]> _listDirectories;
+    private readonly Func<string, FileSystemInfo[]> _list;
 
-    public DuplicateFileService() : this(ListFiles, Directory.GetDirectories) { }
+    public DuplicateFileService() : this(List) { }
 
-    /// <summary>Scans through the listings given, so a test decides what a scan finds, or how it ends.</summary>
-    internal DuplicateFileService(Func<string, FileInfo[]> listFiles, Func<string, string[]> listDirectories)
-    {
-        _listFiles = listFiles;
-        _listDirectories = listDirectories;
-    }
+    /// <summary>Scans through the listing given, so a test decides what a scan finds, or how it ends.</summary>
+    internal DuplicateFileService(Func<string, FileSystemInfo[]> list) => _list = list;
 
-    // DirectoryInfo.GetFiles, not Directory.GetFiles: it returns FileInfo objects whose attributes and length come from
-    // the listing the OS already returned, so the reparse check in the walk is free and there is no second stat per
-    // file.
-    private static FileInfo[] ListFiles(string directory) => new DirectoryInfo(directory).GetFiles();
+    // One listing of a folder, its files and its folders together, each with the attributes and length the OS listed it
+    // with, so neither a file's reparse check nor a folder's costs a stat. A folder was listed twice, files then
+    // folders, with a File.GetAttributes for every folder on top (#2854). The options are the ones GetFiles used:
+    // hidden and system entries are listed.
+    private static FileSystemInfo[] List(string directory) => new DirectoryInfo(directory).GetFileSystemInfos();
 
-    /// <summary><see cref="ScanAsync"/>'s body, handed the listings so each way the root fails is testable.</summary>
+    /// <summary><see cref="ScanAsync"/>'s body, handed the listing so each way the root fails is testable.</summary>
     /// <remarks>
     /// Handed them for the reason <see cref="DiskAnalyzerService.Analyze"/> is handed its own: a real folder cannot be
     /// made unreadable on demand everywhere, because .NET opens a directory with backup semantics, so an elevated
@@ -141,8 +137,7 @@ public sealed class DuplicateFileService
         long minSizeBytes,
         IProgress<ScanProgress>? progress,
         CancellationToken ct,
-        Func<string, FileInfo[]> listFiles,
-        Func<string, string[]> listDirectories)
+        Func<string, FileSystemInfo[]> list)
     {
         if (string.IsNullOrWhiteSpace(rootPath) || !Directory.Exists(rootPath))
             return new DuplicateScan([], ScanFailure.NotFound);
@@ -162,12 +157,10 @@ public sealed class DuplicateFileService
 
         // The root is listed on its own: a folder below it that cannot be listed is skipped, but when the root cannot
         // be, nothing was scanned (#2823).
-        FileInfo[] rootFiles;
-        string[] rootDirs;
+        FileSystemInfo[] rootEntries;
         try
         {
-            rootFiles = listFiles(rootPath);
-            rootDirs = listDirectories(rootPath);
+            rootEntries = list(rootPath);
         }
         catch (UnauthorizedAccessException ex)
         {
@@ -198,27 +191,24 @@ public sealed class DuplicateFileService
         // time since boot, so the first file always clears the gap and every file after it is throttled.
         var lastReport = 0L;
 
-        Visit(rootFiles, rootDirs);
+        Visit(rootEntries);
         while (stack.Count > 0 && !ct.IsCancellationRequested)
         {
             var dir = stack.Pop();
             if (ShouldSkipDir(dir)) continue;
 
-            FileInfo[] files = [];
-            string[] dirs = [];
-            try { files = listFiles(dir); }
+            FileSystemInfo[] entries = [];
+            try { entries = list(dir); }
             catch (UnauthorizedAccessException) { /* skip protected directory */ }
             catch (IOException) { /* skip inaccessible directory */ }
-            try { dirs = listDirectories(dir); }
-            catch (UnauthorizedAccessException) { /* skip protected directory */ }
-            catch (IOException) { /* skip inaccessible directory */ }
-            Visit(files, dirs);
+            Visit(entries);
         }
 
-        void Visit(FileInfo[] files, string[] dirs)
+        void Visit(FileSystemInfo[] entries)
         {
-            foreach (var fi in files)
+            foreach (var entry in entries)
             {
+                if (entry is not FileInfo fi) continue;
                 if (ct.IsCancellationRequested) break;
                 try
                 {
@@ -259,15 +249,11 @@ public sealed class DuplicateFileService
                 catch (IOException) { /* skip inaccessible file */ }
             }
 
-            foreach (var d in dirs)
+            // A link to a folder is not walked: what it holds lives where it points (#2381).
+            foreach (var entry in entries)
             {
-                try
-                {
-                    if ((File.GetAttributes(d) & FileAttributes.ReparsePoint) != 0) continue;
-                }
-                catch (IOException) { continue; }
-                catch (UnauthorizedAccessException) { continue; }
-                stack.Push(d);
+                if (entry is DirectoryInfo && (entry.Attributes & FileAttributes.ReparsePoint) == 0)
+                    stack.Push(entry.FullName);
             }
         }
 

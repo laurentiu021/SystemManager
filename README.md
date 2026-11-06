@@ -471,7 +471,7 @@ Edit Windows environment variables without the cramped built-in dialog:
   From the keyboard, an arrow key moves a volume 1% and Page Up or Page Down 10%, on these
   sliders and the PC's
 - **Live and lightweight** — the app list reconciles on a ~1-second loop and the meters
-  update on a shared timer, both paused while the tab is hidden so it costs nothing in
+  update every 50 ms, both paused while the tab is hidden so it costs nothing in
   the background. The refresh never replaces a message on the status line, so a saved preset
   or a change Windows refused stays there until you do something else
 - **Real names and icons** — resolved from each audio session's process (with a safe

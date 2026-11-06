@@ -1332,4 +1332,20 @@ public class BandwidthMonitorViewModelTests : IDisposable
         }
         finally { File.Delete(path); }
     }
+
+    /// <summary>
+    /// A hidden tab parks its poll loop at its gate, rather than waking each second to skip the sample (#2853).
+    /// </summary>
+    [Fact]
+    public void AHiddenTab_ParksItsPollLoop()
+    {
+        using var vm = NewVm();
+        Assert.False(vm.Shown.IsOpen);   // hidden, as IsActive starts
+
+        vm.IsActive = true;
+        Assert.True(vm.Shown.IsOpen);
+
+        vm.IsActive = false;
+        Assert.False(vm.Shown.IsOpen);
+    }
 }

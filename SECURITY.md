@@ -354,7 +354,7 @@ see the last two rows.
 | Disk Analyzer history | `%LocalAppData%\SysManager` | The ten biggest folders, by name and size, of each of the last 20 locations you scanned, so the next scan can show what changed |
 | Bandwidth history | `%LocalAppData%\SysManager` | Total download and upload rates, kept seven days, for the Bandwidth Monitor graph |
 | Downloaded tools and icons | `%LocalAppData%\SysManager\tools`, `…\IconCache` | The Ookla speed-test CLI, downloaded the first time you run that test; app icons, only if you turned web icons on |
-| The app's native libraries | `%TEMP%\.net\SysManager` | Unpacked there by .NET each time SysManager starts, because a single-file app cannot load them from inside itself |
+| The app's native libraries | `%TEMP%\.net\SysManager-v<version>`, one folder for each version run | Unpacked there by .NET the first time each version starts, into a folder named after the exe, because a single-file app cannot load them from inside itself |
 | The original hosts file | `%SystemRoot%\System32\drivers\etc\hosts.bak` | Copied once, the first time SysManager saves the hosts file, and kept beside it so the original can be restored |
 | A copy of your environment variables | Registry: `HKCU\Software\SysManager\Backups\Environment`; machine-wide ones in `HKLM\SOFTWARE\SysManagerEnvironmentBackup` | Taken before SysManager first changes them. The machine-wide copy is locked so a standard user cannot change it |
 

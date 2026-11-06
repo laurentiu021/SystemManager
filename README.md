@@ -2857,7 +2857,8 @@ worth stating alongside the benefit.
 
 **What you get.** Nothing is installed. SysManager keeps its settings, history and logs in
 `%LocalAppData%\SysManager` and `%AppData%\SysManager`, the .NET runtime unpacks its native
-libraries into `%TEMP%\.net\SysManager`, and anything else it writes is a change you asked for —
+libraries into a folder under `%TEMP%\.net` named after the exe, and anything else it writes is a
+change you asked for —
 [Uninstalling](#uninstalling) lists every place. There is no service, no scheduled task you did
 not create and no uninstaller to trust: delete the exe and the program is gone. You can run it from
 a USB stick on a machine you are fixing for someone else, which is a large part of what this
@@ -2954,8 +2955,8 @@ it is worth explaining rather than leaving you to guess.
 **Why it happens.** Two reasons, and neither is about what the code does:
 
 - **The shape of the file.** SysManager ships as one large executable that carries everything it needs
-  inside it, compressed, and unpacks its native libraries into `%TEMP%\.net\SysManager` when you launch
-  it. That is a legitimate way to ship a portable app with no installer — and it is also what some
+  inside it, compressed, and unpacks its native libraries into `%TEMP%\.net` the first time you launch
+  each version. That is a legitimate way to ship a portable app with no installer — and it is also what some
   malware does to hide, so a scanner that judges structure rather than behaviour treats it as
   suspicious. Add an unknown publisher and no signature, and a heuristic engine has every reason to be
   cautious.
@@ -3083,7 +3084,9 @@ To remove it completely:
    the in-app updater has run, and the logs, which are capped at about 140 MB:
    - `%LocalAppData%\SysManager`
    - `%AppData%\SysManager`
-   - `%TEMP%\.net\SysManager`, where the .NET runtime unpacks the app's native libraries each time it starts
+   - `%TEMP%\.net\SysManager-v<version>`, where the .NET runtime unpacks the app's native libraries the first
+     time each version starts: one folder for each version you have run, named after the exe, so an exe you
+     renamed has its own
    - `HKEY_CURRENT_USER\Software\SysManager`, the copy of your environment variables
    - `HKEY_LOCAL_MACHINE\SOFTWARE\SysManagerEnvironmentBackup`, only if you changed a machine-wide
      variable (needs administrator rights)

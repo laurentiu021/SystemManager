@@ -9,8 +9,6 @@
     <AssemblyName>SysManager</AssemblyName>
     <RootNamespace>SysManager</RootNamespace>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
-    <!-- Appended, not replaced, so the doc-comment settings in Directory.Build.props still apply. -->
-    <NoWarn>$(NoWarn);NU1603;NU1701</NoWarn>
     <!-- The documentation file exists for the compiler's checks; it is not part of what ships. -->
     <PublishDocumentationFile>false</PublishDocumentationFile>
     <!-- The release publishes a single file, which turns on the SDK's single-file analyzer (IL3000 to IL3003:
@@ -43,6 +41,12 @@
     <PackageReference Include="H.NotifyIcon.Wpf" />
     <PackageReference Include="LibreHardwareMonitorLib" />
     <PackageReference Include="LiveChartsCore.SkiaSharpView.WPF" />
+    <!-- The chart's WPF view brings these three in, and each ships only .NET Framework assets, which NuGet uses with
+         warning NU1701. They are referenced here so the warning is waived for them alone: a project-wide NoWarn
+         waived it, and NU1603, for every package, so the next one would have reached the release unseen (#2858). -->
+    <PackageReference Include="OpenTK" NoWarn="NU1701" />
+    <PackageReference Include="OpenTK.GLWpfControl" NoWarn="NU1701" />
+    <PackageReference Include="SkiaSharp.Views.WPF" NoWarn="NU1701" />
     <PackageReference Include="Microsoft.Diagnostics.Tracing.TraceEvent" />
     <PackageReference Include="Microsoft.Extensions.DependencyInjection" />
     <PackageReference Include="NvAPIWrapper.Net" />

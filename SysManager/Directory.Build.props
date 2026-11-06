@@ -32,10 +32,6 @@
     <NoWarn>$(NoWarn);CS1591;CS1573</NoWarn>
   </PropertyGroup>
 
-  <ItemGroup>
-    <PackageReference Include="Microsoft.SourceLink.GitHub" PrivateAssets="All" />
-  </ItemGroup>
-
   <!-- The test processes have WPF clear its weak-event tables at exit where they are, rather than ask each table's
        thread to (#2671). The STA tests build WPF objects on threads that end with the test, each leaving a
        Dispatcher that was never shut down and a weak-event table registered for the process's exit. At exit WPF

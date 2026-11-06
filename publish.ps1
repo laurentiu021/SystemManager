@@ -35,15 +35,9 @@ $publishArgs = @(
     '-p:IncludeNativeLibrariesForSelfExtract=true',
     '-p:EnableCompressionInSingleFile=true',
     '-p:DebugType=embedded',
-    # Reproducible, path-normalized release build. ContinuousIntegrationBuild
-    # turns on DeterministicSourcePaths, which (with SourceLink, already
-    # referenced in Directory.Build.props) rewrites the local source root in the
-    # embedded PDB to a '/_/' prefix — so the shipped single-file binary never
-    # carries an absolute build path. publish.ps1 produces release artifacts only
-    # (release.yml invokes it), so this is correctly scoped to release builds and
-    # does not affect local IDE/dev debugging.
-    '-p:ContinuousIntegrationBuild=true',
-    '-p:Deterministic=true',
+    # ContinuousIntegrationBuild and Deterministic, which make the build reproducible and rewrite the local source
+    # root in the embedded PDB to '/_/', come from Directory.Build.props for every Release build; they were also
+    # passed here, which changed nothing (#2858).
     '-o', $Output
 )
 

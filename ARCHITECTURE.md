@@ -911,6 +911,11 @@ Key services:
   before its interval and still checks `IsActive` after, for a tab hidden during the interval.
   `ArchitectureTests.EveryLoopThatSkipsWhileHidden_WaitsAtItsGateFirst` fails on a view model loop that sleeps and
   then skips while hidden without waiting at its gate first.
+- `Helpers/TailLines` — a file's lines from the last to the first, read from the file's end with `RandomAccess` as
+  the caller asks for them, the lines `File.ReadAllLines` gives for a UTF-8 file of LF or CRLF lines. Both history
+  loads read through it and stop at the first sample before their range, so the last hour of a 30-day Resource
+  History file reads about 600 lines where it read all 260,000 (#2853). The file is cut only at an LF and each line
+  is decoded whole, and `TailLinesTests` holds it to `File.ReadAllLines` for every read size from one byte.
 - `Helpers/SafeFileWalk` — the one directory walk every service that deletes or overwrites what it
   finds goes through. Four rules live here rather than at eight copies of a stack loop: never enter a
   reparse point (the root, a directory, **or a file**), skip the excluded subtrees, honour the
@@ -2075,7 +2080,10 @@ Key services:
 - `ResourceHistoryService` — always-on background sampler (started at app startup,
   runs while minimized to tray) that records CPU/RAM/GPU usage + CPU/GPU temperatures
   every 10s as append-only NDJSON in `%LocalAppData%\SysManager\resource-history.ndjson`,
-  with 7/14/30-day retention (periodic prune). Reuses `SystemInfoService` + NvAPIWrapper +
+  with 7/14/30-day retention. Each hour `PruneWhenDueAsync` reads the first line, and rewrites the file only once its
+  oldest sample is `PruneSlackDays` (a day) past the window, so at most once a day where every hourly prune did;
+  `LoadAsync` never reaches past the window, and reads the file from its end through `TailLines` (#2853).
+  Reuses `SystemInfoService` + NvAPIWrapper +
   `TemperatureService`; serialize/parse/prune/downsample/CSV are pure, unit-tested static
   helpers, and the directory is injectable — like `BandwidthHistoryService` — so tests cover the
   load and retention paths without touching the user's own history. A retention setting that
@@ -2110,9 +2118,10 @@ Key services:
   `%LocalAppData%\SysManager\bandwidth-history.ndjson` (serialize/parse/prune/downsample are pure,
   unit-tested; the directory is injectable so tests never touch the user's own history), and the VM
   reads it back through a range picker — Live plus last hour/24 hours/7 days, capped at the service's
-  own retention so no range can promise data that was pruned. `LoadAsync` walks the append-ordered
-  file from the end and stops at the first sample outside the window, so a week-long file costs the
-  window, not the whole file; the loaded series is downsampled to 400 points before plotting. The
+  own retention so no range can promise data that was pruned. `LoadAsync` reads the append-ordered
+  file from its end through `TailLines` and stops at the first sample outside the window, so a week-long file costs
+  the window, not the whole file, which it read before walking it until #2853; the loaded series is downsampled to
+  400 points before plotting. The
   range summary integrates each rate over the gap to the next sample rather than summing rates, and
   skips gaps longer than 4× the write cadence — samples are only written while the tab is open, so
   crediting the last known rate across a closed-tab hour would fabricate traffic. `BandwidthFormat`

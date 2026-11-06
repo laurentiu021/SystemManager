@@ -28,9 +28,12 @@ public sealed class ResourceHistoryService : IDisposable
     /// <summary>Retention options offered in the UI (days).</summary>
     public static readonly int[] RetentionOptions = [7, 14, 30];
 
-    // Prune (rewrite to drop expired lines) at most once an hour while running, so a
-    // long-lived session doesn't let the file grow past the retention window on disk.
+    // Look once an hour whether a prune is due, so a long-lived session doesn't let the file grow past the retention
+    // window on disk. One is due once the oldest sample is PruneSlackDays past the window (#2853).
     private const int PruneEverySamples = 360; // 360 × 10s = 1 hour
+
+    /// <summary>How far past the window the file may run before the sampler's hourly look prunes it.</summary>
+    internal const int PruneSlackDays = 1;
 
     private static readonly JsonSerializerOptions SampleJson = new() { WriteIndented = false };
 
@@ -176,7 +179,7 @@ public sealed class ResourceHistoryService : IDisposable
                     if (++_samplesSincePrune >= PruneEverySamples)
                     {
                         _samplesSincePrune = 0;
-                        await PruneAsync(ct).ConfigureAwait(false);
+                        await PruneWhenDueAsync(ct).ConfigureAwait(false);
                     }
 
                     await Task.Delay(TimeSpan.FromSeconds(SampleIntervalSeconds), ct).ConfigureAwait(false);
@@ -260,26 +263,29 @@ public sealed class ResourceHistoryService : IDisposable
     }
 
     /// <summary>
-    /// Loads samples newer than <paramref name="range"/> ago, oldest-first. Malformed lines
-    /// are skipped. Returns an empty list when no history exists yet.
+    /// Loads samples newer than <paramref name="range"/> ago, and never older than the retention window, oldest-first.
+    /// Malformed lines are skipped. Returns an empty list when no history exists yet.
     /// </summary>
+    /// <remarks>
+    /// The file runs up to <see cref="PruneSlackDays"/> past the window between prunes, and a range longer than the
+    /// window, 30 days while 7 are kept, showed that day too (#2853).
+    /// </remarks>
     public async Task<IReadOnlyList<ResourceSample>> LoadAsync(TimeSpan range, CancellationToken ct = default)
     {
         await _fileLock.WaitAsync(ct).ConfigureAwait(false);
         try
         {
             if (!File.Exists(_dataPath)) return [];
-            var lines = await File.ReadAllLinesAsync(_dataPath, ct).ConfigureAwait(false);
-            var cutoff = _time.GetUtcNow() - range;
-            // The file is append-only and time-ordered, so the requested range is a suffix:
-            // walk from the END and stop at the first line older than the cutoff. This bounds
-            // work to the window (e.g. ~360 lines for "last hour") instead of parsing the whole
-            // file — which for a 30-day file is ~260k lines / ~260k allocations on every load.
+            var window = TimeSpan.FromDays(PruneWindowDays);
+            var cutoff = _time.GetUtcNow() - (range < window ? range : window);
+            // The file is append-only and time-ordered, so the requested range is a suffix: read from the END and stop
+            // at the first line older than the cutoff. Reading only that suffix bounds the work to the range (~360
+            // lines for "last hour"); the whole file, 260,000 lines at 30 days, was read for every load (#2853).
             var samples = new List<ResourceSample>();
-            for (int i = lines.Length - 1; i >= 0; i--)
+            await foreach (var line in TailLines.ReadBackwardAsync(_dataPath, ct).ConfigureAwait(false))
             {
-                if (!TryParse(lines[i], out var s)) continue;   // skip blanks/malformed
-                if (s!.Timestamp < cutoff) break;                // older than the window — done
+                if (!TryParse(line, out var s)) continue;   // skip blanks/malformed
+                if (s!.Timestamp < cutoff) break;            // older than the range — done
                 samples.Add(s);
             }
             samples.Reverse(); // collected newest-first; callers expect oldest-first
@@ -294,6 +300,23 @@ public sealed class ResourceHistoryService : IDisposable
     /// The days a prune keeps: the saved choice, or while it cannot be read or used, the longest one offered.
     /// </summary>
     private int PruneWindowDays => _retentionKnown ? _retentionDays : RetentionOptions.Max();
+
+    /// <summary>
+    /// The sampler's hourly prune, which reads and writes the whole file again only once its oldest sample is
+    /// <see cref="PruneSlackDays"/> past the window: at most once a day, where it was every hour (#2853).
+    /// </summary>
+    /// <remarks>
+    /// On an install that runs all day, an hour of samples has always expired by the next hour, so the prune made each
+    /// hour read, parsed and rewrote the whole file, about 60,000 lines at the 7-day window and 260,000 at 30, with a
+    /// flush to the device, 24 times a day. The file is oldest-first, so its first readable line says whether anything
+    /// is that far past, for the cost of that line. What the file holds past the window, <see cref="LoadAsync"/> does
+    /// not read.
+    /// </remarks>
+    internal async Task PruneWhenDueAsync(CancellationToken ct = default)
+    {
+        if (await OldestSampleOutsideAsync(PruneWindowDays + PruneSlackDays, ct).ConfigureAwait(false) is null) return;
+        await PruneAsync(ct).ConfigureAwait(false);
+    }
 
     /// <summary>Rewrites the file dropping samples older than the retention window and any malformed lines.</summary>
     public async Task PruneAsync(CancellationToken ct = default)

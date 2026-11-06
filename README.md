@@ -1259,7 +1259,7 @@ Answers "what is actually using my space?" by listing the biggest files in one p
   NVIDIA card, and temperatures generally need sensors Windows can read, with the CPU's also needing
   administrator rights and the PawnIO driver, which SysManager does not install
 - **Configurable retention** — keep 7, 14, or 30 days of history; older samples
-  are pruned automatically. Choosing a shorter window asks first when it would delete
+  leave the charts at once and the file within a day. Choosing a shorter window asks first when it would delete
   history, and a choice that cannot be saved is not made. If the setting cannot be read,
   nothing newer than 30 days is pruned until it can be, or until you choose again
 - **Export to CSV** — save the visible range for analysis in Excel or elsewhere, each time in your

@@ -62,21 +62,21 @@ public sealed class BandwidthHistoryService
     }
 
     /// <summary>
-    /// Loads samples newer than <paramref name="range"/> ago, oldest-first. Walks from the end
-    /// (the file is append-ordered) so the work is bounded by the window, not the whole file.
+    /// Loads samples newer than <paramref name="range"/> ago, oldest-first. Reads from the end (the file is
+    /// append-ordered), so the work is bounded by the range, not the whole file.
     /// </summary>
+    /// <remarks>The whole file was read first, and only the walk was bounded (#2853).</remarks>
     public async Task<IReadOnlyList<BandwidthSample>> LoadAsync(TimeSpan range, CancellationToken ct = default)
     {
         await _fileLock.WaitAsync(ct).ConfigureAwait(false);
         try
         {
             if (!File.Exists(_dataPath)) return [];
-            var lines = await File.ReadAllLinesAsync(_dataPath, ct).ConfigureAwait(false);
             var cutoff = DateTime.Now - range;
             var samples = new List<BandwidthSample>();
-            for (int i = lines.Length - 1; i >= 0; i--)
+            await foreach (var line in TailLines.ReadBackwardAsync(_dataPath, ct).ConfigureAwait(false))
             {
-                if (!TryParse(lines[i], out var s)) continue;
+                if (!TryParse(line, out var s)) continue;
                 if (s!.Timestamp < cutoff) break;
                 samples.Add(s);
             }

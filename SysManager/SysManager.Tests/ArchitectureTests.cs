@@ -16510,6 +16510,24 @@ public partial class ArchitectureTests
     private static partial Regex SkipWhileHidden();
 
     /// <summary>
+    /// The Resource History sampler's hourly prune goes through <c>PruneWhenDueAsync</c>, which rewrites the file once
+    /// its oldest sample is a day past the window, and not straight through <c>PruneAsync</c>, which rewrote it every
+    /// hour once an hour of samples had expired (#2853).
+    /// </summary>
+    [Fact]
+    public void TheHistorySamplersHourlyPrune_GoesThroughTheDueCheck()
+    {
+        var code = WithoutComments(File.ReadAllText(
+            Path.Combine(TestPaths.AppProject(), "Services", "ResourceHistoryService.cs")));
+        var at = code.IndexOf(">= PruneEverySamples)", StringComparison.Ordinal);
+        Assert.True(at >= 0, "the sampler's hourly prune was not found in ResourceHistoryService.");
+        var hourly = code[at..code.IndexOf('}', at)];
+
+        Assert.Contains("PruneWhenDueAsync(", hourly);
+        Assert.DoesNotContain("PruneAsync(", hourly);
+    }
+
+    /// <summary>
     /// Every kernel TCP and UDP event precise mode counts reaches the loopback filter with both of its addresses.
     /// </summary>
     /// <remarks>

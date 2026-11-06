@@ -2,7 +2,9 @@
 // Author: laurentiu021 · https://github.com/laurentiu021/SystemManager
 // License: MIT
 
+using System.IO;
 using System.Linq;
+using SysManager.Helpers;
 using SysManager.Models;
 using SysManager.Services;
 
@@ -116,5 +118,46 @@ public class BandwidthHistoryTests
 
         for (int i = 1; i < result.Count; i++)
             Assert.True(result[i].Timestamp >= result[i - 1].Timestamp);
+    }
+}
+
+/// <summary><see cref="BandwidthHistoryService"/> against a file on disk, in a temp folder of its own.</summary>
+public class BandwidthHistoryServiceDiskTests : IDisposable
+{
+    private readonly string _dir =
+        Path.Combine(Path.GetTempPath(), "SysManagerBandwidthHistoryTests", Guid.NewGuid().ToString("N"));
+
+    public BandwidthHistoryServiceDiskTests() => Directory.CreateDirectory(_dir);
+
+    public void Dispose()
+    {
+        try { if (Directory.Exists(_dir)) Directory.Delete(_dir, recursive: true); }
+        catch (IOException) { /* a leftover temp dir must never fail a test run */ }
+        GC.SuppressFinalize(this);
+    }
+
+    private string DataPath => Path.Combine(_dir, "bandwidth-history.ndjson");
+
+    /// <summary>
+    /// The last hour of a long file is read from its end: with the file's start locked against reading, it still
+    /// loads. The load read the whole file first, so the lock failed it (#2853).
+    /// </summary>
+    [Fact]
+    public async Task LoadAsync_ReadsOnlyTheEndOfTheFile()
+    {
+        var now = DateTime.Now;
+        File.WriteAllLines(DataPath, [
+            .. Enumerable.Range(1, 4_000).Reverse()
+                .Select(i => BandwidthHistoryService.Serialize(new(now.AddHours(-2).AddSeconds(-5 * i), 1, 1))),
+            .. Enumerable.Range(0, 6)
+                .Select(i => BandwidthHistoryService.Serialize(new(now.AddMinutes(-50 + 10 * i), 1, 1))),
+        ]);
+        using var head = new FileStream(DataPath, FileMode.Open, FileAccess.Read, FileShare.Read);
+        head.Lock(0, TailLines.ChunkBytes);
+        Assert.Throws<IOException>(() => File.ReadAllLines(DataPath));   // the lock holds
+
+        var loaded = await new BandwidthHistoryService(_dir).LoadAsync(TimeSpan.FromHours(1));
+
+        Assert.Equal(6, loaded.Count);
     }
 }

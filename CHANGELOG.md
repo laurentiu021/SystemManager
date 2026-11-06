@@ -10,6 +10,22 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.136.127] - 2026-11-06
+
+**Resource History no longer rewrites its whole history file every hour, and the Resource History and Bandwidth Monitor charts read only the part of their file they show.**
+
+### Fixed
+- On a PC where SysManager runs all day, Resource History rewrote its whole history file every hour. An hour of
+  samples had always expired by then, so each hourly prune read, parsed and wrote again about 60,000 lines at the
+  7-day window and 260,000 at 30, with a flush to the disk, 24 times a day. On my PC a prune of a 30-day file took
+  824 ms and wrote 19 MB. It now looks at the oldest sample each hour, in under a millisecond, and rewrites the
+  file only once that sample is a day past the window, so at most once a day. The file can hold up to that day
+  more, and the charts never show it. Since 1.47.0.
+- Showing a range in Resource History or Bandwidth Monitor read the whole history file first, so the last hour of a
+  30-day file read all 260,000 lines: 132 to 152 ms and 72 MB of memory on my PC. Both now read from the end of the
+  file back to the start of the range, and that last hour takes a few milliseconds. Since 1.47.0 for Resource History and
+  1.54.0 for Bandwidth Monitor.
+
 ## [1.136.126] - 2026-11-06
 
 **Process Manager, Volume Control and Bandwidth Monitor no longer wake up every second while you are on another tab.**

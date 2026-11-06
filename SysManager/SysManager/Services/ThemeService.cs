@@ -662,9 +662,9 @@ public sealed class ThemeService
     /// </summary>
     /// <remarks>
     /// Pure black, not a softened near-black. #1A1A1A was the first choice, because pure black can read
-    /// as harsh on a saturated fill, but it does not clear the bar: against the default accent #6366F1 it
-    /// measures 3.90:1 while white measures 4.47:1, so NEITHER reaches 4.5 and the app's own signature
-    /// colour would still fail. With pure black every preset clears it, the worst case being 4.60:1.
+    /// as harsh on a saturated fill, but it does not clear the bar: against #6366F1, Clean Indigo's accent and
+    /// the default's until #2926, it measures 3.90:1 while white measures 4.47:1, so NEITHER reaches 4.5 and
+    /// that indigo would still fail. With pure black every preset clears it, the worst case being 4.60:1.
     /// <para>Deliberately a local contrast implementation rather than one shared with the tests.
     /// <c>ThemeStatusBrushTests</c> and <c>ThemeTextContrastTests</c> keep their own, so a mistake in this
     /// formula shows up as a failing assertion instead of being cancelled out by a shared bug. The other
@@ -772,7 +772,9 @@ public sealed class ThemeService
             // sky-800, the light themes' Info already: #0369A1 measured 4.37:1 on the Windows chip's tint at the top
             // of a card on Soft Blossom and Lavender (#2931).
             ("InfoText", C("#075985")), ("InfoBgSubtle", C("#2638BDF8")), ("InfoBorder", C("#5538BDF8")),
-            ("DangerText", C("#B91C1C")), ("DangerBgSubtle", C("#26EF4444")), ("DangerBorder", C("#55EF4444")),
+            // red-800, as the green, sky and amber text above: #B91C1C, the light themes' Danger, read 3.52:1 on a
+            // chosen Critical filter chip at the top of a card on Lavender once the chip's words took it (#2926).
+            ("DangerText", C("#991B1B")), ("DangerBgSubtle", C("#26EF4444")), ("DangerBorder", C("#55EF4444")),
             // The neutral pair on light: the light verbose grey, slate-600, on its own tint.
             ("NeutralText", C("#475569")), ("NeutralBgSubtle", C("#26475569")),
 
@@ -980,8 +982,10 @@ public sealed record ThemePreset(
 {
     public static readonly Dictionary<string, ThemePreset> Defaults = new()
     {
+        // The accent is a shade under the #6366F1 Clean Indigo keeps: on #6366F1 white reads 4.47:1 and black
+        // 4.70, so the labels on it would turn black; on #5F62EE white reads 4.70 (#2926).
         ["midnight-indigo"] = new("midnight-indigo", "Midnight Indigo", true,
-            C("#6366F1"), C("#070A0F"), C("#0E1218"), C("#151A23"), C("#1F2633"),
+            C("#5F62EE"), C("#070A0F"), C("#0E1218"), C("#151A23"), C("#1F2633"),
             C("#F1F3F7"), C("#A3ADBF"), C("#9097A7")), // muted: WCAG AA on the DERIVED Surface3/Surface4 too (was #7B8396, 4.09 / 3.53)
         ["deep-ocean"] = new("deep-ocean", "Deep Ocean", true,
             C("#3B82F6"), C("#050D1A"), C("#0A1628"), C("#0F1D33"), C("#1A2D4D"),

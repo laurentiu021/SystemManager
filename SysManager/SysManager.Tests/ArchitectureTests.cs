@@ -7326,7 +7326,7 @@ public partial class ArchitectureTests
         }
 
         Assert.True(setsColour.Count >= 10,
-            $"only {setsColour.Count} keyed TextBlock styles were read from App.xaml, out of the 14 there — "
+            $"only {setsColour.Count} keyed TextBlock styles were read from App.xaml, out of the 16 there — "
             + "the style match is out of date, so the check below covers almost nothing.");
 
         bool Resolves(string key, int depth = 0)

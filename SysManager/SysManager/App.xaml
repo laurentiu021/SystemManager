@@ -95,13 +95,13 @@
             <SolidColorBrush x:Key="TextDisabled" Color="#4A5266"/>
 
             <!-- Accent (primary action) -->
-            <Color x:Key="AccentColor">#6366F1</Color>
+            <Color x:Key="AccentColor">#5F62EE</Color>
             <Color x:Key="AccentHoverColor">#818CF8</Color>
             <Color x:Key="AccentPressedColor">#4F46E5</Color>
             <SolidColorBrush x:Key="Accent" Color="{DynamicResource AccentColor}"/>
             <SolidColorBrush x:Key="AccentHover" Color="{DynamicResource AccentHoverColor}"/>
             <SolidColorBrush x:Key="AccentPressed" Color="{DynamicResource AccentPressedColor}"/>
-            <SolidColorBrush x:Key="AccentSoft" Color="#186366F1"/>
+            <SolidColorBrush x:Key="AccentSoft" Color="#185F62EE"/>
 
             <!-- Status colors -->
             <SolidColorBrush x:Key="Success" Color="#22C55E"/>
@@ -358,11 +358,23 @@
             <!-- ============================================================ -->
             <!-- Global defaults — every Control gets a modern base look       -->
             <!-- ============================================================ -->
-            <Style TargetType="TextBlock">
-                <Setter Property="Foreground" Value="{DynamicResource TextPrimary}"/>
+            <!-- What every TextBlock shares, without a colour. The keyless style below adds TextPrimary to it. A
+                 control whose template colours its text gives the TextBlocks inside it a keyless style based on this
+                 one instead: in its style's Resources for the TextBlocks of its content and its template, and in its
+                 ContentPresenter's for the TextBlock the presenter makes for a string. They then take the colour the
+                 template sets (#2926). -->
+            <Style x:Key="TextBase" TargetType="TextBlock">
                 <Setter Property="FontFamily" Value="{StaticResource UiFont}"/>
                 <Setter Property="TextOptions.TextFormattingMode" Value="Ideal"/>
                 <Setter Property="TextOptions.TextRenderingMode" Value="ClearType"/>
+            </Style>
+
+            <!-- A style setter outranks an inherited colour, so with only this every label read TextPrimary whatever
+                 its template set. The colour stays here all the same: WPF-UI's dictionary is fixed to Dark, so the
+                 controls App.xaml does not restyle, such as list, tree and menu items and expanders, carry WPF-UI's
+                 white or the system's black, and this is what gives their text the theme's colour. -->
+            <Style TargetType="TextBlock" BasedOn="{StaticResource TextBase}">
+                <Setter Property="Foreground" Value="{DynamicResource TextPrimary}"/>
             </Style>
 
             <Style TargetType="ProgressBar">
@@ -376,6 +388,9 @@
                  hover and the shared focus ring. It set no template, and a style with none falls back to Windows'
                  own, so the plans were white circles with a light-blue hover and a dotted focus box (#2816). -->
             <Style TargetType="RadioButton">
+                <Style.Resources>
+                    <Style TargetType="TextBlock" BasedOn="{StaticResource TextBase}"/>
+                </Style.Resources>
                 <Setter Property="Foreground" Value="{DynamicResource TextPrimary}"/>
                 <Setter Property="FontFamily" Value="{StaticResource UiFont}"/>
                 <!-- Body's size, as the CheckBox style sets it. Without it the label took the 14 that WPF-UI gives a
@@ -398,7 +413,11 @@
                                 <ContentPresenter Margin="{TemplateBinding Padding}"
                                                   VerticalAlignment="Center"
                                                   TextBlock.Foreground="{TemplateBinding Foreground}"
-                                                  TextBlock.FontSize="{TemplateBinding FontSize}"/>
+                                                  TextBlock.FontSize="{TemplateBinding FontSize}">
+                                    <ContentPresenter.Resources>
+                                        <Style TargetType="TextBlock" BasedOn="{StaticResource TextBase}"/>
+                                    </ContentPresenter.Resources>
+                                </ContentPresenter>
                             </StackPanel>
                             <ControlTemplate.Triggers>
                                 <Trigger Property="IsChecked" Value="True">
@@ -461,10 +480,18 @@
             <!-- Buttons                                                       -->
             <!-- ============================================================ -->
             <Style x:Key="ButtonBase" TargetType="Button">
+                <!-- Every button style based on this one inherits the scope TextBase describes, so a label takes the
+                     colour its template sets. Each template's ContentPresenter carries the same for a string. -->
+                <Style.Resources>
+                    <Style TargetType="TextBlock" BasedOn="{StaticResource TextBase}"/>
+                </Style.Resources>
                 <Setter Property="FontFamily" Value="{StaticResource UiFont}"/>
                 <Setter Property="FontSize" Value="13"/>
                 <Setter Property="FontWeight" Value="SemiBold"/>
                 <Setter Property="Foreground" Value="{DynamicResource TextPrimary}"/>
+                <!-- Transparent, so a button in this base style alone shows no Windows #DDDDDD behind TextPrimary,
+                     1.22:1 on the default theme. Every style based on it sets its own. -->
+                <Setter Property="Background" Value="Transparent"/>
                 <Setter Property="Padding" Value="14,8"/>
                 <!-- A floor on the clickable box, not on the layout. Nothing here set one, so a button's
                      size was purely padding plus content.
@@ -505,7 +532,11 @@
                                     CornerRadius="{StaticResource RadiusMd}"
                                     Padding="{TemplateBinding Padding}">
                                 <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"
-                                                  TextBlock.Foreground="{TemplateBinding Foreground}"/>
+                                                  TextBlock.Foreground="{TemplateBinding Foreground}">
+                                    <ContentPresenter.Resources>
+                                        <Style TargetType="TextBlock" BasedOn="{StaticResource TextBase}"/>
+                                    </ContentPresenter.Resources>
+                                </ContentPresenter>
                             </Border>
                             <ControlTemplate.Triggers>
                                 <Trigger Property="IsMouseOver" Value="True">
@@ -557,7 +588,11 @@
                                     Padding="{TemplateBinding Padding}"
                                     BorderThickness="1" BorderBrush="{DynamicResource Border1}">
                                 <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"
-                                                  TextBlock.Foreground="{TemplateBinding Foreground}"/>
+                                                  TextBlock.Foreground="{TemplateBinding Foreground}">
+                                    <ContentPresenter.Resources>
+                                        <Style TargetType="TextBlock" BasedOn="{StaticResource TextBase}"/>
+                                    </ContentPresenter.Resources>
+                                </ContentPresenter>
                             </Border>
                             <ControlTemplate.Triggers>
                                 <Trigger Property="IsMouseOver" Value="True">
@@ -612,9 +647,28 @@
                 red row would read as "this menu is dangerous" rather than "this item is" — the same
                 reasoning that made the row button DangerGhostButton instead of DangerButton. The disabled
                 trigger drops back to the muted colour so a greyed-out item does not still shout.
+
+                DangerText rather than Danger: on the menu's #2C2C2C the red made for fills reads 3.71:1 and the
+                red made for text 5.05:1. The template is WPF-UI's, so the scope TextBase describes cannot go on its
+                header presenter; the header template presents the header again, as that presenter does, with access
+                keys and an element shown as itself, and carries the scope (#2926).
             -->
             <Style x:Key="DangerMenuItem" TargetType="MenuItem">
-                <Setter Property="Foreground" Value="{DynamicResource Danger}"/>
+                <Style.Resources>
+                    <Style TargetType="TextBlock" BasedOn="{StaticResource TextBase}"/>
+                </Style.Resources>
+                <Setter Property="Foreground" Value="{DynamicResource DangerText}"/>
+                <Setter Property="HeaderTemplate">
+                    <Setter.Value>
+                        <DataTemplate>
+                            <ContentPresenter Content="{Binding}" RecognizesAccessKey="True">
+                                <ContentPresenter.Resources>
+                                    <Style TargetType="TextBlock" BasedOn="{StaticResource TextBase}"/>
+                                </ContentPresenter.Resources>
+                            </ContentPresenter>
+                        </DataTemplate>
+                    </Setter.Value>
+                </Setter>
                 <Style.Triggers>
                     <Trigger Property="IsEnabled" Value="False">
                         <Setter Property="Foreground" Value="{DynamicResource TextMuted}"/>
@@ -625,7 +679,9 @@
             <Style x:Key="DangerGhostButton" TargetType="Button" BasedOn="{StaticResource ButtonBase}">
                 <Setter Property="Background" Value="Transparent"/>
                 <Setter Property="BorderThickness" Value="1"/>
-                <Setter Property="Foreground" Value="{DynamicResource Danger}"/>
+                <!-- DangerText rather than Danger, as DangerMenuItem: the red made for fills read 4.29:1 at the top of
+                     a card on Dark Forest once the label took it (#2926). The outline and the hover fill stay Danger. -->
+                <Setter Property="Foreground" Value="{DynamicResource DangerText}"/>
                 <Setter Property="Template">
                     <Setter.Value>
                         <ControlTemplate TargetType="Button">
@@ -633,7 +689,11 @@
                                     Padding="{TemplateBinding Padding}"
                                     BorderThickness="1" BorderBrush="{DynamicResource Danger}">
                                 <ContentPresenter x:Name="Cp" HorizontalAlignment="Center" VerticalAlignment="Center"
-                                                  TextBlock.Foreground="{TemplateBinding Foreground}"/>
+                                                  TextBlock.Foreground="{TemplateBinding Foreground}">
+                                    <ContentPresenter.Resources>
+                                        <Style TargetType="TextBlock" BasedOn="{StaticResource TextBase}"/>
+                                    </ContentPresenter.Resources>
+                                </ContentPresenter>
                             </Border>
                             <ControlTemplate.Triggers>
                                 <Trigger Property="IsMouseOver" Value="True">
@@ -738,6 +798,10 @@
             <!-- Filter Chips — safety level radio buttons                    -->
             <!-- ============================================================ -->
             <Style x:Key="FilterChip" TargetType="RadioButton">
+                <!-- The scope TextBase describes, as on ButtonBase; the three chips below are based on this. -->
+                <Style.Resources>
+                    <Style TargetType="TextBlock" BasedOn="{StaticResource TextBase}"/>
+                </Style.Resources>
                 <!-- FilterChipCaution and FilterChipCritical derive from this style, so all three
                      filter chips inherit the ring from here. -->
                 <Setter Property="FocusVisualStyle" Value="{StaticResource FocusRing}"/>
@@ -749,7 +813,11 @@
                                     Cursor="Hand">
                                 <StackPanel Orientation="Horizontal">
                                     <Ellipse x:Name="Dot" Width="6" Height="6" Fill="{DynamicResource Success}" Margin="0,0,5,0"/>
-                                    <ContentPresenter VerticalAlignment="Center"/>
+                                    <ContentPresenter VerticalAlignment="Center">
+                                        <ContentPresenter.Resources>
+                                            <Style TargetType="TextBlock" BasedOn="{StaticResource TextBase}"/>
+                                        </ContentPresenter.Resources>
+                                    </ContentPresenter>
                                 </StackPanel>
                             </Border>
                             <ControlTemplate.Triggers>
@@ -784,7 +852,11 @@
                             <Border x:Name="Bd" CornerRadius="{StaticResource RadiusPill}" Padding="8,4"
                                     Background="{DynamicResource Surface3}" BorderBrush="{DynamicResource Border2}" BorderThickness="1"
                                     Cursor="Hand">
-                                <ContentPresenter VerticalAlignment="Center"/>
+                                <ContentPresenter VerticalAlignment="Center">
+                                    <ContentPresenter.Resources>
+                                        <Style TargetType="TextBlock" BasedOn="{StaticResource TextBase}"/>
+                                    </ContentPresenter.Resources>
+                                </ContentPresenter>
                             </Border>
                             <ControlTemplate.Triggers>
                                 <Trigger Property="IsChecked" Value="True">
@@ -811,7 +883,11 @@
                                     Cursor="Hand">
                                 <StackPanel Orientation="Horizontal">
                                     <Ellipse x:Name="Dot" Width="6" Height="6" Fill="{DynamicResource Warning}" Margin="0,0,5,0"/>
-                                    <ContentPresenter VerticalAlignment="Center"/>
+                                    <ContentPresenter VerticalAlignment="Center">
+                                        <ContentPresenter.Resources>
+                                            <Style TargetType="TextBlock" BasedOn="{StaticResource TextBase}"/>
+                                        </ContentPresenter.Resources>
+                                    </ContentPresenter>
                                 </StackPanel>
                             </Border>
                             <ControlTemplate.Triggers>
@@ -838,7 +914,11 @@
                                     Cursor="Hand">
                                 <StackPanel Orientation="Horizontal">
                                     <Ellipse x:Name="Dot" Width="6" Height="6" Fill="{DynamicResource Danger}" Margin="0,0,5,0"/>
-                                    <ContentPresenter VerticalAlignment="Center"/>
+                                    <ContentPresenter VerticalAlignment="Center">
+                                        <ContentPresenter.Resources>
+                                            <Style TargetType="TextBlock" BasedOn="{StaticResource TextBase}"/>
+                                        </ContentPresenter.Resources>
+                                    </ContentPresenter>
                                 </StackPanel>
                             </Border>
                             <ControlTemplate.Triggers>
@@ -872,7 +952,12 @@
                                     <StackPanel Orientation="Horizontal" Margin="4,0,0,0">
                                         <TextBlock Text="&#x1F6E1;" FontSize="13" VerticalAlignment="Center"/>
                                         <ContentPresenter Margin="8,0,0,0" VerticalAlignment="Center"
-                                                          TextBlock.Foreground="{DynamicResource WarningText}" TextBlock.FontWeight="SemiBold"/>
+                                                          TextBlock.Foreground="{TemplateBinding Foreground}"
+                                                          TextBlock.FontWeight="SemiBold">
+                                            <ContentPresenter.Resources>
+                                                <Style TargetType="TextBlock" BasedOn="{StaticResource TextBase}"/>
+                                            </ContentPresenter.Resources>
+                                        </ContentPresenter>
                                     </StackPanel>
                                 </Grid>
                             </Border>
@@ -918,8 +1003,12 @@
                                     BorderThickness="{TemplateBinding BorderThickness}"
                                     CornerRadius="{StaticResource RadiusMd}"
                                     Padding="{TemplateBinding Padding}">
-                                <ContentPresenter x:Name="Cp" HorizontalAlignment="Center" VerticalAlignment="Center"
-                                                  TextBlock.Foreground="{TemplateBinding Foreground}"/>
+                                <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"
+                                                  TextBlock.Foreground="{TemplateBinding Foreground}">
+                                    <ContentPresenter.Resources>
+                                        <Style TargetType="TextBlock" BasedOn="{StaticResource TextBase}"/>
+                                    </ContentPresenter.Resources>
+                                </ContentPresenter>
                             </Border>
                             <ControlTemplate.Triggers>
                                 <Trigger Property="IsMouseOver" Value="True">
@@ -934,7 +1023,7 @@
                                 </Trigger>
                                 <Trigger Property="IsEnabled" Value="False">
                                     <Setter TargetName="Bd" Property="Background" Value="{DynamicResource Surface3}"/>
-                                    <Setter TargetName="Cp" Property="TextBlock.Foreground" Value="{DynamicResource TextMuted}"/>
+                                    <Setter Property="Foreground" Value="{DynamicResource TextMuted}"/>
                                 </Trigger>
                             </ControlTemplate.Triggers>
                         </ControlTemplate>
@@ -1456,6 +1545,9 @@
             <!-- CheckBox (dark-friendly bifă)                                 -->
             <!-- ============================================================ -->
             <Style TargetType="CheckBox">
+                <Style.Resources>
+                    <Style TargetType="TextBlock" BasedOn="{StaticResource TextBase}"/>
+                </Style.Resources>
                 <Setter Property="Foreground" Value="{DynamicResource TextPrimary}"/>
                 <Setter Property="FontFamily" Value="{StaticResource UiFont}"/>
                 <Setter Property="FontSize" Value="13"/>
@@ -1485,7 +1577,11 @@
                                 <ContentPresenter Margin="{TemplateBinding Padding}"
                                                   VerticalAlignment="Center"
                                                   TextBlock.Foreground="{TemplateBinding Foreground}"
-                                                  TextBlock.FontSize="{TemplateBinding FontSize}"/>
+                                                  TextBlock.FontSize="{TemplateBinding FontSize}">
+                                    <ContentPresenter.Resources>
+                                        <Style TargetType="TextBlock" BasedOn="{StaticResource TextBase}"/>
+                                    </ContentPresenter.Resources>
+                                </ContentPresenter>
                             </StackPanel>
                             <ControlTemplate.Triggers>
                                 <Trigger Property="IsChecked" Value="True">
@@ -1537,6 +1633,9 @@
             </Style>
 
             <Style TargetType="DataGridColumnHeader">
+                <Style.Resources>
+                    <Style TargetType="TextBlock" BasedOn="{StaticResource TextBase}"/>
+                </Style.Resources>
                 <Setter Property="Background" Value="{DynamicResource Surface2}"/>
                 <Setter Property="Foreground" Value="{DynamicResource TextMuted}"/>
                 <Setter Property="FontWeight" Value="SemiBold"/>
@@ -1563,7 +1662,11 @@
                                                           HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}"
                                                           VerticalAlignment="Center"
                                                           Content="{TemplateBinding Content}"
-                                                          ContentTemplate="{TemplateBinding ContentTemplate}"/>
+                                                          ContentTemplate="{TemplateBinding ContentTemplate}">
+                                            <ContentPresenter.Resources>
+                                                <Style TargetType="TextBlock" BasedOn="{StaticResource TextBase}"/>
+                                            </ContentPresenter.Resources>
+                                        </ContentPresenter>
                                         <Path x:Name="SortArrow" Grid.Column="1"
                                               Visibility="Collapsed"
                                               Fill="{DynamicResource TextSecondary}"

@@ -175,6 +175,21 @@ WPF's default, so they already render that way, and the only difference `BasedOn
 the smaller one deserves its own look at 28px (#2688). `TypographyTokenTests.Display_StillStandsAloneAndStillResolvesItsColour`
 fails if someone completes the set, which is the prompt to do that look first.
 
+The implicit style's colour is also why no control's own colour reached its words until #2926. A style setter
+outranks an inherited value, and WPF hands the keyless style to the TextBlock a `ContentPresenter` makes for a string
+as well, so every button, chip, checkbox and header label read `TextPrimary` whatever its template set. `TextBase`
+now holds what every TextBlock shares without a colour, the keyless style is `TextBase` plus `TextPrimary`, and a
+control whose template colours its words carries a keyless style based on `TextBase` in two places: its style's
+`Resources`, which the TextBlocks of its content and of its template find, and its `ContentPresenter`'s, which the
+TextBlock made for a string finds. Neither reaches the other's, so both are needed, and a colour trigger sets the
+control's `Foreground` rather than the presenter's, or words given in a panel keep the old colour. The colour stays on
+the keyless style rather than moving to the window because WPF-UI's dictionary is fixed to Dark: the controls
+`App.xaml` does not restyle carry WPF-UI's white or the system's black, and the keyless style is what gives their text
+the theme's colour. `DangerMenuItem` cannot reach WPF-UI's header presenter, so its header template presents the header
+again, with access keys, and carries the scope. `TemplateLabelColourTests` lays every button, chip, checkbox, header and
+menu item style out on all twelve themes and fails a label that is not its control's colour, as words, in a panel or,
+on a menu item, with an access key, enabled or not, or that reads under 4.5:1 where the views put it.
+
 These guards hold the scale. `ArchitectureTests.EveryTextBlockSize_ComesFromAToken` fails on a raw `FontSize`
 on a text `TextBlock` at any size; on a token whose size is overwritten on the element, which is how `Subtle`
 with `FontSize="11"` hid fifteen times from a scan that skipped every styled element; on a `FontSize` set inside an

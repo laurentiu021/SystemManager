@@ -1418,7 +1418,7 @@ Answers "what is actually using my space?" by listing the biggest files in one p
   file, and each save puts a finished copy in place, so it cannot be left half-written
 - **Nothing restarts or services Windows in the middle of a repair.** A feature change, a
   Windows Update install, Reset Windows Update, and creating or restoring a restore point
-  each wait their turn behind an SFC or DISM repair, a component-store cleanup, or one another.
+  each wait their turn behind an SFC or DISM repair, a component-store check or cleanup, or one another.
   A restore restarts Windows at once, so it can no longer cut off a repair SysManager is running
 - **Deep Cleanup and Windows Update take turns with the Windows Update folder.** The "Windows Update cache"
   category deletes inside it, and the "Delivery Optimization cache" holds what Windows Update downloads, so a

@@ -13,7 +13,7 @@ namespace SysManager.Tests;
 
 /// <summary>
 /// Tests for <see cref="StartupService.SetEnabledAsync(StartupEntry, bool)"/> covering registry-based
-/// and Task Scheduler entries, plus specific error messages (#176), and for the scan's read of the same
+/// and Task Scheduler entries, plus specific error messages, and for the scan's read of the same
 /// StartupApproved lists (#2741).
 /// </summary>
 public sealed class StartupToggleTests : IDisposable

@@ -179,8 +179,9 @@ project defines them in `TestCollections.cs`:
 
 `SysManager.IntegrationTests` defines its own `Network` collection, for the classes that touch the network
 stack or share `StaHelper`'s one STA thread, and
-`SysManager.UITests` defines `App` in `AppFixture.cs`. `CatalogSignatureTests` names a `Sequential`
-collection that nothing defines; the integration project runs serially anyway, so it changes nothing.
+`SysManager.UITests` defines `App` in `AppFixture.cs`. `CatalogSignatureTests` and
+`EtwBandwidthSourceKernelTests` name a `Sequential` collection that nothing defines; the integration project runs
+serially anyway, so it changes nothing.
 
 ### The test processes end when their last test does
 

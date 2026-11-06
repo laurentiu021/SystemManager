@@ -8,7 +8,7 @@ namespace SysManager.Tests;
 
 /// <summary>
 /// Pins <see cref="GpuVramHelper.SelectVramBytes"/> — the pure VRAM-source selection that both
-/// the System Report and the About-page diagnostics share (F27). <c>Win32_VideoController.AdapterRAM</c>
+/// the System Report and the About-page diagnostics share (#1231). <c>Win32_VideoController.AdapterRAM</c>
 /// is a uint32 that saturates near 4 GiB, so the 64-bit driver <c>qwMemorySize</c> must win when
 /// present; AdapterRAM is only a fallback. The registry-read path itself needs a live driver key
 /// and is not unit-tested.
@@ -18,7 +18,7 @@ public class GpuVramHelperTests
     [Fact]
     public void SelectVramBytes_PrefersRegistryQwordOverAdapterRam()
     {
-        // Regression (F27): an 8 GB card reports ~4 GB via AdapterRAM's uint32 ceiling. The
+        // Regression (#1231): an 8 GB card reports ~4 GB via AdapterRAM's uint32 ceiling. The
         // 64-bit qwMemorySize from the driver registry key must be reported instead.
         const ulong eightGB = 8UL * 1024 * 1024 * 1024;
         const ulong adapterRamCap = 4290772992UL; // AdapterRAM's ~4 GiB uint32 ceiling

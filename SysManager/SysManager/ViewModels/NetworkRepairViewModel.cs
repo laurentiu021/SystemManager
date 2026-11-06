@@ -25,8 +25,8 @@ public sealed partial class NetworkRepairViewModel : ElevatedViewModelBase
     /// <summary>Builds the tab over the network services its sibling tabs share.</summary>
     /// <param name="shared">The network services the network tabs share.</param>
     /// <param name="restorePoint">
-    /// The session's restore point, taken before the first Winsock or TCP/IP reset, as each tab that changes Windows
-    /// takes it before its first change.
+    /// The session's restore point, taken before the first Winsock or TCP/IP reset, as the other tabs that try one
+    /// take it before their first change.
     /// </param>
     public NetworkRepairViewModel(NetworkSharedState shared, ISessionRestorePoint restorePoint)
     {

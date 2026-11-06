@@ -144,7 +144,7 @@ public class FileShredderServiceTests
     [Fact]
     public async Task ShredFileAsync_Thorough_MultiPass_OverwritesAndDeletes()
     {
-        // Held-handle regression (F48): the shred now opens ONE exclusive handle and reuses
+        // Held-handle regression (#1222): the shred now opens ONE exclusive handle and reuses
         // it for every pass (rewinding Position=0) plus the final truncate, instead of
         // reopening the file by path each pass. A 7-pass Thorough shred exercises that reuse
         // across many passes and must still fully overwrite (multi-KB file spanning several

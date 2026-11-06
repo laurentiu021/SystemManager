@@ -735,14 +735,8 @@ public sealed partial class WindowsUpdateViewModel : ViewModelBase
     {
         if (el.ValueKind == JsonValueKind.Number)
         {
-            var bytes = el.GetInt64();
-            return bytes switch
-            {
-                >= 1L << 30 => string.Create(CultureInfo.InvariantCulture, $"{bytes / (double)(1L << 30):F1} GB"),
-                >= 1L << 20 => string.Create(CultureInfo.InvariantCulture, $"{bytes / (double)(1L << 20):F1} MB"),
-                >= 1L << 10 => string.Create(CultureInfo.InvariantCulture, $"{bytes / (double)(1L << 10):F1} KB"),
-                _ => $"{bytes} B"
-            };
+            // FormatHelper's figure, where a ladder of its own read "1024.0 MB" a few bytes under a gigabyte (#2862).
+            return FormatHelper.FormatSize(el.GetInt64());
         }
         return el.GetString() ?? "";
     }

@@ -34,11 +34,12 @@ public class CleanupCategoryHumanSizeBulkTests
     [InlineData(1L, "B")]
     [InlineData(1023L, "B")]
     [InlineData(1024L, "KB")]
-    [InlineData((1024L * 1024) - 1, "KB")]
+    [InlineData(1048524L, "KB")]                            // 1023.9 KB, the largest size still under 1024.0
+    [InlineData((1024L * 1024) - 1, "MB")]                  // rounds to 1024.0 KB, so it reads 1.0 MB (#2862)
     [InlineData(1024L * 1024, "MB")]
-    [InlineData((1024L * 1024 * 1024) - 1, "MB")]
+    [InlineData((1024L * 1024 * 1024) - 1, "GB")]           // rounds to 1024.0 MB (#2862)
     [InlineData(1024L * 1024 * 1024, "GB")]
-    [InlineData((1024L * 1024 * 1024 * 1024) - 1, "GB")]
+    [InlineData((1024L * 1024 * 1024 * 1024) - 1, "TB")]    // rounds to 1024.0 GB (#2862)
     [InlineData(1024L * 1024 * 1024 * 1024, "TB")]
     public void HumanSize_PicksCorrectUnit(long bytes, string expectedUnit)
     {

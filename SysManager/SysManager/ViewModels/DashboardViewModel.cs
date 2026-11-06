@@ -1200,10 +1200,9 @@ public sealed partial class DashboardViewModel : ElevatedViewModelBase
             var (freed, deleted, _, cancelled) = await _tuneUp.CleanTempFilesAsync(_quickActionCts!.Token);
 
             QuickActionProgress = 100;
-            var freedMB = freed / 1024.0 / 1024.0;
-            QuickActionDetail = freedMB >= 1024
-                ? string.Create(CultureInfo.InvariantCulture, $"Freed {freedMB / 1024:F1} GB")
-                : $"Freed {freedMB:F0} MB";
+            // As Quick Tune-Up's card writes the same sweep's figure. Whole megabytes read "1024 MB" just under a
+            // gigabyte, and "0 MB" under half of one (#2862).
+            QuickActionDetail = $"Freed {FormatHelper.FormatSize(freed)}";
             // A cancelled sweep has still deleted what it reached, for good, so the card says what it freed and it is
             // recorded, and only then does the action end as cancelled (#2736).
             if (cancelled) QuickActionDetail += " before it was cancelled";

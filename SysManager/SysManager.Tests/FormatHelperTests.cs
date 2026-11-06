@@ -24,7 +24,7 @@ public class FormatHelperTests
     [InlineData(1024, "1.0 KB")]
     [InlineData(1536, "1.5 KB")]
     [InlineData(10240, "10.0 KB")]
-    [InlineData(1048575, "1024.0 KB")]
+    [InlineData(1048524, "1023.9 KB")]   // the largest size still under 1024.0 once rounded
     public void FormatSize_Kilobytes_ReturnsKB(long bytes, string expected)
     {
         Assert.Equal(expected, FormatHelper.FormatSize(bytes));
@@ -34,7 +34,6 @@ public class FormatHelperTests
     [InlineData(1048576, "1.0 MB")]
     [InlineData(1572864, "1.5 MB")]
     [InlineData(104857600, "100.0 MB")]
-    [InlineData(1073741823, "1024.0 MB")]
     public void FormatSize_Megabytes_ReturnsMB(long bytes, string expected)
     {
         Assert.Equal(expected, FormatHelper.FormatSize(bytes));
@@ -65,6 +64,55 @@ public class FormatHelperTests
     public void FormatSize_ExactBoundary_1GB()
     {
         Assert.Equal("1.0 GB", FormatHelper.FormatSize(1L << 30));
+    }
+
+    // ---------- the top of a unit reads as the next one (#2862) ----------
+    // 1,048,575 bytes is 1023.999 KB, which one decimal rounds to 1024.0, so it read "1024.0 KB", and the top of every
+    // unit did the same. Rounded, a figure that reaches 1024 belongs to the next unit.
+
+    [Theory]
+    [InlineData(1048525, "1.0 MB")]          // the smallest size that rounds to 1024.0 KB
+    [InlineData(1048575, "1.0 MB")]          // read "1024.0 KB"
+    [InlineData(1073741823, "1.0 GB")]       // read "1024.0 MB"
+    [InlineData(1099511627775, "1.0 TB")]    // read "1024.0 GB"
+    public void FormatSize_TheTopOfAUnit_ReadsAsTheNextUnit(long bytes, string expected)
+        => Assert.Equal(expected, FormatHelper.FormatSize(bytes));
+
+    /// <summary>
+    /// Over sizes of every unit, the tops and bottoms of each among them, from a fixed seed: a figure is the size
+    /// rounded to one decimal, at least 1 and under 1024 in its unit (TB aside), and a larger size never reads smaller.
+    /// </summary>
+    [Fact]
+    public void FormatSize_OverSizesOfEveryUnit_ReadsTheSizeInTheLargestUnitItReaches()
+    {
+        string[] units = ["B", "KB", "MB", "GB", "TB"];
+        var random = new Random(2862);
+        var sizes = new List<long>();
+        for (var shift = 10; shift <= 40; shift += 10)
+        {
+            var edge = 1L << shift;
+            for (var i = 0; i < 400; i++) sizes.Add(edge + (long)((random.NextDouble() - 0.5) * 0.12 * edge));
+        }
+        for (var i = 0; i < 4000; i++) sizes.Add((long)Math.Pow(2, random.NextDouble() * 50));
+        sizes.Sort();
+
+        var previous = -1.0;
+        foreach (var bytes in sizes)
+        {
+            var text = FormatHelper.FormatSize(bytes);
+            var parts = text.Split(' ');
+            var unit = Array.IndexOf(units, parts[1]);
+            var value = double.Parse(parts[0], CultureInfo.InvariantCulture);
+            var inUnit = bytes / Math.Pow(1024, unit);
+            Assert.True(unit >= 0, $"{bytes}: \"{text}\" names no unit");
+            Assert.True(Math.Abs(inUnit - value) <= (unit == 0 ? 0 : 0.05 + 1e-9),
+                $"{bytes}: \"{text}\" is not the size");
+            if (unit > 0) Assert.True(value >= 1, $"{bytes}: \"{text}\" belongs to the unit below");
+            if (unit < units.Length - 1) Assert.True(value < 1024, $"{bytes}: \"{text}\" belongs to the next unit");
+            var shown = value * Math.Pow(1024, unit);
+            Assert.True(shown >= previous, $"{bytes}: \"{text}\" reads smaller than the size before it");
+            previous = shown;
+        }
     }
 
     // ---------- one decimal separator, whatever the machine's locale ----------

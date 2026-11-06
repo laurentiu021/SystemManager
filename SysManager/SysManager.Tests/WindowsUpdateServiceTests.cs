@@ -52,6 +52,7 @@ public class WindowsUpdateServiceTests
     [InlineData(1536, "1.5 KB")]
     [InlineData(157286400, "150.0 MB")]
     [InlineData(2147483648, "2.0 GB")]
+    [InlineData(1073741823, "1.0 GB")]   // its own ladder read "1024.0 MB" (#2862)
     public void FormatSize_FormatsHumanReadable(long bytes, string expected)
     {
         Assert.Equal(expected, WindowsUpdateService.FormatSize(bytes));

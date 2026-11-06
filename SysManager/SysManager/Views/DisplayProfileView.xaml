@@ -4,6 +4,7 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:v="clr-namespace:SysManager.Views"
              xmlns:vm="clr-namespace:SysManager.ViewModels"
+             xmlns:helpers="clr-namespace:SysManager.Helpers"
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
              mc:Ignorable="d"
@@ -75,9 +76,12 @@
                     <Run Text="Keep these settings? Reverting in"/>
                     <Run Text="{Binding RevertCountdown, Mode=OneWay}"/><Run Text="s."/>
                 </TextBlock>
+                <!-- Takes focus when the bar appears: Apply is disabled by then, and someone using the keyboard or a
+                     screen reader was left with focus nowhere and 15 seconds to find this (#2883). -->
                 <Button Grid.Column="1" Content="Keep" Command="{Binding KeepSettingsCommand}"
                         Style="{StaticResource PrimaryButton}" Margin="0,0,8,0" Padding="16,6"
-                        AutomationProperties.Name="Keep the new display settings"/>
+                        AutomationProperties.Name="Keep the new display settings"
+                        helpers:FocusWhenShown.Take="True"/>
                 <Button Grid.Column="2" Content="Revert now" Command="{Binding RevertNowCommand}"
                         Style="{StaticResource SecondaryButton}" Padding="14,6"
                         AutomationProperties.Name="Revert now — the display settings"/>

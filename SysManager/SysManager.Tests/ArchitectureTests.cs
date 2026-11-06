@@ -18091,9 +18091,51 @@ public partial class ArchitectureTests
                 "the Ookla test reports its phases, four a run: fetching the CLI, extracting it, running, done"),
         ];
 
-        var appDir = TestPaths.AppProject();
-        var viewsDir = Path.Combine(appDir, "Views");
-        var vmDir = Path.Combine(appDir, "ViewModels");
+        var announced = AnnouncedProperties();
+        var vmDir = Path.Combine(TestPaths.AppProject(), "ViewModels");
+
+        var offenders = new List<string>();
+        var callbacksSeen = 0;
+
+        foreach (var file in Directory.EnumerateFiles(vmDir, "*ViewModel.cs", SearchOption.TopDirectoryOnly))
+        {
+            var vm = Path.GetFileNameWithoutExtension(file);
+            var code = WithoutComments(File.ReadAllText(file));
+
+            foreach (var body in ProgressCallbackBodies(code))
+            {
+                callbacksSeen++;
+                foreach (var written in AssignedProperties(body).Where(announced.Contains))
+                {
+                    if (exempt.Any(e => e.Vm == vm && e.Property == written)) continue;
+                    offenders.Add($"{vm}.{written}");
+                }
+            }
+        }
+
+        // Floor on the OTHER corpus: the callbacks themselves.
+        Assert.True(callbacksSeen >= 11,
+            $"only {callbacksSeen} progress callbacks were found — the callback shape is out of date, so no "
+            + "writer is being read.");
+
+        Assert.True(offenders.Count == 0,
+            "these write a live region from inside a progress callback, so a screen reader is told the fast "
+            + "value: it starts a sentence per item and is cut off by the next, which is less useful than "
+            + "silence. Announce the coarsest line the tab has and move the per-item value to a silent "
+            + "readout beside it, as Duplicate Finder and Disk Analyzer do:\n  "
+            + string.Join("\n  ", offenders));
+    }
+
+    /// <summary>
+    /// Every property a view renders in a live region, checked against the ones known to be announced.
+    /// </summary>
+    /// <remarks>
+    /// Shared by <see cref="NoProgressCallback_WritesAnAnnouncedLine"/> and
+    /// <see cref="NoTimerTick_WritesAnAnnouncedLine"/>, so the two read the same set of live regions.
+    /// </remarks>
+    private static HashSet<string> AnnouncedProperties()
+    {
+        var viewsDir = Path.Combine(TestPaths.AppProject(), "Views");
 
         // Every property any view announces. StatusMessage is included whenever a view uses
         // <v:StatusFooter/>, which renders it through StatusLine from ANOTHER file — most tabs reach it that
@@ -18133,37 +18175,143 @@ public partial class ArchitectureTests
             + $"binding changed shape — update the list with the current names:\n  "
             + string.Join("\n  ", missing));
 
+        return announced;
+    }
+
+    /// <summary>
+    /// No timer's tick writes a property a view announces, unless the write is rare.
+    /// </summary>
+    /// <remarks>
+    /// A timer fires by itself, every second or two, and a live region speaks every change. Display Profiles'
+    /// countdown rewrote <c>StatusMessage</c> each second, "Keep these settings? Reverting in 14s…", so Narrator
+    /// queued about fifteen near-identical sentences while the user looked for Keep, and kept speaking after the mode
+    /// had gone back (#2883). The guard above reads progress callbacks, and a tick is not one. The seconds are counted
+    /// in the bar above the line now, which is not announced, and the line is said once.
+    /// <para>A tick handler is the callback passed to <c>CreateTimer</c> or the handler added to a <c>Tick</c> event,
+    /// with the methods of the same file it names, two calls deep: every handler here hands its work to a method,
+    /// which hands it on once more on Dark Mode Scheduler. Three methods reached that way write an announced line and
+    /// are allowed to, each for a reason about the rate. An exemption names the method, so the countdown's revert,
+    /// which says once what it did, does not excuse a line the tick itself writes.</para>
+    /// </remarks>
+    [Fact]
+    public void NoTimerTick_WritesAnAnnouncedLine()
+    {
+        (string Vm, string Method, string Property, string Why)[] exempt =
+        [
+            ("DarkModeViewModel", "EvaluateScheduleAsync", "StatusMessage",
+                "only when the schedule switches the theme, twice a day at most"),
+            ("DisplayProfileViewModel", "RevertToPreviousAsync", "StatusMessage",
+                "once, when the countdown runs out: the revert says what it did"),
+            ("StandbyMemoryViewModel", "Tick", "StatusMessage",
+                "only when an auto-purge runs, and a purge waits out a cooldown before the next"),
+        ];
+
+        var announced = AnnouncedProperties();
+        var vmDir = Path.Combine(TestPaths.AppProject(), "ViewModels");
         var offenders = new List<string>();
-        var callbacksSeen = 0;
+        var handlers = new List<string>();
+        var used = new HashSet<(string, string, string)>();
 
         foreach (var file in Directory.EnumerateFiles(vmDir, "*ViewModel.cs", SearchOption.TopDirectoryOnly))
         {
             var vm = Path.GetFileNameWithoutExtension(file);
             var code = WithoutComments(File.ReadAllText(file));
 
-            foreach (var body in ProgressCallbackBodies(code))
+            foreach (var handler in TimerTickHandlers(code))
             {
-                callbacksSeen++;
-                foreach (var written in AssignedProperties(body).Where(announced.Contains))
+                handlers.Add(vm);
+                foreach (var (method, body) in Reached(code, handler, depth: 2))
                 {
-                    if (exempt.Any(e => e.Vm == vm && e.Property == written)) continue;
-                    offenders.Add($"{vm}.{written}");
+                    foreach (var written in AssignedProperties(body).Where(announced.Contains))
+                    {
+                        if (exempt.Any(e => e.Vm == vm && e.Method == method && e.Property == written))
+                            used.Add((vm, method, written));
+                        else
+                            offenders.Add($"{vm}.{written}, written in {method}");
+                    }
                 }
             }
         }
 
-        // Floor on the OTHER corpus: the callbacks themselves.
-        Assert.True(callbacksSeen >= 11,
-            $"only {callbacksSeen} progress callbacks were found — the callback shape is out of date, so no "
-            + "writer is being read.");
+        // Vacuity floor, as the view models that own one: a reader that stopped finding the handlers would pass.
+        string[] owners =
+            ["DarkModeViewModel", "DashboardViewModel", "DisplayProfileViewModel", "StandbyMemoryViewModel"];
+        var unseen = owners.Except(handlers, StringComparer.Ordinal).ToList();
+        Assert.True(unseen.Count == 0,
+            "no timer tick handler was found in these view models, which own one, so the reader is out of date: "
+            + string.Join(", ", unseen));
+
+        // An exemption nothing uses any more is a name that drifted, and would excuse whatever comes next under it.
+        var stale = exempt.Where(e => !used.Contains((e.Vm, e.Method, e.Property)))
+            .Select(e => $"{e.Vm}.{e.Method} writing {e.Property}").ToList();
+        Assert.True(stale.Count == 0, "these exemptions excuse nothing now; remove them: " + string.Join(", ", stale));
 
         Assert.True(offenders.Count == 0,
-            "these write a live region from inside a progress callback, so a screen reader is told the fast "
-            + "value: it starts a sentence per item and is cut off by the next, which is less useful than "
-            + "silence. Announce the coarsest line the tab has and move the per-item value to a silent "
-            + "readout beside it, as Duplicate Finder and Disk Analyzer do:\n  "
-            + string.Join("\n  ", offenders));
+            "these write a live region from a timer's tick, so a screen reader is told every change, as many times "
+            + "as the timer fires. Show the changing value in a line that is not announced, and announce the "
+            + "start and the end once:\n  " + string.Join("\n  ", offenders.Distinct()));
     }
+
+    /// <summary>
+    /// The text of every timer tick handler in a comment-stripped view model: the argument list of a
+    /// <c>CreateTimer</c> call, and what is added to a <c>Tick</c> event, to the end of its statement.
+    /// </summary>
+    private static IEnumerable<string> TimerTickHandlers(string code)
+    {
+        foreach (var m in TimerCreation().Matches(code).Cast<Match>())
+            yield return BalancedFrom(code, m.Index + m.Length - 1);
+
+        foreach (var m in TickSubscription().Matches(code).Cast<Match>())
+        {
+            var end = code.IndexOf(';', m.Index);
+            yield return end < 0 ? code[m.Index..] : code[m.Index..end];
+        }
+    }
+
+    /// <summary>
+    /// A handler's text, named "the tick", and the body of each method of the same file it names, and of the ones those
+    /// name, <paramref name="depth"/> calls deep, each with its method's name. A method with an expression body counts
+    /// as one whose body is the expression.
+    /// </summary>
+    private static List<(string Method, string Body)> Reached(string code, string handler, int depth)
+    {
+        var bodies = MethodBodiesByName(code);
+        foreach (var m in ExpressionBodiedMember().Matches(code).Cast<Match>())
+        {
+            if (!bodies.TryGetValue(m.Groups["name"].Value, out var list))
+                bodies[m.Groups["name"].Value] = list = [];
+            list.Add("=> " + m.Groups["body"].Value + ";");
+        }
+
+        var reached = new List<(string Method, string Body)> { ("the tick", handler) };
+        var frontier = reached.ToList();
+        var seen = new HashSet<string>(StringComparer.Ordinal);
+        for (var level = 0; level < depth; level++)
+        {
+            var next = frontier
+                .SelectMany(item => Identifier().Matches(item.Body).Cast<Match>().Select(id => id.Value))
+                .Where(name => seen.Add(name) && bodies.ContainsKey(name))
+                .SelectMany(name => bodies[name].Select(body => (name, body)))
+                .ToList();
+            reached.AddRange(next);
+            frontier = next;
+        }
+
+        return reached;
+    }
+
+    /// <summary>A <c>CreateTimer(</c> call, up to and including its opening parenthesis.</summary>
+    [GeneratedRegex(@"\bCreateTimer\s*\(", RegexOptions.CultureInvariant)]
+    private static partial Regex TimerCreation();
+
+    /// <summary>A handler added to a timer's <c>Tick</c> event.</summary>
+    [GeneratedRegex(@"\.Tick\s*\+=", RegexOptions.CultureInvariant)]
+    private static partial Regex TickSubscription();
+
+    /// <summary>A member with an expression body: its name and the expression, to the end of the statement.</summary>
+    [GeneratedRegex(@"\n    (?:public|private|internal|protected)[^\n=;{]*?\b(?<name>\w+)\s*\([^)]*\)"
+                    + @"\s*=>(?<body>[^;]*);", RegexOptions.CultureInvariant)]
+    private static partial Regex ExpressionBodiedMember();
 
     /// <summary>
     /// The body of every <c>new Progress&lt;T&gt;(…)</c> in a view model — the lambda's statements, or the

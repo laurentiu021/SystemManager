@@ -214,7 +214,8 @@ public static class RebuildFocus
         };
 
     /// <summary>Whether <paramref name="element"/> is <paramref name="ancestor"/> or inside it.</summary>
-    private static bool IsWithin(DependencyObject element, DependencyObject ancestor)
+    /// <remarks><see cref="FocusWhenShown"/> asks the same of where focus is.</remarks>
+    internal static bool IsWithin(DependencyObject element, DependencyObject ancestor)
     {
         for (var node = element; node is not null; node = ParentOf(node))
         {

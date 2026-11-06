@@ -323,7 +323,11 @@ public sealed partial class DisplayProfileViewModel : ViewModelBase
     {
         IsAwaitingConfirm = true;
         RevertCountdown = RevertSeconds;
-        StatusMessage = $"Keep these settings? Reverting in {RevertCountdown}s…";
+        // Said once. The status line is a live region, and rewritten each second it queued about fifteen
+        // near-identical sentences while the user looked for Keep, still speaking after the mode had gone back
+        // (#2883). The seconds are counted in the bar above it, which is not announced.
+        StatusMessage = $"Applied {_appliedMode?.Display}. Press Keep within {RevertSeconds} seconds, or the previous "
+                        + "mode comes back.";
         ApplyCommand.NotifyCanExecuteChanged();
 
         StopRevertTimer();
@@ -344,11 +348,7 @@ public sealed partial class DisplayProfileViewModel : ViewModelBase
         if (from is null || !ReferenceEquals(from, _revertTimer)) return;
 
         RevertCountdown--;
-        if (RevertCountdown > 0)
-        {
-            StatusMessage = $"Keep these settings? Reverting in {RevertCountdown}s…";
-            return;
-        }
+        if (RevertCountdown > 0) return;
         // Launch the (async) revert through the guarded helper — the timer callback is
         // void, so an awaited failure would otherwise be unobserved.
         InitializeAsync(() => RevertToPreviousAsync("No confirmation — reverted to the previous display mode."));

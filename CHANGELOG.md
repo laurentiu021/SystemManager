@@ -10,6 +10,18 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.136.136] - 2026-11-06
+
+**Display Profiles reads its 15-second countdown out once rather than every second, and puts focus on Keep.**
+
+### Fixed
+- After Apply on Display Profiles, the status line, which a screen reader announces, was rewritten every second, "Keep
+  these settings? Reverting in 14s…", so Narrator queued about fifteen sentences while you looked for Keep, and kept
+  talking after the mode had gone back (since 1.37.0). It is said once now, "Applied 1920 × 1080 @ 60 Hz. Press Keep
+  within 15 seconds, or the previous mode comes back.", and the bar above it counts the seconds without being read
+  out. Focus moves to Keep when the bar appears, since Apply is disabled by then and focus was left nowhere. A check
+  reads every timer in the view models and fails when one writes an announced line on each tick.
+
 ## [1.136.135] - 2026-11-06
 
 **Tab goes through five rows in the order they are drawn, where it went backwards or skipped ahead.**

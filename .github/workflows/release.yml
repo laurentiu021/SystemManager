@@ -315,6 +315,10 @@ jobs:
               # shutdown is a different property, it needs a real desktop and a pre-seeded preference,
               # and it belongs to the FlaUI suite rather than to the release gate.
               Write-Host "Process $($app.Id) is alive after 25s; stopping it."
+              # Read before the kill, for the step summary below (#2852).
+              $app.Refresh()
+              $privateMb = [math]::Round($app.PrivateMemorySize64 / 1MB)
+              $peakMb = [math]::Round($app.PeakWorkingSet64 / 1MB)
               $app.Kill()
               if (-not $app.WaitForExit(10000)) {
                   throw "The process did not exit within 10 seconds of being killed, which means the " +
@@ -387,6 +391,26 @@ jobs:
                     "update check would misreport this build. Not publishing it."
           }
           Write-Host "The running app reports version $env:VERSION."
+
+          # How long the start took and how much memory it used, for the step summary only: nothing here holds a
+          # release back, and a missing line is a warning (#2852). The pattern is LogService.FirstFrameMessage.
+          $frame = Get-Content $log.FullName |
+                   Where-Object { $_ -match 'First frame (\d+) ms after the process started, priority (\w+)' } |
+                   Select-Object -First 1
+          if ($frame -and $frame -match 'First frame (\d+) ms after the process started, priority (\w+)') {
+              $row = "| Elevated | $($Matches[1]) ms | $($Matches[2]) | $privateMb MB | $peakMb MB |"
+              Add-Content -Path $env:GITHUB_STEP_SUMMARY -Value @(
+                  "### Start-up of $env:VERSION"
+                  ""
+                  "| Start | First frame | Priority | Private bytes | Peak working set |"
+                  "|---|---|---|---|---|"
+                  $row
+              )
+              Write-Host "First frame after $($Matches[1]) ms; $privateMb MB private, $peakMb MB peak working set."
+          }
+          else {
+              Write-Host "::warning::The log has no first-frame line, so this release's start-up time was not recorded."
+          }
 
           Write-Host "The published exe started, stayed alive for 25s and logged no error."
 

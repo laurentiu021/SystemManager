@@ -19,11 +19,11 @@
                 <!-- Version card -->
                 <Border Style="{StaticResource Card}" Margin="0,20,0,0">
                     <Grid>
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="*"/>
-                            <ColumnDefinition Width="Auto"/>
-                        </Grid.ColumnDefinitions>
                         <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto"/>
+                            <!-- The buttons, under the name rather than beside it. Beside it, in a column that kept its
+                                 full width, nine buttons left the name, version and tagline no room and ran off the
+                                 card's edge at the default window; here the row wraps instead (#2735). -->
                             <RowDefinition Height="Auto"/>
                             <!-- Report / environment status line, added below the button row. -->
                             <RowDefinition Height="Auto"/>
@@ -34,7 +34,7 @@
                             <!-- A startup choice that could not be saved (#2833). -->
                             <RowDefinition Height="Auto"/>
                         </Grid.RowDefinitions>
-                        <StackPanel Grid.Column="0">
+                        <StackPanel>
                             <StackPanel Orientation="Horizontal">
                                 <TextBlock Text="SysManager" FontSize="24" FontWeight="SemiBold" Foreground="{DynamicResource TextPrimary}"/>
                                 <Border Style="{StaticResource BadgeAccent}" Margin="12,0,0,0" VerticalAlignment="Center">
@@ -53,23 +53,23 @@
                                 </TextBlock>
                             </StackPanel>
                         </StackPanel>
-                        <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
+                        <WrapPanel Grid.Row="1" Orientation="Horizontal" Margin="0,16,0,0">
                             <Button Content="Check for updates" Command="{Binding CheckForUpdatesCommand}"
-                                    Style="{StaticResource PrimaryButton}"
+                                    Style="{StaticResource PrimaryButton}" Margin="0,0,8,8"
                                     IsEnabled="{Binding IsCheckingForUpdates, Converter={StaticResource BoolInvert}}"/>
                             <Button Content="Export full report"
                                     Command="{Binding ExportToFileCommand}"
-                                    Style="{StaticResource PrimaryButton}" Margin="8,0,0,0"
+                                    Style="{StaticResource PrimaryButton}" Margin="0,0,8,8"
                                     IsEnabled="{Binding IsGeneratingReport, Converter={StaticResource BoolInvert}}"
                                     ToolTip="Generate a comprehensive system report and choose where to save it."/>
                             <Button Content="Copy full report"
                                     Command="{Binding CopyReportCommand}"
-                                    Style="{StaticResource SecondaryButton}" Margin="8,0,0,0"
+                                    Style="{StaticResource SecondaryButton}" Margin="0,0,8,8"
                                     IsEnabled="{Binding IsGeneratingReport, Converter={StaticResource BoolInvert}}"
                                     ToolTip="Generate a comprehensive system report and copy it to the clipboard."/>
                             <Button Content="Copy environment info"
                                     Command="{Binding CopyEnvironmentInfoCommand}"
-                                    Style="{StaticResource SecondaryButton}" Margin="8,0,0,0"
+                                    Style="{StaticResource SecondaryButton}" Margin="0,0,8,8"
                                     ToolTip="Copy your SysManager version, Windows version, architecture, elevation state and Windows language — ready to paste into a bug report."/>
                             <!-- One file instead of four manual steps. Producing evidence for a bug used to
                                  mean copying the environment block, exporting the report, then leaving the
@@ -79,7 +79,7 @@
                                  take on trust is one a careful user will not attach. -->
                             <Button Content="Save diagnostics bundle"
                                     Command="{Binding SaveDiagnosticsBundleCommand}"
-                                    Style="{StaticResource SecondaryButton}" Margin="8,0,0,0"
+                                    Style="{StaticResource SecondaryButton}" Margin="0,0,8,8"
                                     IsEnabled="{Binding IsGeneratingReport, Converter={StaticResource BoolInvert}}"
                                     AutomationProperties.Name="Save diagnostics bundle — one zip file to attach to a bug report"
                                     ToolTip="Save one zip holding the system report, your environment info and the newest log files — everything a bug report needs. Nothing is sent anywhere; you choose where the file goes and whether to attach it."/>
@@ -89,7 +89,7 @@
                                  update safe also destroyed the outgoing executable, so a SUCCESSFUL
                                  update into a broken build left nothing to return to. -->
                             <Button Content="{Binding RollBackLabel}" Command="{Binding RollBackCommand}"
-                                    Style="{StaticResource SecondaryButton}" Margin="8,0,0,0"
+                                    Style="{StaticResource SecondaryButton}" Margin="0,0,8,8"
                                     Visibility="{Binding CanRollBack, Converter={StaticResource BoolToVis}}"
                                     AutomationProperties.Name="Go back to the previous version of SysManager"
                                     ToolTip="Reinstall the version you had before the last update. SysManager will close and reopen; your settings are not affected."/>
@@ -97,24 +97,24 @@
                                  but nothing in the app took them there. This opens the bug form with the
                                  version and elevation fields already filled in (see ReportProblem). -->
                             <Button Content="Report a problem" Command="{Binding ReportProblemCommand}"
-                                    Style="{StaticResource SecondaryButton}" Margin="8,0,0,0"
+                                    Style="{StaticResource SecondaryButton}" Margin="0,0,8,8"
                                     AutomationProperties.Name="Report a problem on GitHub"
                                     ToolTip="Open the bug-report form on GitHub, with your version and elevation state already filled in."/>
                             <Button Content="Ask a question" Command="{Binding OpenDiscussionsCommand}"
-                                    Style="{StaticResource SecondaryButton}" Margin="8,0,0,0"
+                                    Style="{StaticResource SecondaryButton}" Margin="0,0,8,8"
                                     AutomationProperties.Name="Ask a question — open GitHub Discussions"
                                     ToolTip="Open GitHub Discussions for questions and ideas — for anything that is not a bug."/>
                             <Button Content="View license" Command="{Binding OpenLicenseCommand}"
-                                    Style="{StaticResource SecondaryButton}" Margin="8,0,0,0"/>
+                                    Style="{StaticResource SecondaryButton}" Margin="0,0,8,8"/>
                             <!-- OpenChangelogCommand existed alongside OpenRepo and OpenLicense from the
                                  start, and was the one sibling nothing ever bound: the release notes
                                  were only reachable by finding the repository by hand. Same style and
                                  spacing as the license button beside it. -->
                             <Button Content="What's new" Command="{Binding OpenChangelogCommand}"
-                                    Style="{StaticResource SecondaryButton}" Margin="8,0,0,0"
+                                    Style="{StaticResource SecondaryButton}" Margin="0,0,8,8"
                                     AutomationProperties.Name="What's new — open the changelog on GitHub"
                                     ToolTip="See what changed in this and previous versions"/>
-                        </StackPanel>
+                        </WrapPanel>
 
                         <!-- Report / environment results live here, next to the buttons that produce
                              them. They previously wrote to UpdateStatus inside the update card below,
@@ -122,7 +122,7 @@
                              "Report saved" — losing the more important message and making the update
                              card describe something unrelated. Collapsed until there is something
                              to say, so the row does not reserve empty space. -->
-                        <StackPanel Grid.Row="1" Grid.ColumnSpan="2">
+                        <StackPanel Grid.Row="2">
                             <TextBlock Text="{Binding ReportStatus}"
                                        Style="{StaticResource SubtleStatusLine}" Margin="0,10,0,0" TextWrapping="Wrap"
                                        Visibility="{Binding ReportStatus, Converter={StaticResource FlexVis}, Mode=OneWay}"/>
@@ -147,7 +147,7 @@
                              "Load app icons from the web" toggle: plain language, plus a tooltip naming
                              exactly what does and does not leave the machine. Unchecking the first does NOT
                              disable the "Check for updates" button above — that stays available on demand. -->
-                        <CheckBox Grid.Row="2" Grid.ColumnSpan="2" Margin="0,10,0,0"
+                        <CheckBox Grid.Row="3" Margin="0,10,0,0"
                                   Content="Check GitHub for a new version when SysManager starts"
                                   IsChecked="{Binding CheckForUpdatesOnStartup, Mode=TwoWay}"
                                   AutomationProperties.Name="Check GitHub for a new version when SysManager starts"
@@ -155,14 +155,14 @@
                         <!-- The Dashboard's app-updates alert asked winget at every launch, with no way to turn it
                              off (#2613). Only the check at startup: Scan system, Update All Apps and the App
                              Updates tab still ask winget when they are pressed, as the tooltip says. -->
-                        <CheckBox Grid.Row="3" Grid.ColumnSpan="2" Margin="0,8,0,0"
+                        <CheckBox Grid.Row="4" Margin="0,8,0,0"
                                   Content="Check winget for app updates when SysManager starts"
                                   IsChecked="{Binding CheckAppUpdatesOnStartup, Mode=TwoWay}"
                                   AutomationProperties.Name="Check winget for app updates when SysManager starts"
                                   ToolTip="On by default, so the Dashboard can say which of your apps have updates. SysManager asks winget, and winget asks Microsoft's package sources — nothing about you is added. Turn it off and the check runs only when you press Scan system on the Dashboard, or on the App Updates tab."/>
                         <!-- Says when either choice above could not be saved, so it holds only until SysManager closes
                              (#2833). Collapsed otherwise, like the report and rollback lines above. -->
-                        <TextBlock Grid.Row="4" Grid.ColumnSpan="2" Text="{Binding StartupChecksStatus}"
+                        <TextBlock Grid.Row="5" Text="{Binding StartupChecksStatus}"
                                    Style="{StaticResource SubtleStatusLine}" Margin="0,8,0,0" TextWrapping="Wrap"
                                    Visibility="{Binding StartupChecksStatus, Converter={StaticResource FlexVis}, Mode=OneWay}"/>
                     </Grid>

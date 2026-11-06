@@ -10,6 +10,19 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.136.138] - 2026-11-06
+
+**About shows SysManager's name, version and tagline again, with its buttons under them in rows that wrap to fit the
+window.**
+
+### Fixed
+- About's top card put its nine buttons in one row beside the name, version, tagline and BUILD / LICENSE / SOURCE line,
+  in a column that always kept its full width. At the default window that row was 1,240 px wide in a card with 954 px
+  inside, so the name and everything under it got no room at all, and View license and What's new ran off the card's
+  edge where they could be neither seen nor clicked (since 1.64.0, when the row reached eight buttons). The buttons
+  sit under the name now, in a row that wraps: two lines at the default window, three at the smallest. They keep their
+  order, styles and 8 px spacing. A layout test fails when anything in the card is cut at either size.
+
 ## [1.136.137] - 2026-11-06
 
 **On Windows Features the note about administrator rights comes before Scan now, and App Blocker, File Shredder and

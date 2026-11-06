@@ -2358,8 +2358,8 @@ Key utility classes that don't fit neatly into Services or ViewModels (not an ex
   is gone, for Process Manager and Volume Control alike (#2718).
 - `FormatHelper` — byte-size and transfer-rate formatting, and `JoinForSentence` for an
   "a, b and c" list. Durations are `EtaCalculator.FormatTimeSpan`'s.
-- `GatewayHelper` — default gateway IP lookup for network tabs. `NetworkSharedState` calls it at launch,
-  on every Start and when the PC's addresses change.
+- `GatewayHelper` — default gateway IP lookup for network tabs. `NetworkSharedState` calls it when the first
+  network tab is opened, on every Start and when the PC's addresses change.
 - `EtaCalculator` — estimates time remaining for long-running operations. `_gate` is a `Lock`, not a
   plain `object` — the last one in the app; `ArchitectureTests.NoLockTargetIsAPlainObjectField` keeps
   it that way (#2855).
@@ -2490,8 +2490,10 @@ Standby's tab is still registered lazily, and opening it resolves the same singl
 is not maintained by hand here — `ArchitectureTests.OnlyTheJustifiedTabs_AreBuiltAtStartup`
 guards the nav table, and `TheShellConstructor_ResolvesExactlyTheJustifiedViewModels` pins
 what the shell constructor resolves, both with the same reasons. The Network tabs were the last
-exception to go: their view-models are lazy now, while the one `NetworkSharedState` they share is
-still resolved at startup, so the shell can dispose it explicitly — its constructor starts nothing.
+exception to go: their view-models are lazy, and since #2852 so is the one `NetworkSharedState` they share. The
+container builds it with the first of them and disposes it at exit; built in the shell's constructor, it loaded
+LiveCharts and SkiaSharp for the charts' axes, looked up the gateway and applied the Global preset before the first
+frame. Without a container, the shell disposes the one its designer graph built.
 `WelcomeViewModel` is resolved there too, and is not a tab: the Welcome screen has to be up on the first frame of
 a first launch, and building it reads whether one file exists.
 

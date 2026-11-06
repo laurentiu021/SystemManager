@@ -21,11 +21,6 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable,
     // resolved lazily — each tab's NavItem builds its VM on first open (see NavItem.Content).
     private readonly IServiceProvider? _sp;
 
-    // Shared network state — injected into all four network tab VMs and owning SkiaSharp paint
-    // handles, so it is created once here (not per tab) and disposed explicitly below. It starts
-    // no background polling on construction, so keeping it eager costs nothing at startup.
-    private readonly NetworkSharedState? _networkShared;
-
     // Kept eager (must exist at startup, independent of whether their tab is ever opened):
     //  • Dashboard — it is the initially-selected tab, so it is built immediately anyway.
     //  • DarkMode  — owns the always-on dark/light theme SCHEDULE poll; nothing else runs it, so
@@ -147,8 +142,10 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable,
         // late bind exists to break. Nothing can navigate before the user clicks, which is long after here.
         _sp?.GetService<NavigationService>()?.Bind(this);
 
-        // NetworkSharedState is shared by the four network tabs and disposed explicitly below.
-        _networkShared = Eager<NetworkSharedState>();
+        // NetworkSharedState, which the four network tabs share, is not built here: the container builds it with the
+        // first of them and disposes it at exit. Built here, it loaded LiveCharts and SkiaSharp for the charts' axes,
+        // looked the gateway up and applied the Global preset before the first frame, for a screen with no chart
+        // (#2852).
         // Dashboard is the initially-selected tab (built immediately regardless).
         _dashboard = Eager<DashboardViewModel>();
         // DarkMode is resolved eagerly so its always-on theme schedule poll starts with the app,
@@ -716,7 +713,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable,
         // Idempotency guard: Dispose is wired to two shutdown paths, OnClosed and
         // Application.Exit. OnClosed unwires Exit as it runs, but a second call from
         // anywhere must still do nothing, because disposing the SkiaSharp paint handles
-        // (via NetworkShared) twice is undefined behavior.
+        // (via the designer graph's NetworkSharedState) twice is undefined behavior.
         if (_disposed) return;
         _disposed = true;
 
@@ -727,8 +724,10 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable,
         foreach (var item in NavItems)
             item.Dispose();
 
-        // Shared network state is not a tab — dispose it explicitly (once).
-        _networkShared?.Dispose();
+        // Shared network state is not a tab. The container disposes it at exit; without one, the shell disposes the
+        // one its designer graph built.
+        if (_sp is null && _designerVms!.TryGetValue(typeof(NetworkSharedState), out var shared))
+            ((NetworkSharedState)shared).Dispose();
 
         GC.SuppressFinalize(this);
     }

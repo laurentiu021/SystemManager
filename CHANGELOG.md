@@ -10,6 +10,17 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.136.128] - 2026-11-06
+
+**SysManager starts without building what the network tabs share: it is built when the first of them is opened.**
+
+### Fixed
+- The state the Ping, Traceroute, Speed Test and Network Repair tabs share was built before the first frame, although
+  the four tabs are built only when opened and the first screen has no chart. Building it loaded LiveCharts, SkiaSharp
+  and the native Skia library for the charts' axes, looked up the default gateway and applied the Global preset. It
+  is built with the first of the four tabs now, and still closed with the app. Since 1.52.104, when the tabs began
+  to be built on first open.
+
 ## [1.136.127] - 2026-11-06
 
 **Resource History no longer rewrites its whole history file every hour, and the Resource History and Bandwidth Monitor charts read only the part of their file they show.**

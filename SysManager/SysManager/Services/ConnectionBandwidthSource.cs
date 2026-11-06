@@ -3,6 +3,7 @@
 // License: MIT
 
 using System.Buffers.Binary;
+using System.ComponentModel;
 using System.Net;
 using System.Runtime.InteropServices;
 using Serilog;
@@ -47,6 +48,9 @@ public class ConnectionBandwidthSource : IBandwidthMonitorService
     private long _prevTimestampTicks;
     private bool _primed;
 
+    // The names of the connections' owners, kept from one sample to the next (#2854). Only the sample writes it.
+    private readonly OwnerNames _owners = new(StartOf, ResolveName);
+
     /// <summary>Creates the source; nothing is read until <see cref="Start"/>.</summary>
     /// <param name="timeProvider">Test seam; defaults to the system clock.</param>
     public ConnectionBandwidthSource(TimeProvider? timeProvider = null) => _time = timeProvider ?? TimeProvider.System;
@@ -68,11 +72,10 @@ public class ConnectionBandwidthSource : IBandwidthMonitorService
     /// <remarks>
     /// <para>Getting this off the UI thread is the point, and it now happens ONCE, in
     /// <c>BandwidthMonitorViewModel.PollOnceAsync</c>. The work here is not bounded by a small constant:
-    /// the table of every adapter's counters, two native TCP table queries, one per address family, and a
-    /// <c>Process.GetProcessById</c> for each PID not yet in the name cache. A machine with many adapters
-    /// or a browser holding dozens of sockets pays for
-    /// all of it, so running it inline made the window stutter continuously for as long as the tab was
-    /// open (1.61.9).</para>
+    /// the table of every adapter's counters, two native TCP table queries, one per address family, and for
+    /// each PID that owns a connection, a read of when it started, and its name when that is not known yet.
+    /// A machine with many adapters or a browser holding dozens of sockets pays for all of it, so running it
+    /// inline made the window stutter continuously for as long as the tab was open (1.61.9).</para>
     /// <para>This method used to wrap itself in <c>Task.Run</c>. That fixed this source and left its
     /// ETW sibling — which returned <c>Task.FromResult</c> — running inline, an asymmetry no test
     /// enforced and the interface did not document. The offload moved to the consumer so both modes are
@@ -156,14 +159,15 @@ public class ConnectionBandwidthSource : IBandwidthMonitorService
         var rows = new List<ConnectionRow>();
         try
         {
-            // One name cache per enumeration, owned here — see ResolveName for why it is not static.
-            // Shared across the IPv4 and IPv6 passes so a PID with both is resolved once, not twice.
-            var nameCache = new Dictionary<int, string>();
-            NativeTables.CollectTcp(rows, nameCache);
+            NativeTables.CollectTcp(rows, _owners.NameOf);
         }
         catch (Exception ex) when (ex is DllNotFoundException or EntryPointNotFoundException or OutOfMemoryException)
         {
             Log.Debug("Bandwidth: connection enumeration failed: {Error}", ex.Message);
+        }
+        finally
+        {
+            _owners.EndSample();
         }
         return rows;
     }
@@ -244,31 +248,86 @@ public class ConnectionBandwidthSource : IBandwidthMonitorService
     public void Dispose() { }
 
     /// <summary>
-    /// PID→name resolution against a cache the CALLER owns, so repeated PIDs (a browser holding
-    /// twenty sockets) cost one <c>Process.GetProcessById</c>. Names only; no MainModule/path read.
+    /// The name of process <paramref name="pid"/>, looked up in Windows. Names only; no MainModule/path read.
     /// </summary>
     /// <remarks>
-    /// The cache used to be a private STATIC Dictionary that <c>QueryTable</c> cleared on entry. Two
-    /// problems, both fixed by making it a parameter. It was shared process-wide across every source
-    /// instance while a plain Dictionary is not thread-safe — harmless while the poll ran on the UI
-    /// thread, but the sample now runs on a worker, and a mode switch constructing a new source could
-    /// mutate it concurrently. And the clear-on-entry meant the UDP pass wiped the names the TCP pass
-    /// had just resolved, so a PID with both kinds of socket was looked up twice per poll for nothing.
-    /// One cache per sample: correct lifetime, no sharing, no clearing.
     /// <para>The name is <c>Process.ProcessName</c> as is — no extension — because that is what precise mode
     /// shows for the same process (TraceEvent's image name without extension) and what Process Manager shows.
     /// Appending ".exe" made toggling precise rates relabel every row, and turned the kernel's own row into
     /// "System.exe", a file that does not exist, so it lost the Windows icon as well (#2426).</para>
+    /// <para>It takes a snapshot of every process on the PC to find the one name, about a third of a millisecond
+    /// on my PC, which is why <see cref="OwnerNames"/> keeps what it finds.</para>
     /// </remarks>
-    internal static string ResolveName(int pid, Dictionary<int, string> nameCache)
+    internal static string ResolveName(int pid)
     {
-        if (nameCache.TryGetValue(pid, out var cached)) return cached;
-        string name;
-        try { using var p = System.Diagnostics.Process.GetProcessById(pid); name = p.ProcessName; }
-        catch (ArgumentException) { name = $"PID {pid}"; }   // process exited between table read and lookup
-        catch (InvalidOperationException) { name = $"PID {pid}"; }
-        nameCache[pid] = name;
-        return name;
+        try
+        {
+            using var p = System.Diagnostics.Process.GetProcessById(pid);
+            return p.ProcessName;
+        }
+        catch (ArgumentException) { return $"PID {pid}"; }   // process exited between table read and lookup
+        catch (InvalidOperationException) { return $"PID {pid}"; }
+    }
+
+    /// <summary>When process <paramref name="pid"/> started, or null when Windows does not say.</summary>
+    /// <remarks>
+    /// Reads the process's creation time with the least access Windows grants, in microseconds, without the
+    /// snapshot of every process that its name costs. Null for a process that has exited, and for one this user
+    /// may not open at all.
+    /// </remarks>
+    internal static DateTime? StartOf(int pid)
+    {
+        try
+        {
+            using var p = System.Diagnostics.Process.GetProcessById(pid);
+            return p.StartTime;
+        }
+        catch (ArgumentException) { return null; }          // not running
+        catch (InvalidOperationException) { return null; }   // exited while it was read
+        catch (Win32Exception) { return null; }              // may not be opened
+    }
+
+    /// <summary>
+    /// The names of the processes that own connections, kept from one sample to the next while each process is the
+    /// same one (#2854).
+    /// </summary>
+    /// <remarks>
+    /// <para>Every sample looked every owner up again, and a name costs a snapshot of every process on the PC, so a
+    /// browser's helpers and the services that hold sockets cost several milliseconds a second. A name is kept now
+    /// for as long as its PID started at the same time. Windows gives a PID that came free to a new process, and the
+    /// new one started at another time, so its name is looked up rather than taken from the process before it, the
+    /// mistake the Volume Control's identity cache avoids with a key of its own. A PID whose start cannot be read is
+    /// looked up on every sample, as before.</para>
+    /// <para>A PID is looked up once a sample however many connections it holds, over IPv4 and IPv6 alike, and one that
+    /// left the tables is forgotten when the sample ends, so the names kept are those of the connections shown.</para>
+    /// <para>Not thread-safe: the source's one sample at a time is its only caller.</para>
+    /// </remarks>
+    internal sealed class OwnerNames(Func<int, DateTime?> startedAt, Func<int, string> lookUp)
+    {
+        private Dictionary<int, (DateTime? Started, string Name)> _lastSample = [];
+        private Dictionary<int, (DateTime? Started, string Name)> _thisSample = [];
+
+        /// <summary>The name of <paramref name="pid"/> for this sample.</summary>
+        public string NameOf(int pid)
+        {
+            // PID 0 owns the connections closing after their process let them go (TIME_WAIT), and is never shown.
+            if (pid <= 0) return "";
+            if (_thisSample.TryGetValue(pid, out var already)) return already.Name;
+
+            var started = startedAt(pid);
+            var name = started is not null && _lastSample.TryGetValue(pid, out var last) && last.Started == started
+                ? last.Name
+                : lookUp(pid);
+            _thisSample[pid] = (started, name);
+            return name;
+        }
+
+        /// <summary>Ends a sample: the PIDs it named are the ones kept for the next.</summary>
+        public void EndSample()
+        {
+            (_lastSample, _thisSample) = (_thisSample, _lastSample);
+            _thisSample.Clear();
+        }
     }
 
     /// <summary>
@@ -438,13 +497,12 @@ public class ConnectionBandwidthSource : IBandwidthMonitorService
         // TCP_TABLE_OWNER_PID_CONNECTIONS: connected sockets with the owning PID, and no listeners.
         private const int TcpTableOwnerPidConnections = 4;
 
-        internal static void CollectTcp(
-            List<ConnectionBandwidthSource.ConnectionRow> rows, Dictionary<int, string> nameCache)
+        internal static void CollectTcp(List<ConnectionBandwidthSource.ConnectionRow> rows, Func<int, string> nameOf)
         {
             foreach (var family in (ReadOnlySpan<int>)[AfInet, AfInet6])
             {
                 foreach (var (pid, remotePort) in ReadTcpTable(QueryTable(family), ipv6: family == AfInet6))
-                    rows.Add(new ConnectionBandwidthSource.ConnectionRow(pid, ResolveName(pid, nameCache), remotePort));
+                    rows.Add(new ConnectionBandwidthSource.ConnectionRow(pid, nameOf(pid), remotePort));
             }
         }
 

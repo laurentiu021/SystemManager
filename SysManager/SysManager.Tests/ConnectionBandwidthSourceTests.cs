@@ -34,7 +34,7 @@ public class ConnectionBandwidthSourceTests
     {
         using var self = System.Diagnostics.Process.GetCurrentProcess();
 
-        var name = ConnectionBandwidthSource.ResolveName(self.Id, new Dictionary<int, string>());
+        var name = ConnectionBandwidthSource.ResolveName(self.Id);
 
         Assert.Equal(self.ProcessName, name);
         Assert.False(name.EndsWith(".exe", StringComparison.OrdinalIgnoreCase), name);
@@ -50,8 +50,132 @@ public class ConnectionBandwidthSourceTests
     [Fact]
     public void ResolveName_ForAPidThatIsNotRunning_SaysPid()
     {
-        Assert.Equal($"PID {int.MaxValue}",
-            ConnectionBandwidthSource.ResolveName(int.MaxValue, new Dictionary<int, string>()));
+        Assert.Equal($"PID {int.MaxValue}", ConnectionBandwidthSource.ResolveName(int.MaxValue));
+    }
+
+    // ── the owners' names, kept from one sample to the next (#2854) ──
+    //
+    // Every sample looked every owner up again, and Process.ProcessName takes a snapshot of every process on the PC
+    // to find one name. A name is kept now while its PID started at the same time.
+
+    /// <summary>A start read and a name lookup that do what the test says, and count the lookups.</summary>
+    private sealed class Owners
+    {
+        public Dictionary<int, DateTime?> Started { get; } = [];
+        public Dictionary<int, string> Names { get; } = [];
+        public List<int> LookedUp { get; } = [];
+
+        public ConnectionBandwidthSource.OwnerNames Cache() => new(
+            pid => Started.GetValueOrDefault(pid),
+            pid =>
+            {
+                LookedUp.Add(pid);
+                return Names[pid];
+            });
+    }
+
+    private static readonly DateTime StartedAt = new(2026, 11, 6, 9, 0, 0, DateTimeKind.Local);
+
+    [Fact]
+    public void AnOwnerThatStartedAtTheSameTime_IsLookedUpOnce_AcrossSamples()
+    {
+        var owners = new Owners();
+        owners.Started[1200] = StartedAt;
+        owners.Names[1200] = "chrome";
+        var cache = owners.Cache();
+
+        for (var sample = 0; sample < 3; sample++)
+        {
+            Assert.Equal("chrome", cache.NameOf(1200));
+            Assert.Equal("chrome", cache.NameOf(1200));   // a second socket in the same sample
+            cache.EndSample();
+        }
+
+        Assert.Equal([1200], owners.LookedUp);
+    }
+
+    /// <summary>
+    /// A PID Windows gave to another process is looked up again, rather than showing the name of the process before.
+    /// </summary>
+    [Fact]
+    public void APidThatStartedAgain_IsLookedUpAgain_AndTakesTheNewName()
+    {
+        var owners = new Owners();
+        owners.Started[1200] = StartedAt;
+        owners.Names[1200] = "chrome";
+        var cache = owners.Cache();
+        Assert.Equal("chrome", cache.NameOf(1200));
+        cache.EndSample();
+
+        owners.Started[1200] = StartedAt.AddSeconds(30);
+        owners.Names[1200] = "steam";
+
+        Assert.Equal("steam", cache.NameOf(1200));
+        Assert.Equal([1200, 1200], owners.LookedUp);
+    }
+
+    /// <summary>A PID that left the tables is forgotten: the names kept are those of the connections shown.</summary>
+    [Fact]
+    public void AnOwnerThatLeftTheTables_IsForgotten()
+    {
+        var owners = new Owners();
+        owners.Started[1200] = StartedAt;
+        owners.Names[1200] = "chrome";
+        owners.Started[3400] = StartedAt;
+        owners.Names[3400] = "svchost";
+        var cache = owners.Cache();
+        cache.NameOf(1200);
+        cache.NameOf(3400);
+        cache.EndSample();
+
+        cache.NameOf(3400);   // 1200 closed its connections
+        cache.EndSample();
+        cache.NameOf(1200);   // and opened one again
+        cache.EndSample();
+
+        Assert.Equal([1200, 3400, 1200], owners.LookedUp);
+    }
+
+    /// <summary>A PID whose start cannot be read is looked up on every sample, as before, and once a sample.</summary>
+    [Fact]
+    public void AnOwnerWhoseStartCannotBeRead_IsLookedUpEverySample_OnceASample()
+    {
+        var owners = new Owners();
+        owners.Names[4] = "System";
+        var cache = owners.Cache();
+
+        for (var sample = 0; sample < 2; sample++)
+        {
+            Assert.Equal("System", cache.NameOf(4));
+            Assert.Equal("System", cache.NameOf(4));
+            cache.EndSample();
+        }
+
+        Assert.Equal([4, 4], owners.LookedUp);
+    }
+
+    /// <summary>PID 0, which holds the connections no process owns any more, is never looked up.</summary>
+    [Fact]
+    public void ThePidNoProcessOwns_IsNeverLookedUp()
+    {
+        var owners = new Owners();
+        var cache = owners.Cache();
+
+        Assert.Equal("", cache.NameOf(0));
+        cache.EndSample();
+
+        Assert.Empty(owners.LookedUp);
+    }
+
+    /// <summary>The start a name is kept by is the one Windows gives, and the same on every read.</summary>
+    [Fact]
+    public void StartOf_IsWhenTheProcessStarted_AndNullForOneThatIsNotRunning()
+    {
+        using var self = System.Diagnostics.Process.GetCurrentProcess();
+
+        Assert.Equal(self.StartTime, ConnectionBandwidthSource.StartOf(self.Id));
+        Assert.Equal(ConnectionBandwidthSource.StartOf(self.Id), ConnectionBandwidthSource.StartOf(self.Id));
+        Assert.Null(ConnectionBandwidthSource.StartOf(int.MaxValue));
     }
 
     // ── the TCP tables, as Windows lays them out (#2706) ──

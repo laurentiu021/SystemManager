@@ -10,6 +10,18 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.136.122] - 2026-11-06
+
+**Bandwidth Monitor looks up the name of each app it lists once, rather than every second.**
+
+### Fixed
+- Bandwidth Monitor looked up the name of every app holding a connection again each second, and each lookup takes a
+  snapshot of every process on the PC: about a third of a millisecond an app on my PC, so a browser with its helpers
+  and the services that hold sockets cost several milliseconds a second while the tab was open. A name is kept now
+  for as long as its app is the same one, told apart by when it started, so a program that is given the number of
+  one that closed still shows its own name. Connections no app owns any more, which close on their own, are no
+  longer looked up at all. Since the tab was added, in 1.54.0.
+
 ## [1.136.121] - 2026-11-06
 
 **The Dashboard's temperature cards and usage bars now change only when the figure they show does, rather than on every reading.**

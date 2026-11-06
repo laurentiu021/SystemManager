@@ -2062,6 +2062,9 @@ Key services:
   so one that reconnects is only remembered (#2706). It reads the extended TCP tables for IPv4 and
   IPv6 via iphlpapi P/Invoke
   (`GetExtendedTcpTable`, connected sockets only) to attribute connections to other machines to PIDs.
+  `OwnerNames` keeps each owner's name from one sample to the next for as long as the PID started at the same
+  time, read through `StartOf` in microseconds, since `ResolveName` takes a snapshot of every process to find one
+  name; a PID Windows gave to a new process is looked up again, and one that left the tables is forgotten (#2854).
   The pure `ReadTcpTable` parses both row layouts and leaves out listeners and connections to this PC;
   UDP is not read, since it has no connections to count (#2706). `EtwBandwidthSource` (admin) opens
   a kernel ETW session (TraceEvent) for true per-process byte rates and falls back cleanly if the

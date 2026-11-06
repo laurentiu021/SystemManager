@@ -517,11 +517,11 @@ jobs:
       # a RID-agnostic restore.
       #
       # Note this is a restore-graph inventory, not a byte-level manifest of the exe:
-      # verified against a real win-x64 publish, 71 components resolve, of which 14 are
-      # RID-specific placeholder packages (Linux/macOS/Android variants of
-      # System.IO.Ports and SkiaSharp/HarfBuzz native assets, all empty '_._' on this
-      # RID) plus System.IO.Hashing, a build-time transitive of SourceLink that never
-      # reaches the output. They are kept rather than filtered because a
+      # verified against a real win-x64 publish, 14 of the components are RID-specific
+      # placeholder packages (Linux/macOS/Android variants of System.IO.Ports and
+      # SkiaSharp/HarfBuzz native assets, all empty '_._' on this RID). System.IO.Hashing,
+      # which the Source Link package brought in at build time, left with that package
+      # (#2858). The placeholders are kept rather than filtered because a
       # vulnerability-feed consumer wants the resolved set, and hand-maintaining an
       # exclusion list would silently rot as the graph changes.
       - name: Generate CycloneDX SBOM

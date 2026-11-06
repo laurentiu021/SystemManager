@@ -18,6 +18,10 @@
     <PackageVersion Include="H.NotifyIcon.Wpf" Version="2.4.1" />
     <PackageVersion Include="LibreHardwareMonitorLib" Version="0.9.6" />
     <PackageVersion Include="LiveChartsCore.SkiaSharpView.WPF" Version="2.0.5" />
+    <!-- What LiveChartsCore.SkiaSharpView.WPF 2.0.5 resolves, referenced by the app only to waive NU1701 for them. -->
+    <PackageVersion Include="OpenTK" Version="3.3.1" />
+    <PackageVersion Include="OpenTK.GLWpfControl" Version="3.3.0" />
+    <PackageVersion Include="SkiaSharp.Views.WPF" Version="3.119.0" />
     <PackageVersion Include="Microsoft.Diagnostics.Tracing.TraceEvent" Version="4.0.0" />
     <PackageVersion Include="Microsoft.Extensions.DependencyInjection" Version="10.0.14" />
     <PackageVersion Include="NvAPIWrapper.Net" Version="0.8.1.101" />
@@ -27,11 +31,6 @@
     <PackageVersion Include="System.Management" Version="10.0.14" />
     <PackageVersion Include="System.Management.Automation" Version="7.6.9" />
     <PackageVersion Include="System.ServiceProcess.ServiceController" Version="10.0.14" />
-  </ItemGroup>
-
-  <!-- Build-time / repository-wide (applied via Directory.Build.props) -->
-  <ItemGroup>
-    <PackageVersion Include="Microsoft.SourceLink.GitHub" Version="10.0.403" />
   </ItemGroup>
 
   <!--

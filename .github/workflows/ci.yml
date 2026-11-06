@@ -60,8 +60,8 @@ jobs:
 
       # The key hashes every file that decides WHICH packages get restored, and NOTHING else. Under
       # central package management a .csproj carries no package versions at all — they are all in
-      # Directory.Packages.props, and Directory.Build.props adds a PackageReference of its own
-      # (Microsoft.SourceLink.GitHub). **/*.csproj is deliberately NOT in this list: SysManager.csproj's
+      # Directory.Packages.props, and a PackageReference for every project would go in Directory.Build.props,
+      # which every project imports. **/*.csproj is deliberately NOT in this list: SysManager.csproj's
       # own <Version> is the app's build number, not a package version, and it changes on every single
       # release — so including it rotated the key on every fix:/feat: merge for a reason that had
       # nothing to do with what gets restored (#2847). Hashing only .csproj (the ORIGINAL key, before

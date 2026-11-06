@@ -42,7 +42,9 @@ internal static partial class WingetTableParser
     // A winget table always prints a separator row of dashes directly under the header,
     // in EVERY UI language (the dashes are not localized). Anchoring on it lets us find the
     // header — and derive columns positionally — without depending on the English words.
-    [GeneratedRegex(@"^\s*-{3,}")]
+    // Dashes and nothing else: a row whose package name starts with three dashes matched, and ended the table there,
+    // the two rows above it with it, as the start of another table (#2862).
+    [GeneratedRegex(@"^\s*-{3,}\s*$")]
     private static partial Regex DashesSeparator();
 
     /// <summary>
@@ -83,7 +85,8 @@ internal static partial class WingetTableParser
                 break;
             }
 
-            if (line.StartsWith("--")) continue;
+            // The separator row itself. A row whose name starts with two dashes was skipped as one (#2862).
+            if (DashesSeparator().IsMatch(line)) continue;
             if (summaryPattern.IsMatch(line)) break;
             if (CellsOf(line) < layout.Version) continue;
 

@@ -2337,7 +2337,9 @@ Key utility classes that don't fit neatly into Services or ViewModels (not an ex
   Column positions are display columns, counted as winget counts them: per text
   element, two for an East Asian Wide or Fullwidth character (Unicode 15.0) and
   one otherwise. Columns are found by the titles winget prints in each of its
-  languages, two-word Korean titles included.
+  languages, two-word Korean titles included. The separator is a row of dashes and
+  nothing else, so a package whose name starts with dashes is a row (#2862), and a
+  fixed-seed property renders tables the way winget pads them and parses them back.
 - `WingetFailure` — the one translation of winget outcomes into plain language:
   why an install or uninstall failed, whether an install found the app already
   there, and the missing-App-Installer sentence. `UpgradeWarning` is the one

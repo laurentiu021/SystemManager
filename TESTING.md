@@ -383,6 +383,10 @@ and `INavigationService` do, is left to that registration.
 ### Conventions
 
 - Pure logic tests (parsers, analyzers, converters) need no mocking.
+- A parser or a formatter that takes text it does not choose gets a property beside its examples, over values drawn
+  from a fixed seed so a failure repeats: `FormatSize` and `FormatRate` over every unit's top and bottom, winget's
+  table rendered as winget pads it and parsed back, and a CSV row written for six cultures and read back under
+  RFC 4180 (#2862). The examples pinned "1024.0 KB" as right, and the table property found a row the parser dropped.
 - Tests that depend on OS services should use NSubstitute to mock the
   service interface, keeping the test fast and deterministic.
 - Time-dependent tests inject a time source. **A tolerance is not an alternative**, which this file

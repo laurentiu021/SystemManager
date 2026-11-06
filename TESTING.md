@@ -108,6 +108,13 @@ same floor `--minimum-expected-tests` enforces on the runner itself) before the 
 runs, because the CLI uploads an unreadable report just as happily as a readable one and
 Codecov never reports the rejection back.
 
+Codecov's statuses are informational. The one coverage figure that fails a run is the line coverage of
+`SysManager/Helpers/`, pure code with nothing of the machine behind it: the unit job's "Helpers coverage holds its
+floor" step reads it from the same report, counting each line of a file once, and fails under
+`HELPERS_COVERAGE_FLOOR`. The floor was set half a point under the figure measured then, and is raised when the
+step's notice says the figure has moved a point past it, never lowered (#2862). A change that adds a helper adds
+its tests.
+
 ## Test infrastructure
 
 ### Frameworks

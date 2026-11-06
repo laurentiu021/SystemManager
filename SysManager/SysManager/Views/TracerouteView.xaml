@@ -53,7 +53,7 @@
                         <TextBlock Text="Latency per hop" Style="{StaticResource SectionTitle}"/>
                         <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" DockPanel.Dock="Right" VerticalAlignment="Center">
                             <TextBlock Text="Every" Style="{StaticResource Subtle}" VerticalAlignment="Center"/>
-                            <ComboBox AutomationProperties.Name="Auto-trace interval in seconds"
+                            <ComboBox AutomationProperties.Name="Every — seconds between automatic traces"
                                       ItemsSource="{Binding Shared.TraceIntervalOptions}"
                                       SelectedValue="{Binding Shared.TraceIntervalSeconds}" Width="72" Margin="8,0,4,0"/>
                             <TextBlock Text="s" Style="{StaticResource Subtle}" VerticalAlignment="Center"/>

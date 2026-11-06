@@ -69,7 +69,7 @@
                         <ComboBox ItemsSource="{Binding RangeOptions}"
                                   SelectedItem="{Binding SelectedRange, Mode=TwoWay}" Width="150" Margin="8,0,0,0"
                                   TextSearch.TextPath="Label"
-                                  AutomationProperties.Name="Throughput chart time range"
+                                  AutomationProperties.Name="Show — the time range of the throughput chart"
                                   ToolTip="Live shows the last couple of minutes. The other ranges chart the history recorded while this tab was open.">
                             <ComboBox.ItemTemplate>
                                 <DataTemplate>
@@ -89,7 +89,7 @@
                         <TextBlock Text="Alert over" Style="{StaticResource Subtle}" VerticalAlignment="Center"/>
                         <TextBox Text="{Binding AlertThresholdText, UpdateSourceTrigger=PropertyChanged}"
                                  Width="64" Margin="8,0,6,0" VerticalContentAlignment="Center"
-                                 AutomationProperties.Name="Alert threshold in megabits per second"
+                                 AutomationProperties.Name="Alert over — megabits per second, 0 for no alert"
                                  ToolTip="Warn when total download or upload exceeds this many Mbps. 0 turns the alert off."/>
                         <TextBlock Text="Mbps" Style="{StaticResource Subtle}" VerticalAlignment="Center"/>
                     </StackPanel>

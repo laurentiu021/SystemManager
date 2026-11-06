@@ -106,7 +106,7 @@ public sealed class BandwidthMonitorViewUiTests : IDisposable
         StaHelper.Run(() =>
         {
             var view = Laid(vm);
-            var box = Named<TextBox>(view, "Alert threshold in megabits per second");
+            var box = Named<TextBox>(view, "Alert over — megabits per second, 0 for no alert");
 
             box.Text = "2.";
             Assert.Equal("2.", box.Text);

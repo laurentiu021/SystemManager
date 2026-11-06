@@ -364,7 +364,7 @@
                                                     <Hyperlink Command="{Binding DataContext.OpenReleaseCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
                                                                CommandParameter="{Binding Url}"
                                                                Foreground="{DynamicResource Accent}"
-                                                               AutomationProperties.Name="{Binding Version, StringFormat='View {0} on GitHub'}">View on GitHub ↗</Hyperlink>
+                                                               AutomationProperties.Name="{Binding Version, StringFormat='View on GitHub — {0}'}">View on GitHub ↗</Hyperlink>
                                                 </TextBlock>
                                             </StackPanel>
                                             <TextBlock Style="{StaticResource Body}" helpers:MarkdownTextBlock.Markdown="{Binding Body}" Foreground="{DynamicResource TextSecondary}"

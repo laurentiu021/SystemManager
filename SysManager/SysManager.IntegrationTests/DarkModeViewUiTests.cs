@@ -64,7 +64,7 @@ public class DarkModeViewUiTests
             using var vm = new DarkModeViewModel(new FakeThemes());
             var view = Laid(new DarkModeView { DataContext = vm });
             var box = Assert.Single(Descendants<TextBox>(view),
-                b => AutomationProperties.GetName(b) == "Dark theme start time (HH:mm)");
+                b => AutomationProperties.GetName(b) == "Dark starts at — a time as HH:mm");
 
             Type(box, typed);
 

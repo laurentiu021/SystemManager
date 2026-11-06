@@ -296,9 +296,10 @@ by 24.
 The controls whose effect is hardest to take back explain themselves, not just their label. Landing on
 Shred All announces the button and then "Overwrites every item in the list so it cannot be recovered, then
 deletes it. This cannot be undone, not even from the Recycle Bin. SysManager asks you to confirm first." The
-same goes for Uninstall selected and Remove ticked on the Uninstaller, Kill process, Delete preset, Delete
-selected shortcuts, Empty Recycle Bin, Clean selected on Deep Cleanup and on Browser Cleaner, and the Run as
-administrator button that appears on the 32 pages needing elevation.
+same goes for Uninstall selected and Remove ticked on the Uninstaller, Kill process, End process on File Lock
+Detector, Delete preset, Delete selected shortcuts, Empty Recycle Bin, Clean selected on Deep Cleanup and on Browser
+Cleaner, Clear History on New App Alerts, Remove selected on Preinstalled Apps, Restore selected on Restore Points, and
+the Run as administrator button that appears on the 32 pages needing elevation.
 
 Before that, the red colour and the confirmation dialog were the only warnings, and neither reaches someone
 who cannot see the screen — the dialog arrives after the button has already been pressed. The explanation is
@@ -308,8 +309,10 @@ plus the button on each Undo Changes row, which says before you press it that it
 cannot be pressed yet. An explanation on every button in the app would make it slower to navigate, not
 clearer.
 
-A control that changes with its state is named for what pressing it does now, so a muted app's button on Volume
-Control is announced "Unmute Spotify". A control on a list row names its row: each of the PATH editor's buttons says
+Every control is announced with the words on it or beside it first, and what it acts on after them, so saying what
+you see to voice control presses it: the box after "Ping every" is "Ping every — seconds between pings". A control
+that changes with its state is named for what pressing it does now, so a muted app's button on Volume Control is
+announced "Unmute Spotify". A control on a list row names its row: each of the PATH editor's buttons says
 which folder it moves or removes, and a Browser Cleaner checkbox says whose data it ticks, as in "Select Cookies in
 Chrome (Work)". Each line of a tab's live output, each entry of a picker or a list, and each row of a table is read by
 the words on it, not by how the app stores it. The Help and Appearance buttons at the bottom of the sidebar

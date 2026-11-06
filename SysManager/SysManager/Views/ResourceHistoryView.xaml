@@ -45,7 +45,7 @@
                 <TextBlock Text="Keep" Style="{StaticResource Subtle}" VerticalAlignment="Center" Margin="16,0,0,0"/>
                 <ComboBox ItemsSource="{Binding RetentionOptions}"
                           SelectedItem="{Binding RetentionDays, Mode=TwoWay}" Width="64" Margin="8,0,0,0"
-                          AutomationProperties.Name="History retention in days"/>
+                          AutomationProperties.Name="Keep — days of history"/>
                 <TextBlock Text="days" Style="{StaticResource Subtle}" VerticalAlignment="Center" Margin="6,0,0,0"/>
                 <Button Content="Refresh" Command="{Binding ReloadCommand}"
                         Style="{StaticResource GhostButton}" Margin="16,0,0,0"

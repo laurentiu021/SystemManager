@@ -50,7 +50,7 @@
                         </ComboBox.ItemTemplate>
                     </ComboBox>
                     <TextBlock Grid.Column="2" Text="Min size (MB):" Style="{StaticResource Body}" Foreground="{DynamicResource TextSecondary}" VerticalAlignment="Center" Margin="16,0,8,0"/>
-                    <TextBox Grid.Column="3" AutomationProperties.Name="Minimum file size in megabytes" Text="{Binding MinSizeMB, Mode=TwoWay}" Width="80"/>
+                    <TextBox Grid.Column="3" AutomationProperties.Name="Min size (MB) — smaller files are not listed" Text="{Binding MinSizeMB, Mode=TwoWay}" Width="80"/>
                     <TextBlock Grid.Column="4" Text="Top:" Style="{StaticResource Body}" Foreground="{DynamicResource TextSecondary}" VerticalAlignment="Center" Margin="16,0,8,0"/>
                     <TextBox Grid.Column="5" AutomationProperties.Name="Number of top results to show" Text="{Binding TopCount, Mode=TwoWay}" Width="60"/>
                     <Button Grid.Column="6" Content="Scan" Command="{Binding ScanCommand}" Margin="16,0,0,0"

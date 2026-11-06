@@ -59,6 +59,7 @@
 
                 <Button Content="Restore selected…" Command="{Binding RestoreCommand}"
                         AutomationProperties.Name="Restore selected… — the selected restore point"
+                        AutomationProperties.HelpText="Puts Windows back to the selected restore point and restarts the PC at once, so save your work first. Programs and drivers installed since then are removed. SysManager asks you to confirm first."
                         Style="{StaticResource DangerButton}"
                         ToolTip="Roll the system back to the selected restore point (restarts Windows)."/>
             </WrapPanel>

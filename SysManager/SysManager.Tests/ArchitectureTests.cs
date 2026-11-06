@@ -5307,6 +5307,13 @@ public partial class ArchitectureTests
         ("EmptyRecycleBinCommand", "CleanupView.xaml", ["DangerButton"]),
         ("CleanCommand", "DeepCleanupView.xaml", ["DangerButton"]),
         ("CleanCommand", "BrowserCleanerView.xaml", ["DangerButton"]),
+        // Four more that wore the red fill and said nothing to a screen reader (#2883): File Lock Detector's End
+        // process is the kill Process Manager lists above, Clear History erases the only record of what installed
+        // itself, Remove selected uninstalls apps the Store may not have any more, and a restore restarts Windows.
+        ("KillSelectedCommand", "FileLockView.xaml", ["DangerButton"]),
+        ("ClearHistoryCommand", "AppAlertsView.xaml", ["DangerButton"]),
+        ("RemoveSelectedCommand", "DebloaterView.xaml", ["DangerButton"]),
+        ("RestoreCommand", "RestorePointsView.xaml", ["DangerButton"]),
     ];
 
     /// <summary>
@@ -5396,7 +5403,7 @@ public partial class ArchitectureTests
     /// (<c>ProcessManagerView</c>'s "Kill process", <c>DiskAnalyzerView</c>'s "Show in Explorer"), and a
     /// tooltip is mouse-hover-only — it is not reliably surfaced to a screen reader, and a keyboard user
     /// tabbing onto the button never triggers it at all.</para>
-    /// <para><b>Deliberately narrow.</b> HelpText makes navigation more verbose, so this covers the eight
+    /// <para><b>Deliberately narrow.</b> HelpText makes navigation more verbose, so this covers the twelve
     /// controls that do something the user cannot take back, not the ~461 buttons in the app. The list is
     /// the same one <see cref="EveryImmediatelyDestructiveButton_WearsADestructiveStyle"/> uses, so a
     /// control added there is required to explain itself here without anyone remembering to.</para>
@@ -5442,8 +5449,8 @@ public partial class ArchitectureTests
         // row would satisfy it while quietly dropping a control from both guards. The absolute count is what
         // catches that. It is a measured population: raise it when a destructive control is added, and only
         // lower it with a reason, never to make a red go away.
-        Assert.True(DestructiveControls.Length >= 8,
-            $"the shared destructive-control list is down to {DestructiveControls.Length} rows, from 8 "
+        Assert.True(DestructiveControls.Length >= 12,
+            $"the shared destructive-control list is down to {DestructiveControls.Length} rows, from 12 "
             + "measured. A control was removed from it rather than from the app, which silently narrows both "
             + "guards over this list.");
 
@@ -10673,13 +10680,17 @@ public partial class ArchitectureTests
         var named = new Dictionary<string, string[]>(StringComparer.Ordinal)
         {
             ["AdminBanner.xaml"] = ["Run as administrator"],
+            ["AppAlertsView.xaml"] = ["Clear History on New App Alerts"],
             ["AudioMixerView.xaml"] = ["Delete preset"],
             ["BrowserCleanerView.xaml"] = ["Clean selected on Deep Cleanup and on Browser Cleaner"],
             ["CleanupView.xaml"] = ["Empty Recycle Bin"],
+            ["DebloaterView.xaml"] = ["Remove selected on Preinstalled Apps"],
             ["DeepCleanupView.xaml"] = ["Clean selected on Deep Cleanup"],
             ["DiskAnalyzerView.xaml"] = ["Run as administrator"],
+            ["FileLockView.xaml"] = ["End process on File Lock Detector"],
             ["FileShredderView.xaml"] = ["Shred All"],
             ["ProcessManagerView.xaml"] = ["Kill process"],
+            ["RestorePointsView.xaml"] = ["Restore selected on Restore Points"],
             ["ShortcutCleanerView.xaml"] = ["Delete selected shortcuts"],
             ["UndoChangesView.xaml"] = ["Undo Changes row"],
             ["UninstallerView.xaml"] = ["Uninstall selected", "Remove ticked"],

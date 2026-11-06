@@ -53,6 +53,7 @@
                             ToolTip="Save this list before clearing it — Clear History erases it."/>
                     <Button Content="Clear History" Command="{Binding ClearHistoryCommand}"
                             AutomationProperties.Name="Clear History — app alerts"
+                            AutomationProperties.HelpText="Deletes every recorded alert, here and on Recent Changes, and they cannot be brought back. SysManager asks you to confirm first."
                             Style="{StaticResource DangerButton}" Padding="12,8"/>
                 </StackPanel>
                 <TextBlock DockPanel.Dock="Right" VerticalAlignment="Center" HorizontalAlignment="Right"

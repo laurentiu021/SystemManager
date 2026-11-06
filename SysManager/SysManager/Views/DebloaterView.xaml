@@ -50,6 +50,7 @@
 
                 <Button Content="Remove selected…" Command="{Binding RemoveSelectedCommand}"
                         AutomationProperties.Name="Remove selected… — the selected apps"
+                        AutomationProperties.HelpText="Uninstalls the ticked apps for your account. Most can be installed again from the Microsoft Store, but apps Microsoft has retired cannot. SysManager asks you to confirm first."
                         Style="{StaticResource DangerButton}" Margin="0,0,16,0"
                         ToolTip="Uninstall the ticked apps for the current user. Most can be reinstalled from the Store; apps Microsoft has retired cannot."/>
 

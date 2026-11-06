@@ -184,7 +184,7 @@
                     </StackPanel>
 
                     <TextBlock Text="Max results" Style="{StaticResource Subtle}" VerticalAlignment="Center"/>
-                    <ComboBox ItemsSource="{Binding MaxResultOptions}" SelectedItem="{Binding SelectedMaxResults}" AutomationProperties.Name="Maximum results" Width="88" Margin="8,0,18,0"/>
+                    <ComboBox ItemsSource="{Binding MaxResultOptions}" SelectedItem="{Binding SelectedMaxResults}" AutomationProperties.Name="Max results — how many events are read" Width="88" Margin="8,0,18,0"/>
 
                     <Button Content="Refresh" AutomationProperties.AutomationId="btn-logs-refresh" AutomationProperties.Name="Refresh logs" Command="{Binding RefreshCommand}" Style="{StaticResource PrimaryButton}"/>
                     <Button Content="Cancel" AutomationProperties.Name="Cancel log loading" Command="{Binding CancelCommand}" Style="{StaticResource GhostButton}" Margin="6,0,0,0"/>

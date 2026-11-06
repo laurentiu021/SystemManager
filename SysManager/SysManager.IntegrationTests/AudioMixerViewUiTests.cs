@@ -152,8 +152,8 @@ public sealed class AudioMixerViewUiTests : IDisposable
             var shown = ShownTexts(card);
             Assert.Contains("Headphones (Studio)", shown);
             Assert.Contains("Change in Windows sound settings…", shown);
-            Assert.Same(vm.Pc.OpenOutputSettingsCommand,
-                Named<Button>(card, "Change the device this PC plays sound through, in Windows sound settings").Command);
+            const string settings = "Change in Windows sound settings — the device this PC plays sound through";
+            Assert.Same(vm.Pc.OpenOutputSettingsCommand, Named<Button>(card, settings).Command);
         });
     }
 

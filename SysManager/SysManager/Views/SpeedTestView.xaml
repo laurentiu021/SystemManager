@@ -152,14 +152,17 @@
                 <!-- Info: Ookla vs HTTP explanation -->
                 <Border Grid.Row="1" Grid.ColumnSpan="2" Background="{DynamicResource Surface2}" BorderBrush="{DynamicResource Border1}" BorderThickness="1"
                         CornerRadius="{StaticResource RadiusMd}" Padding="12,10" Margin="0,12,0,0">
-                    <StackPanel Orientation="Horizontal">
-                        <TextBlock Text="&#xE946;" FontFamily="Segoe Fluent Icons,Segoe MDL2 Assets"
+                    <!-- The glyph docked left and the text filling the rest, so the text wraps to the card. In a
+                         horizontal StackPanel it was given unlimited width and ran on one line until the card's edge
+                         cut the caveat off (#2787). -->
+                    <DockPanel>
+                        <TextBlock Text="&#xE946;" FontFamily="Segoe Fluent Icons,Segoe MDL2 Assets" DockPanel.Dock="Left"
                                    FontSize="14" Foreground="{DynamicResource Info}" VerticalAlignment="Top" Margin="0,0,10,0"/>
                         <TextBlock TextWrapping="Wrap" Foreground="{DynamicResource TextSecondary}" Style="{StaticResource Subtle}">
                             <Run FontWeight="SemiBold" Foreground="{DynamicResource TextPrimary}">Ookla</Run><Run Text=" measures raw TCP throughput to a nearby server — most accurate for ISP bandwidth. "/>
                             <Run FontWeight="SemiBold" Foreground="{DynamicResource TextPrimary}">HTTP</Run><Run Text=" tests download/upload via Cloudflare CDN — reflects real web browsing speed but may show lower results due to HTTP overhead and CDN routing."/>
                         </TextBlock>
-                    </StackPanel>
+                    </DockPanel>
                 </Border>
 
                 <!-- Ookla History -->

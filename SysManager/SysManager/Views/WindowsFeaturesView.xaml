@@ -194,8 +194,10 @@
                                                 </Style>
                                             </Border.Style>
                                         </Border>
-                                        <StackPanel Orientation="Horizontal" Margin="4,0,0,0">
-                                            <Ellipse Width="6" Height="6" VerticalAlignment="Center">
+                                        <!-- Docked, so the status trims to the column: in a horizontal StackPanel its
+                                             ellipsis never ran and a narrow column cut it instead (#2787). -->
+                                        <DockPanel Margin="4,0,0,0">
+                                            <Ellipse Width="6" Height="6" VerticalAlignment="Center" DockPanel.Dock="Left">
                                                 <Ellipse.Style>
                                                     <Style TargetType="Ellipse">
                                                         <Setter Property="Fill" Value="{DynamicResource TextMuted}"/>
@@ -233,7 +235,7 @@
                                                     </Style>
                                                 </TextBlock.Style>
                                             </TextBlock>
-                                        </StackPanel>
+                                        </DockPanel>
                                     </Grid>
                                 </Border>
                             </DataTemplate>

@@ -151,105 +151,120 @@
         <!-- Filter bar -->
         <Border Grid.Row="3" Style="{StaticResource Card}" Margin="28,16,28,0">
             <StackPanel>
-                <StackPanel Orientation="Horizontal">
-                    <TextBlock Text="Log" Style="{StaticResource Subtle}" VerticalAlignment="Center"/>
-                    <ComboBox ItemsSource="{Binding AvailableLogs}" SelectedItem="{Binding SelectedLog}" AutomationProperties.Name="Log source" Width="130" Margin="8,0,18,0"/>
-
-                    <TextBlock Text="Time" Style="{StaticResource Subtle}" VerticalAlignment="Center"/>
-                    <StackPanel Orientation="Horizontal" Margin="8,0,18,0">
-                        <RadioButton Content="1h" GroupName="TimeRange" Margin="0,0,4,0"
-                                     AutomationProperties.Name="1h — time range: last hour"
-                                     IsChecked="{Binding SelectedTimeRange, Converter={StaticResource IsEqual}, ConverterParameter='Last hour'}"
-                                     Style="{StaticResource FilterChipNeutral}"/>
-                        <RadioButton Content="24h" GroupName="TimeRange" Margin="0,0,4,0"
-                                     AutomationProperties.Name="24h — time range: last 24 hours"
-                                     IsChecked="{Binding SelectedTimeRange, Converter={StaticResource IsEqual}, ConverterParameter='Last 24 hours'}"
-                                     Style="{StaticResource FilterChipNeutral}"/>
-                        <RadioButton Content="7d" GroupName="TimeRange" Margin="0,0,4,0"
-                                     AutomationProperties.Name="7d — time range: last 7 days"
-                                     IsChecked="{Binding SelectedTimeRange, Converter={StaticResource IsEqual}, ConverterParameter='Last 7 days'}"
-                                     Style="{StaticResource FilterChipNeutral}"/>
-                        <RadioButton Content="30d" GroupName="TimeRange" Margin="0,0,4,0"
-                                     AutomationProperties.Name="30d — time range: last 30 days"
-                                     IsChecked="{Binding SelectedTimeRange, Converter={StaticResource IsEqual}, ConverterParameter='Last 30 days'}"
-                                     Style="{StaticResource FilterChipNeutral}"/>
-                        <RadioButton Content="90d" GroupName="TimeRange" Margin="0,0,4,0"
-                                     AutomationProperties.Name="90d — time range: last 90 days"
-                                     IsChecked="{Binding SelectedTimeRange, Converter={StaticResource IsEqual}, ConverterParameter='Last 90 days'}"
-                                     Style="{StaticResource FilterChipNeutral}"/>
-                        <RadioButton Content="All" GroupName="TimeRange"
-                                     AutomationProperties.Name="Time range: all time"
-                                     IsChecked="{Binding SelectedTimeRange, Converter={StaticResource IsEqual}, ConverterParameter='All'}"
-                                     Style="{StaticResource FilterChipNeutral}"/>
+                <!-- Both rows wrap, as the Uninstaller's and Duplicate Finder's toolbars do, each label in one panel
+                     with its control so the two move together. As horizontal StackPanels they ran past the card,
+                     which cut Refresh, Cancel and the search box near the smallest window (#2787). -->
+                <WrapPanel>
+                    <StackPanel Orientation="Horizontal" Margin="0,0,18,0">
+                        <TextBlock Text="Log" Style="{StaticResource Subtle}" VerticalAlignment="Center"/>
+                        <ComboBox ItemsSource="{Binding AvailableLogs}" SelectedItem="{Binding SelectedLog}" AutomationProperties.Name="Log source" Width="130" Margin="8,0,0,0"/>
                     </StackPanel>
 
-                    <TextBlock Text="Max results" Style="{StaticResource Subtle}" VerticalAlignment="Center"/>
-                    <ComboBox ItemsSource="{Binding MaxResultOptions}" SelectedItem="{Binding SelectedMaxResults}" AutomationProperties.Name="Max results — how many events are read" Width="88" Margin="8,0,18,0"/>
-
-                    <Button Content="Refresh" AutomationProperties.AutomationId="btn-logs-refresh" AutomationProperties.Name="Refresh logs" Command="{Binding RefreshCommand}" Style="{StaticResource PrimaryButton}"/>
-                    <Button Content="Cancel" AutomationProperties.Name="Cancel log loading" Command="{Binding CancelCommand}" Style="{StaticResource GhostButton}" Margin="6,0,0,0"/>
-                    <!-- Only shown once something is marked: with no marks there is nothing to clear,
-                         and a permanently visible no-op button is the defect this fix removes. The
-                         count makes it clear the marks include rows the current filter may be hiding. -->
-                    <Button Content="{Binding ClearMarksText}"
-                            AutomationProperties.Name="Clear all marked events"
-                            Command="{Binding ClearHighlightsCommand}"
-                            Style="{StaticResource GhostButton}" Margin="6,0,0,0"
-                            Visibility="{Binding HighlightedCount, Converter={StaticResource FlexVis}}"/>
-                </StackPanel>
-
-                <StackPanel Orientation="Horizontal" Margin="0,12,0,0">
-                    <TextBlock Text="Show" Style="{StaticResource Subtle}" VerticalAlignment="Center" Margin="0,0,10,0"/>
-
-                    <!-- Each toggle has its own colored dot next to the label -->
-                    <StackPanel Orientation="Horizontal" Margin="0,0,14,0">
-                        <ToggleButton Style="{StaticResource ToggleSwitch}" AutomationProperties.Name="Show Critical events" IsChecked="{Binding ShowCritical}" VerticalAlignment="Center"/>
-                        <Ellipse Style="{StaticResource SevDot}" Fill="{DynamicResource CriticalText}" Margin="8,0,6,0"/>
-                        <TextBlock Text="Critical" Style="{StaticResource Body}" Foreground="{DynamicResource TextPrimary}" VerticalAlignment="Center"/>
-                    </StackPanel>
-                    <StackPanel Orientation="Horizontal" Margin="0,0,14,0">
-                        <ToggleButton Style="{StaticResource ToggleSwitch}" AutomationProperties.Name="Show Error events" IsChecked="{Binding ShowError}" VerticalAlignment="Center"/>
-                        <Ellipse Style="{StaticResource SevDot}" Fill="{DynamicResource Danger}" Margin="8,0,6,0"/>
-                        <TextBlock Text="Error" Style="{StaticResource Body}" Foreground="{DynamicResource TextPrimary}" VerticalAlignment="Center"/>
-                    </StackPanel>
-                    <StackPanel Orientation="Horizontal" Margin="0,0,14,0">
-                        <ToggleButton Style="{StaticResource ToggleSwitch}" AutomationProperties.Name="Show Warning events" IsChecked="{Binding ShowWarning}" VerticalAlignment="Center"/>
-                        <Ellipse Style="{StaticResource SevDot}" Fill="{DynamicResource WarningStripe}" Margin="8,0,6,0"/>
-                        <TextBlock Text="Warning" Style="{StaticResource Body}" Foreground="{DynamicResource TextPrimary}" VerticalAlignment="Center"/>
-                    </StackPanel>
-                    <StackPanel Orientation="Horizontal" Margin="0,0,14,0">
-                        <ToggleButton Style="{StaticResource ToggleSwitch}" AutomationProperties.Name="Show Info events" IsChecked="{Binding ShowInfo}" VerticalAlignment="Center"/>
-                        <Ellipse Style="{StaticResource SevDot}" Fill="{DynamicResource Info}" Margin="8,0,6,0"/>
-                        <TextBlock Text="Info" Style="{StaticResource Body}" Foreground="{DynamicResource TextPrimary}" VerticalAlignment="Center"/>
-                    </StackPanel>
-                    <StackPanel Orientation="Horizontal" Margin="0,0,22,0">
-                        <ToggleButton Style="{StaticResource ToggleSwitch}" AutomationProperties.Name="Show Verbose events" IsChecked="{Binding ShowVerbose}" VerticalAlignment="Center"/>
-                        <Ellipse Style="{StaticResource SevDot}" Fill="{DynamicResource TextMuted}" Margin="8,0,6,0"/>
-                        <TextBlock Text="Verbose" Style="{StaticResource Body}" Foreground="{DynamicResource TextPrimary}" VerticalAlignment="Center"/>
+                    <StackPanel Orientation="Horizontal" Margin="0,0,18,0">
+                        <TextBlock Text="Time" Style="{StaticResource Subtle}" VerticalAlignment="Center"/>
+                        <StackPanel Orientation="Horizontal" Margin="8,0,0,0">
+                            <RadioButton Content="1h" GroupName="TimeRange" Margin="0,0,4,0"
+                                         AutomationProperties.Name="1h — time range: last hour"
+                                         IsChecked="{Binding SelectedTimeRange, Converter={StaticResource IsEqual}, ConverterParameter='Last hour'}"
+                                         Style="{StaticResource FilterChipNeutral}"/>
+                            <RadioButton Content="24h" GroupName="TimeRange" Margin="0,0,4,0"
+                                         AutomationProperties.Name="24h — time range: last 24 hours"
+                                         IsChecked="{Binding SelectedTimeRange, Converter={StaticResource IsEqual}, ConverterParameter='Last 24 hours'}"
+                                         Style="{StaticResource FilterChipNeutral}"/>
+                            <RadioButton Content="7d" GroupName="TimeRange" Margin="0,0,4,0"
+                                         AutomationProperties.Name="7d — time range: last 7 days"
+                                         IsChecked="{Binding SelectedTimeRange, Converter={StaticResource IsEqual}, ConverterParameter='Last 7 days'}"
+                                         Style="{StaticResource FilterChipNeutral}"/>
+                            <RadioButton Content="30d" GroupName="TimeRange" Margin="0,0,4,0"
+                                         AutomationProperties.Name="30d — time range: last 30 days"
+                                         IsChecked="{Binding SelectedTimeRange, Converter={StaticResource IsEqual}, ConverterParameter='Last 30 days'}"
+                                         Style="{StaticResource FilterChipNeutral}"/>
+                            <RadioButton Content="90d" GroupName="TimeRange" Margin="0,0,4,0"
+                                         AutomationProperties.Name="90d — time range: last 90 days"
+                                         IsChecked="{Binding SelectedTimeRange, Converter={StaticResource IsEqual}, ConverterParameter='Last 90 days'}"
+                                         Style="{StaticResource FilterChipNeutral}"/>
+                            <RadioButton Content="All" GroupName="TimeRange"
+                                         AutomationProperties.Name="Time range: all time"
+                                         IsChecked="{Binding SelectedTimeRange, Converter={StaticResource IsEqual}, ConverterParameter='All'}"
+                                         Style="{StaticResource FilterChipNeutral}"/>
+                        </StackPanel>
                     </StackPanel>
 
-                    <TextBlock Text="Search" Style="{StaticResource Subtle}" VerticalAlignment="Center" Margin="0,0,8,0"/>
-                    <Grid Width="280">
-                        <TextBox x:Name="SearchBox" Text="{Binding FilterText, UpdateSourceTrigger=PropertyChanged}"
-                                 AutomationProperties.Name="Search logs by message, source, or event ID"
-                                 ToolTip="Filters by message, provider, or event ID"/>
-                        <TextBlock Text="Filter by message, source, or event ID…"
-                                   Foreground="{DynamicResource TextMuted}"
-                                   VerticalAlignment="Center" Margin="8,0,0,0"
-                                   IsHitTestVisible="False">
-                            <TextBlock.Style>
-                                <Style TargetType="TextBlock" BasedOn="{StaticResource Subtle}">
-                                    <Setter Property="Visibility" Value="Collapsed"/>
-                                    <Style.Triggers>
-                                        <DataTrigger Binding="{Binding Text, ElementName=SearchBox}" Value="">
-                                            <Setter Property="Visibility" Value="Visible"/>
-                                        </DataTrigger>
-                                    </Style.Triggers>
-                                </Style>
-                            </TextBlock.Style>
-                        </TextBlock>
-                    </Grid>
-                </StackPanel>
+                    <StackPanel Orientation="Horizontal" Margin="0,0,18,0">
+                        <TextBlock Text="Max results" Style="{StaticResource Subtle}" VerticalAlignment="Center"/>
+                        <ComboBox ItemsSource="{Binding MaxResultOptions}" SelectedItem="{Binding SelectedMaxResults}" AutomationProperties.Name="Max results — how many events are read" Width="88" Margin="8,0,0,0"/>
+                    </StackPanel>
+
+                    <StackPanel Orientation="Horizontal">
+                        <Button Content="Refresh" AutomationProperties.AutomationId="btn-logs-refresh" AutomationProperties.Name="Refresh logs" Command="{Binding RefreshCommand}" Style="{StaticResource PrimaryButton}"/>
+                        <Button Content="Cancel" AutomationProperties.Name="Cancel log loading" Command="{Binding CancelCommand}" Style="{StaticResource GhostButton}" Margin="6,0,0,0"/>
+                        <!-- Only shown once something is marked: with no marks there is nothing to clear,
+                             and a permanently visible no-op button is the defect this fix removes. The
+                             count makes it clear the marks include rows the current filter may be hiding. -->
+                        <Button Content="{Binding ClearMarksText}"
+                                AutomationProperties.Name="Clear all marked events"
+                                Command="{Binding ClearHighlightsCommand}"
+                                Style="{StaticResource GhostButton}" Margin="6,0,0,0"
+                                Visibility="{Binding HighlightedCount, Converter={StaticResource FlexVis}}"/>
+                    </StackPanel>
+                </WrapPanel>
+
+                <WrapPanel Margin="0,12,0,0">
+                    <StackPanel Orientation="Horizontal">
+                        <TextBlock Text="Show" Style="{StaticResource Subtle}" VerticalAlignment="Center" Margin="0,0,10,0"/>
+
+                        <!-- Each toggle has its own colored dot next to the label -->
+                        <StackPanel Orientation="Horizontal" Margin="0,0,14,0">
+                            <ToggleButton Style="{StaticResource ToggleSwitch}" AutomationProperties.Name="Show Critical events" IsChecked="{Binding ShowCritical}" VerticalAlignment="Center"/>
+                            <Ellipse Style="{StaticResource SevDot}" Fill="{DynamicResource CriticalText}" Margin="8,0,6,0"/>
+                            <TextBlock Text="Critical" Style="{StaticResource Body}" Foreground="{DynamicResource TextPrimary}" VerticalAlignment="Center"/>
+                        </StackPanel>
+                        <StackPanel Orientation="Horizontal" Margin="0,0,14,0">
+                            <ToggleButton Style="{StaticResource ToggleSwitch}" AutomationProperties.Name="Show Error events" IsChecked="{Binding ShowError}" VerticalAlignment="Center"/>
+                            <Ellipse Style="{StaticResource SevDot}" Fill="{DynamicResource Danger}" Margin="8,0,6,0"/>
+                            <TextBlock Text="Error" Style="{StaticResource Body}" Foreground="{DynamicResource TextPrimary}" VerticalAlignment="Center"/>
+                        </StackPanel>
+                        <StackPanel Orientation="Horizontal" Margin="0,0,14,0">
+                            <ToggleButton Style="{StaticResource ToggleSwitch}" AutomationProperties.Name="Show Warning events" IsChecked="{Binding ShowWarning}" VerticalAlignment="Center"/>
+                            <Ellipse Style="{StaticResource SevDot}" Fill="{DynamicResource WarningStripe}" Margin="8,0,6,0"/>
+                            <TextBlock Text="Warning" Style="{StaticResource Body}" Foreground="{DynamicResource TextPrimary}" VerticalAlignment="Center"/>
+                        </StackPanel>
+                        <StackPanel Orientation="Horizontal" Margin="0,0,14,0">
+                            <ToggleButton Style="{StaticResource ToggleSwitch}" AutomationProperties.Name="Show Info events" IsChecked="{Binding ShowInfo}" VerticalAlignment="Center"/>
+                            <Ellipse Style="{StaticResource SevDot}" Fill="{DynamicResource Info}" Margin="8,0,6,0"/>
+                            <TextBlock Text="Info" Style="{StaticResource Body}" Foreground="{DynamicResource TextPrimary}" VerticalAlignment="Center"/>
+                        </StackPanel>
+                        <StackPanel Orientation="Horizontal" Margin="0,0,22,0">
+                            <ToggleButton Style="{StaticResource ToggleSwitch}" AutomationProperties.Name="Show Verbose events" IsChecked="{Binding ShowVerbose}" VerticalAlignment="Center"/>
+                            <Ellipse Style="{StaticResource SevDot}" Fill="{DynamicResource TextMuted}" Margin="8,0,6,0"/>
+                            <TextBlock Text="Verbose" Style="{StaticResource Body}" Foreground="{DynamicResource TextPrimary}" VerticalAlignment="Center"/>
+                        </StackPanel>
+                    </StackPanel>
+
+                    <StackPanel Orientation="Horizontal">
+                        <TextBlock Text="Search" Style="{StaticResource Subtle}" VerticalAlignment="Center" Margin="0,0,8,0"/>
+                        <Grid Width="280">
+                            <TextBox x:Name="SearchBox" Text="{Binding FilterText, UpdateSourceTrigger=PropertyChanged}"
+                                     AutomationProperties.Name="Search logs by message, source, or event ID"
+                                     ToolTip="Filters by message, provider, or event ID"/>
+                            <TextBlock Text="Filter by message, source, or event ID…"
+                                       Foreground="{DynamicResource TextMuted}"
+                                       VerticalAlignment="Center" Margin="8,0,0,0"
+                                       IsHitTestVisible="False">
+                                <TextBlock.Style>
+                                    <Style TargetType="TextBlock" BasedOn="{StaticResource Subtle}">
+                                        <Setter Property="Visibility" Value="Collapsed"/>
+                                        <Style.Triggers>
+                                            <DataTrigger Binding="{Binding Text, ElementName=SearchBox}" Value="">
+                                                <Setter Property="Visibility" Value="Visible"/>
+                                            </DataTrigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </TextBlock.Style>
+                            </TextBlock>
+                        </Grid>
+                    </StackPanel>
+                </WrapPanel>
             </StackPanel>
         </Border>
 
@@ -341,13 +356,14 @@
                         <DataGridTemplateColumn Header="Severity" Width="106" MinWidth="90" SortMemberPath="Severity">
                             <DataGridTemplateColumn.CellTemplate>
                                 <DataTemplate>
-                                    <StackPanel Orientation="Horizontal" VerticalAlignment="Center"
-                                                ToolTip="{Binding SeverityLabel}">
-                                        <Ellipse Width="10" Height="10" VerticalAlignment="Center"
+                                    <!-- Docked, so the label trims to the column: in a horizontal StackPanel its
+                                         ellipsis never ran and a narrow column cut it instead (#2787). -->
+                                    <DockPanel VerticalAlignment="Center" ToolTip="{Binding SeverityLabel}">
+                                        <Ellipse Width="10" Height="10" VerticalAlignment="Center" DockPanel.Dock="Left"
                                                  helpers:ThemeBrush.Fill="{Binding SeverityColor}"/>
                                         <TextBlock Text="{Binding SeverityLabel}" Margin="8,0,0,0"
                                                    VerticalAlignment="Center" TextTrimming="CharacterEllipsis"/>
-                                    </StackPanel>
+                                    </DockPanel>
                                 </DataTemplate>
                             </DataGridTemplateColumn.CellTemplate>
                         </DataGridTemplateColumn>

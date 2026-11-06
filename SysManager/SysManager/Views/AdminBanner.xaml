@@ -29,7 +29,7 @@
             <!-- DockPanel, not a horizontal StackPanel: the message is the last child, so it fills the
                  remaining width and TextWrapping actually wraps. Inside a horizontal StackPanel the child
                  is measured with infinite width, so the attribute is inert and long copy is clipped —
-                 NoTextWrapping_IsInertInsideAHorizontalStackPanel exists for that exact mistake, and two
+                 NoTextWrappingOrTrimming_IsInertInsideAHorizontalStackPanel exists for that exact mistake, and two
                  views already used this DockPanel shape before the extraction. -->
             <DockPanel>
                 <!-- HelpText, not a longer Name: Narrator reads the name first and the help text after, so

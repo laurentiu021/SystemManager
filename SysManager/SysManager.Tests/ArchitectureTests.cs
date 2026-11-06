@@ -3723,28 +3723,39 @@ public partial class ArchitectureTests
     }
 
     /// <summary>
-    /// <c>TextWrapping="Wrap"</c> must not sit inside a horizontal <c>StackPanel</c>, where it does
+    /// <c>TextWrapping</c> and <c>TextTrimming</c> must not sit inside a horizontal <c>StackPanel</c>, where they do
     /// nothing.
     /// </summary>
     /// <remarks>
     /// <para>A StackPanel measures its children with infinite width along its orientation, so a TextBlock
     /// inside a horizontal one never learns a width to wrap against: the attribute is inert and the text
     /// is laid out on a single line, with whatever exceeds the panel silently clipped. It reads as
-    /// protection and provides none.</para>
+    /// protection and provides none. Trimming is the same: an ellipsis needs a width to trim to.</para>
     /// <para>14 TextBlocks across 13 views did this, every one of them a warning or an explanation — an
     /// SSD-shredding caveat, a Tamper-Protection notice, admin-requirement banners — so the truncation
     /// dropped the caveat and kept the setup. The correct parent is a <c>DockPanel</c> (glyph docked
     /// left, message filling) or a <c>Grid</c>, both of which give the text a real width. This test keeps
     /// the next hand-written banner from reintroducing the class.</para>
+    /// <para>It missed three more for two reasons (#2787). It read only the <c>Text</c> attribute, so Speed Test's
+    /// note, a TextBlock of <c>Run</c>s, had no text and was skipped. And it stopped at the first StackPanel it
+    /// met, treating a vertical one as giving a real width, which it cannot when a horizontal one holds it: Deep
+    /// Cleanup's "Safe by design" and the preview banner sat in exactly that. Every container passes on the width it is
+    /// given, so the walk now goes past each one to the first horizontal StackPanel, and stops only where something
+    /// sets a width of its own that fits a card on the smallest page, or a template begins. Deep Cleanup's note had a
+    /// width of its own, a MaxWidth of 900, which is the width it wrapped at whatever the window. It reads trimming and
+    /// <c>MainWindow.xaml</c> as well, which found the Dashboard's alert titles, cut mid-word with no ellipsis, and two
+    /// list cells.</para>
     /// </remarks>
     [Fact]
-    public void NoTextWrapping_IsInertInsideAHorizontalStackPanel()
+    public void NoTextWrappingOrTrimming_IsInertInsideAHorizontalStackPanel()
     {
-        var viewsDir = Path.Combine(TestPaths.AppProject(), "Views");
+        var appDir = TestPaths.AppProject();
+        var files = Directory.GetFiles(Path.Combine(appDir, "Views"), "*.xaml")
+            .Append(Path.Combine(appDir, "MainWindow.xaml"));
         var offenders = new List<string>();
         var scanned = 0;
 
-        foreach (var file in Directory.GetFiles(viewsDir, "*.xaml"))
+        foreach (var file in files)
         {
             System.Xml.Linq.XDocument doc;
             try { doc = System.Xml.Linq.XDocument.Load(file); }
@@ -3753,10 +3764,14 @@ public partial class ArchitectureTests
             foreach (var tb in doc.Descendants().Where(e => e.Name.LocalName == "TextBlock"))
             {
                 scanned++;
-                if (((string?)tb.Attribute("TextWrapping") ?? "") != "Wrap") continue;
+                var wraps = (string?)tb.Attribute("TextWrapping") is "Wrap" or "WrapWithOverflow";
+                var trims = (string?)tb.Attribute("TextTrimming") is "CharacterEllipsis" or "WordEllipsis";
+                if (!wraps && !trims) continue;
+                // A width or maximum of its own that fits is a width to wrap or trim against, wherever it sits.
+                if (HasAWidthThatFits(tb)) continue;
                 if (!InsideHorizontalStackPanel(tb)) continue;
 
-                var text = WhitespaceRun().Replace((string?)tb.Attribute("Text") ?? "", " ").Trim();
+                var text = WhitespaceRun().Replace(TextOf(tb), " ").Trim();
 
                 // A short LITERAL cannot meaningfully clip, so it stays out of scope. A BINDING does not:
                 // its length is unknown at build time, and treating unknown as short is how four real
@@ -3773,42 +3788,106 @@ public partial class ArchitectureTests
             }
         }
 
-        Assert.True(scanned > 100, $"Only {scanned} TextBlocks parsed — the check is not reading the views.");
+        // Vacuity floor: 1,026 TextBlocks in the views and the main window when measured (#2787).
+        Assert.True(scanned > 900, $"Only {scanned} TextBlocks parsed — the check is not reading the views.");
 
         Assert.True(offenders.Count == 0,
-            "These TextBlocks set TextWrapping=\"Wrap\" but their nearest layout ancestor is a horizontal " +
-            "StackPanel, which hands children infinite width — so wrapping does nothing and the text is " +
-            "clipped instead. Put the message in a DockPanel (glyph docked left) or a Grid so it has a " +
-            "real width to wrap in:\n  " + string.Join("\n  ", offenders));
+            "These TextBlocks wrap or trim, but a horizontal StackPanel above them hands them infinite width, "
+            + "so the attribute does nothing and the text is clipped instead. Put the message in a DockPanel "
+            + "(glyph docked left) or a Grid so it has a real width:\n  " + string.Join("\n  ", offenders));
     }
 
     /// <summary>
-    /// True if the nearest ancestor that constrains width along an axis is a horizontal StackPanel.
-    /// A Grid, DockPanel, Border, ScrollViewer or vertical StackPanel between the TextBlock and any
-    /// horizontal StackPanel gives the text a real width, so the decision is made on the FIRST layout
-    /// container encountered walking outward — only an unbroken path into a horizontal StackPanel is inert.
+    /// True if a horizontal StackPanel above <paramref name="textBlock"/> hands it unlimited width.
     /// </summary>
+    /// <remarks>
+    /// A Grid, DockPanel, Border, WrapPanel or vertical StackPanel passes on the width it is given, so inside a
+    /// horizontal StackPanel it has none to pass on: the walk goes past every one of them. It stops, with the text
+    /// given a width, at an element with a width of its own that fits, at a ScrollViewer that scrolls across, where a
+    /// long line is meant to scroll, and at the start of a template or a tooltip, whose width this markup cannot tell.
+    /// </remarks>
     private static bool InsideHorizontalStackPanel(System.Xml.Linq.XElement textBlock)
     {
         for (var e = textBlock.Parent; e is not null; e = e.Parent)
         {
-            switch (e.Name.LocalName)
-            {
-                case "StackPanel":
-                    // No Orientation attribute defaults to Vertical, which constrains width — not a problem.
-                    return (((string?)e.Attribute("Orientation")) ?? "Vertical") == "Horizontal";
-                case "Grid":
-                case "DockPanel":
-                case "Border":
-                case "ScrollViewer":
-                case "WrapPanel":
-                case "UserControl":
-                case "GroupBox":
-                case "ToolTip":
-                    return false;
-            }
+            var name = e.Name.LocalName;
+            if (name is "DataTemplate" or "HierarchicalDataTemplate" or "ControlTemplate" or "ItemsPanelTemplate"
+                    or "ToolTip" or "Popup"
+                || name.EndsWith(".ToolTip", StringComparison.Ordinal))
+                return false;
+            if (name == "StackPanel" && (string?)e.Attribute("Orientation") == "Horizontal") return true;
+            if (name == "ScrollViewer" && (string?)e.Attribute("HorizontalScrollBarVisibility") is "Auto" or "Visible")
+                return false;
+            if (HasAWidthThatFits(e)) return false;
         }
         return false;
+    }
+
+    /// <summary>
+    /// The narrowest a card's content gets: the 724 px page at the window's smallest, less its two 28 px gutters and
+    /// a card's 16 px padding and 1 px border on each side.
+    /// </summary>
+    private const double NarrowestCardContent = 724 - 2 * 28 - 2 * 17;
+
+    /// <summary>
+    /// Whether an element sets a width or a maximum of its own that fits <see cref="NarrowestCardContent"/>, so what
+    /// is inside it has that width whatever holds it.
+    /// </summary>
+    private static bool HasAWidthThatFits(System.Xml.Linq.XElement element) =>
+        new[] { "Width", "MaxWidth" }.Any(name =>
+            double.TryParse((string?)element.Attribute(name), NumberStyles.Float, CultureInfo.InvariantCulture,
+                out var width)
+            && width <= NarrowestCardContent);
+
+    /// <summary>
+    /// A TextBlock's text: its <c>Text</c>, or the words of its content, <c>Run</c>s included, where it has none.
+    /// </summary>
+    private static string TextOf(System.Xml.Linq.XElement textBlock) =>
+        (string?)textBlock.Attribute("Text")
+        ?? string.Concat(textBlock.DescendantNodes().Select(node => node switch
+        {
+            System.Xml.Linq.XText text when !text.Parent!.Name.LocalName.Contains('.') => text.Value,
+            System.Xml.Linq.XElement { Name.LocalName: "Run" } run => (string?)run.Attribute("Text") ?? "",
+            _ => "",
+        }));
+
+    /// <summary>
+    /// The toast is at most a fixed width, and its title and detail wrap inside it, so a long result makes it taller
+    /// rather than running off the window (#2787).
+    /// </summary>
+    /// <remarks>
+    /// The toast sits at the window's bottom right and sizes to its text. With no maximum and neither line wrapping,
+    /// the Uninstaller's "Completed 3/5 uninstalls. Restart required for 2 apps. 1 app is still installed — its
+    /// uninstaller may still be running; Scan again once it finishes." ran off the window's edge in a narrower window.
+    /// Its text is set from code, so the wrap guard above, which reads text in the markup, cannot see it.
+    /// </remarks>
+    [Fact]
+    public void TheToast_WrapsInsideAMaximumWidth()
+    {
+        var window = System.Xml.Linq.XDocument.Load(Path.Combine(TestPaths.AppProject(), "MainWindow.xaml"));
+        System.Xml.Linq.XName name = System.Xml.Linq.XName.Get("Name", "http://schemas.microsoft.com/winfx/2006/xaml");
+        System.Xml.Linq.XElement Named(string id) =>
+            window.Descendants().Single(e => (string?)e.Attribute(name) == id);
+
+        // The page beside the sidebar at the window's smallest, 960 px, less its 16 px frame and the 220 px sidebar;
+        // the toast keeps 20 px from the page's right edge.
+        const double smallestPage = 724;
+        const double toastMargin = 20;
+        var toast = Named("ToastOverlay");
+        var maxWidth = (string?)toast.Attribute("MaxWidth");
+        Assert.True(double.TryParse(maxWidth, NumberStyles.Float, CultureInfo.InvariantCulture, out var most)
+                    && most <= smallestPage - toastMargin,
+            $"the toast's MaxWidth is \"{maxWidth}\", where it needs one that fits the smallest page, or a long "
+            + "result runs off the window.");
+
+        foreach (var line in new[] { "ToastTitle", "ToastDetail" })
+        {
+            var block = Named(line);
+            Assert.True((string?)block.Attribute("TextWrapping") == "Wrap", $"{line} does not wrap.");
+            Assert.True(block.Ancestors().TakeWhile(a => a != toast).All(a =>
+                    a.Name.LocalName != "StackPanel" || (string?)a.Attribute("Orientation") != "Horizontal"),
+                $"{line} sits in a horizontal StackPanel inside the toast, which would give it unlimited width.");
+        }
     }
 
     /// <summary>

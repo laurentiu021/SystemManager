@@ -13,8 +13,9 @@
             <!-- Left accent stripe, mirrors the elevated-admin banner pattern -->
             <Border Background="{DynamicResource Info}" Width="4" HorizontalAlignment="Left"
                     CornerRadius="2" Margin="-12,-10,0,-10"/>
-            <StackPanel Orientation="Horizontal" Margin="10,0,0,0" VerticalAlignment="Center">
-                <TextBlock Text="&#xE9F5;" FontFamily="Segoe Fluent Icons,Segoe MDL2 Assets"
+            <!-- Docked, so the message wraps to the banner instead of being cut near the smallest window (#2787). -->
+            <DockPanel Margin="10,0,0,0" VerticalAlignment="Center">
+                <TextBlock Text="&#xE9F5;" FontFamily="Segoe Fluent Icons,Segoe MDL2 Assets" DockPanel.Dock="Left"
                            FontSize="15" Foreground="{DynamicResource Info}"
                            VerticalAlignment="Center" Margin="0,0,10,0"/>
                 <StackPanel VerticalAlignment="Center">
@@ -28,7 +29,7 @@
                                Style="{StaticResource Subtle}"
                                Margin="0,2,0,0" TextWrapping="Wrap"/>
                 </StackPanel>
-            </StackPanel>
+            </DockPanel>
         </Grid>
     </Border>
 </UserControl>

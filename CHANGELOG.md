@@ -10,6 +10,33 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.136.139] - 2026-11-06
+
+**Notes, toolbars, Dashboard alert titles and toasts that a narrower window cut off at the edge wrap onto another line
+now.**
+
+### Fixed
+- Three notes ran on one line until the card's edge cut them. Speed Test's note about its two tests lost its caveat,
+  "but may show lower results due to HTTP overhead and CDN routing", even at the default window (since 1.11.0). Deep
+  Cleanup's "Safe by design" always wrapped at 900 px whatever the window, so a narrower one cut the end of every line
+  (since 0.5.0). The preview banner was cut near the smallest window (since 1.34.0). Each wraps to its card now. The
+  check meant to catch this missed all three: it read only a note's `Text`, so a note made of runs had none, and it
+  stopped at the first panel it met. It reads runs now, follows the width out past every panel, and covers trimmed
+  text and the main window as well.
+- Three rows of controls ran past the card near the smallest window. System Logs' filter bar lost Refresh, Cancel and
+  the search box (since 0.16.0), Traceroute's one-off trace row lost Trace now and Cancel (since 0.19.0), and Right-click
+  Menu's toolbar cut "Show system entries" (since 1.7.5). Each row wraps now, as the Uninstaller's toolbar does, with
+  each label kept beside its control. At the default window nothing moves.
+- A long System Alerts title on the Dashboard was cut mid-word at the card's edge, with no ellipsis, so "3 memory
+  hardware errors in 30 days — test your RAM" lost the instruction (since 1.17.0). It wraps onto a second line now. The
+  severity labels in System Logs' list (since 1.56.11) and the status in Windows Features' list (since 1.8.0) end in an
+  ellipsis in a narrow column, where they were cut.
+- A long toast, such as the Uninstaller's "Completed 3/5 uninstalls. Restart required for 2 apps. …", had no width
+  limit and ran off the window's edge in a narrower window (since 1.9.0). It is at most 460 px wide now, and its title
+  and detail wrap.
+- A layout test builds every tab at the default and the smallest window and fails on anything cut across. It lists the
+  header rows #2704 is about, so the list empties as those are fixed.
+
 ## [1.136.138] - 2026-11-06
 
 **About shows SysManager's name, version and tagline again, with its buttons under them in rows that wrap to fit the

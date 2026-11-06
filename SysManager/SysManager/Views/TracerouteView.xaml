@@ -80,13 +80,15 @@
                     <TextBlock Grid.Row="0" Text="Hops" Style="{StaticResource SectionTitle}"/>
                     <StackPanel Grid.Row="1" Margin="0,12,0,12">
                         <TextBlock Text="Run a one-off trace to any host:" Style="{StaticResource Subtle}" Margin="0,0,0,6"/>
-                        <StackPanel Orientation="Horizontal">
+                        <!-- Wraps, so Trace now and Cancel move under the box instead of off the card in a narrow
+                             window (#2787). -->
+                        <WrapPanel>
                             <TextBox AutomationProperties.Name="Host to trace" Text="{Binding TraceHost, UpdateSourceTrigger=PropertyChanged}" Width="180"
-                                     IsEnabled="{Binding IsTracing, Converter={StaticResource BoolInvert}}"/>
-                            <Button Content="Trace now" Command="{Binding TraceCommand}" Style="{StaticResource PrimaryButton}" Margin="8,0,0,0"
+                                     Margin="0,0,8,0" IsEnabled="{Binding IsTracing, Converter={StaticResource BoolInvert}}"/>
+                            <Button Content="Trace now" Command="{Binding TraceCommand}" Style="{StaticResource PrimaryButton}" Margin="0,0,6,0"
                                     IsEnabled="{Binding IsTracing, Converter={StaticResource BoolInvert}}"/>
-                            <Button Content="Cancel" Command="{Binding CancelTraceCommand}" Style="{StaticResource GhostButton}" Margin="6,0,0,0"/>
-                        </StackPanel>
+                            <Button Content="Cancel" Command="{Binding CancelTraceCommand}" Style="{StaticResource GhostButton}"/>
+                        </WrapPanel>
                         <TextBlock Text="{Binding TraceStatus}" Style="{StaticResource Subtle}" Margin="0,6,0,0"/>
                     </StackPanel>
                     <DataGrid AutomationProperties.Name="Traceroute hops" Grid.Row="2" ItemsSource="{Binding Shared.TracerouteHops}"

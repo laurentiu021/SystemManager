@@ -264,6 +264,14 @@ runner, which allows 10 s, then forced it out with exit code 1 although every te
   queue and deliberately does **not** pump a dispatcher, so `DispatcherTimer` and `InvokeAsync` do not
   run under it — a pumping dispatcher schedules real layout, which reaches DirectWrite and dies on a
   headless runner. The unit project has no view-instantiating test and so needs no copy of this.
+- `PageWidth` — **`SysManager.IntegrationTests` only.** The width a tab's page has beside the sidebar: 1,044 px at
+  the window's default 1280 and 724 at its smallest, 960. A view laid out at these widths is laid out as it is seen.
+- `LayoutClip` — **`SysManager.IntegrationTests` only.** Reads which laid-out elements their parent cuts. A cut
+  element is still laid out at its full width and then clipped, so its own size cannot show the cut; the layout clip
+  WPF gives it can. `ViewLayoutTests` reads it over every view at both page widths (#2787), and About's test over its
+  version card (#2735). It leaves out what is collapsed, which keeps the sizes of the last pass that showed it.
+- `AppViews` — **`SysManager.IntegrationTests` only.** Every view a test can build on its own, in name order, for the
+  tests that go over all of them.
 - `RunningChild` — **`SysManager.IntegrationTests` only.** A Windows PowerShell the test starts and
   owns, for tests that end or change a real process: File Lock Detector's End process, CPU Core
   Affinity's pin (#2514), and Gaming Profile's auto-revert when the game exits (#2745). It can hold

@@ -28,8 +28,14 @@
                        Style="{StaticResource Subtle}" Margin="0,4,0,0"/>
         </StackPanel>
 
+        <!-- Elevation banner, straight after the header as on every tab that needs administrator rights, so
+             the reason Scan lists nothing comes before Scan, on screen and to Tab (#2943). -->
+        <v:AdminBanner Grid.Row="1" Margin="0,0,0,12"
+                       NotElevatedMessage="Listing, enabling or disabling Windows features requires administrator privileges — Windows shows the list only to an administrator."
+                       ElevatedMessage="Running as administrator — you can list, enable and disable Windows features."/>
+
         <!-- Toolbar -->
-        <Border Grid.Row="1" Style="{StaticResource Card}" Margin="0,0,0,12" Padding="12">
+        <Border Grid.Row="2" Style="{StaticResource Card}" Margin="0,0,0,12" Padding="12">
             <WrapPanel>
                 <Button Content="Scan" Command="{Binding ScanCommand}"
                         Style="{StaticResource SecondaryButton}" Margin="0,0,8,0"/>
@@ -52,11 +58,6 @@
                 </Border>
             </WrapPanel>
         </Border>
-
-        <!-- Elevation banner -->
-        <v:AdminBanner Grid.Row="2" Margin="0,0,0,12"
-                       NotElevatedMessage="Listing, enabling or disabling Windows features requires administrator privileges — Windows shows the list only to an administrator."
-                       ElevatedMessage="Running as administrator — you can list, enable and disable Windows features."/>
 
         <!-- Summary -->
         <Border Grid.Row="3" Style="{StaticResource Card}" Margin="0,0,0,12" Padding="12">

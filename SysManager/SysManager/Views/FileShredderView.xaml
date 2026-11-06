@@ -70,53 +70,56 @@
         </Border>
 
         <!-- Items DataGrid -->
-        <DataGrid Grid.Row="2" ItemsSource="{Binding Items}"
-                  AutomationProperties.Name="Files queued for shredding"
-                  AutoGenerateColumns="False" IsReadOnly="True"
-                  CanUserAddRows="False" CanUserDeleteRows="False"
-                  CanUserSortColumns="True"
-                  CanUserResizeColumns="True"
-                  GridLinesVisibility="None"
-                  Background="Transparent" BorderThickness="0"
-                  Margin="28,12,28,0"
-                  VirtualizingPanel.IsVirtualizing="True"
-                  VirtualizingPanel.VirtualizationMode="Recycling">
-            <DataGrid.Style>
-                <Style TargetType="DataGrid" BasedOn="{StaticResource {x:Type DataGrid}}">
-                    <Setter Property="HeadersVisibility" Value="Column"/>
-                    <Style.Triggers>
-                        <DataTrigger Binding="{Binding Items.Count}" Value="0">
-                            <Setter Property="HeadersVisibility" Value="None"/>
-                        </DataTrigger>
-                    </Style.Triggers>
-                </Style>
-            </DataGrid.Style>
-            <DataGrid.Columns>
-                <DataGridTextColumn Header="Name" Binding="{Binding Name}" Width="200" MinWidth="100"/>
-                <DataGridTextColumn Header="Path" Binding="{Binding Path}" Width="*" MinWidth="120"/>
-                <DataGridTextColumn Header="Size" Binding="{Binding SizeDisplay}" SortMemberPath="SizeBytes" Width="90" MinWidth="60"/>
-                <DataGridTextColumn Header="Status" Binding="{Binding Status}" Width="160" MinWidth="80"/>
-                <DataGridTemplateColumn Header="" Width="70" MinWidth="70" CanUserResize="False">
-                    <DataGridTemplateColumn.CellTemplate>
-                        <DataTemplate>
-                            <Button Content="Remove"
-                                    AutomationProperties.Name="{Binding Name, StringFormat='Remove {0} from shred queue'}"
-                                    Command="{Binding DataContext.RemoveItemCommand, RelativeSource={RelativeSource AncestorType=DataGrid}}"
-                                    CommandParameter="{Binding}"
-                                    Style="{StaticResource GhostButton}"
-                                    Padding="4,2" FontSize="11"/>
-                        </DataTemplate>
-                    </DataGridTemplateColumn.CellTemplate>
-                </DataGridTemplateColumn>
-            </DataGrid.Columns>
-        </DataGrid>
+        <Border Grid.Row="2" Style="{StaticResource Card}" Margin="28,16,28,0" Padding="0">
+            <Grid>
+                <DataGrid ItemsSource="{Binding Items}"
+                          AutomationProperties.Name="Files queued for shredding"
+                          AutoGenerateColumns="False" IsReadOnly="True"
+                          CanUserAddRows="False" CanUserDeleteRows="False"
+                          CanUserSortColumns="True"
+                          CanUserResizeColumns="True"
+                          GridLinesVisibility="None"
+                          Background="Transparent" BorderThickness="0"
+                          VirtualizingPanel.IsVirtualizing="True"
+                          VirtualizingPanel.VirtualizationMode="Recycling">
+                    <DataGrid.Style>
+                        <Style TargetType="DataGrid" BasedOn="{StaticResource {x:Type DataGrid}}">
+                            <Setter Property="HeadersVisibility" Value="Column"/>
+                            <Style.Triggers>
+                                <DataTrigger Binding="{Binding Items.Count}" Value="0">
+                                    <Setter Property="HeadersVisibility" Value="None"/>
+                                </DataTrigger>
+                            </Style.Triggers>
+                        </Style>
+                    </DataGrid.Style>
+                    <DataGrid.Columns>
+                        <DataGridTextColumn Header="Name" Binding="{Binding Name}" Width="200" MinWidth="100"/>
+                        <DataGridTextColumn Header="Path" Binding="{Binding Path}" Width="*" MinWidth="120"/>
+                        <DataGridTextColumn Header="Size" Binding="{Binding SizeDisplay}" SortMemberPath="SizeBytes" Width="90" MinWidth="60"/>
+                        <DataGridTextColumn Header="Status" Binding="{Binding Status}" Width="160" MinWidth="80"/>
+                        <DataGridTemplateColumn Header="" Width="70" MinWidth="70" CanUserResize="False">
+                            <DataGridTemplateColumn.CellTemplate>
+                                <DataTemplate>
+                                    <Button Content="Remove"
+                                            AutomationProperties.Name="{Binding Name, StringFormat='Remove {0} from shred queue'}"
+                                            Command="{Binding DataContext.RemoveItemCommand, RelativeSource={RelativeSource AncestorType=DataGrid}}"
+                                            CommandParameter="{Binding}"
+                                            Style="{StaticResource GhostButton}"
+                                            Padding="4,2" FontSize="11"/>
+                                </DataTemplate>
+                            </DataGridTemplateColumn.CellTemplate>
+                        </DataGridTemplateColumn>
+                    </DataGrid.Columns>
+                </DataGrid>
 
-        <!-- Empty state — neutral glyph; the warning triangle is reserved for the
-             actual SSD warning banner, not this idle "nothing queued yet" state. -->
-        <v:EmptyState Grid.Row="2" Glyph="&#xE74C;"
-                      Title="No files queued"
-                      Message="Add files above to securely erase them beyond recovery."
-                      Visibility="{Binding Items.Count, Converter={StaticResource FlexVis}, ConverterParameter=Inverse}"/>
+                <!-- Empty state — neutral glyph; the warning triangle is reserved for the
+                     actual SSD warning banner, not this idle "nothing queued yet" state. -->
+                <v:EmptyState Glyph="&#xE74C;"
+                              Title="No files queued"
+                              Message="Add files above to securely erase them beyond recovery."
+                              Visibility="{Binding Items.Count, Converter={StaticResource FlexVis}, ConverterParameter=Inverse}"/>
+            </Grid>
+        </Border>
 
         <!-- Footer -->
         <Border Grid.Row="3" Margin="28,12,28,24" Padding="8">

@@ -10,6 +10,26 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.136.137] - 2026-11-06
+
+**On Windows Features the note about administrator rights comes before Scan now, and App Blocker, File Shredder and
+Shortcut Cleaner show their lists in a card like the other list tabs.**
+
+### Fixed
+- On Windows Features the Scan and Search toolbar sat between the heading and the banner that says why the tab needs
+  administrator rights, so someone without them met Scan first, on screen and with Tab, and read why the list stays
+  empty only after it (since 1.7.7). The banner comes straight after the heading now, as on the 31 other tabs that
+  carry it. On Shortcut Cleaner the banner sat 16 px under the heading, where the other tabs laid out the same way
+  leave 12 (since 1.43.0). Two checks fail the build: one when a control comes between a tab's heading and its
+  banner, one when a banner on that layout leaves the 12 px gap.
+- App Blocker (since 0.34.0), File Shredder (since 1.4.0) and Shortcut Cleaner (since 0.32.0) drew their list straight
+  on the page, where Startup Manager, Uninstaller, Services and the other list tabs put theirs in a card with an edge
+  and rounded corners. The difference showed most on the light themes. Each list and its empty message sit in a card
+  now. On File Shredder and Shortcut Cleaner that card sits 16 px under the toolbar, as on Quick Cleanup, instead of
+  12. App Blocker's two rows of buttons are wrapping card toolbars like Uninstaller's, and the faint divider
+  between Refresh and Select All, the only one on a toolbar in the app, is gone, so the two buttons sit 16 px apart
+  where they were 49. A check fails the build when a list sits outside a card.
+
 ## [1.136.136] - 2026-11-06
 
 **Display Profiles reads its 15-second countdown out once rather than every second, and puts focus on Keep.**

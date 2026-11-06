@@ -6251,6 +6251,134 @@ public partial class ArchitectureTests
     }
 
     /// <summary>
+    /// On every tab that hosts the admin banner, the banner comes straight after the page's header.
+    /// </summary>
+    /// <remarks>
+    /// The banner says why administrator rights are needed and what they unlock, so it has to come before the
+    /// controls that will not work without them. Windows Features put its Scan and Search toolbar between the header
+    /// and the banner, so someone without elevation met Scan first, on screen and with Tab (#2943). What may sit in
+    /// between is what holds no control: App Blocker's warning that a block cannot be undone is the one case. Read
+    /// by grid row where the banner sits in a Grid, and by order where it sits in a panel.
+    /// </remarks>
+    [Fact]
+    public void EveryAdminBanner_ComesStraightAfterThePageHeader()
+    {
+        var viewsDir = Path.Combine(TestPaths.AppProject(), "Views");
+        var offenders = new List<string>();
+        var hosts = 0;
+
+        foreach (var file in Directory.GetFiles(viewsDir, "*.xaml"))
+        {
+            var name = Path.GetFileName(file);
+            if (name == "AdminBanner.xaml") continue;
+            var banner = XDocument.Load(file).Descendants().FirstOrDefault(e => e.Name.LocalName == "AdminBanner");
+            if (banner?.Parent is not { } parent) continue;
+
+            var siblings = parent.Elements().Where(e => !e.Name.LocalName.Contains('.')).ToList();
+            var header = siblings.FirstOrDefault(e => e.DescendantsAndSelf()
+                .Any(d => (string?)d.Attribute("Style") == "{StaticResource Display}"));
+            Assert.True(header is not null,
+                $"{name}: the page header is not beside the admin banner, so where the banner sits cannot be read");
+            hosts++;
+
+            var between = parent.Name.LocalName == "Grid"
+                ? siblings.Where(e => GridRowOf(e) > GridRowOf(header) && GridRowOf(e) < GridRowOf(banner))
+                : siblings.SkipWhile(e => e != header).Skip(1).TakeWhile(e => e != banner);
+            foreach (var element in between)
+            {
+                var control = element.DescendantsAndSelf().FirstOrDefault(d =>
+                    UiAutomationContractTests.TakesFocus.Contains(d.Name.LocalName, StringComparer.Ordinal));
+                if (control is not null)
+                    offenders.Add($"{name}: a <{control.Name.LocalName}> sits between the header and the admin banner");
+            }
+        }
+
+        // Vacuity floor: 32 views host the banner when measured (#2943).
+        Assert.True(hosts >= 30, $"only {hosts} views hosting the admin banner were read, from 32 measured.");
+        Assert.True(offenders.Count == 0,
+            "the admin banner says why these tabs need administrator rights, and here a control comes before it, so "
+            + "someone without them meets the control first. Put the banner straight after the header:\n  "
+            + string.Join("\n  ", offenders));
+    }
+
+    /// <summary>The grid row an element is placed in: its <c>Grid.Row</c>, or 0.</summary>
+    private static int GridRowOf(XElement element) =>
+        int.TryParse((string?)element.Attribute("Grid.Row"), NumberStyles.None, CultureInfo.InvariantCulture,
+            out var row) ? row : 0;
+
+    /// <summary>
+    /// A per-section view puts its admin banner on the banner gutter, <c>28,12,28,0</c>.
+    /// </summary>
+    /// <remarks>
+    /// The per-section layout gives each section its own 28 px sides, and the banner 12 above it. Shortcut Cleaner's
+    /// banner took the content card's 16, so the gap above it was 4 px taller than on Quick Cleanup beside it
+    /// (#2943). A per-section view is one whose header is on <c>28,24,28,0</c>, as the end-gutter guard reads it.
+    /// </remarks>
+    [Fact]
+    public void EveryPerSectionView_PutsItsAdminBannerOnTheBannerGutter()
+    {
+        var viewsDir = Path.Combine(TestPaths.AppProject(), "Views");
+        var offenders = new List<string>();
+        var perSection = 0;
+
+        foreach (var file in Directory.GetFiles(viewsDir, "*.xaml"))
+        {
+            var document = XDocument.Load(file);
+            var banner = document.Descendants().FirstOrDefault(e => e.Name.LocalName == "AdminBanner");
+            if (banner is null) continue;
+            if (!document.Descendants().Any(e => (string?)e.Attribute("Margin") == "28,24,28,0")) continue;
+
+            perSection++;
+            var margin = (string?)banner.Attribute("Margin");
+            if (margin != "28,12,28,0")
+                offenders.Add($"{Path.GetFileName(file)}: the admin banner is on Margin=\"{margin}\"");
+        }
+
+        // Vacuity floor: ten per-section views host the banner when measured.
+        Assert.True(perSection >= 9,
+            $"only {perSection} per-section views with an admin banner were read, from 10 measured.");
+        Assert.True(offenders.Count == 0,
+            "a per-section view's admin banner sits on the banner gutter, 28,12,28,0, as on Quick Cleanup:\n  "
+            + string.Join("\n  ", offenders));
+    }
+
+    /// <summary>
+    /// Every list table in the views sits in a card.
+    /// </summary>
+    /// <remarks>
+    /// Startup Manager, Uninstaller, Services, Process Manager and the rest put their <c>DataGrid</c> and its empty
+    /// state in a <c>Card</c>, so the header band and the striped rows have an edge and rounded corners. App Blocker,
+    /// File Shredder and Shortcut Cleaner put theirs straight on the page, which showed most on the light themes
+    /// (#2885).
+    /// </remarks>
+    [Fact]
+    public void EveryDataGrid_SitsInACard()
+    {
+        var viewsDir = Path.Combine(TestPaths.AppProject(), "Views");
+        string[] cards = ["{StaticResource Card}", "{StaticResource CardInner}"];
+        var offenders = new List<string>();
+        var grids = 0;
+
+        foreach (var file in Directory.GetFiles(viewsDir, "*.xaml"))
+        {
+            foreach (var grid in XDocument.Load(file).Descendants().Where(e => e.Name.LocalName == "DataGrid"))
+            {
+                grids++;
+                if (grid.Ancestors().Any(a => cards.Contains((string?)a.Attribute("Style"), StringComparer.Ordinal)))
+                    continue;
+                offenders.Add($"{Path.GetFileName(file)}: \"{(string?)grid.Attribute("AutomationProperties.Name")}\"");
+            }
+        }
+
+        // Vacuity floor: 35 tables when measured (#2885).
+        Assert.True(grids >= 33, $"only {grids} DataGrids were read, from 35 measured.");
+        Assert.True(offenders.Count == 0,
+            "these tables sit on the bare page. Put the DataGrid and its empty state in "
+            + "<Border Style=\"{StaticResource Card}\" Padding=\"0\">, as Startup Manager does:\n  "
+            + string.Join("\n  ", offenders));
+    }
+
+    /// <summary>
     /// A per-section view's LAST horizontal-28 gutter must carry a documented bottom gutter, so no tab ends
     /// with its content jammed against the bottom of the window.
     /// </summary>

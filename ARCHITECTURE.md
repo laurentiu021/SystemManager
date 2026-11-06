@@ -2083,6 +2083,9 @@ Key services:
   with 7/14/30-day retention. Each hour `PruneWhenDueAsync` reads the first line, and rewrites the file only once its
   oldest sample is `PruneSlackDays` (a day) past the window, so at most once a day where every hourly prune did;
   `LoadAsync` never reaches past the window, and reads the file from its end through `TailLines` (#2853).
+  `CountSampleAsync` makes the first of those looks `FirstPruneLookAfterSamples` (six samples, a minute) in, where
+  `Start` pruned the whole file before its first sample, and the session's first append starts on a line of its own
+  when a crash left the last one without its ending, the line that start-up prune dropped (#2852).
   Reuses `SystemInfoService` + NvAPIWrapper +
   `TemperatureService`; serialize/parse/prune/downsample/CSV are pure, unit-tested static
   helpers, and the directory is injectable — like `BandwidthHistoryService` — so tests cover the

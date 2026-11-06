@@ -714,4 +714,66 @@ public class ResourceHistoryServiceDiskTests : IDisposable
         Assert.True(ResourceHistoryService.TryParse(kept[0], out var sample));
         Assert.Equal(Noon.AddHours(-1), sample!.Timestamp);
     }
+
+    // ── The sampler's start (#2852) ─────────────────────────────────────────
+
+    /// <summary>
+    /// The sampler's first look at the prune comes a minute in, after six samples, and the next an hour after it. The
+    /// whole file was pruned as the app started, before the first sample.
+    /// </summary>
+    [Fact]
+    public async Task TheFirstLookAtThePrune_ComesAMinuteIn_AndTheNextAnHourAfter()
+    {
+        void SeedADuePrune() => Seed(Stamped(Noon.AddDays(-9)), Stamped(Noon.AddHours(-1)));
+        using var service = ServiceAt(Noon);
+
+        SeedADuePrune();
+        var due = File.ReadAllBytes(DataPath);
+        for (var i = 1; i < ResourceHistoryService.FirstPruneLookAfterSamples; i++)
+            await service.CountSampleAsync(default);
+        Assert.Equal(due, File.ReadAllBytes(DataPath));   // five samples in: not looked at yet
+        await service.CountSampleAsync(default);
+        Assert.Single(File.ReadAllLines(DataPath));       // the sixth: pruned
+
+        SeedADuePrune();
+        for (var i = 1; i < 360; i++) await service.CountSampleAsync(default);
+        Assert.Equal(due, File.ReadAllBytes(DataPath));   // 359 samples after that look: not looked at again yet
+        await service.CountSampleAsync(default);
+        Assert.Single(File.ReadAllLines(DataPath));       // an hour after it: pruned
+    }
+
+    /// <summary>
+    /// A line a crash cut short does not swallow the next sample: the session's first append starts on a line of its
+    /// own. The prune as the app started dropped such a line before the first append.
+    /// </summary>
+    [Fact]
+    public async Task TheFirstAppend_AfterALineACrashCutShort_StartsALineOfItsOwn()
+    {
+        Seed(Stamped(Noon.AddMinutes(-30)));
+        // A line with no ending, as a crash leaves it.
+        File.AppendAllText(DataPath, "{\"t\":\"2026-11-06T11:40:00+00:00\",\"c\":1");
+        using var service = ServiceAt(Noon);
+
+        await service.AppendAsync(Stamped(Noon.AddMinutes(-5)), default);
+
+        var loaded = await service.LoadAsync(TimeSpan.FromHours(1));
+        Assert.Equal([Noon.AddMinutes(-30), Noon.AddMinutes(-5)], loaded.Select(s => s.Timestamp));
+    }
+
+    /// <summary>An append to a file that ends as it should, or to no file, adds no empty line.</summary>
+    [Fact]
+    public async Task AnAppend_ToAFileThatEndsWithItsLine_AddsNoEmptyLine()
+    {
+        using (var first = ServiceAt(Noon))
+        {
+            await first.AppendAsync(Stamped(Noon.AddMinutes(-20)), default);   // no file yet
+            await first.AppendAsync(Stamped(Noon.AddMinutes(-10)), default);
+        }
+        using (var second = ServiceAt(Noon)) await second.AppendAsync(Stamped(Noon.AddMinutes(-5)), default);
+
+        var text = File.ReadAllText(DataPath);
+        Assert.DoesNotContain("\n\n", text);
+        Assert.NotEqual('\n', text[0]);
+        Assert.Equal(3, File.ReadAllLines(DataPath).Length);
+    }
 }

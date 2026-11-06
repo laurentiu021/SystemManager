@@ -35,6 +35,12 @@ public sealed class ResourceHistoryService : IDisposable
     /// <summary>How far past the window the file may run before the sampler's hourly look prunes it.</summary>
     internal const int PruneSlackDays = 1;
 
+    /// <summary>
+    /// The samples before the sampler's first look at the prune: a minute, rather than a prune of the whole file as
+    /// the app started (#2852).
+    /// </summary>
+    internal const int FirstPruneLookAfterSamples = 6;
+
     private static readonly JsonSerializerOptions SampleJson = new() { WriteIndented = false };
 
     private readonly SystemInfoService _sys;
@@ -53,7 +59,10 @@ public sealed class ResourceHistoryService : IDisposable
     private CancellationTokenSource? _cts;
     private Task? _loopTask;
     private bool _disposed;
-    private int _samplesSincePrune;
+    private int _samplesSincePrune = PruneEverySamples - FirstPruneLookAfterSamples;
+
+    // False until the session's first append has looked at how the file ends (#2852).
+    private bool _lastLineEnded;
 
     private int _retentionDays = 7;
 
@@ -157,9 +166,6 @@ public sealed class ResourceHistoryService : IDisposable
         _cts = new CancellationTokenSource();
         var ct = _cts.Token;
 
-        // Prune stale/malformed lines from a previous session before accruing new ones.
-        _ = PruneAsync(ct);
-
         _cpu = _sys.NewCpuSampler();
         _loopTask = Task.Run(async () =>
         {
@@ -175,12 +181,7 @@ public sealed class ResourceHistoryService : IDisposable
                     var sample = await CaptureSampleAsync(ct).ConfigureAwait(false);
                     await AppendAsync(sample, ct).ConfigureAwait(false);
                     LastSampleAt = sample.Timestamp;
-
-                    if (++_samplesSincePrune >= PruneEverySamples)
-                    {
-                        _samplesSincePrune = 0;
-                        await PruneWhenDueAsync(ct).ConfigureAwait(false);
-                    }
+                    await CountSampleAsync(ct).ConfigureAwait(false);
 
                     await Task.Delay(TimeSpan.FromSeconds(SampleIntervalSeconds), ct).ConfigureAwait(false);
                 }
@@ -243,15 +244,40 @@ public sealed class ResourceHistoryService : IDisposable
         return gpus.Count > 0 ? gpus[0].UsagePercent : null;
     }
 
+    /// <summary>
+    /// Counts a sample the sampler took. Every <see cref="PruneEverySamples"/>th, the first
+    /// <see cref="FirstPruneLookAfterSamples"/> in, looks whether a prune is due.
+    /// </summary>
+    /// <remarks>
+    /// The sampler pruned the whole file as it started, before its first sample: on a 30-day file on my PC, 824 ms,
+    /// 160 MB allocated and 19 MB written, in the first second of every launch, for the samples that had expired since
+    /// the last prune. A minute in, the look reads one line, and prunes only once a sample is a day past the window.
+    /// </remarks>
+    internal async Task CountSampleAsync(CancellationToken ct)
+    {
+        if (++_samplesSincePrune < PruneEverySamples) return;
+        _samplesSincePrune = 0;
+        await PruneWhenDueAsync(ct).ConfigureAwait(false);
+    }
+
     // ── Disk access ──────────────────────────────────────────────────────
 
-    private async Task AppendAsync(ResourceSample sample, CancellationToken ct)
+    /// <summary>Appends one sample, on a line of its own.</summary>
+    /// <remarks>
+    /// A crash or a power cut in an append can leave the file's last line without its ending, and the next sample then
+    /// ran on from it into a line nothing can read. The prune as the app started dropped that line first; the
+    /// session's first append now starts on a new line when the file does not end with one (#2852).
+    /// </remarks>
+    internal async Task AppendAsync(ResourceSample sample, CancellationToken ct)
     {
         await _fileLock.WaitAsync(ct).ConfigureAwait(false);
         try
         {
             Directory.CreateDirectory(_dataDir);
-            await File.AppendAllTextAsync(_dataPath, Serialize(sample) + "\n", ct).ConfigureAwait(false);
+            var line = Serialize(sample) + "\n";
+            if (!_lastLineEnded && !EndsWithLineEnding(_dataPath)) line = "\n" + line;
+            await File.AppendAllTextAsync(_dataPath, line, ct).ConfigureAwait(false);
+            _lastLineEnded = true;
         }
         catch (IOException ex) { Log.Debug("Resource history append failed: {Error}", ex.Message); }
         // UnauthorizedAccessException is a SIBLING of IOException, not a subclass, so it escapes the
@@ -294,6 +320,33 @@ public sealed class ResourceHistoryService : IDisposable
         catch (IOException ex) { Log.Debug("Resource history load failed: {Error}", ex.Message); return []; }
         catch (UnauthorizedAccessException ex) { Log.Debug("Resource history load denied: {Error}", ex.Message); return []; }
         finally { if (!_disposed) _fileLock.Release(); }
+    }
+
+    /// <summary>
+    /// True when the file is missing, empty or ends with an LF, or when its end cannot be read: the append then goes
+    /// on as it always did, and fails or not by itself.
+    /// </summary>
+    private static bool EndsWithLineEnding(string path)
+    {
+        try
+        {
+            if (!File.Exists(path)) return true;
+            using var file = File.OpenHandle(path, FileMode.Open, FileAccess.Read, FileShare.Read);
+            var length = RandomAccess.GetLength(file);
+            if (length == 0) return true;
+            Span<byte> last = stackalloc byte[1];
+            return RandomAccess.Read(file, last, length - 1) != 1 || last[0] == (byte)'\n';
+        }
+        catch (IOException ex)
+        {
+            Log.Debug("Resource history end read failed: {Error}", ex.Message);
+            return true;
+        }
+        catch (UnauthorizedAccessException ex)
+        {
+            Log.Debug("Resource history end read denied: {Error}", ex.Message);
+            return true;
+        }
     }
 
     /// <summary>

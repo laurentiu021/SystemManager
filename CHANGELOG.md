@@ -10,6 +10,19 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.136.120] - 2026-11-06
+
+**On Windows Update, Cancel stops a check for updates and a download straight away, and an install in progress finishes before the rest is left.**
+
+### Fixed
+- Cancel and Escape did nothing while Windows Update searched for updates, which can take minutes. They took effect
+  only once the search had returned, and its result was thrown away. During an install, Cancel waited until the
+  update being downloaded and installed was done, which for a cumulative update or a feature upgrade can be tens of
+  minutes. The search and the download now stop when you cancel. On my PC, a check that takes about 35 seconds ended
+  under a second after Cancel. An update that is installing is left to finish, because one stopped part way can be
+  left half applied. The console says so, and nothing after it starts. Since the tab started reading Windows Update
+  directly, in 1.18.0.
+
 ## [1.136.119] - 2026-11-06
 
 **On Windows Update, an install that is cancelled or stopped by an error still says how many updates went in and whether to restart, and no row is left saying "Pending…".**

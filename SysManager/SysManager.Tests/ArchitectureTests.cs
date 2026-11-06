@@ -22867,12 +22867,20 @@ public partial class ArchitectureTests
     /// <remarks>
     /// Both passed <c>IsInstalled=0</c> alone, which replaces the search's default rather than adding to it, so an
     /// update the user had hidden was listed, ticked and installed. Read from source because the searches go through
-    /// COM.
+    /// COM. A search starts as a job since #2791, so Cancel can stop it: <c>BeginSearch</c>, whose first argument is
+    /// the criteria, is read as well as <c>Search</c>.
     /// </remarks>
     [Fact]
     public void EveryWindowsUpdateSearch_LeavesOutTheUpdatesTheUserHid()
     {
         Assert.Equal("IsInstalled=0 and IsHidden=0", WindowsUpdateService.PendingCriteria);
+
+        // The reader takes the criteria from either call, and not from the call that ends a job.
+        Assert.Equal("PendingCriteria",
+            UpdateSearch().Match("searcher.Search(PendingCriteria)").Groups["criteria"].Value);
+        Assert.Equal("\"IsInstalled=0\"",
+            UpdateSearch().Match("searcher.BeginSearch(\"IsInstalled=0\", done, null)").Groups["criteria"].Value);
+        Assert.DoesNotMatch(UpdateSearch(), "searcher.EndSearch(job)");
 
         var code = WithoutComments(File.ReadAllText(
             Path.Combine(TestPaths.AppProject(), "Services", "WindowsUpdateService.cs")));
@@ -22884,7 +22892,8 @@ public partial class ArchitectureTests
         Assert.All(searches, criteria => Assert.Equal(nameof(WindowsUpdateService.PendingCriteria), criteria));
     }
 
-    [GeneratedRegex(@"\.Search\s*\((?<criteria>[^)]*)\)", RegexOptions.CultureInvariant)]
+    /// <summary>A Windows Update search, one blocking call or a job: its criteria, the first argument.</summary>
+    [GeneratedRegex(@"\.(?:Begin)?Search\s*\((?<criteria>[^,)]*)[,)]", RegexOptions.CultureInvariant)]
     private static partial Regex UpdateSearch();
 
     /// <summary>

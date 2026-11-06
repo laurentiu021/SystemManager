@@ -837,7 +837,8 @@ Across the tab:
   look at the history, keeps your choices, and only an update not listed before starts ticked
 - Live progress per update: `Connecting → Downloading → Installing → ✓ Installed`
   streamed to the console as it happens. The console shows this tab's own runs only: the Dashboard's
-  Check Windows Updates does not write into it
+  Check Windows Updates does not write into it. Cancel stops a check for updates and a download at
+  once; an update that is installing finishes first, since one stopped part way can be left half applied
 - Per-row Status column updated in real time
   (`Pending…` → `Downloading…` → `Installing…` → `Installed` /
   `Installed (reboot required)` / `Failed` / `Not applied`). A failed row names the error code

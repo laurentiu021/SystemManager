@@ -10363,6 +10363,62 @@ public partial class ArchitectureTests
     }
 
     /// <summary>
+    /// No style for a button or a list item leaves the control to Windows' template.
+    /// </summary>
+    /// <remarks>
+    /// A style that sets neither a <c>Template</c> nor <c>BasedOn</c> replaces the implicit style for its type, and the
+    /// control then takes its template from Windows' theme, not from the WPF-UI dictionaries <c>App.xaml</c> merges or
+    /// from the app. Three did (#2816): App.xaml's own RadioButton style, so Performance Mode's power plans were white
+    /// circles with a light-blue hover, and the item styles of the live output lines and Duplicate Finder's groups,
+    /// which hovered and selected in blue, where the app hovers in a purple tint.
+    /// <see cref="EveryStyleInAView_BuildsOnTheAppStyleItReplaces"/> did not see them: it reads the views, for the types
+    /// App.xaml styles. This reads App.xaml as well, for the controls whose hover, press or selection a template draws.
+    /// App.xaml's DataGrid, ProgressBar and TabControl styles set colours on Windows' templates on purpose and are
+    /// outside it. So is a MenuItem: Windows' style picks its template by role from keys WPF-UI fills, so Process
+    /// Manager's Kill item, whose style has neither, measured the same template as the items around it.
+    /// </remarks>
+    [Fact]
+    public void NoStyle_LeavesAButtonOrListItemToWindowsTemplate()
+    {
+        string[] drawnByTheirTemplate =
+        [
+            "Button", "ToggleButton", "RepeatButton", "CheckBox", "RadioButton", "ComboBoxItem", "ListBoxItem",
+            "ListViewItem", "TreeViewItem", "TabItem",
+        ];
+        var appDir = TestPaths.AppProject();
+        var files = Directory.GetFiles(Path.Combine(appDir, "Views"), "*.xaml")
+            .Append(Path.Combine(appDir, "MainWindow.xaml"))
+            .Append(Path.Combine(appDir, "App.xaml"));
+        XNamespace x = "http://schemas.microsoft.com/winfx/2006/xaml";
+        var offenders = new List<string>();
+        var read = 0;
+
+        foreach (var file in files)
+        {
+            foreach (var style in XDocument.Load(file, LoadOptions.SetLineInfo).Descendants()
+                         .Where(e => e.Name.LocalName == "Style"))
+            {
+                var type = TargetTypeName((string?)style.Attribute("TargetType"));
+                if (type is null || !drawnByTheirTemplate.Contains(type, StringComparer.Ordinal)) continue;
+                read++;
+                if (style.Attribute("BasedOn") is not null) continue;
+                if (style.Descendants().Any(s => s.Name.LocalName == "Setter"
+                        && (string?)s.Attribute("Property") is "Template" or "Control.Template"))
+                    continue;
+                offenders.Add($"{Path.GetFileName(file)}:{((System.Xml.IXmlLineInfo)style).LineNumber}: a {type} style "
+                              + ((string?)style.Attribute(x + "Key") is { } key ? $"\"{key}\" " : "")
+                              + "sets no Template and no BasedOn");
+            }
+        }
+
+        // Vacuity floor: 45 styles for these controls in App.xaml and the views when measured (#2816).
+        Assert.True(read >= 40, $"only {read} styles for buttons and list items were read, from 45 measured.");
+        Assert.True(offenders.Count == 0,
+            "these styles leave their control to Windows' template, which hovers and selects in blue. Give the style "
+            + "a template, or base it on the style it varies:\n  " + string.Join("\n  ", offenders));
+    }
+
+    /// <summary>
     /// Every checkbox in a grid is the app's checkbox, through <c>GridCheckBox</c> (#2696).
     /// </summary>
     /// <remarks>

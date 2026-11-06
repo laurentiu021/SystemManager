@@ -10,6 +10,25 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.136.141] - 2026-11-06
+
+**Performance Mode's power plans, the live output on five tabs and Duplicate Finder's groups take the app's look,
+where they fell back to Windows' white circles and blue highlights.**
+
+### Fixed
+- Performance Mode's three power plans were Windows' radio buttons: white circles, a light-blue hover and a dotted
+  focus box (since 1.8.0). They are the app's now, shaped like its checkbox: an 18 px ring, an accent dot when chosen,
+  a lighter rim on hover and the app's focus ring.
+- The lines of live output on Quick Cleanup, App Updates, System Fixes, System Health and Windows Update hovered and
+  selected in Windows blue (since 0.3.0). They hover in the app's purple tint now, and the selected line has an accent
+  rim. The lines keep their height.
+- Duplicate Finder's groups hovered light blue with a blue border, and a selected group kept a near-white border once
+  focus left (since 0.35.3), so the purple hover added for them in 1.10.1 never showed. They hover in the purple tint
+  now, with an accent rim on the selected group.
+- A check fails the build when a style for a button or a list item, in App.xaml or a view, sets neither a template nor
+  a style to build on, which is what left these three to Windows. Process Manager's Kill item has the same kind of
+  style, but measured, it draws with the same template as the menu items around it, so it is unchanged.
+
 ## [1.136.140] - 2026-11-06
 
 **On seven tabs the buttons beside a description keep their full width now, where the description took the row and

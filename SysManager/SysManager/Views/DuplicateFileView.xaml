@@ -89,11 +89,30 @@
                         <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
                         <Setter Property="Padding" Value="0"/>
                         <Setter Property="Margin" Value="0"/>
-                        <Style.Triggers>
-                            <Trigger Property="IsMouseOver" Value="True">
-                                <Setter Property="Background" Value="{DynamicResource AccentSoft}"/>
-                            </Trigger>
-                        </Style.Triggers>
+                        <Setter Property="FocusVisualStyle" Value="{StaticResource FocusRing}"/>
+                        <!-- A template of its own, as Disk Analyzer's rows have, so the hover is drawn: with none a
+                             group took Windows' item template, whose own triggers coloured its border light blue and
+                             won over the purple hover set on the item since #538, and a selected group kept a
+                             near-white border after focus left (#2816). -->
+                        <Setter Property="Template">
+                            <Setter.Value>
+                                <ControlTemplate TargetType="ListViewItem">
+                                    <Border x:Name="Bd" Background="Transparent" BorderBrush="Transparent"
+                                            BorderThickness="1" CornerRadius="{StaticResource RadiusMd}">
+                                        <ContentPresenter/>
+                                    </Border>
+                                    <ControlTemplate.Triggers>
+                                        <Trigger Property="IsMouseOver" Value="True">
+                                            <Setter TargetName="Bd" Property="Background" Value="{DynamicResource AccentSoft}"/>
+                                        </Trigger>
+                                        <Trigger Property="IsSelected" Value="True">
+                                            <Setter TargetName="Bd" Property="Background" Value="{DynamicResource AccentSoft}"/>
+                                            <Setter TargetName="Bd" Property="BorderBrush" Value="{DynamicResource Accent}"/>
+                                        </Trigger>
+                                    </ControlTemplate.Triggers>
+                                </ControlTemplate>
+                            </Setter.Value>
+                        </Setter>
                     </Style>
                 </ListView.ItemContainerStyle>
                 <ListView.ItemTemplate>

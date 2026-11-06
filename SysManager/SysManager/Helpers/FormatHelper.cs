@@ -18,37 +18,67 @@ public static class FormatHelper
     /// user's locale, so on a comma-decimal locale (ro-RO, de-DE) a size printed "1,5 GB" while
     /// <see cref="FormatRate"/> — already invariant — printed "12.4 Mbps" on the same screen.
     /// One decimal separator across the whole app.</para>
+    /// <para>A figure that would read 1024.0 once rounded to one decimal takes the next unit: 1,048,575 bytes is
+    /// "1.0 MB", where it read "1024.0 KB", and the top of every unit did the same (#2862).</para>
     /// </summary>
-    public static string FormatSize(long bytes) => bytes switch
+    public static string FormatSize(long bytes)
     {
-        <= 0 => "0 B",
-        < 1L << 10 => bytes.ToString(CultureInfo.InvariantCulture) + " B",
-        < 1L << 20 => OneDecimal(bytes, 1L << 10) + " KB",
-        < 1L << 30 => OneDecimal(bytes, 1L << 20) + " MB",
-        < 1L << 40 => OneDecimal(bytes, 1L << 30) + " GB",
-        _ => OneDecimal(bytes, 1L << 40) + " TB"
-    };
+        if (bytes <= 0) return "0 B";
+        if (bytes < 1024) return bytes.ToString(CultureInfo.InvariantCulture) + " B";
 
-    private static string OneDecimal(long bytes, long divisor) =>
-        (bytes / (double)divisor).ToString("F1", CultureInfo.InvariantCulture);
+        var value = bytes / 1024.0;
+        var unit = 0;
+        var shown = OneDecimal(value);
+        while (unit < SizeUnits.Length - 1 && ReadsAtLeast(shown, 1024))
+        {
+            value /= 1024;
+            unit++;
+            shown = OneDecimal(value);
+        }
+        return shown + " " + SizeUnits[unit];
+    }
+
+    private static readonly string[] SizeUnits = ["KB", "MB", "GB", "TB"];
+
+    private static string OneDecimal(double value) => value.ToString("F1", CultureInfo.InvariantCulture);
+
+    /// <summary>
+    /// Whether a figure, as it is written, reaches <paramref name="next"/>: the rounding that decides is the one the
+    /// reader sees.
+    /// </summary>
+    private static bool ReadsAtLeast(string shown, double next) =>
+        double.Parse(shown, NumberStyles.Float, CultureInfo.InvariantCulture) >= next;
 
     /// <summary>
     /// Formats a byte-per-second rate as a human-readable "12.4 Mbps"-style string. Network speeds
     /// are conventionally shown in BITS per second, so the byte rate is multiplied by 8. Uses
     /// decimal units (bps / Kbps / Mbps / Gbps / Tbps), whole numbers up to Kbps and one decimal
     /// from Mbps up. A zero/negative/NaN rate renders as "0 bps".
+    /// <para>A figure that would read 1000 once rounded takes the next unit, as <see cref="FormatSize"/> does at 1024:
+    /// 124,950 bytes a second is "1.0 Mbps", where it read "1000 Kbps" (#2862).</para>
     /// </summary>
     public static string FormatRate(double bytesPerSec)
     {
         if (double.IsNaN(bytesPerSec) || bytesPerSec <= 0) return "0 bps";
         double bits = bytesPerSec * 8.0;
-        string[] units = ["bps", "Kbps", "Mbps", "Gbps", "Tbps"];
         int u = 0;
-        while (bits >= 1000.0 && u < units.Length - 1) { bits /= 1000.0; u++; }
-        string value = u <= 1 ? Math.Round(bits).ToString(CultureInfo.InvariantCulture)
-                              : bits.ToString("F1", CultureInfo.InvariantCulture);
-        return $"{value} {units[u]}";
+        while (bits >= 1000.0 && u < RateUnits.Length - 1) { bits /= 1000.0; u++; }
+        var shown = RateFigure(bits, u);
+        if (u < RateUnits.Length - 1 && ReadsAtLeast(shown, 1000))
+        {
+            bits /= 1000.0;
+            u++;
+            shown = RateFigure(bits, u);
+        }
+        return $"{shown} {RateUnits[u]}";
     }
+
+    private static readonly string[] RateUnits = ["bps", "Kbps", "Mbps", "Gbps", "Tbps"];
+
+    /// <summary>Whole numbers up to Kbps, one decimal from Mbps up.</summary>
+    private static string RateFigure(double value, int unit) => unit <= 1
+        ? Math.Round(value).ToString(CultureInfo.InvariantCulture)
+        : value.ToString("F1", CultureInfo.InvariantCulture);
 
     /// <summary>
     /// Joins names for a sentence: "a", "a and b", "a, b and c", or "" for none.

@@ -2,8 +2,8 @@
 // Author: laurentiu021 · https://github.com/laurentiu021/SystemManager
 // License: MIT
 
-using System.Globalization;
 using System.Runtime.InteropServices;
+using SysManager.Helpers;
 using SysManager.Models;
 
 namespace SysManager.Services;
@@ -629,14 +629,13 @@ public sealed class WindowsUpdateService : IWindowsUpdateService
         if (o is not null && Marshal.IsComObject(o)) Marshal.FinalReleaseComObject(o);
     }
 
-    internal static string FormatSize(long bytes) => bytes switch
-    {
-        >= 1L << 30 => string.Create(CultureInfo.InvariantCulture, $"{bytes / (double)(1L << 30):F1} GB"),
-        >= 1L << 20 => string.Create(CultureInfo.InvariantCulture, $"{bytes / (double)(1L << 20):F1} MB"),
-        >= 1L << 10 => string.Create(CultureInfo.InvariantCulture, $"{bytes / (double)(1L << 10):F1} KB"),
-        > 0 => $"{bytes} B",
-        _ => "",
-    };
+    /// <summary>
+    /// An update's size as <see cref="FormatHelper.FormatSize"/> writes it, or "" when Windows gave none.
+    /// </summary>
+    /// <remarks>
+    /// Its own ladder read "1024.0 MB" for an update a few bytes under a gigabyte, as FormatHelper's did (#2862).
+    /// </remarks>
+    internal static string FormatSize(long bytes) => bytes > 0 ? FormatHelper.FormatSize(bytes) : "";
 }
 
 /// <summary>

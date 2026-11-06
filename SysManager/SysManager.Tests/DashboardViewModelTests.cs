@@ -473,9 +473,9 @@ public sealed class DashboardViewModelTests : IDisposable
         await vm.QuickCleanupCommand.ExecuteAsync(null);
 
         Assert.Equal("Cancelled", vm.QuickActionStatus);
-        Assert.Equal("Freed 300 MB before it was cancelled", vm.QuickActionDetail);
+        Assert.Equal("Freed 300.0 MB before it was cancelled", vm.QuickActionDetail);
         var entry = Assert.Single(ActivityLogService.Instance.GetRecent(10));
-        Assert.Equal(("Quick Cleanup", "Freed 300 MB before it was cancelled"), (entry.Action, entry.Detail));
+        Assert.Equal(("Quick Cleanup", "Freed 300.0 MB before it was cancelled"), (entry.Action, entry.Detail));
         Assert.Contains(vm.RecentActivity, e => e.Action == "Quick Cleanup");   // shown on the card's list too
         Assert.Equal(1, reads.Drives);
     }
@@ -900,7 +900,28 @@ public sealed class DashboardViewModelTests : IDisposable
         Assert.Equal("Quick Cleanup", heldBy);
         Assert.Null(OperationLockService.Instance.GetActiveOperationName(OperationCategory.Disk));
         Assert.Equal("✓ Done", vm.QuickActionStatus);
-        Assert.Equal("Freed 300 MB", vm.QuickActionDetail);
+        Assert.Equal("Freed 300.0 MB", vm.QuickActionDetail);
+    }
+
+    /// <summary>
+    /// Quick Cleanup's freed figure is the one Quick Tune-Up gives the same sweep. Its own whole megabytes read
+    /// "1024 MB" just under a gigabyte and "0 MB" under half a megabyte (#2862).
+    /// </summary>
+    [Theory]
+    [InlineData(1_073_700_000L, "Freed 1.0 GB")]   // 1023.96 MB: read "Freed 1024 MB"
+    [InlineData(400_000L, "Freed 390.6 KB")]        // read "Freed 0 MB"
+    public async Task QuickCleanup_SaysWhatItFreed_AsQuickTuneUpDoes(long freed, string expected)
+    {
+        using var activity = new ActivityLogScope();
+        using var confirm = new DialogAnswer(confirm: true);
+        var tuneUp = Substitute.For<ITuneUpService>();
+        tuneUp.CleanTempFilesAsync(Arg.Any<CancellationToken>())
+            .Returns(Task.FromResult(new TempCleanResult(freed, 12, 0, Cancelled: false)));
+        var vm = NewVm(QuietWinget(), tuneUp: tuneUp);
+
+        await vm.QuickCleanupCommand.ExecuteAsync(null);
+
+        Assert.Equal(expected, vm.QuickActionDetail);
     }
 
     [Fact]

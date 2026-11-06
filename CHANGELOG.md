@@ -10,6 +10,22 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.136.131] - 2026-11-06
+
+**A size just under a megabyte or a gigabyte no longer reads "1024.0 KB" or "1024.0 MB", and a speed just under a megabit no longer reads "1000 Kbps".**
+
+### Fixed
+- Sizes were rounded to one decimal in the unit they fell in, so the top of each unit read as 1024 of it: 1,048,575
+  bytes read "1024.0 KB" where it is "1.0 MB", and so on up to the terabyte. A size that rounds to 1024 takes the
+  next unit now. Windows Update's list and the Dashboard's Quick Cleanup had sizes of their own with the same
+  fault, and use the same figure now. Since 0.48.31, when sizes came to be formatted in one place.
+- Network speeds did the same at 1000: 124,950 bytes a second read "1000 Kbps" where it is "1.0 Mbps", in Bandwidth
+  Monitor and wherever else a speed is shown. Since 1.54.0.
+
+### Changed
+- The Dashboard's Quick Cleanup says what it freed with one decimal, "Freed 300.0 MB", as Quick Tune-Up does for the
+  same sweep. It said "Freed 0 MB" for under half a megabyte.
+
 ## [1.136.130] - 2026-11-06
 
 **The log now says how long SysManager took to show its window, and every release records it.**

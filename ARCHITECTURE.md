@@ -2363,7 +2363,10 @@ Key utility classes that don't fit neatly into Services or ViewModels (not an ex
 - `FileDescription` — a running program's description from its file's version resource, or none when the file
   is gone, for Process Manager and Volume Control alike (#2718).
 - `FormatHelper` — byte-size and transfer-rate formatting, and `JoinForSentence` for an
-  "a, b and c" list. Durations are `EtaCalculator.FormatTimeSpan`'s.
+  "a, b and c" list. Durations are `EtaCalculator.FormatTimeSpan`'s. A figure that reads 1024 (a size) or 1000 (a
+  rate) once rounded the way it is written takes the next unit, decided on the written figure rather than the
+  unrounded one; fixed-seed properties over every unit's top and bottom hold both to that (#2862). Windows Update's
+  sizes and the Dashboard's Quick Cleanup go through `FormatSize` rather than ladders of their own.
 - `GatewayHelper` — default gateway IP lookup for network tabs. `NetworkSharedState` calls it when the first
   network tab is opened, on every Start and when the PC's addresses change.
 - `EtaCalculator` — estimates time remaining for long-running operations. `_gate` is a `Lock`, not a

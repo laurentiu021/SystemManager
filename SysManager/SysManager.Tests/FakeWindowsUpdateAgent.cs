@@ -2,6 +2,8 @@
 // Author: laurentiu021 · https://github.com/laurentiu021/SystemManager
 // License: MIT
 
+using SysManager.Services;
+
 namespace SysManager.Tests;
 
 // A Windows Update Agent made of plain objects, for WindowsUpdateService to read late-bound the way it reads WUA's
@@ -20,6 +22,21 @@ public sealed class FakeUpdateSession
     /// <summary>Thrown by a search instead of an answer, when set.</summary>
     public Exception? SearchFails { get; set; }
 
+    /// <summary>A search runs until it is asked to stop, when set, as an online search can for minutes.</summary>
+    public bool SearchRunsUntilStopped { get; set; }
+
+    /// <summary>A download runs until it is asked to stop, when set.</summary>
+    public bool DownloadRunsUntilStopped { get; set; }
+
+    /// <summary>Completes once a search has started, so a test cancels while one runs and not before.</summary>
+    public TaskCompletionSource SearchStarted { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+    /// <summary>Completes once a download has started.</summary>
+    public TaskCompletionSource DownloadStarted { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+    /// <summary>Every job started, searches and downloads, in order.</summary>
+    public List<FakeJob> Jobs { get; } = [];
+
     /// <summary>Called with each update as it downloads, before the download is done: a test cancels here.</summary>
     public Action<FakeUpdate>? Downloading { get; set; }
 
@@ -36,20 +53,27 @@ public sealed class FakeUpdateSession
     public FakeUpdateInstaller CreateUpdateInstaller() => new(this);
 }
 
-/// <summary>WUA's update downloader: it downloads the updates it was given, every one successfully.</summary>
+/// <summary>WUA's update downloader, which downloads as a job: every update, unless the job is stopped.</summary>
 public sealed class FakeUpdateDownloader(FakeUpdateSession session)
 {
     public FakeCollection<FakeUpdate>? Updates { get; set; }
 
-    public FakeOperationResult Download()
+    public FakeJob BeginDownload(object onProgressChanged, object onCompleted, object? state)
     {
+        var job = new FakeJob(onCompleted);
+        session.Jobs.Add(job);
+        session.DownloadStarted.TrySetResult();
         for (var i = 0; i < Updates!.Count; i++)
-        {
-            var update = Updates.Item(i);
-            session.Downloading?.Invoke(update);
-            update.IsDownloaded = true;
-        }
+            session.Downloading?.Invoke(Updates.Item(i));
+        if (!session.DownloadRunsUntilStopped) job.Finish();
+        return job;
+    }
 
+    public FakeOperationResult EndDownload(FakeJob job)
+    {
+        if (job.StopRequested) return new FakeOperationResult(FakeOperationResult.Aborted, 0);
+        for (var i = 0; i < Updates!.Count; i++)
+            Updates.Item(i).IsDownloaded = true;
         return new FakeOperationResult(FakeOperationResult.Succeeded, 0);
     }
 }
@@ -80,6 +104,9 @@ public sealed class FakeOperationResult(int resultCode, int hResult, bool reboot
     /// <summary>WUA's <c>OperationResultCode.orcSucceeded</c>.</summary>
     public const int Succeeded = 2;
 
+    /// <summary>WUA's <c>OperationResultCode.orcAborted</c>.</summary>
+    public const int Aborted = 5;
+
     public int ResultCode { get; } = resultCode;
 
     public int HResult { get; } = hResult;
@@ -89,17 +116,45 @@ public sealed class FakeOperationResult(int resultCode, int hResult, bool reboot
     public FakeOperationResult GetUpdateResult(int index) => this;
 }
 
-/// <summary>WUA's update searcher.</summary>
+/// <summary>WUA's update searcher, which searches as a job.</summary>
 public sealed class FakeUpdateSearcher(FakeUpdateSession session)
 {
     public bool IncludePotentiallySupersededUpdates { get; set; }
 
-    public FakeSearchResult Search(string criteria)
+    public FakeJob BeginSearch(string criteria, object onCompleted, object? state)
     {
         session.Searches.Add(criteria);
+        var job = new FakeJob(onCompleted);
+        session.Jobs.Add(job);
+        session.SearchStarted.TrySetResult();
+        if (!session.SearchRunsUntilStopped) job.Finish();
+        return job;
+    }
+
+    public FakeSearchResult EndSearch(FakeJob job)
+    {
         if (session.SearchFails is { } failure) throw failure;
         return new FakeSearchResult(new FakeCollection<FakeUpdate>([.. session.Pending]));
     }
+}
+
+/// <summary>A WUA job: it calls its callback when it is done, and asking it to stop makes it done.</summary>
+public sealed class FakeJob(object onCompleted)
+{
+    public bool StopRequested { get; private set; }
+
+    public bool CleanedUp { get; private set; }
+
+    public void RequestAbort()
+    {
+        StopRequested = true;
+        Finish();
+    }
+
+    public void CleanUp() => CleanedUp = true;
+
+    /// <summary>Calls the callback late-bound, as WUA calls it through its dispatch ID 0.</summary>
+    public void Finish() => ((dynamic)onCompleted).Invoke(this, null);
 }
 
 /// <summary>A search's result.</summary>

@@ -273,6 +273,85 @@ public class WindowsUpdateServiceTests
         Assert.Equal(["Installed", "Installing…"], rows.Select(r => r.Status));
     }
 
+    // ---------- Cancel stops a running search and a running download (#2791) ----------
+    //
+    // Each was one blocking call that Cancel could not interrupt: a search took minutes before Cancel did anything, and
+    // a cumulative update's download did too. An install in progress is left to finish, and the run stops after it.
+
+    [Fact]
+    public async Task AScanCancelledWhileItSearches_AsksTheSearchToStop()
+    {
+        using var cts = new CancellationTokenSource();
+        var session = SessionWith("a");
+        session.SearchRunsUntilStopped = true;
+
+        var scan = AgentOver(session).ScanAsync(ct: cts.Token);
+        await session.SearchStarted.Task;
+        cts.Cancel();
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => scan);
+        var job = Assert.Single(session.Jobs);
+        Assert.True(job.StopRequested);
+        Assert.True(job.CleanedUp);
+    }
+
+    [Fact]
+    public async Task AnInstallCancelledWhileItSearches_AsksTheSearchToStop_AndInstallsNothing()
+    {
+        using var cts = new CancellationTokenSource();
+        var session = SessionWith("a");
+        session.SearchRunsUntilStopped = true;
+        var rows = Rows("a");
+
+        var install = AgentOver(session).InstallAsync(rows, ct: cts.Token);
+        await session.SearchStarted.Task;
+        cts.Cancel();
+
+        Assert.Equal(new InstallReport(0, 0, false, Cancelled: true), await install);
+        Assert.True(Assert.Single(session.Jobs).StopRequested);
+        Assert.Empty(session.Installed);
+        Assert.Equal(["Pending…"], rows.Select(r => r.Status));
+    }
+
+    [Fact]
+    public async Task AnInstallCancelledWhileAnUpdateDownloads_AsksTheDownloadToStop()
+    {
+        using var cts = new CancellationTokenSource();
+        var session = SessionWith("a");
+        session.Pending[0].IsDownloaded = false;
+        session.DownloadRunsUntilStopped = true;
+        var rows = Rows("a");
+
+        var install = AgentOver(session).InstallAsync(rows, ct: cts.Token);
+        await session.DownloadStarted.Task;
+        cts.Cancel();
+
+        Assert.Equal(new InstallReport(0, 0, false, Cancelled: true), await install);
+        var download = session.Jobs[^1];
+        Assert.True(download.StopRequested);
+        Assert.True(download.CleanedUp);
+        Assert.Empty(session.Installed);
+        Assert.Equal(["Downloading…"], rows.Select(r => r.Status));
+    }
+
+    [Fact]
+    public async Task AnInstallCancelledWhileAnUpdateInstalls_LetsItFinish_AndSaysSo()
+    {
+        using var cts = new CancellationTokenSource();
+        var session = SessionWith("a", "b");
+        session.Installing = update =>
+        {
+            if (update.Id == "a") cts.Cancel();
+        };
+        var progress = new SyncProgress<string>();
+
+        var report = await AgentOver(session).InstallAsync(Rows("a", "b"), progress, cts.Token);
+
+        Assert.Equal(new InstallReport(1, 0, false, Cancelled: true), report);
+        Assert.Equal(["a"], session.Installed);
+        Assert.Contains("  Cancelling once this update has installed…", progress.Reports);
+    }
+
     [Fact]
     public void TheAgent_WantsBothFactories()
     {

@@ -75,8 +75,19 @@ public sealed class WindowsUpdateService : IWindowsUpdateService
                 searcher = session.CreateUpdateSearcher();
                 searcher.IncludePotentiallySupersededUpdates = false;
 
-                result = searcher.Search(PendingCriteria);
-                ct.ThrowIfCancellationRequested();
+                // A job rather than one blocking call, so Cancel stops it: the search alone can take minutes, and
+                // Cancel used to change nothing until it returned, then threw its result away (#2791).
+                var searched = new WuaJobCallback();
+                var searchJob = searcher.BeginSearch(PendingCriteria, searched, null);
+                try
+                {
+                    if (!WaitForJob(searchJob, searched, ct)) throw new OperationCanceledException(ct);
+                    result = searcher.EndSearch(searchJob);
+                }
+                finally
+                {
+                    ReleaseJob(searchJob, searched);
+                }
 
                 updates = result.Updates;
                 var count = (int)updates.Count;
@@ -141,7 +152,23 @@ public sealed class WindowsUpdateService : IWindowsUpdateService
             {
                 session = _createSession();
                 searcher = session.CreateUpdateSearcher();
-                search = searcher.Search(PendingCriteria);
+                var searched = new WuaJobCallback();
+                var searchJob = searcher.BeginSearch(PendingCriteria, searched, null);
+                try
+                {
+                    if (!WaitForJob(searchJob, searched, ct))
+                    {
+                        progress?.Report("Cancelled.");
+                        return new InstallReport(0, 0, false, Cancelled: true);
+                    }
+
+                    search = searcher.EndSearch(searchJob);
+                }
+                finally
+                {
+                    ReleaseJob(searchJob, searched);
+                }
+
                 liveUpdates = search.Updates;
 
                 // Build a UpdateID -> live COM object map for the requested entries.
@@ -193,7 +220,26 @@ public sealed class WindowsUpdateService : IWindowsUpdateService
                             try
                             {
                                 dl.Updates = coll;
-                                var dlResult = dl.Download();
+                                // A job too, so Cancel stops the download: a cumulative update or a feature upgrade
+                                // downloads for many minutes, and Cancel waited for all of it (#2791).
+                                var downloaded = new WuaJobCallback();
+                                var downloadJob = dl.BeginDownload(new WuaJobCallback(), downloaded, null);
+                                dynamic dlResult;
+                                try
+                                {
+                                    if (!WaitForJob(downloadJob, downloaded, ct))
+                                    {
+                                        cancelled = true;
+                                        break;
+                                    }
+
+                                    dlResult = dl.EndDownload(downloadJob);
+                                }
+                                finally
+                                {
+                                    ReleaseJob(downloadJob, downloaded);
+                                }
+
                                 try
                                 {
                                     dlCode = EffectiveResultCode((int)dlResult.ResultCode, () => UpdateResultCode(dlResult));
@@ -253,7 +299,15 @@ public sealed class WindowsUpdateService : IWindowsUpdateService
                         try
                         {
                             inst.Updates = coll;
-                            var iResult = inst.Install();
+                            // One blocking call, and not a job like the search and the download: an install stopped
+                            // part way can leave the update half applied. So Cancel lets it finish and stops the run
+                            // before the next one, and says so (#2791).
+                            dynamic iResult;
+                            using (ct.Register(() => progress?.Report("  Cancelling once this update has installed…")))
+                            {
+                                iResult = inst.Install();
+                            }
+
                             try
                             {
                                 iCode = EffectiveResultCode((int)iResult.ResultCode, () => UpdateResultCode(iResult));
@@ -321,6 +375,43 @@ public sealed class WindowsUpdateService : IWindowsUpdateService
 
             return new InstallReport(installed, failed, reboot, cancelled, agentError);
         }, ct);
+
+    /// <summary>How long a job asked to stop is waited for before the run gives up on it.</summary>
+    /// <remarks>
+    /// WUA promises no time for a job, a stopping one included, and Microsoft's guidelines for asynchronous WUA
+    /// operations say to bring a time-out of one's own. Past it the run ends as cancelled and leaves the job to WUA.
+    /// </remarks>
+    internal static readonly TimeSpan AbortWait = TimeSpan.FromSeconds(30);
+
+    /// <summary>
+    /// Waits for <paramref name="job"/> to call <paramref name="done"/>, and asks it to stop if <paramref name="ct"/>
+    /// is cancelled first.
+    /// </summary>
+    /// <returns>True when the job finished on its own; false when it was asked to stop.</returns>
+    private static bool WaitForJob(dynamic job, WuaJobCallback done, CancellationToken ct)
+    {
+        try
+        {
+            done.Called.Wait(ct);
+            return true;
+        }
+        catch (OperationCanceledException)
+        {
+            job.RequestAbort();
+            done.Called.Wait(AbortWait);
+            return false;
+        }
+    }
+
+    /// <summary>
+    /// Lets go of a job: <c>CleanUp</c> disconnects its callbacks, which WUA's guidelines say to do outside them, once
+    /// it is done. A job that never said it stopped is only released, since CleanUp waits for it to finish.
+    /// </summary>
+    private static void ReleaseJob(dynamic job, WuaJobCallback done)
+    {
+        if (done.Called.IsCompleted) job.CleanUp();
+        ReleaseComObject(job);
+    }
 
     /// <summary>WUA's <c>OperationResultCode.orcSucceeded</c>.</summary>
     private const int Succeeded = 2;
@@ -546,6 +637,28 @@ public sealed class WindowsUpdateService : IWindowsUpdateService
         > 0 => $"{bytes} B",
         _ => "",
     };
+}
+
+/// <summary>
+/// The callback a Windows Update Agent job calls through its dispatch ID 0, as WUA calls an automation object's: when
+/// the job is done, or, handed to a download as its progress callback, as the download moves on.
+/// </summary>
+/// <remarks>
+/// Public and COM-visible because WUA calls it through the IDispatch .NET gives it. It holds only the first call, so a
+/// job asked to stop can be waited for until it says it has.
+/// </remarks>
+[ComVisible(true)]
+[ClassInterface(ClassInterfaceType.AutoDispatch)]
+public sealed class WuaJobCallback
+{
+    private readonly TaskCompletionSource _called = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+    /// <summary>Completes the first time the job calls back.</summary>
+    internal Task Called => _called.Task;
+
+    /// <summary>What WUA calls, with the job and the callback's arguments; neither is read.</summary>
+    [DispId(0)]
+    public void Invoke(object job, object callbackArgs) => _called.TrySetResult();
 }
 
 /// <summary>Aggregate result of an install batch.</summary>

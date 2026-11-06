@@ -10,6 +10,31 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.136.145] - 2026-11-06
+
+**Small grey labels are easy to read, a switched-off text box or drop-down looks switched off, and the Appearance
+panel's switches, the theme cards and the toast's close button light up under the pointer.**
+
+### Fixed
+- Eleven lines of small grey words were faded on top of their grey, which took them under the 4.5:1 that words need:
+  Privacy & Telemetry's category under each setting read 2.98:1 on the default theme (since 1.5.0), Notification
+  Blocker's app IDs and Preinstalled Apps' package names about 3:1, App Blocker's "N blocked" and Shortcut Cleaner's
+  scanning line 3.75:1, the sidebar's "by laurentiu021" about 3.7:1, and the collapsed sidebar groups' subtitles, on
+  every page, about 4.15:1, 3.43 on Clean Indigo (since 0.23.0). About's "Built by" line, the sidebar groups' counts,
+  Disk Analyzer's block detail and File Shredder's status line were faded the same way. None is faded now. The lines
+  that were the secondary grey take the muted grey instead, the quieter step that reads at 4.5:1 or better on every
+  theme, so they stay as quiet.
+- A disabled text box or drop-down looked ready to type in: Dark Mode Scheduler's two times, while the schedule is
+  off, gave no caret when clicked, and Gaming Profile's game picker looked live while game mode was on. They dim to
+  half when disabled now, as the checkboxes do.
+- The Appearance panel's Dark / Light / Auto / Custom switch, Browser Cleaner's "Browsing data / Extensions" and
+  Privacy & Telemetry's "By topic / By reach" switches, the theme cards and the toast's close button showed nothing
+  under the pointer but the cursor. The switches and the theme cards take the app's purple tint now, the toast's close
+  button the main window's hover tint, as the main window keeps purple for the open page, and the four custom colour
+  swatches an accent edge.
+- Three checks hold these: no line of text is faded with an opacity; every button-like template reacts to the
+  pointer, or names what draws its hover instead; and every text box and drop-down template dims when disabled.
+
 ## [1.136.144] - 2026-11-06
 
 **A name with an underscore keeps it in the right-click menus: for a program named my_app.exe the menu says "Kill

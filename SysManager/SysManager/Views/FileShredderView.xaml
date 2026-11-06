@@ -133,7 +133,7 @@
                     <Run Text=" item(s) queued"/>
                 </TextBlock>
                 <TextBlock Text="{Binding StatusMessage}" Style="{StaticResource StatusLine}"
-                           Margin="16,0,0,0" Opacity="0.8" TextWrapping="Wrap"
+                           Margin="16,0,0,0" TextWrapping="Wrap"
                            VerticalAlignment="Center"/>
             </DockPanel>
         </Border>

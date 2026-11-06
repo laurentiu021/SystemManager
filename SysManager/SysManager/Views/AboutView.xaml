@@ -13,7 +13,8 @@
                 <StackPanel>
                     <TextBlock Text="About SysManager" Style="{StaticResource Display}"/>
                     <TextBlock Text="Version info, updates and release notes." Style="{StaticResource Subtle}" Margin="0,4,0,0"/>
-                    <TextBlock Text="Built by laurentiu021 · MIT licensed" Style="{StaticResource Subtle}" Margin="0,2,0,0" Opacity="0.7"/>
+                    <TextBlock Text="Built by laurentiu021 · MIT licensed" Style="{StaticResource Subtle}" Margin="0,2,0,0"
+                               Foreground="{DynamicResource TextMuted}"/>
                 </StackPanel>
 
                 <!-- Version card -->

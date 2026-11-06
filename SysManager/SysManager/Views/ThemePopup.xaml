@@ -5,11 +5,38 @@
              Width="340">
     <UserControl.Resources>
         <!-- A preset card is a RadioButton, so a screen reader finds it by name, picks it, and hears which one is
-             chosen. As a focusable Border it had no automation peer (#2785). This template adds no look of its
-             own: the card is still drawn by the Border it carries, built in CreatePresetCard. -->
+             chosen. As a focusable Border it had no automation peer (#2785). The card is still drawn by the Border it
+             carries, built in CreatePresetCard; this template adds the purple tint under the pointer, which it had no
+             way to show (#2882). -->
         <ControlTemplate x:Key="PresetCardChrome" TargetType="RadioButton">
-            <ContentPresenter/>
+            <Grid>
+                <Border x:Name="Tint" Background="Transparent"
+                        CornerRadius="{Binding Content.CornerRadius, RelativeSource={RelativeSource TemplatedParent}}"/>
+                <ContentPresenter/>
+            </Grid>
+            <ControlTemplate.Triggers>
+                <Trigger Property="IsMouseOver" Value="True">
+                    <Setter TargetName="Tint" Property="Background" Value="{DynamicResource AccentSoft}"/>
+                </Trigger>
+            </ControlTemplate.Triggers>
         </ControlTemplate>
+
+        <!-- A custom colour's swatch, which opens its hex box when clicked. An accent edge under the pointer shows it
+             can be clicked (#2882). -->
+        <Style x:Key="ColourSwatch" TargetType="Border">
+            <Setter Property="Width" Value="24"/>
+            <Setter Property="Height" Value="24"/>
+            <Setter Property="CornerRadius" Value="{StaticResource RadiusMd}"/>
+            <Setter Property="Margin" Value="0,0,10,0"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="BorderBrush" Value="{DynamicResource Accent}"/>
+            <Setter Property="BorderThickness" Value="0"/>
+            <Style.Triggers>
+                <Trigger Property="IsMouseOver" Value="True">
+                    <Setter Property="BorderThickness" Value="2"/>
+                </Trigger>
+            </Style.Triggers>
+        </Style>
     </UserControl.Resources>
     <Border Background="{DynamicResource Surface1}" BorderBrush="{DynamicResource Border1}"
             BorderThickness="1" CornerRadius="16">
@@ -100,10 +127,8 @@
                                      so this is the default being correct rather than a setting.
                                      EveryMouseClickableElement_IsAlsoKeyboardOperable lists them with this
                                      reason, so the exemption is visible rather than assumed. -->
-                                <Border Grid.Column="1" x:Name="CustomAccentPreview"
-                                        Width="24" Height="24" CornerRadius="{StaticResource RadiusMd}" Background="#5F62EE"
-                                        Margin="0,0,10,0" Cursor="Hand"
-                                        MouseLeftButtonUp="CustomAccent_Click"/>
+                                <Border Grid.Column="1" x:Name="CustomAccentPreview" Style="{StaticResource ColourSwatch}"
+                                        Background="#5F62EE" MouseLeftButtonUp="CustomAccent_Click"/>
                                 <TextBox Grid.Column="2" x:Name="CustomAccentHex" Text="#5F62EE"
                                          FontFamily="{StaticResource MonoFont}" FontSize="12"
                                          Background="Transparent" BorderThickness="0"
@@ -125,10 +150,8 @@
                                 </Grid.ColumnDefinitions>
                                 <TextBlock Text="Background" Foreground="{DynamicResource TextSecondary}"
                                            Style="{StaticResource Subtle}" VerticalAlignment="Center"/>
-                                <Border Grid.Column="1" x:Name="CustomBgPreview"
-                                        Width="24" Height="24" CornerRadius="{StaticResource RadiusMd}" Background="#070A0F"
-                                        Margin="0,0,10,0" Cursor="Hand"
-                                        MouseLeftButtonUp="CustomBg_Click"/>
+                                <Border Grid.Column="1" x:Name="CustomBgPreview" Style="{StaticResource ColourSwatch}"
+                                        Background="#070A0F" MouseLeftButtonUp="CustomBg_Click"/>
                                 <TextBox Grid.Column="2" x:Name="CustomBgHex" Text="#070A0F"
                                          FontFamily="{StaticResource MonoFont}" FontSize="12"
                                          Background="Transparent" BorderThickness="0"
@@ -150,10 +173,8 @@
                                 </Grid.ColumnDefinitions>
                                 <TextBlock Text="Surface" Foreground="{DynamicResource TextSecondary}"
                                            Style="{StaticResource Subtle}" VerticalAlignment="Center"/>
-                                <Border Grid.Column="1" x:Name="CustomSurfacePreview"
-                                        Width="24" Height="24" CornerRadius="{StaticResource RadiusMd}" Background="#0E1218"
-                                        Margin="0,0,10,0" Cursor="Hand"
-                                        MouseLeftButtonUp="CustomSurface_Click"/>
+                                <Border Grid.Column="1" x:Name="CustomSurfacePreview" Style="{StaticResource ColourSwatch}"
+                                        Background="#0E1218" MouseLeftButtonUp="CustomSurface_Click"/>
                                 <TextBox Grid.Column="2" x:Name="CustomSurfaceHex" Text="#0E1218"
                                          FontFamily="{StaticResource MonoFont}" FontSize="12"
                                          Background="Transparent" BorderThickness="0"
@@ -175,10 +196,8 @@
                                 </Grid.ColumnDefinitions>
                                 <TextBlock Text="Text" Foreground="{DynamicResource TextSecondary}"
                                            Style="{StaticResource Subtle}" VerticalAlignment="Center"/>
-                                <Border Grid.Column="1" x:Name="CustomTextPreview"
-                                        Width="24" Height="24" CornerRadius="{StaticResource RadiusMd}" Background="#F1F3F7"
-                                        Margin="0,0,10,0" Cursor="Hand"
-                                        MouseLeftButtonUp="CustomText_Click"/>
+                                <Border Grid.Column="1" x:Name="CustomTextPreview" Style="{StaticResource ColourSwatch}"
+                                        Background="#F1F3F7" MouseLeftButtonUp="CustomText_Click"/>
                                 <TextBox Grid.Column="2" x:Name="CustomTextHex" Text="#F1F3F7"
                                          FontFamily="{StaticResource MonoFont}" FontSize="12"
                                          Background="Transparent" BorderThickness="0"

@@ -111,7 +111,7 @@
                                                    TextWrapping="Wrap" Margin="0,2,16,0"
                                                    Visibility="{Binding Description, Converter={StaticResource FlexVis}}"/>
                                         <TextBlock Text="{Binding Name}" Style="{StaticResource Micro}" Foreground="{DynamicResource TextMuted}"
-                                                   Opacity="0.6" Margin="0,2,0,0"/>
+                                                   Margin="0,2,0,0"/>
                                     </StackPanel>
                                 </DataTemplate>
                             </DataGridTemplateColumn.CellTemplate>

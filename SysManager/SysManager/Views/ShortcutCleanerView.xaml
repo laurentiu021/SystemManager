@@ -28,7 +28,7 @@
                        Style="{StaticResource Subtle}" Margin="0,4,0,0" TextWrapping="Wrap"/>
             <TextBlock Text="{Binding ScanStatus}" Style="{StaticResource SubtleStatusLine}" Margin="0,2,0,0"/>
             <TextBlock Text="{Binding CurrentLocation}" Style="{StaticResource Subtle}" Margin="0,2,0,0"
-                       Opacity="0.6"
+                       Foreground="{DynamicResource TextMuted}"
                        Visibility="{Binding IsScanning, Converter={StaticResource BoolToVis}}"/>
         </StackPanel>
 

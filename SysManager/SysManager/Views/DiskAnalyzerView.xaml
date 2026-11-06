@@ -54,7 +54,7 @@
                                     <TextBlock Text="{Binding Name}" Style="{StaticResource Body}" FontWeight="SemiBold"
                                                TextTrimming="CharacterEllipsis" Foreground="{TemplateBinding Foreground}"/>
                                 </DockPanel>
-                                <TextBlock Text="{Binding Detail}" Style="{StaticResource Subtle}" Opacity="0.85"
+                                <TextBlock Text="{Binding Detail}" Style="{StaticResource Subtle}"
                                            TextTrimming="CharacterEllipsis" Foreground="{TemplateBinding Foreground}"
                                            Visibility="{Binding ShowDetail, Converter={StaticResource FlexVis}}"/>
                             </StackPanel>

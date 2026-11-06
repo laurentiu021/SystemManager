@@ -176,12 +176,11 @@ public class AboutViewUiTests
     /// The buttons sat in a column beside the name that kept its full width. With nine of them that column was wider
     /// than the card, so the name's column got none, and View license and What's new ran off the card's edge. A cut
     /// element is still laid out at its full width and then clipped by its parent, so its own size cannot tell; the
-    /// layout clip WPF gives it can, and this reads that for every element in the card. 1044 is the page's width
-    /// beside the sidebar in the window's default 1280 px, and 724 in its smallest, 960.
+    /// layout clip WPF gives it can, and <see cref="LayoutClip"/> reads that for every element in the card.
     /// </remarks>
     [Theory]
-    [InlineData(1044)]
-    [InlineData(724)]
+    [InlineData(PageWidth.Default)]
+    [InlineData(PageWidth.Smallest)]
     public void TheVersionCard_CutsNothing(int pageWidth)
     {
         var dir = Path.Combine(Path.GetTempPath(), "SysManagerTests", Guid.NewGuid().ToString("N"));
@@ -204,54 +203,24 @@ public class AboutViewUiTests
             while (card is not Border { Style: var style } || !ReferenceEquals(style, cardStyle))
                 card = System.Windows.Media.VisualTreeHelper.GetParent(card);
 
-            var buttons = LaidOut(card).OfType<Button>().Count();
+            var buttons = LayoutClip.LaidOut(card).OfType<Button>().Count();
             Assert.True(buttons >= 9,
                 $"{buttons} buttons were laid out in the version card, where nine are always shown.");
             Assert.Contains(Descendants<TextBlock>(card), t => t.Text == "SysManager");
 
-            var cut = LaidOut(card)
-                .Select(e => (Element: e, Room: System.Windows.Controls.Primitives.LayoutInformation.GetLayoutClip(e)))
-                .Where(c => c.Room is not null && Cut(c.Element, c.Room.Bounds))
-                .Select(c => $"{Describe(c.Element)} is {c.Element.ActualWidth:F0} x {c.Element.ActualHeight:F0} "
-                             + $"and shown {Shown(c.Room!.Bounds)}")
-                .ToList();
+            var cut = new List<string>();
+            foreach (var element in LayoutClip.LaidOut(card))
+            {
+                if (LayoutClip.IsCut(element, out var room))
+                    cut.Add($"{LayoutClip.Describe(element)} is {element.ActualWidth:F0} x {element.ActualHeight:F0} "
+                            + $"and shown {LayoutClip.Shown(room)}");
+            }
             Assert.True(cut.Count == 0,
                 $"at a page {pageWidth} px wide, these are cut in About's version card:\n  " + string.Join("\n  ", cut));
         });
 
         if (Directory.Exists(dir)) Directory.Delete(dir, recursive: true);
     }
-
-    /// <summary>
-    /// The elements under <paramref name="root"/> that are laid out: a collapsed one, and everything inside it, keeps
-    /// the sizes of the last pass that showed it, so it is left out with its subtree.
-    /// </summary>
-    private static IEnumerable<FrameworkElement> LaidOut(DependencyObject root)
-    {
-        var count = System.Windows.Media.VisualTreeHelper.GetChildrenCount(root);
-        for (var i = 0; i < count; i++)
-        {
-            var child = System.Windows.Media.VisualTreeHelper.GetChild(root, i);
-            if (child is UIElement { Visibility: not Visibility.Visible }) continue;
-            if (child is FrameworkElement element) yield return element;
-            foreach (var deeper in LaidOut(child)) yield return deeper;
-        }
-    }
-
-    /// <summary>Whether the room its parent gives an element is smaller than the element, beyond rounding.</summary>
-    private static bool Cut(FrameworkElement element, Rect room) =>
-        room.IsEmpty
-            ? element.ActualWidth > 1 || element.ActualHeight > 1
-            : room.Width + 1 < element.ActualWidth || room.Height + 1 < element.ActualHeight;
-
-    private static string Shown(Rect room) => room.IsEmpty ? "not at all" : $"{room.Width:F0} x {room.Height:F0}";
-
-    private static string Describe(FrameworkElement element) => element switch
-    {
-        TextBlock text => $"the text \"{text.Text}\"",
-        ContentControl { Content: string content } control => $"the {control.GetType().Name} \"{content}\"",
-        _ => $"a {element.GetType().Name} holding \"{Descendants<TextBlock>(element).FirstOrDefault()?.Text}\"",
-    };
 
     private static IEnumerable<T> Descendants<T>(DependencyObject root) where T : DependencyObject
     {

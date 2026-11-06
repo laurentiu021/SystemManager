@@ -28,8 +28,8 @@ public sealed class DisplayProfileViewUiTests
         {
             AppResources.Ensure();
             var view = new DisplayProfileView();
-            view.Measure(new Size(1044, 900));
-            view.Arrange(new Rect(0, 0, 1044, 900));
+            view.Measure(new Size(PageWidth.Default, 900));
+            view.Arrange(new Rect(0, 0, PageWidth.Default, 900));
             view.UpdateLayout();
 
             var keep = Assert.Single(Descendants<Button>(view),

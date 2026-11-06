@@ -184,8 +184,16 @@
 
         <!-- Toolbar -->
         <Border Grid.Row="3" Style="{StaticResource Card}" Margin="0,0,0,12" Padding="12">
-            <DockPanel>
-                <StackPanel Orientation="Horizontal" DockPanel.Dock="Left">
+            <!-- The controls wrap in what the counts leave, as the Uninstaller's toolbar does. In a horizontal
+                 StackPanel they ran past the card near the smallest window and cut "Show system entries" (#2787).
+                 A Grid rather than a DockPanel so the counts can keep their width while still coming after the
+                 controls, in the order they are drawn. -->
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="Auto"/>
+                </Grid.ColumnDefinitions>
+                <WrapPanel Grid.Column="0">
                     <ComboBox ItemsSource="{Binding LocationFilters}"
                               SelectedItem="{Binding SelectedLocation}"
                               AutomationProperties.Name="Filter by location"
@@ -208,19 +216,19 @@
                     <Button Content="Restart Explorer" Command="{Binding RestartExplorerCommand}"
                             AutomationProperties.Name="Restart Explorer to apply add-on changes"
                             ToolTip="Applies changes to add-ons. Closes all open File Explorer windows and starts it again — your files are not affected."
-                            Style="{StaticResource SecondaryButton}" Margin="0,0,8,0"/>
+                            Style="{StaticResource SecondaryButton}" Margin="0,0,16,0"/>
                     <CheckBox Content="Show system entries"
                               IsChecked="{Binding ShowSystemEntries}"
                               AutomationProperties.Name="Show system entries"
-                              VerticalAlignment="Center" Margin="8,0,0,0"/>
-                </StackPanel>
-                <TextBlock DockPanel.Dock="Right" VerticalAlignment="Center" HorizontalAlignment="Right"
+                              VerticalAlignment="Center"/>
+                </WrapPanel>
+                <TextBlock Grid.Column="1" VerticalAlignment="Center" HorizontalAlignment="Right" Margin="12,0,0,0"
                            Style="{StaticResource Subtle}">
                     <Run Text="{Binding EnabledCount, Mode=OneWay}"/> enabled ·
                     <Run Text="{Binding DisabledCount, Mode=OneWay}"/> disabled ·
                     <Run Text="{Binding TotalCount, Mode=OneWay}"/> shown
                 </TextBlock>
-            </DockPanel>
+            </Grid>
         </Border>
 
         <!-- Context menu entries list -->

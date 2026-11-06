@@ -656,9 +656,10 @@
              announce the toast when it appears: it carries operation-completion feedback and
              auto-dismisses, so the title is Assertive, to be heard before it fades, and the detail
              follows it. The setting used to sit on this Border, which has no automation peer, so it
-             reached no screen reader at all (#2670). -->
+             reached no screen reader at all (#2670). At most 460 px wide, with both lines wrapping, so a long
+             result makes the toast taller instead of running off the window's edge (#2787). -->
         <Border x:Name="ToastOverlay" Grid.Column="1"
-                HorizontalAlignment="Right" VerticalAlignment="Bottom"
+                HorizontalAlignment="Right" VerticalAlignment="Bottom" MaxWidth="460"
                 Margin="0,0,20,20" Visibility="Collapsed">
             <!-- Themed status brushes, not literal greens. The container follows the theme via Surface2
                  while the three greens here were fixed at #22C55E — the DARK-mode value — so the tick
@@ -686,11 +687,11 @@
                     </Border>
                     <StackPanel Grid.Column="1" VerticalAlignment="Center">
                         <TextBlock x:Name="ToastTitle" Style="{StaticResource Body}" FontWeight="SemiBold"
-                                   Foreground="{DynamicResource TextPrimary}"
+                                   Foreground="{DynamicResource TextPrimary}" TextWrapping="Wrap"
                                    AutomationProperties.LiveSetting="Assertive"
                                    helpers:LiveRegion.Announces="True"/>
                         <TextBlock x:Name="ToastDetail" Style="{StaticResource Caption}"
-                                   Foreground="{DynamicResource TextSecondary}" Margin="0,2,0,0"
+                                   Foreground="{DynamicResource TextSecondary}" Margin="0,2,0,0" TextWrapping="Wrap"
                                    AutomationProperties.LiveSetting="Polite"
                                    helpers:LiveRegion.Announces="True"/>
                     </StackPanel>

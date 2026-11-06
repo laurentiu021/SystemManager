@@ -49,10 +49,9 @@ public sealed class BootAnalyzerViewUiTests
             var when = new DateTime(2026, 11, 2, 8, 0, 0, DateTimeKind.Local);
             foreach (var kind in kinds) surface.Degradations.Add(new BootDegradation(when, kind, "component", 1000));
 
-            // The page's width beside the sidebar in the window's default 1280 px.
             var view = new BootAnalyzerView { DataContext = surface };
-            view.Measure(new Size(1044, 900));
-            view.Arrange(new Rect(0, 0, 1044, 900));
+            view.Measure(new Size(PageWidth.Default, 900));
+            view.Arrange(new Rect(0, 0, PageWidth.Default, 900));
             view.UpdateLayout();
 
             var grid = Descendants<DataGrid>(view)

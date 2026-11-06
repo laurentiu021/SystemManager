@@ -101,6 +101,47 @@ public sealed class DashboardAlertsViewUiTests
         });
     }
 
+    /// <summary>
+    /// A long alert title wraps onto a second line at the smallest window, where it was cut mid-word (#2787).
+    /// </summary>
+    /// <remarks>
+    /// The title sat in a horizontal StackPanel beside its dot, which gave it unlimited width, so its ellipsis never
+    /// ran and the card's edge cut it: about 160 px of title fit at the smallest window, and "3 memory hardware errors
+    /// in 30 days — test your RAM" lost the instruction. The cut falls on the panel around the title, not the title
+    /// itself, so this reads the title and everything it sits in.
+    /// </remarks>
+    [Fact]
+    public async Task ALongTitle_WrapsAtTheSmallestWindow_InsteadOfBeingCut()
+    {
+        const string title = "3 memory hardware errors in 30 days — test your RAM";
+        using var vm = await VmWithTheAppUpdateCheckOffAsync();
+
+        StaHelper.Run(() =>
+        {
+            vm.Alerts.Add(new DashboardAlert
+            {
+                Title = title,
+                Severity = AlertSeverity.Red,
+                State = AlertLoadingState.Complete,
+            });
+            AppResources.Ensure();
+            var view = new DashboardView { DataContext = vm };
+            view.Measure(new Size(PageWidth.Smallest, 4000));
+            view.Arrange(new Rect(0, 0, PageWidth.Smallest, 4000));
+            view.UpdateLayout();
+
+            var block = Assert.Single(Descendants<TextBlock>(view), t => t.Text == title);
+            for (DependencyObject? at = block; at is not null && at != view; at = VisualTreeHelper.GetParent(at))
+            {
+                if (at is FrameworkElement element && LayoutClip.IsCutAcross(element, out var room))
+                    Assert.Fail($"{LayoutClip.Describe(element)} is {element.ActualWidth:F0} px wide and shown "
+                                + $"{LayoutClip.Shown(room)}, so the alert's title is cut.");
+            }
+            Assert.True(block.ActualHeight > 2 * block.FontSize,
+                $"the title is {block.ActualHeight:F0} px tall, one line, so this window did not need it to wrap.");
+        });
+    }
+
     private static T Named<T>(DependencyObject root, string name) where T : FrameworkElement =>
         Assert.Single(Descendants<T>(root), e => AutomationProperties.GetName(e) == name);
 

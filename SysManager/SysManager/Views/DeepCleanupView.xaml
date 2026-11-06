@@ -33,19 +33,22 @@
                 <!-- Safety note -->
                 <Border Style="{StaticResource Card}" Margin="0,16,0,0"
                         Background="{DynamicResource AccentSoft}" BorderBrush="{DynamicResource Accent}" BorderThickness="1">
-                    <StackPanel Orientation="Horizontal">
-                        <TextBlock Text="&#xE946;" FontFamily="Segoe Fluent Icons,Segoe MDL2 Assets"
+                    <!-- Docked, so the text wraps to the card's width. It used to sit in a horizontal StackPanel with a
+                         MaxWidth of 900, so it wrapped at 900 whatever the window, and a narrower window cut the end
+                         of every line (#2787). -->
+                    <DockPanel>
+                        <TextBlock Text="&#xE946;" FontFamily="Segoe Fluent Icons,Segoe MDL2 Assets" DockPanel.Dock="Left"
                                    FontSize="18" Foreground="{DynamicResource Accent}" VerticalAlignment="Top" Margin="0,2,12,0"/>
                         <StackPanel>
                             <TextBlock Text="Safe by design" Style="{StaticResource SectionTitle}" Foreground="{DynamicResource Accent}"/>
-                            <TextBlock TextWrapping="Wrap" Foreground="{DynamicResource TextSecondary}" MaxWidth="900" Margin="0,4,0,0" Style="{StaticResource Subtle}">
+                            <TextBlock TextWrapping="Wrap" Foreground="{DynamicResource TextSecondary}" Margin="0,4,0,0" Style="{StaticResource Subtle}">
                                 Only a fixed list of folders is scanned: driver installer leftovers, Windows' own caches, logs and leftovers, the Recycle Bin, and
                                 game launchers' caches and logs.
                                 We never touch browser caches, passwords, live app settings, the registry, active drivers or game files; inside Program Files only
                                 named launcher cache and log folders are cleaned. A file that's locked or in use is skipped — nothing is forced.
                             </TextBlock>
                         </StackPanel>
-                    </StackPanel>
+                    </DockPanel>
                 </Border>
 
                 <!-- SCAN + CLEAN -->

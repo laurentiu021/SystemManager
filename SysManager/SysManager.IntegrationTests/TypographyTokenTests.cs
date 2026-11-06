@@ -293,11 +293,7 @@ public class TypographyTokenTests
         {
             AppResources.Ensure();
 
-            var views = typeof(App).Assembly.GetTypes()
-                .Where(t => t.Namespace == "SysManager.Views" && typeof(UserControl).IsAssignableFrom(t)
-                            && !t.IsAbstract && t.GetConstructor(Type.EmptyTypes) is not null)
-                .OrderBy(t => t.Name, StringComparer.Ordinal)
-                .ToList();
+            var views = AppViews.Constructible();
             Assert.True(views.Count >= 60, $"only {views.Count} views were found, where there are 67.");
 
             var offenders = new List<string>();

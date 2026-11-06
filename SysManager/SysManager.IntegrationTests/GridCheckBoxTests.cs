@@ -36,11 +36,7 @@ public class GridCheckBoxTests
                 .First(s => s.Property == Control.TemplateProperty).Value;
             var ring = app.FindResource("FocusRing");
 
-            var views = typeof(App).Assembly.GetTypes()
-                .Where(t => t.Namespace == "SysManager.Views" && typeof(UserControl).IsAssignableFrom(t)
-                            && !t.IsAbstract && t.GetConstructor(Type.EmptyTypes) is not null)
-                .OrderBy(t => t.Name, StringComparer.Ordinal)
-                .ToList();
+            var views = AppViews.Constructible();
 
             var offenders = new List<string>();
             var found = 0;

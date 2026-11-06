@@ -101,10 +101,10 @@
                                      EveryMouseClickableElement_IsAlsoKeyboardOperable lists them with this
                                      reason, so the exemption is visible rather than assumed. -->
                                 <Border Grid.Column="1" x:Name="CustomAccentPreview"
-                                        Width="24" Height="24" CornerRadius="{StaticResource RadiusMd}" Background="#6366F1"
+                                        Width="24" Height="24" CornerRadius="{StaticResource RadiusMd}" Background="#5F62EE"
                                         Margin="0,0,10,0" Cursor="Hand"
                                         MouseLeftButtonUp="CustomAccent_Click"/>
-                                <TextBox Grid.Column="2" x:Name="CustomAccentHex" Text="#6366F1"
+                                <TextBox Grid.Column="2" x:Name="CustomAccentHex" Text="#5F62EE"
                                          FontFamily="{StaticResource MonoFont}" FontSize="12"
                                          Background="Transparent" BorderThickness="0"
                                          Foreground="{DynamicResource TextPrimary}"

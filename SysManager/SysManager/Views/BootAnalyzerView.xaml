@@ -118,7 +118,7 @@
                                 device or the others, and sending someone looking for one is worse than an
                                 honest dead end.
 
-                                Same GhostButton + MetricBlue treatment as the Dashboard's "Fix this", so a
+                                Same GhostButton + InfoText treatment as the Dashboard's "Fix this", so a
                                 link to another tab looks the same wherever it appears.
                             -->
                             <DataGridTemplateColumn Header="" Width="170" MinWidth="150"
@@ -130,7 +130,7 @@
                                                 Command="{Binding DataContext.OpenFixForCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
                                                 CommandParameter="{Binding}"
                                                 Style="{StaticResource GhostButton}" Padding="8,2" FontSize="11"
-                                                Foreground="{DynamicResource MetricBlue}"
+                                                Foreground="{DynamicResource InfoText}"
                                                 HorizontalAlignment="Left" VerticalAlignment="Center"
                                                 Visibility="{Binding CanNavigate, Converter={StaticResource BoolToVis}}"/>
                                     </DataTemplate>

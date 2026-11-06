@@ -595,22 +595,37 @@ public class ThemeStatusBrushTests
 
     /// <summary>
     /// Pinned because it was the deciding measurement. A softened near-black (#1A1A1A) reads better on a
-    /// saturated fill and was the first choice, but it does NOT clear the bar: against the default accent
-    /// #6366F1 it is 3.90:1 while white is 4.47:1, so neither reaches 4.5 and the app's own signature
-    /// colour would still fail. Only pure black does, which is why the helper returns Colors.Black rather
+    /// saturated fill and was the first choice, but it does NOT clear the bar: against #6366F1, Clean Indigo's
+    /// accent and the default's until #2926, it is 3.90:1 while white is 4.47:1, so neither reaches 4.5 and that
+    /// indigo would still fail. Only pure black does, which is why the helper returns Colors.Black rather
     /// than a friendlier tone — and why a future "soften that harsh black" edit must not be made blindly.
     /// </summary>
     [Fact]
-    public void TextOnAccent_NeedsPureBlack_BecauseNearBlackMissesTheDefaultAccent()
+    public void TextOnAccent_NeedsPureBlack_BecauseNearBlackMissesCleanIndigo()
+    {
+        var indigo = ThemePreset.Defaults["clean-indigo"].Accent;
+
+        Assert.True(ContrastRatio(Colors.White, indigo) < 4.5,
+            "white was expected to fail against Clean Indigo's accent — if it now passes, re-derive this.");
+        Assert.True(ContrastRatio(C("#1A1A1A"), indigo) < 4.5,
+            "#1A1A1A was expected to fail too; that is the reason pure black is used.");
+        Assert.True(ContrastRatio(Colors.Black, indigo) >= 4.5);
+        Assert.Equal(Colors.Black, ThemeService.OnColor(indigo));
+    }
+
+    /// <summary>
+    /// The default theme's accent is a shade under Clean Indigo's, #5F62EE rather than #6366F1, so the labels on it
+    /// are white: white reads 4.70:1 there and black 4.47, where on #6366F1 black won by the same hair (#2926).
+    /// </summary>
+    [Fact]
+    public void TextOnAccent_IsWhite_OnTheDefaultAccent()
     {
         var defaultAccent = ThemePreset.Defaults["midnight-indigo"].Accent;
 
-        Assert.True(ContrastRatio(Colors.White, defaultAccent) < 4.5,
-            "white was expected to fail against the default accent — if it now passes, re-derive this.");
-        Assert.True(ContrastRatio(C("#1A1A1A"), defaultAccent) < 4.5,
-            "#1A1A1A was expected to fail too; that is the reason pure black is used.");
-        Assert.True(ContrastRatio(Colors.Black, defaultAccent) >= 4.5);
-        Assert.Equal(Colors.Black, ThemeService.OnColor(defaultAccent));
+        Assert.True(ContrastRatio(Colors.White, defaultAccent) >= 4.5,
+            $"white reads {ContrastRatio(Colors.White, defaultAccent):F2}:1 on the default accent {defaultAccent}.");
+        Assert.True(ContrastRatio(Colors.White, defaultAccent) > ContrastRatio(Colors.Black, defaultAccent));
+        Assert.Equal(Colors.White, ThemeService.OnColor(defaultAccent));
     }
 
     /// <summary>

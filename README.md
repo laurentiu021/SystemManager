@@ -286,6 +286,12 @@ one colour disappears against at least one of those. With two, one line always c
 underneath. Measured across all 12 themes and the six fills a control can sit on, the better of the two
 lines never drops below 4.47:1 — above the 3:1 WCAG asks of a non-text indicator.
 
+**The words on every button, chip and table header are drawn in the colour made for them**, and measured where
+they sit. A primary button's words are black or white, whichever reads better on the theme's colour, at 4.60:1 or
+more on every theme; red buttons, the admin button, the ghost buttons, the safety chips and the column headers each
+keep their own colour. A check lays all of them out on the twelve themes, over the page, a card and the top of a
+card, and fails anything under the 4.5:1 that words need.
+
 **Every button is at least 28 by 28 pixels**, however small its label. Every button in the app that sets its
 own padding — 110 of them — was rendered and measured, and **30 came out smaller than the 24 by 24 that WCAG
 2.5.8 asks for**, spread across 16 screens. The worst was the **X that removes an entry from your hosts

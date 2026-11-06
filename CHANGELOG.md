@@ -10,6 +10,44 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.136.143] - 2026-11-06
+
+**Buttons, filter chips and table headers show the colours they were made in: a primary button's words are black or
+white, whichever reads on the theme's colour, and red buttons, the admin button and the safety chips finally look like
+what they are.**
+
+### Fixed
+- Every label on a button, filter chip, checkbox, column header and the Kill menu item was drawn in the main text
+  colour, whatever colour its control set, because the app-wide text style outranked the colour each control passed
+  down. The colours never showed: the ghost buttons' since 0.3.0, the admin button's since 1.8.0, the filter chips'
+  since 1.10.0, the Kill item's since 1.104.0 and the one picked for words on the accent since 1.75.9. A primary
+  button read 1.93:1 on Warm Ember and 2.24 on Dark Forest, and a red button 3.39 on the default theme and 1.41 on
+  Mint Fresh, where words need 4.5.
+- Each label takes its control's colour now. A primary button's words are black or white, whichever reads better on
+  the theme's accent, 4.60:1 or more on every theme; a red button's are the colour picked for words on red, and grey
+  out when it is disabled; ghost buttons are a step quieter; Run as administrator is amber, shield and all; Process
+  Manager's row kill button and its Kill menu item are red; the Services chips say Safe, Caution and Critical in green,
+  amber and red; and table headers are the grey they were given, and the main text colour under the pointer.
+- Two checks lay out every button, chip, checkbox, header and menu item style on all twelve themes. One fails when a
+  label is not its control's colour, given as words or inside a panel, enabled or not; the other when it reads under
+  4.5:1 over the page, a card or the top of a card, and over an inner card for a style a view puts on one. Both say
+  which styles they could not read, so a style is never passed unmeasured.
+
+### Changed
+- The default theme's purple is a shade darker, #5F62EE rather than #6366F1, so the words on it stay white: on
+  #6366F1 black read better by a hair, 4.70 to 4.47:1. The chosen mode in the Appearance panel, a checkbox's tick and
+  a switch that is on, which already took the colour picked for the accent and were black on the default theme, are
+  white with it. Clean Indigo keeps #6366F1, and its primary buttons have black words.
+- On the light themes, red words are a step darker, #991B1B rather than #B91C1C, as their green, blue and amber words
+  already are: once the Critical chip showed its colour, the old red read 3.52:1 on the chosen chip at the top of a
+  card on Lavender.
+- The blue "Go to", "Fix this" and "See all changes" links on Dashboard and Boot Analyzer use the blue made for words
+  rather than the memory card's: that blue read 4.39:1 at the top of a card on Dark Forest once it showed. Process
+  Manager's kill button and Kill item use the red made for words for the same reason: the red made for fills read
+  4.29:1 on the button and 3.71 on the menu.
+- The right-click menus are still WPF-UI's dark grey on the light themes, where every item, Kill included, is hard to
+  read (#3198).
+
 ## [1.136.142] - 2026-11-06
 
 **The words on the status chips are easy to read on every theme now, where "Not recognised", "Unsigned", "Known app"

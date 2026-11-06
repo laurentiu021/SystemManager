@@ -9,6 +9,7 @@ using System.Windows.Data;
 using System.Windows.Media;
 using SysManager.Helpers;
 using SysManager.Models;
+using SysManager.Services;
 
 namespace SysManager.Tests;
 
@@ -276,7 +277,7 @@ public class ConverterTests
             converter.Convert(level, typeof(string), null!, CultureInfo.InvariantCulture);
 
         Assert.Equal("Not rated", text);
-        Assert.Equal("TextMuted", Colour(color, SafetyLevel.NotRated));
+        Assert.Equal("NeutralText", Colour(color, SafetyLevel.NotRated));
         Assert.Equal("DangerText", Colour(color, SafetyLevel.Critical));
         Assert.NotEqual(Colour(background, SafetyLevel.Critical), Colour(background, SafetyLevel.NotRated));
     }
@@ -348,17 +349,20 @@ public class ConverterTests
     {
         // The database holds 108 entries while a typical machine runs 200+ processes, so most rows are
         // Unknown. Tinting them amber/red would make a normal machine look alarming and train the user
-        // to ignore the column. It uses the app's existing TextMuted grey — "no information", which is
-        // what Unknown means — and is asserted to be neither the warning nor the danger colour.
+        // to ignore the column. It uses the theme's neutral grey — "no information", which is what
+        // Unknown means — and is asserted to be neither the warning nor the danger colour, in either mode.
         var unknown = ProcessSafetyPalette.TextColor("Unknown");
 
-        Assert.Equal("#7B8396", unknown);   // a fixed colour, the same on every theme
-        var muted = (Color)ColorConverter.ConvertFromString(unknown);
+        Assert.Equal("NeutralText", unknown);   // a theme brush, a grey for each mode (#2931)
+        foreach (var isDark in new[] { true, false })
+        {
+            var muted = ThemeService.StatusPalette(isDark).Single(e => e.Key == unknown).Color;
 
-        // Desaturated: no channel dominates the way it does in an amber/red alert.
-        var max = Math.Max(muted.R, Math.Max(muted.G, muted.B));
-        var min = Math.Min(muted.R, Math.Min(muted.G, muted.B));
-        Assert.True(max - min < 0x30, $"spread {max - min:X} is too saturated for a neutral chip");
+            // Desaturated: no channel dominates the way it does in an amber/red alert.
+            var max = Math.Max(muted.R, Math.Max(muted.G, muted.B));
+            var min = Math.Min(muted.R, Math.Min(muted.G, muted.B));
+            Assert.True(max - min < 0x30, $"spread {max - min:X} is too saturated for a neutral chip");
+        }
     }
 
     [Theory]

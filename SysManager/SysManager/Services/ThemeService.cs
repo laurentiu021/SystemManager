@@ -548,7 +548,7 @@ public sealed class ThemeService
         //    the approved mockup's cardgrad (white-alpha on dark / dark-alpha on light).
         //  - Rim: a vertical border gradient, brighter/darker at the very top (Lerp toward TextPrimary)
         //    fading to the normal border by mid-height — the 1px contour highlight without a shadow.
-        var sheenTop = theme.IsDark ? Lighten(theme.Surface, 0.05) : Darken(theme.Surface, 0.02);
+        var sheenTop = CardSheenTop(theme);
         SetBrush(res, "CardSurface", VGradient((sheenTop, 0.0), (theme.Surface, 0.55)));
         var rim = Lerp(theme.Border, theme.TextPrimary, 0.22);
         SetBrush(res, "CardRim", VGradient((rim, 0.0), (theme.Border, 0.5)));
@@ -711,6 +711,11 @@ public sealed class ThemeService
             ("SuccessText", C("#4ADE80")), ("SuccessBgSubtle", C("#1A22C55E")), ("SuccessBorder", C("#3322C55E")),
             ("InfoText", C("#7DD3FC")), ("InfoBgSubtle", C("#1A38BDF8")), ("InfoBorder", C("#3338BDF8")),
             ("DangerText", C("#F87171")), ("DangerBgSubtle", C("#1AEF4444")), ("DangerBorder", C("#33EF4444")),
+            // The neutral pair, for a chip that means "no information": Not recognised and Unsigned on Process
+            // Manager and Startup Manager, Not rated elsewhere. The grey the verbose output lines use, on its own
+            // tint. The chips used a fixed #7B8396 on every theme, an old copy of the default theme's muted text,
+            // which measured 2.84 to 4.45:1 on eleven of the twelve presets (#2931).
+            ("NeutralText", C("#9AA0A6")), ("NeutralBgSubtle", C("#1A9AA0A6")),
 
             // Critical severity (LogsView): a distinct, hotter red than Danger. Dark values mirror the
             // previous hardcoded #FF3B30 literals so dark themes are unchanged; the light array darkens
@@ -761,9 +766,15 @@ public sealed class ThemeService
             ("WarningText", C("#92400E")), ("WarningBgSubtle", C("#26FBBF24")),   // amber-800 text — AA on white
             ("WarningBg", C("#40FBBF24")), ("WarningStripe", C("#D97706")),
             ("WarningBorder", C("#55FBBF24")),
-            ("SuccessText", C("#15803D")), ("SuccessBgSubtle", C("#2622C55E")), ("SuccessBorder", C("#5522C55E")),
-            ("InfoText", C("#0369A1")), ("InfoBgSubtle", C("#2638BDF8")), ("InfoBorder", C("#5538BDF8")),
+            // green-800, the light themes' Success already: #15803D measured 3.81 to 4.24:1 on the chips' own tint
+            // on the six light presets (#2931).
+            ("SuccessText", C("#166534")), ("SuccessBgSubtle", C("#2622C55E")), ("SuccessBorder", C("#5522C55E")),
+            // sky-800, the light themes' Info already: #0369A1 measured 4.37:1 on the Windows chip's tint at the top
+            // of a card on Soft Blossom and Lavender (#2931).
+            ("InfoText", C("#075985")), ("InfoBgSubtle", C("#2638BDF8")), ("InfoBorder", C("#5538BDF8")),
             ("DangerText", C("#B91C1C")), ("DangerBgSubtle", C("#26EF4444")), ("DangerBorder", C("#55EF4444")),
+            // The neutral pair on light: the light verbose grey, slate-600, on its own tint.
+            ("NeutralText", C("#475569")), ("NeutralBgSubtle", C("#26475569")),
 
             // Critical severity (LogsView) — darker red than dark-mode so the Critical card/dot stay AA
             // on the tinted light surfaces (was a fixed #FF3B30 that washed out); BgSubtle bumped alpha.
@@ -826,6 +837,13 @@ public sealed class ThemeService
             (byte)(a.G + (b.G - a.G) * t),
             (byte)(a.B + (b.B - a.B) * t));
     }
+
+    /// <summary>
+    /// The colour at the top of a card's sheen: the surface a hair lifted on a dark theme and tinted down on a light
+    /// one. Internal so the chip contrast test reads the colour the top row of a card sits on.
+    /// </summary>
+    internal static Color CardSheenTop(ThemePreset theme) =>
+        theme.IsDark ? Lighten(theme.Surface, 0.05) : Darken(theme.Surface, 0.02);
 
     /// <summary>
     /// <paramref name="c"/> moved toward white by <paramref name="amount"/> (0 to 1), alpha kept. Internal because the

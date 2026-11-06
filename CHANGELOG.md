@@ -10,6 +10,23 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.136.142] - 2026-11-06
+
+**The words on the status chips are easy to read on every theme now, where "Not recognised", "Unsigned", "Known app"
+and "Verified" were faint on most of them.**
+
+### Fixed
+- The grey "Not recognised" chip on Process Manager (since 1.59.0) and "Unsigned" on Startup Manager (since 1.85.0),
+  which between them are most rows, used one fixed grey on every theme, an old copy of the default theme's muted text.
+  Against its own tint it measured 2.73 to 3.99:1 at the top of a card on all twelve themes, where small text needs
+  4.5. Each mode has its own neutral grey now, the one the verbose output lines use, on a tint of itself, and "Not
+  rated" on Services and Windows Features takes the same pair.
+- On the light themes the green "Known app", "Verified" and "Safe" chips measured 3.66 to 4.24:1, and the blue
+  "Windows" chip 4.37 on Soft Blossom and Lavender (since 1.52.23). Both texts are a step darker on the light themes
+  now, the shades the light themes' green and blue already used elsewhere.
+- A test reads every chip's words against its tint over the card, and over the top of the card's sheen, on all twelve
+  built-in themes. Before, the light success text was checked against white only and the grey against nothing.
+
 ## [1.136.141] - 2026-11-06
 
 **Performance Mode's power plans, the live output on five tabs and Duplicate Finder's groups take the app's look,

@@ -137,6 +137,9 @@
             <SolidColorBrush x:Key="DangerBgSubtle" Color="#1AEF4444"/>
             <SolidColorBrush x:Key="DangerBorder" Color="#33EF4444"/>
             <SolidColorBrush x:Key="DangerText" Color="#F87171"/>
+            <!-- The neutral pair for a chip that means "no information" (#2931). -->
+            <SolidColorBrush x:Key="NeutralText" Color="#9AA0A6"/>
+            <SolidColorBrush x:Key="NeutralBgSubtle" Color="#1A9AA0A6"/>
 
             <!-- Console output coloring (legacy) -->
             <SolidColorBrush x:Key="OutErrorBrush"   Color="#F87171" />

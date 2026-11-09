@@ -134,6 +134,9 @@
                                         <ColumnDefinition Width="Auto"/>
                                         <ColumnDefinition Width="Auto"/>
                                     </Grid.ColumnDefinitions>
+                                    <!-- The hover mark on the row's left edge, in its padding (#3204). -->
+                                    <Rectangle Grid.ColumnSpan="3" Margin="-8,0,0,0"
+                                               Style="{StaticResource BorderRowHoverMark}"/>
                                     <TextBlock Grid.Column="0" Text="{Binding Name}"
                                                Style="{StaticResource Body}" VerticalAlignment="Center"
                                                Foreground="{DynamicResource TextPrimary}"
@@ -215,6 +218,9 @@
                                         <ColumnDefinition Width="*"/>
                                         <ColumnDefinition Width="Auto"/>
                                     </Grid.ColumnDefinitions>
+                                    <!-- The hover mark on the row's left edge, in its padding (#3204). -->
+                                    <Rectangle Grid.ColumnSpan="4" Margin="-16,0,0,0"
+                                               Style="{StaticResource BorderRowHoverMark}"/>
 
                                     <!-- Checkbox -->
                                     <CheckBox Grid.Column="0" VerticalAlignment="Center"

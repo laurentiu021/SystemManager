@@ -18166,6 +18166,89 @@ public partial class ArchitectureTests
     }
 
     /// <summary>
+    /// Every row that takes the hover tint also draws the hover mark, and shows it under the pointer (#3204).
+    /// </summary>
+    /// <remarks>
+    /// The tint was the whole hover once, and a word on it paid for the lift: the muted words of a hovered list row
+    /// read 3.49 to 4.33:1 on eight themes. The 3 px mark carries the hover now, on the list rows as on the sidebar's
+    /// since #1540, so the tint is kept faint enough for every text tier to read on it, which
+    /// <c>ThemeTextContrastTests.EveryTextTier_ReadsOnAHoveredRow</c> holds. A row given the tint without the mark
+    /// would barely show the pointer. This finds every setter that paints <c>RowHover</c> and the row it paints: the
+    /// element its style is set on, every element a keyed style is given to, or the template of an implicit style or
+    /// of the trigger it sits in. Each must hold a mark, and a mark that does not show itself, RowHoverMarkBar, needs
+    /// its template's IsMouseOver trigger to show it.
+    /// </remarks>
+    [Fact]
+    public void EveryHoverTint_ComesWithTheHoverMark()
+    {
+        var appDir = TestPaths.AppProject();
+        var files = Directory.GetFiles(Path.Combine(appDir, "Views"), "*.xaml")
+            .Append(Path.Combine(appDir, "MainWindow.xaml"))
+            .Append(Path.Combine(appDir, "App.xaml"));
+        XNamespace x = "http://schemas.microsoft.com/winfx/2006/xaml";
+        string[] markStyles =
+        [
+            "{StaticResource RowHoverMarkBar}", "{StaticResource BorderRowHoverMark}",
+            "{StaticResource SidebarHoverMark}",
+        ];
+        var offenders = new List<string>();
+        var tints = 0;
+
+        string? Problem(XElement row)
+        {
+            var mark = row.Descendants().FirstOrDefault(e => e.Name.LocalName == "Rectangle"
+                && markStyles.Contains((string?)e.Attribute("Style"), StringComparer.Ordinal));
+            if (mark is null) return "takes the hover tint and draws no hover mark";
+            if ((string?)mark.Attribute("Style") != "{StaticResource RowHoverMarkBar}") return null;
+            var name = (string?)mark.Attribute(x + "Name");
+            var shown = row.DescendantsAndSelf().Where(e => e.Name.LocalName == "Trigger"
+                    && (string?)e.Attribute("Property") == "IsMouseOver" && (string?)e.Attribute("Value") == "True")
+                .SelectMany(t => t.Elements().Where(s => s.Name.LocalName == "Setter"))
+                .Any(s => name is not null && (string?)s.Attribute("TargetName") == name
+                          && (string?)s.Attribute("Property") == "Visibility"
+                          && (string?)s.Attribute("Value") == "Visible");
+            return shown ? null : "draws a hover mark that nothing shows under the pointer";
+        }
+
+        foreach (var file in files)
+        {
+            var document = XDocument.Load(file, LoadOptions.SetLineInfo);
+            var name = Path.GetFileName(file);
+            foreach (var setter in document.Descendants().Where(e => e.Name.LocalName == "Setter"
+                         && (string?)e.Attribute("Value") == "{DynamicResource RowHover}"))
+            {
+                tints++;
+                var template = setter.Ancestors().FirstOrDefault(a => a.Name.LocalName == "ControlTemplate");
+                var style = setter.Ancestors().FirstOrDefault(a => a.Name.LocalName == "Style");
+                List<XElement> rows =
+                    template is not null ? [template]
+                    : style?.Parent is { } holder && holder.Name.LocalName.EndsWith(".Style", StringComparison.Ordinal)
+                        ? [holder.Parent!]
+                    : (string?)style?.Attribute(x + "Key") is { } key
+                        ? [.. document.Descendants()
+                            .Where(e => (string?)e.Attribute("Style") == $"{{StaticResource {key}}}")]
+                    : style is not null ? [.. style.Descendants().Where(e => e.Name.LocalName == "ControlTemplate")]
+                    : [];
+                if (rows.Count == 0)
+                    offenders.Add($"{name}:{((System.Xml.IXmlLineInfo)setter).LineNumber}: no row found for the tint");
+                foreach (var row in rows)
+                {
+                    if (Problem(row) is { } problem)
+                        offenders.Add($"{name}:{((System.Xml.IXmlLineInfo)row).LineNumber}: a row {problem}");
+                }
+            }
+        }
+
+        // Vacuity floor: 5 tints when written, the DataGrid row's, the sidebar rows', the sidebar group headers' and
+        // Bulk Installer's two lists'.
+        Assert.True(tints >= 5, $"only {tints} hover tints were found, out of 5 when written.");
+        Assert.True(offenders.Count == 0,
+            "these rows show the pointer with the faint hover tint alone. Give each the hover mark, "
+            + "BorderRowHoverMark inside a Border, or RowHoverMarkBar shown by its template's IsMouseOver trigger:\n  "
+            + string.Join("\n  ", offenders));
+    }
+
+    /// <summary>
     /// Every text box and drop-down template dims when it is disabled, as the other controls do.
     /// </summary>
     /// <remarks>

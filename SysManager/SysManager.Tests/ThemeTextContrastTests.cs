@@ -147,7 +147,8 @@ public class ThemeTextContrastTests
     /// the load-bearing part and this is the assertion that keeps it honest.</para>
     /// <para>Asserted against Surface AND the two derived surfaces below it, because a sidebar row sits on
     /// Surface while a DataGrid row can sit on either — and the derived ones are lighter, so they are the
-    /// worse case for a light-neutral bar.</para>
+    /// worse case for a light-neutral bar. And against the hover tint itself, which the bar sits on while
+    /// it shows, on the list rows as on the sidebar's since #3204.</para>
     /// </remarks>
     [Theory]
     [MemberData(nameof(AllPresets))]
@@ -162,6 +163,7 @@ public class ThemeTextContrastTests
             ("Surface", p.Surface),
             ("Surface3 (derived)", Lerp(p.Surface2, p.TextPrimary, 0.05)),
             ("Surface4 (derived)", Lerp(p.Surface2, p.TextPrimary, 0.10)),
+            ("RowHover (derived)", Lerp(p.Surface, p.TextPrimary, ThemeService.RowHoverLerp(p.IsDark))),
         })
         {
             var ratio = ContrastRatio(ThemeService.RowHoverMarkColor(p), surface);
@@ -204,6 +206,34 @@ public class ThemeTextContrastTests
     }
 
     /// <summary>
+    /// Every text tier reads at 4.5:1 on a hovered row, on every preset (#3204).
+    /// </summary>
+    /// <remarks>
+    /// The grey tiers were held on the page, the cards and the derived inner shades, and not on the tint a
+    /// row takes under the pointer, which sits closer to the text than any of them. At the tint #1540 chose,
+    /// the muted words of a hovered row read 3.49 to 4.33:1 on eight presets, while the 3 px mark beside them
+    /// already carried the hover on the sidebar. The list rows draw the mark too now, and the tint is held
+    /// here instead of to a lift of its own.
+    /// </remarks>
+    [Theory]
+    [MemberData(nameof(AllPresets))]
+    public void EveryTextTier_ReadsOnAHoveredRow(string presetId)
+    {
+        var p = ThemePreset.Defaults[presetId];
+        var hover = Lerp(p.Surface, p.TextPrimary, ThemeService.RowHoverLerp(p.IsDark));
+        foreach (var (tier, text) in new (string, Color)[]
+                 {
+                     ("TextPrimary", p.TextPrimary), ("TextSecondary", p.TextSecondary), ("TextMuted", p.TextMuted),
+                 })
+        {
+            var ratio = ContrastRatio(text, hover);
+            Assert.True(ratio >= 4.5,
+                $"{presetId}: {tier} reads {ratio:F2}:1 on a hovered row's tint {hover}. Keep the tint faint, "
+                + "since the hover mark is what shows the pointer, or move the tier away from the surface.");
+        }
+    }
+
+    /// <summary>
     /// The hover tint must stay clearly WEAKER than the selection tint. Hover says "you are pointing at
     /// this"; selection says "this is where you are", and the stronger signal has to be the second one.
     /// </summary>
@@ -221,11 +251,11 @@ public class ThemeTextContrastTests
         var hoverLift = ContrastRatio(hover, p.Surface);
         var selectionLift = ContrastRatio(selection, p.Surface);
 
-        Assert.True(hoverLift >= 1.40,
-            $"{presetId}: the hover tint is only {hoverLift:F3}:1 off the surface. Below roughly 1.3 it is "
-            + "not perceptible on a laptop panel in a bright room, which is the whole of #1540 — and the "
-            + "light presets are where a single lerp factor fails, because darkening a light surface by the "
-            + "same fraction buys a third less ratio than lightening a dark one.");
+        // The 3 px mark shows the pointer (#1540, #3204), so the tint only backs it up; it still has to be there.
+        Assert.True(hoverLift >= 1.15,
+            $"{presetId}: the hover tint is only {hoverLift:F3}:1 off the surface, too faint to back up the hover "
+            + "mark. The light presets are where a single lerp factor fails, because darkening a light surface "
+            + "by the same fraction buys less ratio than lightening a dark one.");
 
         // Deliberately NOT "selection must be stronger than hover": on a dark theme a neutral lift can
         // out-measure a 9% accent wash while still reading as the weaker signal, because the accent is a
@@ -294,9 +324,11 @@ public class ThemeTextContrastTests
             positionsChecked++;
 
             // Includes the DERIVED surfaces, for the same reason the seeded check above does: they are the
-            // lowest-contrast rungs of the ramp, and the slider shifts Surface2 underneath them.
+            // lowest-contrast rungs of the ramp, and the slider shifts Surface2 underneath them. The hover tint
+            // too, which the slider shifts with Surface (#3204).
             var shadedSurface3 = Lerp(shaded.Surface2, shaded.TextPrimary, 0.05);
             var shadedSurface4 = Lerp(shaded.Surface2, shaded.TextPrimary, 0.10);
+            var shadedHover = Lerp(shaded.Surface, shaded.TextPrimary, ThemeService.RowHoverLerp(shaded.IsDark));
 
             foreach (var (label, surface) in new[]
                      {
@@ -305,6 +337,7 @@ public class ThemeTextContrastTests
                          ("Surface2", shaded.Surface2),
                          ("Surface3 (derived)", shadedSurface3),
                          ("Surface4 (derived)", shadedSurface4),
+                         ("RowHover (derived)", shadedHover),
                      })
             {
                 var muted = ContrastRatio(shaded.TextMuted, surface);
@@ -316,6 +349,7 @@ public class ThemeTextContrastTests
                      {
                          ("Surface2", shaded.Surface2),
                          ("Surface4 (derived)", shadedSurface4),
+                         ("RowHover (derived)", shadedHover),
                      })
             {
                 var secondary = ContrastRatio(shaded.TextSecondary, surface);

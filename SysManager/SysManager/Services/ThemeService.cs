@@ -432,6 +432,7 @@ public sealed class ThemeService
                               (shaded.Background, 7.0), (shaded.Surface, 4.5), (shaded.Surface2, 4.5));
         var surface3 = Lerp(shaded.Surface2, primary, 0.05);
         var surface4 = Lerp(shaded.Surface2, primary, 0.10);
+        var rowHover = Lerp(shaded.Surface, primary, RowHoverLerp(baseTheme.IsDark));
 
         // The floors and the surfaces each one is measured against mirror ThemeTextContrastTests exactly:
         // this correction enforces the same contract those assertions check, rather than a second opinion
@@ -446,10 +447,10 @@ public sealed class ThemeService
         {
             TextPrimary = primary,
             TextSecondary = Legible(shaded.TextSecondary, baseTheme.IsDark,
-                                    (shaded.Surface2, 4.5), (surface4, 4.5)),
+                                    (shaded.Surface2, 4.5), (surface4, 4.5), (rowHover, 4.5)),
             TextMuted = Legible(shaded.TextMuted, baseTheme.IsDark,
                                 (shaded.Background, 4.5), (shaded.Surface, 4.5), (shaded.Surface2, 4.5),
-                                (surface3, 4.5), (surface4, 4.5))
+                                (surface3, 4.5), (surface4, 4.5), (rowHover, 4.5))
         };
     }
 
@@ -556,12 +557,8 @@ public sealed class ThemeService
         // Row hover — a neutral tint, deliberately distinct from the accent-tinted selection
         // (AccentSoft). Before, DataGrid rows used AccentSoft for BOTH hover and selection, so hovering
         // any row made it look selected. This is a lift off the surface (toward TextPrimary),
-        // theme-derived so it works on light presets too.
-        //
-        // The factor is well above the 0.05 it shipped with: composited, 0.05 measured 1.11:1 against the
-        // surface it sits on, which is below the perceptual threshold on a typical laptop panel in a bright
-        // room. Hover is the ONLY affordance signal on the sidebar rows — they have no button chrome — so an
-        // imperceptible one means the app never shows what is clickable (#1540).
+        // theme-derived so it works on light presets too. The mark below is what shows the pointer; the
+        // tint only backs it up, so it is kept faint enough for every grey word on it to read (#3204).
         SetBrush(res, "RowHover", Lerp(theme.Surface, theme.TextPrimary, RowHoverLerp(theme.IsDark)));
 
         // The hover MARK: a 3px bar on the left edge of a hovered sidebar row, which is what actually
@@ -585,17 +582,20 @@ public sealed class ThemeService
     /// How far <c>RowHover</c> lifts the surface toward the text colour, by mode.
     /// </summary>
     /// <remarks>
-    /// Two factors rather than one, because contrast ratio is not symmetric: lightening a dark surface by
-    /// 15% yields 1.43–1.52:1 across the dark presets, while darkening a light surface by the same 15% only
-    /// yields 1.27–1.35:1 — the light presets came out a third weaker for the identical arithmetic. A single
-    /// factor large enough for them (0.22) would push the dark presets to 1.9:1, a heavier wash than the
-    /// design called for. 0.25 on light lands them at 1.52–1.68, the same band.
+    /// The tint was the whole hover once, so it had to be seen on its own: 0.15 on the dark presets and 0.25 on
+    /// the light ones, 1.43 to 1.69:1 off the surface (#1540). A word on it pays for that lift, and the muted
+    /// words of a hovered list row read 3.49 to 4.33:1 on eight presets (#3204). The 3 px mark carries the hover
+    /// now, on the list rows as on the sidebar's, so the tint drops to 1.19 to 1.25:1, where every text tier
+    /// reads at 4.5:1 or better.
+    /// <para>Two factors rather than one, because contrast ratio is not symmetric: the same fraction buys a
+    /// light surface less ratio than a dark one, so the light presets take the larger factor to land in the
+    /// same band.</para>
     /// <para>Internal so <c>ThemeTextContrastTests</c> asserts the floors against THIS method rather than a
     /// copy of the numbers. A test that restates the factor stops testing the moment the service changes it.
     /// The precedent is <c>ApplyStatusBrushes(res, theme.IsDark)</c>, which is mode-dependent for the same
     /// kind of reason.</para>
     /// </remarks>
-    internal static double RowHoverLerp(bool isDark) => isDark ? 0.15 : 0.25;
+    internal static double RowHoverLerp(bool isDark) => isDark ? 0.09 : 0.11;
 
     /// <summary>The colour of the 3px bar on a hovered row.</summary>
     /// <remarks>

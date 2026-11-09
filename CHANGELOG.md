@@ -10,6 +10,22 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.136.148] - 2026-11-09
+
+**Pointing at a row in a list keeps its grey details easy to read, and a bar on the row's left edge shows where the
+pointer is, as in the sidebar.**
+
+### Fixed
+- A list row under the pointer took a tint of the theme's text colour strong enough to show the pointer on its own,
+  and the row's grey words, a publisher, a version, a path, paid for it: they read 3.49 to 4.33:1 on eight of the
+  twelve themes, where words need 4.5, and on Sky Breeze the second grey too, 3.76:1. The tint had been that strong
+  since 1.95.0. Every list row now draws the 3 px bar the sidebar's rows draw on their left edge, so the tint behind
+  it can stay faint, and every grey word reads at 4.73:1 or more on a hovered row on every theme. The sidebar's group
+  headers, which had the tint and no bar, have the bar too, and the notification's close button has a hover of its
+  own.
+- Tests hold every text colour at 4.5:1 on a hovered row, on every theme and at every position of the background
+  shade slider, and fail a row that takes the hover tint without the bar.
+
 ## [1.136.147] - 2026-11-09
 
 **Right-click menus follow your theme: on the light themes their words were dark on a dark grey, and every item now

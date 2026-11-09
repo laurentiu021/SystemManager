@@ -162,6 +162,8 @@ What the app can and cannot do by design:
   [When the app uses the network](#when-the-app-uses-the-network).
 - Elevating silently — every admin action surfaces a banner first and
   uses the standard `runas` UAC prompt.
+- Running a startup hook: an assembly a `DOTNET_STARTUP_HOOKS` variable names, which the .NET
+  runtime would otherwise load and run before SysManager's own code.
 
 ### Things to be aware of
 
@@ -300,6 +302,15 @@ What the app can and cannot do by design:
   `Program Files` would still unpack to the same folder, so the machine-scope install above does
   not close this.
   [#2746](https://github.com/laurentiu021/SystemManager/issues/2746) tracks closing it.
+- **Settings the .NET runtime reads from your environment**: before SysManager's own code runs,
+  the .NET runtime reads some of its settings from environment variables, and any program running
+  as you can set one for the programs you start later, also one you start as administrator.
+  SysManager turns off the one that runs code a variable names, a startup hook, so the runtime
+  ignores `DOTNET_STARTUP_HOOKS`. A profiler named in `CORECLR_` or `DOTNET_` variables loads a
+  library into the app too, and nothing inside an app can turn that off, since the runtime loads
+  it before the app's code runs. It is the same limit as the exe being yours to write to, under
+  **Portable distribution model** above: a program already running as you can influence what you
+  start as administrator.
 - **Older versions' native libraries**: once its window is up, SysManager deletes the folders its
   older versions unpacked under `%TEMP%\.net`, and the other builds beside its own, when nothing in
   them has been written for a week. It never follows a link, and it leaves a folder that holds one,

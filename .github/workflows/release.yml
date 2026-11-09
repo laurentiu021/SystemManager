@@ -306,7 +306,14 @@ jobs:
           Remove-Item $marker -ErrorAction SilentlyContinue
 
           Write-Host "Launching $exe"
+          # With a startup hook named that does not exist. An exe with startup hooks on refuses to start past a hook it
+          # cannot load, so a build that turned them back on fails here, with no log, rather than shipping
+          # (SecurityPromiseTests.TheRuntime_RunsNoStartupHook). Set for this launch only, not in the step's env:
+          # pwsh is a .NET program too, and would read it as it started.
+          $hook = Join-Path ([IO.Path]::GetTempPath()) "no-such-hook-$([guid]::NewGuid())\StartupHook.dll"
+          $env:DOTNET_STARTUP_HOOKS = $hook
           $app = Start-Process -FilePath $exe -PassThru
+          Remove-Item Env:DOTNET_STARTUP_HOOKS
 
           # Long enough for the shell to build, the eager view models to construct and the
           # first frame to render. A crash on this path is immediate, not gradual.
@@ -364,7 +371,8 @@ jobs:
               }
               throw "The published exe exited on its own within 25 seconds (exit code " +
                     "$exitCode). It builds and passes the unit tests but does not run, so this " +
-                    "release must not be published. The log tail above is from the failed launch."
+                    "release must not be published. The log tail above is from the failed launch. " +
+                    "An exit before any log is also what an exe with startup hooks back on does here."
           }
 
           # The version the RUNNING app reports, which is a different property from the version

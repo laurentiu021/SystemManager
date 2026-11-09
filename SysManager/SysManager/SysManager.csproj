@@ -15,9 +15,14 @@
          Assembly.Location and the APIs marked RequiresAssemblyFiles). Set here, every build runs it, so a pull
          request fails on what would otherwise fail only the release, after its tag exists (#2806). -->
     <EnableSingleFileAnalyzer>true</EnableSingleFileAnalyzer>
-    <Version>1.136.160</Version>
-    <FileVersion>1.136.160.0</FileVersion>
-    <AssemblyVersion>1.136.160.0</AssemblyVersion>
+    <!-- No startup hooks. The runtime would otherwise load every assembly a DOTNET_STARTUP_HOOKS variable names and run
+         it before Main, and any program running as you can set that variable for your next start, also as
+         administrator. Nothing in SysManager uses one. Set in every configuration, so a test run in Debug reads the
+         same runtime configuration the release ships. -->
+    <StartupHookSupport>false</StartupHookSupport>
+    <Version>1.136.161</Version>
+    <FileVersion>1.136.161.0</FileVersion>
+    <AssemblyVersion>1.136.161.0</AssemblyVersion>
     <Product>SysManager</Product>
     <Description>SysManager — Windows system monitoring toolkit by laurentiu021. Network, updates, health, logs, safe deep cleanup.</Description>
     <PackageProjectUrl>https://github.com/laurentiu021/SystemManager</PackageProjectUrl>

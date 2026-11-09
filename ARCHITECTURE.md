@@ -23,7 +23,8 @@ SystemManager/                      # the repository
 │   │   │                           #   build (NavItem, UndoChangeRow, …)
 │   │   ├── Views/                  # XAML views + code-behind, plus six shared controls:
 │   │   │                           #   AdminBanner (the elevation banner, 32 tabs)
-│   │   │                           #   EmptyState  (icon + title + message for an empty list)
+│   │   │                           #   EmptyState  (icon + title + message for an empty list,
+│   │   │                           #   with Compact for a small card: no icon, 12 px above and below)
 │   │   │                           #   DevelopmentBanner (the PREVIEW notice)
 │   │   │                           #   StatusFooter (progress bar + status line, 22 tabs)
 │   │   │                           #   ConsoleView (the live output console, five tabs)

@@ -47,4 +47,17 @@ public partial class EmptyState : UserControl
         get => (string)GetValue(MessageProperty);
         set => SetValue(MessageProperty, value);
     }
+
+    /// <summary>
+    /// Leaves the glyph out and keeps 12 px above and below instead of 24, for a state in a card beside or in place of
+    /// a chart or a console, where that space is what the card can least spare (#3221).
+    /// </summary>
+    public static readonly DependencyProperty CompactProperty =
+        DependencyProperty.Register(nameof(Compact), typeof(bool), typeof(EmptyState), new PropertyMetadata(false));
+
+    public bool Compact
+    {
+        get => (bool)GetValue(CompactProperty);
+        set => SetValue(CompactProperty, value);
+    }
 }

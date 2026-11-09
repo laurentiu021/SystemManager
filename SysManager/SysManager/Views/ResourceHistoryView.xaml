@@ -17,8 +17,8 @@
             <RowDefinition Height="Auto"/>
             <RowDefinition Height="Auto"/>
             <RowDefinition Height="Auto"/>
-            <!-- Its floor: both chart cards at their charts' heights, and their empty states whole (#2704). -->
-            <RowDefinition Height="*" MinHeight="572"/>
+            <!-- Its floor: both chart cards at their charts' heights, and their empty states whole (#2704, #3221). -->
+            <RowDefinition Height="*" MinHeight="412"/>
             <RowDefinition Height="Auto"/>
         </Grid.RowDefinitions>
 
@@ -90,7 +90,7 @@
                         <RowDefinition Height="*"/>
                     </Grid.RowDefinitions>
                     <TextBlock Grid.Row="0" Text="Usage" Style="{StaticResource SectionTitle}" Margin="0,0,0,12"/>
-                    <lvc:CartesianChart Grid.Row="1" Background="Transparent" MinHeight="180"
+                    <lvc:CartesianChart Grid.Row="1" Background="Transparent" MinHeight="160"
                                         Visibility="{Binding HasData, Converter={StaticResource FlexVis}}"
                                         Series="{Binding UsageSeries}"
                                         XAxes="{Binding UsageXAxes}" YAxes="{Binding UsageYAxes}"
@@ -99,7 +99,7 @@
                                         LegendBackgroundPaint="{Binding LegendBackgroundPaint}"
                                         TooltipTextPaint="{Binding TooltipTextPaint}"
                                         TooltipBackgroundPaint="{Binding TooltipBackgroundPaint}"/>
-                    <v:EmptyState Grid.Row="1" Glyph="&#xE9D9;" Title="No history yet"
+                    <v:EmptyState Grid.Row="1" Glyph="&#xE9D9;" Title="No history yet" Compact="True"
                                   Message="Resource samples are recorded every 10 seconds while the app runs. Come back after a while to see your usage trend."
                                   Visibility="{Binding HasData, Converter={StaticResource FlexVis}, ConverterParameter=Inverse}"/>
                 </Grid>
@@ -113,7 +113,7 @@
                         <RowDefinition Height="*"/>
                     </Grid.RowDefinitions>
                     <TextBlock Grid.Row="0" Text="Temperature" Style="{StaticResource SectionTitle}" Margin="0,0,0,12"/>
-                    <lvc:CartesianChart Grid.Row="1" Background="Transparent" MinHeight="120"
+                    <lvc:CartesianChart Grid.Row="1" Background="Transparent" MinHeight="92"
                                         Visibility="{Binding HasTemperatureData, Converter={StaticResource FlexVis}}"
                                         Series="{Binding TemperatureSeries}"
                                         XAxes="{Binding TemperatureXAxes}" YAxes="{Binding TemperatureYAxes}"
@@ -122,7 +122,7 @@
                                         LegendBackgroundPaint="{Binding LegendBackgroundPaint}"
                                         TooltipTextPaint="{Binding TooltipTextPaint}"
                                         TooltipBackgroundPaint="{Binding TooltipBackgroundPaint}"/>
-                    <v:EmptyState Grid.Row="1" Glyph="&#xE9CA;" Title="No temperature data"
+                    <v:EmptyState Grid.Row="1" Glyph="&#xE9CA;" Title="No temperature data" Compact="True"
                                   Message="CPU/GPU temperatures need supported sensors, and the CPU's also needs administrator rights and the PawnIO driver, which SysManager does not install. The chart fills in once readings are available."
                                   Visibility="{Binding HasTemperatureData, Converter={StaticResource FlexVis}, ConverterParameter=Inverse}"/>
                 </Grid>

@@ -19,8 +19,7 @@
             <RowDefinition Height="Auto"/>
             <RowDefinition Height="Auto"/>
             <RowDefinition Height="Auto"/>
-            <!-- Its floor: the drift list with its "No changes detected" whole (#2704). -->
-            <RowDefinition Height="*" MinHeight="196"/>
+            <RowDefinition Height="*"/>
             <!-- Row 7: the watched-settings list. Auto rather than star so the drift list above keeps
                  the flexible space — drift is the actionable content, and this list is bounded by its
                  own MaxHeight (the catalog is a fixed eight entries). -->
@@ -108,7 +107,7 @@
                     </DataGrid.Columns>
                 </DataGrid>
 
-                <v:EmptyState Glyph="&#xE73E;" Title="No changes detected"
+                <v:EmptyState Glyph="&#xE73E;" Title="No changes detected" Compact="True"
                               Message="Save a baseline, then check back after a Windows update. Any setting that drifted from your baseline will appear here, ready to restore."
                               Visibility="{Binding HasDrift, Converter={StaticResource FlexVis}, ConverterParameter=Inverse}"/>
             </Grid>

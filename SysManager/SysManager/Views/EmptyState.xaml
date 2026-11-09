@@ -15,12 +15,36 @@
                            Visibility="{Binding Items.Count, Converter={StaticResource FlexVis}, ConverterParameter=Inverse}"/>
            </Grid>
          Glyph is optional — omit it for a title/message-only state. -->
-    <StackPanel VerticalAlignment="Center" HorizontalAlignment="Center" Margin="24">
+    <!-- Compact, for one in a card beside or in place of a chart or a console, where the space round it is what the
+         card can least spare: no glyph, and 12 px above and below instead of 24 (#3221). -->
+    <StackPanel VerticalAlignment="Center" HorizontalAlignment="Center">
+        <StackPanel.Style>
+            <Style TargetType="StackPanel">
+                <Setter Property="Margin" Value="24"/>
+                <Style.Triggers>
+                    <DataTrigger Binding="{Binding Compact, ElementName=Root}" Value="True">
+                        <Setter Property="Margin" Value="24,12"/>
+                    </DataTrigger>
+                </Style.Triggers>
+            </Style>
+        </StackPanel.Style>
         <TextBlock Text="{Binding Glyph, ElementName=Root}"
                    FontFamily="Segoe Fluent Icons,Segoe MDL2 Assets" FontSize="32"
                    HorizontalAlignment="Center" Margin="0,0,0,8"
-                   Foreground="{DynamicResource TextSecondary}"
-                   Visibility="{Binding Glyph, ElementName=Root, Converter={StaticResource FlexVis}}"/>
+                   Foreground="{DynamicResource TextSecondary}">
+            <!-- A setter, not a local value, so the compact trigger can outrank it. -->
+            <TextBlock.Style>
+                <Style TargetType="TextBlock" BasedOn="{StaticResource {x:Type TextBlock}}">
+                    <Setter Property="Visibility"
+                            Value="{Binding Glyph, ElementName=Root, Converter={StaticResource FlexVis}}"/>
+                    <Style.Triggers>
+                        <DataTrigger Binding="{Binding Compact, ElementName=Root}" Value="True">
+                            <Setter Property="Visibility" Value="Collapsed"/>
+                        </DataTrigger>
+                    </Style.Triggers>
+                </Style>
+            </TextBlock.Style>
+        </TextBlock>
         <TextBlock Text="{Binding Title, ElementName=Root}"
                    Style="{StaticResource SectionTitle}"
                    Foreground="{DynamicResource TextSecondary}"

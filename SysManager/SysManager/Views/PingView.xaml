@@ -11,8 +11,8 @@
             <RowDefinition Height="Auto"/>
             <RowDefinition Height="Auto"/>
             <RowDefinition Height="Auto"/>
-            <!-- Its floor: the chart card at the chart's 200 (#2704). -->
-            <RowDefinition Height="*" MinHeight="296"/>
+            <!-- Its floor: the chart card at the chart's 136 (#2704, #3221). -->
+            <RowDefinition Height="*" MinHeight="232"/>
             <!-- Status line. This tab was one of only two in the app with no status line at all, so
                  Clear History wiped the chart and history with no confirmation on screen. -->
             <RowDefinition Height="Auto"/>
@@ -220,7 +220,7 @@
                         </ComboBox>
                     </StackPanel>
                 </DockPanel>
-                <lvc:CartesianChart Grid.Row="1" Background="Transparent" MinHeight="200"
+                <lvc:CartesianChart Grid.Row="1" Background="Transparent" MinHeight="136"
                                     Series="{Binding Shared.LatencySeries}"
                                     XAxes="{Binding Shared.LatencyXAxes}" YAxes="{Binding Shared.LatencyYAxes}"
                                     LegendPosition="Bottom"

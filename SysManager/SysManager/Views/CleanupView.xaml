@@ -10,8 +10,7 @@
             <RowDefinition Height="Auto"/>
             <RowDefinition Height="Auto"/>
             <RowDefinition Height="Auto"/>
-            <!-- Its floor: the console with its "No output yet" whole (#2704). -->
-            <RowDefinition Height="*" MinHeight="188"/>
+            <RowDefinition Height="*"/>
             <RowDefinition Height="Auto"/>
         </Grid.RowDefinitions>
 

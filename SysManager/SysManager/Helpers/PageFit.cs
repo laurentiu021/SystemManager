@@ -26,6 +26,9 @@ public sealed class PageFit : Decorator, IScrollInfo
     /// <summary>How far one press of an arrow on the scroll bar moves, as a list's line.</summary>
     private const double Line = 16;
 
+    /// <summary>A move shorter than this is none: a hundredth of a pixel.</summary>
+    private const double NoMove = 0.01;
+
     private Size _extent;
     private Size _viewport;
     private double _offset;
@@ -101,8 +104,9 @@ public sealed class PageFit : Decorator, IScrollInfo
         var changed = extent != _extent || viewport != _viewport;
         _extent = extent;
         _viewport = viewport;
+        // A clamp only ever pulls the offset back, as the extent shrinks or the window grows.
         var offset = Clamp(_offset);
-        if (offset != _offset)
+        if (offset < _offset)
         {
             _offset = offset;
             changed = true;
@@ -118,7 +122,7 @@ public sealed class PageFit : Decorator, IScrollInfo
     public void SetVerticalOffset(double offset)
     {
         var clamped = Clamp(offset);
-        if (clamped == _offset) return;
+        if (Math.Abs(clamped - _offset) < NoMove) return;
         _offset = clamped;
         InvalidateArrange();
         ScrollOwner?.InvalidateScrollInfo();

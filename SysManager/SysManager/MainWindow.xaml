@@ -170,13 +170,8 @@
              once — the accent one wins, because "this is where you are" outranks "this is what you
              are pointing at". IsMouseOver comes off the Button ancestor rather than this Rectangle,
              which is only 3px wide and would otherwise light up nowhere. -->
-        <Style x:Key="SidebarHoverMark" TargetType="Rectangle">
-            <Setter Property="HorizontalAlignment" Value="Left"/>
-            <Setter Property="Width" Value="3"/>
-            <Setter Property="Height" Value="18"/>
+        <Style x:Key="SidebarHoverMark" TargetType="Rectangle" BasedOn="{StaticResource RowHoverMarkBar}">
             <Setter Property="Fill" Value="{DynamicResource RowHoverMark}"/>
-            <Setter Property="RadiusX" Value="2"/>
-            <Setter Property="RadiusY" Value="2"/>
             <Setter Property="Visibility" Value="Collapsed"/>
             <Style.Triggers>
                 <MultiDataTrigger>
@@ -426,6 +421,10 @@
                                                     <ColumnDefinition Width="*"/>
                                                     <ColumnDefinition Width="Auto"/>
                                                 </Grid.ColumnDefinitions>
+                                                <!-- The leaf rows' hover mark, which the group header lacked; its
+                                                     tint alone is too faint to show the pointer (#3204). -->
+                                                <Rectangle Grid.ColumnSpan="2" Margin="-14,0,0,0"
+                                                           Style="{StaticResource BorderRowHoverMark}"/>
                                                 <StackPanel Grid.Column="0">
                                                     <StackPanel Orientation="Horizontal">
                                                         <TextBlock Text="{Binding Glyph}"
@@ -713,11 +712,13 @@
                                         CornerRadius="{StaticResource RadiusSm}">
                                     <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
                                 </Border>
-                                <!-- A tint under the pointer, so it shows it can be clicked (#2882). RowHover, the
-                                     window's hover, rather than AccentSoft, which marks the open page here. -->
+                                <!-- A tint under the pointer, so it shows it can be clicked (#2882): Surface4, a
+                                     step up from the toast's Surface2 as a ghost button's Surface3 is from a card.
+                                     Not AccentSoft, which marks the open page here, and not RowHover, a row's
+                                     tint, which is faint without its mark and figured from the card surface. -->
                                 <ControlTemplate.Triggers>
                                     <Trigger Property="IsMouseOver" Value="True">
-                                        <Setter TargetName="Bd" Property="Background" Value="{DynamicResource RowHover}"/>
+                                        <Setter TargetName="Bd" Property="Background" Value="{DynamicResource Surface4}"/>
                                     </Trigger>
                                 </ControlTemplate.Triggers>
                             </ControlTemplate>

@@ -1785,10 +1785,74 @@
                 </Setter>
             </Style>
 
+            <!--
+                The bar a hovered row draws on its left edge, as the sidebar's rows have since #1540: 3 px of the
+                muted text colour, which carries the hover at 3:1 or better, so the RowHover tint behind the row can
+                stay faint enough for every grey word on it to read at 4.5:1 (#3204). RowHoverMarkBar is the shape;
+                BorderRowHoverMark shows it while the pointer is on the Border that holds it.
+            -->
+            <Style x:Key="RowHoverMarkBar" TargetType="Rectangle">
+                <Setter Property="HorizontalAlignment" Value="Left"/>
+                <Setter Property="Width" Value="3"/>
+                <Setter Property="Height" Value="18"/>
+                <Setter Property="RadiusX" Value="2"/>
+                <Setter Property="RadiusY" Value="2"/>
+                <Setter Property="Fill" Value="{DynamicResource RowHoverMark}"/>
+                <Setter Property="IsHitTestVisible" Value="False"/>
+                <Setter Property="Visibility" Value="Collapsed"/>
+            </Style>
+
+            <Style x:Key="BorderRowHoverMark" TargetType="Rectangle" BasedOn="{StaticResource RowHoverMarkBar}">
+                <Style.Triggers>
+                    <DataTrigger Binding="{Binding IsMouseOver, RelativeSource={RelativeSource AncestorType=Border}}"
+                                 Value="True">
+                        <Setter Property="Visibility" Value="Visible"/>
+                    </DataTrigger>
+                </Style.Triggers>
+            </Style>
+
             <Style TargetType="DataGridRow">
                 <Setter Property="Background" Value="Transparent"/>
                 <Setter Property="Foreground" Value="{DynamicResource TextPrimary}"/>
                 <Setter Property="BorderThickness" Value="0"/>
+                <!-- WPF's own row template, unchanged, with the hover mark laid over the row's left edge. Like the row
+                     header, the mark stays put when the cells scroll sideways. -->
+                <Setter Property="Template">
+                    <Setter.Value>
+                        <ControlTemplate TargetType="DataGridRow">
+                            <Border x:Name="DGR_Border" Background="{TemplateBinding Background}"
+                                    BorderBrush="{TemplateBinding BorderBrush}"
+                                    BorderThickness="{TemplateBinding BorderThickness}" SnapsToDevicePixels="True">
+                                <SelectiveScrollingGrid>
+                                    <SelectiveScrollingGrid.ColumnDefinitions>
+                                        <ColumnDefinition Width="Auto"/>
+                                        <ColumnDefinition Width="*"/>
+                                    </SelectiveScrollingGrid.ColumnDefinitions>
+                                    <SelectiveScrollingGrid.RowDefinitions>
+                                        <RowDefinition Height="*"/>
+                                        <RowDefinition Height="Auto"/>
+                                    </SelectiveScrollingGrid.RowDefinitions>
+                                    <DataGridCellsPresenter Grid.Column="1" ItemsPanel="{TemplateBinding ItemsPanel}"
+                                                            SnapsToDevicePixels="{TemplateBinding SnapsToDevicePixels}"/>
+                                    <DataGridDetailsPresenter Grid.Column="1" Grid.Row="1"
+                                                              Visibility="{TemplateBinding DetailsVisibility}"
+                                                              SelectiveScrollingGrid.SelectiveScrollingOrientation="{Binding AreRowDetailsFrozen, ConverterParameter={x:Static SelectiveScrollingOrientation.Vertical}, Converter={x:Static DataGrid.RowDetailsScrollingConverter}, RelativeSource={RelativeSource AncestorType=DataGrid}}"/>
+                                    <DataGridRowHeader Grid.RowSpan="2"
+                                                       SelectiveScrollingGrid.SelectiveScrollingOrientation="Vertical"
+                                                       Visibility="{Binding HeadersVisibility, ConverterParameter={x:Static DataGridHeadersVisibility.Row}, Converter={x:Static DataGrid.HeadersVisibilityConverter}, RelativeSource={RelativeSource AncestorType=DataGrid}}"/>
+                                    <Rectangle x:Name="HoverMark" Grid.RowSpan="2" Grid.ColumnSpan="2"
+                                               SelectiveScrollingGrid.SelectiveScrollingOrientation="Vertical"
+                                               Style="{StaticResource RowHoverMarkBar}"/>
+                                </SelectiveScrollingGrid>
+                            </Border>
+                            <ControlTemplate.Triggers>
+                                <Trigger Property="IsMouseOver" Value="True">
+                                    <Setter TargetName="HoverMark" Property="Visibility" Value="Visible"/>
+                                </Trigger>
+                            </ControlTemplate.Triggers>
+                        </ControlTemplate>
+                    </Setter.Value>
+                </Setter>
                 <Style.Triggers>
                     <!-- Hover = subtle neutral tint; selection = accent tint. Distinct now (both were AccentSoft). -->
                     <Trigger Property="IsMouseOver" Value="True">

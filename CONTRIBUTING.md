@@ -98,7 +98,14 @@ SysManager/
 ├── SysManager.Tests/          # xUnit unit tests
 ├── SysManager.IntegrationTests/ # integration tests (CI, non-blocking)
 └── SysManager.UITests/        # FlaUI UI-automation tests
+tools/
+├── ThirdPartyNotices.cs       # writes THIRD-PARTY-NOTICES.txt from the restore graph
+└── licenses/                  # license texts it uses, and packages.json for packages it cannot read one from
 ```
+
+Changed a package in `Directory.Packages.props`? Run `dotnet run tools/ThirdPartyNotices.cs` from the
+repository root and commit `THIRD-PARTY-NOTICES.txt` with the change; `ThirdPartyNoticesTests` fails the
+pull request otherwise.
 
 See [ARCHITECTURE.md](ARCHITECTURE.md) for the deeper tour.
 
@@ -135,7 +142,8 @@ guide. That said, a few explicit rules:
 - **Inclusive terms**: main or primary, allowlist or denylist. A test fails
   the build on the older words in any code, test, script or document; the few
   uses that have to stay (Windows API names such as `SetMasterVolume`, a file
-  name already on users' PCs, and winget-pkgs' own branch) are listed in
+  name already on users' PCs, winget-pkgs' own branch, and another project's
+  branch in a GitHub link the third-party notices quote) are listed in
   `InclusiveTermsTests`.
 - **A change is cited by its issue or pull request number**, as `(#1234)`. A
   review's own labels, a category with an item number or an audit's numbering,

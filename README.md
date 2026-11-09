@@ -2549,6 +2549,9 @@ offers, "rate us" prompts:
   most recent activity so the zip stays small enough to attach, and says so at the top.
 - **Report a problem** and **Ask a question** open the right GitHub page directly; **View
   license** and **What's new** open the licence and the changelog
+- **Open-source components** opens the licenses and notices of the open-source libraries inside
+  SysManager, from a copy the exe carries, in Notepad, so it works offline. Where Notepad is not
+  installed, the same file opens on GitHub at this version
 - **The startup version check is a checkbox here** — "Check GitHub for a new version when
   SysManager starts" — and switching it off does not disable the **Check for updates**
   button, which still works on demand. If the setting cannot be read when SysManager starts
@@ -2946,7 +2949,8 @@ attestation is signed by GitHub's own infrastructure at build time and logged pu
 it also records *which* commit and workflow produced the file, and that record cannot be
 rewritten after the fact. Each release also ships
 `SysManager-v<version>.sbom.json`, a CycloneDX inventory of every NuGet package resolved
-for that build — useful for checking the dependency set against a vulnerability feed.
+for that build — useful for checking the dependency set against a vulnerability feed — and
+`THIRD-PARTY-NOTICES.txt`, the licenses and notices of the open-source components the exe carries.
 
 ### First launch: Windows will warn you
 
@@ -3091,7 +3095,10 @@ the Dashboard's app-updates alert, which asks winget. The About tab can switch o
 Everything else that uses the network runs only when you use it, and
 [When SysManager uses the network](#what-it-is) lists each case.
 
-Third-party components are listed in the SBOM published with every release.
+The open-source components the exe carries are listed, with their licenses and notices, in
+[THIRD-PARTY-NOTICES.txt](THIRD-PARTY-NOTICES.txt), which the exe carries too (About, **Open-source
+components**) and every release publishes beside it. The SBOM published with every release lists their
+exact versions.
 
 ## Uninstalling
 
@@ -3160,8 +3167,8 @@ dotnet publish SysManager/SysManager/SysManager.csproj `
   -o publish
 ```
 
-`publish.ps1` is what the release workflow runs. It also passes
-`-p:ContinuousIntegrationBuild=true -p:Deterministic=true`, so its build is reproducible —
+`publish.ps1` is what the release workflow runs. `Directory.Build.props` sets
+`ContinuousIntegrationBuild` and `Deterministic` for every Release build, so its build is reproducible —
 on the same SDK, which `global.json` pins exactly (`"rollForward": "disable"`). A self-contained
 publish embeds the runtime its SDK carries, so that pin is what makes two builds of one tag
 produce the same bytes; the release workflow also refuses to replace a published exe with a
@@ -3169,6 +3176,19 @@ different hash.
 
 The resulting `SysManager.exe` lands in `publish/` and runs standalone on any
 Windows 10 / 11 x64 machine.
+
+### After a dependency changes
+
+The exe embeds `THIRD-PARTY-NOTICES.txt`, the licenses and notices of every package whose code it
+carries. Write it again from the repo root and commit it:
+
+```powershell
+dotnet run tools/ThirdPartyNotices.cs
+```
+
+It restores the app as the release publishes it and stops, writing nothing, at a package whose license
+it has no text for: give that package an entry in `tools/licenses/packages.json`. A unit test fails a
+pull request whose notices no longer match the packages the exe carries.
 
 ## First-time flow
 

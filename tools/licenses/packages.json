@@ -1,0 +1,29 @@
+{
+  "HidSharp": {
+    "license": "Apache-2.0"
+  },
+  "Microsoft.Management.Infrastructure.Runtime.Win": {
+    "license": "MIT"
+  },
+  "Mono.Posix.NETStandard": {
+    "license": "MIT",
+    "text": "linked/Mono.Posix.NETStandard.txt",
+    "from": "https://github.com/mono/mono/blob/main/LICENSE, where the package's license URL leads"
+  },
+  "NvAPIWrapper.Net": {
+    "license": "LGPL-3.0-only",
+    "text": "linked/NvAPIWrapper.Net.txt",
+    "from": "https://github.com/falahati/NvAPIWrapper/blob/master/LICENSE, the package's license URL",
+    "source": "https://github.com/falahati/NvAPIWrapper"
+  },
+  "OpenTK": {
+    "license": "LicenseRef-OpenTK",
+    "text": "linked/OpenTK.txt",
+    "from": "https://github.com/opentk/opentk/blob/3.3.1/License.txt, the package's license URL at its version"
+  },
+  "OpenTK.GLWpfControl": {
+    "license": "MIT",
+    "text": "linked/OpenTK.GLWpfControl.txt",
+    "from": "https://github.com/opentk/GLWpfControl/blob/3.3.1/LICENSE.md, the package's license URL at its version"
+  }
+}

@@ -45,9 +45,10 @@ public sealed class AboutViewModelLinkTests : IDisposable
         catch (IOException) { /* a leftover temp dir must never fail a test run */ }
     }
 
-    private AboutViewModel NewVm(Action<ProcessStartInfo>? launch = null) =>
+    private AboutViewModel NewVm(Action<ProcessStartInfo>? launch = null, string? noticesDir = null) =>
         new(_updates, new SystemReportService(new SystemInfoService(), new DiskHealthService(), new BatteryService(), new EventLogService()),
-            autoCheck: false, preferences: new UpdateCheckPreferenceService(_dir), updatesDir: _dir, launch: launch ?? _launched.Add);
+            autoCheck: false, preferences: new UpdateCheckPreferenceService(_dir), updatesDir: _dir,
+            launch: launch ?? _launched.Add, noticesDir: noticesDir ?? _dir);
 
     /// <summary>The one address a command asked to open, which it opens through the shell, so in the browser.</summary>
     private string Opened()
@@ -70,6 +71,60 @@ public sealed class AboutViewModelLinkTests : IDisposable
         Assert.IsAssignableFrom<IRelayCommand>(typeof(AboutViewModel).GetProperty(command)!.GetValue(vm)).Execute(null);
 
         Assert.Equal(address, Opened());
+    }
+
+    [Fact]
+    public async Task OpenSourceComponents_OpensTheNoticesTheExeCarries_InNotepadFromSystem32()
+    {
+        var vm = NewVm();
+
+        await vm.OpenThirdPartyNoticesCommand.ExecuteAsync(null);
+
+        var start = Assert.Single(_launched);
+        Assert.False(start.UseShellExecute);
+        Assert.Equal(SystemPaths.ResolveSystemTool("notepad.exe"), start.FileName);
+        Assert.True(Path.IsPathFullyQualified(start.FileName));
+        var path = Assert.Single(start.ArgumentList);
+        Assert.Equal(Path.Combine(_dir, ThirdPartyNotices.FileName), path);
+        Assert.Equal(ThirdPartyNotices.Read(), File.ReadAllText(path));
+        Assert.True(string.IsNullOrEmpty(vm.ReportStatus));
+    }
+
+    [Fact]
+    public async Task OpenSourceComponents_WhenNotepadWillNotStart_OpensTheNoticesOnGitHub_AndSaysSo()
+    {
+        // Notepad is an optional feature on Windows 11: removed, its start fails as a missing file does.
+        var vm = NewVm(launch: start =>
+        {
+            if (!start.UseShellExecute) throw new Win32Exception(2, "The system cannot find the file specified.");
+            _launched.Add(start);
+        });
+
+        await vm.OpenThirdPartyNoticesCommand.ExecuteAsync(null);
+
+        Assert.Equal(AboutViewModel.ThirdPartyNoticesOnline(UpdateService.CurrentVersion), Opened());
+        Assert.Contains("GitHub", vm.ReportStatus, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task OpenSourceComponents_WhenTheNoticesCannotBeWritten_OpensThemOnGitHub()
+    {
+        // A file where the folder should be: the folder cannot be made, so nothing is written for Notepad to open.
+        var blocked = Path.Combine(_dir, "a-file");
+        File.WriteAllText(blocked, "");
+        var vm = NewVm(noticesDir: blocked);
+
+        await vm.OpenThirdPartyNoticesCommand.ExecuteAsync(null);
+
+        Assert.Equal(AboutViewModel.ThirdPartyNoticesOnline(UpdateService.CurrentVersion), Opened());
+        Assert.Contains("GitHub", vm.ReportStatus, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void TheNoticesOnline_AreThoseOfThisVersionsTag()
+    {
+        Assert.Equal(Repository + "/blob/v1.2.3/THIRD-PARTY-NOTICES.txt",
+            AboutViewModel.ThirdPartyNoticesOnline(new Version(1, 2, 3, 0)));
     }
 
     [Fact]

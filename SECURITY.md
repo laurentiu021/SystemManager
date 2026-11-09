@@ -360,6 +360,7 @@ see the last two rows.
 | Crash marker | `%LocalAppData%\SysManager` | Whether the last session crashed, with the error's type and message, the message scrubbed of your account name as the log is |
 | Disk Analyzer history | `%LocalAppData%\SysManager` | The ten biggest folders, by name and size, of each of the last 20 locations you scanned, so the next scan can show what changed |
 | Bandwidth history | `%LocalAppData%\SysManager` | Total download and upload rates, kept seven days, for the Bandwidth Monitor graph |
+| The open-source notices | `%LocalAppData%\SysManager\THIRD-PARTY-NOTICES.txt` | The licenses and notices of the open-source components the exe carries, written from the exe each time About's **Open-source components** opens them in Notepad |
 | Downloaded tools and icons | `%LocalAppData%\SysManager\tools`, `…\IconCache` | The Ookla speed-test CLI, downloaded the first time you run that test; app icons, only if you turned web icons on |
 | The app's native libraries | `%TEMP%\.net\SysManager-v<version>`, one folder for each version run | Unpacked there by .NET the first time each version starts, into a folder named after the exe, because a single-file app cannot load them from inside itself. SysManager deletes an older version's folder once nothing in it has been written for a week, when it runs without administrator rights |
 | The original hosts file | `%SystemRoot%\System32\drivers\etc\hosts.bak` | Copied once, the first time SysManager saves the hosts file, and kept beside it so the original can be restored |

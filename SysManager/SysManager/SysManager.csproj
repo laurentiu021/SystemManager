@@ -15,9 +15,9 @@
          Assembly.Location and the APIs marked RequiresAssemblyFiles). Set here, every build runs it, so a pull
          request fails on what would otherwise fail only the release, after its tag exists (#2806). -->
     <EnableSingleFileAnalyzer>true</EnableSingleFileAnalyzer>
-    <Version>1.136.159</Version>
-    <FileVersion>1.136.159.0</FileVersion>
-    <AssemblyVersion>1.136.159.0</AssemblyVersion>
+    <Version>1.136.160</Version>
+    <FileVersion>1.136.160.0</FileVersion>
+    <AssemblyVersion>1.136.160.0</AssemblyVersion>
     <Product>SysManager</Product>
     <Description>SysManager — Windows system monitoring toolkit by laurentiu021. Network, updates, health, logs, safe deep cleanup.</Description>
     <PackageProjectUrl>https://github.com/laurentiu021/SystemManager</PackageProjectUrl>
@@ -34,6 +34,9 @@
 
   <ItemGroup>
     <EmbeddedResource Include="Data\ProcessDescriptions.json" />
+    <!-- The licenses and notices of the components the exe carries (#2856): written by tools/ThirdPartyNotices.cs, and
+         again by the release before it publishes. About opens them. -->
+    <EmbeddedResource Include="..\..\THIRD-PARTY-NOTICES.txt" LogicalName="SysManager.THIRD-PARTY-NOTICES.txt" />
   </ItemGroup>
 
   <ItemGroup>

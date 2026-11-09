@@ -105,8 +105,8 @@ internal static class TestPaths
     }
 
     /// <summary>
-    /// Every text file in the four places the repository's files live: its top folder, .github, docs and the
-    /// solution. Images are left out, and so are the folders the repository ignores there.
+    /// Every text file in the five places the repository's files live: its top folder, .github, docs, the solution
+    /// and tools. Images are left out, and so are the folders the repository ignores there.
     /// </summary>
     /// <remarks>
     /// One list for every sweep that reads the whole repository for something that must not be anywhere, so each
@@ -115,7 +115,7 @@ internal static class TestPaths
     internal static List<string> RepositoryTextFiles()
     {
         var root = RepoRoot();
-        string[] places = [".github", "docs", "SysManager"];
+        string[] places = [".github", "docs", "SysManager", "tools"];
         string[] images = [".png", ".gif", ".ico"];
         return Directory.EnumerateFiles(root, "*", SearchOption.TopDirectoryOnly)
             .Concat(places.SelectMany(place => FilesBelow(Path.Combine(root, place))))

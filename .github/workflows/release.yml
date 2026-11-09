@@ -201,6 +201,23 @@ jobs:
             ls -la TestResults || true
           fi
 
+      # The licenses and notices of the open-source components the exe carries (#2856), written again from this
+      # build's own restore graph so the exe embeds, and the release publishes, the notices of exactly what it is built
+      # from. The copy in the repository is what a pull request's unit tests check the restore graph against, so a
+      # difference here, in a copyright line a version bump changed, only means that copy wants refreshing. A package
+      # whose license the tool has no text for stops the release.
+      - name: Write the third-party notices for this build
+        shell: pwsh
+        run: |
+          dotnet run tools/ThirdPartyNotices.cs
+          if ($LASTEXITCODE -ne 0) { throw "tools/ThirdPartyNotices.cs could not write the notices; its output says which package." }
+          git diff --quiet -- THIRD-PARTY-NOTICES.txt
+          if ($LASTEXITCODE -ne 0) {
+              Write-Host "::warning::THIRD-PARTY-NOTICES.txt in the repository is behind this build's packages. The release embeds and publishes the one written now; run 'dotnet run tools/ThirdPartyNotices.cs' and commit it."
+              git --no-pager diff --stat -- THIRD-PARTY-NOTICES.txt
+          }
+          exit 0
+
       - name: Publish single-file exe
         shell: pwsh
         run: |
@@ -750,7 +767,9 @@ jobs:
           That proves which commit and workflow produced this exact binary, something the
           SHA256 file cannot show, since it is published alongside the exe it describes.
           Each release also ships `SysManager-__TAG__.sbom.json`, a CycloneDX inventory of
-          every dependency resolved for this build.
+          every dependency resolved for this build, and `THIRD-PARTY-NOTICES.txt`, the
+          licenses and notices of the open-source components the exe carries, which About
+          also opens from the exe itself.
           '@
           $notes = $template.Replace('__TAG__', "v$env:VERSION").Replace('__HASH__', $env:HASH)
           # This appended block is deliberately ASCII-only. A non-ASCII character here is
@@ -857,6 +876,7 @@ jobs:
             publish/SysManager-v${{ steps.version.outputs.version }}.exe
             publish/SysManager-v${{ steps.version.outputs.version }}.exe.sha256
             publish/SysManager-v${{ steps.version.outputs.version }}.sbom.json
+            THIRD-PARTY-NOTICES.txt
 
       # One announcement per release turned Discussions into a wall: every one of the 645 discussions
       # was a release bot post, and the five human categories were empty, so the only low-friction

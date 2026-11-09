@@ -10,6 +10,23 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.136.161] - 2026-11-09
+
+**SysManager no longer runs code that a variable in your environment names before it starts, so another program
+running as you cannot use one to run its code when you start SysManager as administrator.**
+
+### Security
+- The .NET runtime loads every assembly a `DOTNET_STARTUP_HOOKS` variable names and runs it before the app's own
+  code, and any program running as you can set that variable for the programs you start later, also one you start as
+  administrator. A single-file exe published the way the release is ran such a hook. SysManager uses none, so startup
+  hooks are now off, and the runtime ignores the variable.
+- SECURITY.md lists running a startup hook among the things SysManager never does, and says what the runtime still
+  reads from the environment: a profiler named in `CORECLR_` or `DOTNET_` variables, which nothing inside an app can
+  turn off, since the runtime loads it before the app's code runs.
+- `SecurityPromiseTests.TheRuntime_RunsNoStartupHook` fails a build whose runtime configuration leaves startup hooks
+  on, and the release's smoke check starts the exe with a hook named that does not exist, which an exe with hooks on
+  refuses to start past.
+
 ## [1.136.160] - 2026-11-09
 
 **The exe carries the licenses and notices of the open-source code inside it, and About opens them.**

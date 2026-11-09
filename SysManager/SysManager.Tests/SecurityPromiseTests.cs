@@ -3,6 +3,7 @@
 // License: MIT
 
 using System.IO;
+using System.Text.Json;
 using System.Text.RegularExpressions;
 
 namespace SysManager.Tests;
@@ -11,7 +12,7 @@ namespace SysManager.Tests;
 /// One guard per promise in <c>SECURITY.md</c>'s "By design — forbidden" list.
 /// </summary>
 /// <remarks>
-/// Those seven statements are the strongest claims the project makes to someone deciding whether to run a
+/// Those eight statements are the strongest claims the project makes to someone deciding whether to run a
 /// privileged utility, and until now not one of them was enforced by anything. A refactor that added a
 /// registry delete to the cleanup engine, or an <c>HttpClient</c> to a diagnostics path, would have shipped
 /// green while falsifying a published security promise. One of the seven was already a documented manual
@@ -438,6 +439,39 @@ public class SecurityPromiseTests
             + "its SHA256, the SBOM and the attestation are already published — which is what stops it from "
             + "being able to alter the asset the verification instructions describe. Move the step after the "
             + "check, or correct SECURITY.md:\n  " + string.Join("\n  ", early));
+    }
+
+    // ── 9. No startup hook runs ──
+
+    /// <summary>
+    /// Promise: "Running a startup hook", an assembly a <c>DOTNET_STARTUP_HOOKS</c> variable names.
+    /// </summary>
+    /// <remarks>
+    /// The .NET runtime loads every assembly that variable names and runs its <c>StartupHook.Initialize</c> before
+    /// <c>Main</c>, and any program running as you can set the variable for the programs you start later, also one you
+    /// start as administrator. A single-file exe published the way the release is ran such a hook, and with
+    /// <c>StartupHookSupport</c> off it ignored the variable. The SDK writes that property into the runtime
+    /// configuration as <c>System.StartupHookProvider.IsSupported</c>, which the runtime reads before it looks at the
+    /// variable, and the single-file bundle carries the same file, so the assertion is on the file the build wrote
+    /// rather than on the project. The release's smoke check proves it on the published exe: it starts the exe with a
+    /// hook named that does not exist, which an exe with hooks on refuses to start past.
+    /// </remarks>
+    [Fact]
+    public void TheRuntime_RunsNoStartupHook()
+    {
+        // The build copies the app's runtime configuration beside the app assembly the tests load.
+        var app = Path.GetDirectoryName(typeof(App).Assembly.Location)!;
+        var config = Path.Combine(app, "SysManager.runtimeconfig.json");
+        Assert.True(File.Exists(config), $"{config} not found, so the app's runtime configuration cannot be read.");
+
+        using var json = JsonDocument.Parse(File.ReadAllText(config));
+        var properties = json.RootElement.GetProperty("runtimeOptions").GetProperty("configProperties");
+        var off = properties.TryGetProperty("System.StartupHookProvider.IsSupported", out var supported)
+                  && supported.ValueKind == JsonValueKind.False;
+        Assert.True(off,
+            "SysManager's runtime configuration leaves startup hooks on, so the runtime runs any assembly a "
+            + "DOTNET_STARTUP_HOOKS variable names before Main, in an elevated SysManager too. "
+            + "SysManager.csproj sets <StartupHookSupport>false</StartupHookSupport> for this.");
     }
 
     /// <summary>A workflow's lines, trimmed, with their indexes, leaving out comment lines.</summary>

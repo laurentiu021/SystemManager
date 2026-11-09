@@ -280,6 +280,7 @@
                                 <StackPanel Margin="4,4" VerticalAlignment="Center">
                                     <StackPanel.ToolTip>
                                         <StackPanel MaxWidth="500">
+                                            <TextBlock Text="{Binding Name}" FontWeight="SemiBold" TextWrapping="Wrap" Margin="0,0,0,6"/>
                                             <TextBlock FontWeight="SemiBold" Text="Registry Name:"/>
                                             <TextBlock Text="{Binding RawName}" TextWrapping="Wrap" Margin="0,2,0,6"/>
                                             <TextBlock FontWeight="SemiBold" Text="Full Command:"/>
@@ -288,7 +289,8 @@
                                             <TextBlock Text="{Binding RegistryPath}" TextWrapping="Wrap" Margin="0,2,0,0"/>
                                         </StackPanel>
                                     </StackPanel.ToolTip>
-                                    <TextBlock Text="{Binding Name}" FontWeight="SemiBold" Style="{StaticResource Body}"/>
+                                    <TextBlock Text="{Binding Name}" FontWeight="SemiBold" Style="{StaticResource Body}"
+                                               TextTrimming="CharacterEllipsis"/>
                                     <TextBlock Text="{Binding Explanation}" Foreground="{DynamicResource TextMuted}"
                                                Style="{StaticResource Caption}" TextWrapping="NoWrap" TextTrimming="CharacterEllipsis"
                                                MaxWidth="450" HorizontalAlignment="Left" Margin="0,1,0,0"

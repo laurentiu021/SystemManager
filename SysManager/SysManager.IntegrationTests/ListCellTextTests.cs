@@ -22,6 +22,26 @@ public sealed class ListCellTextTests
 {
     private sealed record Row(string Name);
 
+    /// <summary>
+    /// What a template column's cell is given in place of its row: the same long words under every name the
+    /// templates read, and nothing set otherwise.
+    /// </summary>
+    private sealed class LongRow
+    {
+        public const string Words = "Microsoft Visual C++ 2015-2022 Redistributable (x64) - 14.38.33135";
+        public string Name => Words;
+        public string DisplayName => Words;
+        public string ProcessName => Words;
+        public string ExecutableName => Words;
+        public string Category => Words;
+        public string Id => Words;
+        public string Description => Words;
+        public string PlainDescription => Words;
+        public string Command => Words;
+        public string RemoteSummary => Words;
+        public ImageSource? Icon => null;
+    }
+
     [Fact]
     public void EveryTextColumnInTheViews_DrawsItsCellsInGridCellText()
     {
@@ -62,6 +82,90 @@ public sealed class ListCellTextTests
         Assert.True(columns >= 128, $"only {columns} text columns were read, out of 128 when written.");
         Assert.True(wrong.Count == 0,
             "these lists cut a long value at the column's edge:\n  " + string.Join("\n  ", wrong));
+    }
+
+    [Fact]
+    public void EveryTemplateColumnsWords_KeepToTheirCell_AndShowWholeOnHover()
+    {
+        // A cell 160 px wide holding the template with long words: a bound word laid out in a horizontal StackPanel
+        // keeps all its width and runs past the cell, which is how the names beside an icon or a badge were cut.
+        var wrong = new List<string>();
+        var read = 0;
+        StaHelper.Run(() =>
+        {
+            AppResources.Ensure();
+            foreach (var type in AppViews.Constructible())
+            {
+                var view = (UserControl)Activator.CreateInstance(type)!;
+                foreach (var grid in LogicalDescendants<DataGrid>(view))
+                {
+                    foreach (var column in grid.Columns.OfType<DataGridTemplateColumn>())
+                    {
+                        if (column.CellTemplate?.LoadContent() is not FrameworkElement content) continue;
+                        content.DataContext = new LongRow();
+                        var cell = new Border { Width = 160, Child = content };
+                        cell.Measure(new Size(160, 400));
+                        cell.Arrange(new Rect(0, 0, 160, 400));
+                        cell.UpdateLayout();
+
+                        foreach (var words in Descendants<TextBlock>(content)
+                                     .Where(t => t.Text.Contains(LongRow.Words, StringComparison.Ordinal)
+                                                 && !InABadge(t, content)))
+                        {
+                            read++;
+                            var where = $"{type.Name}'s \"{column.Header}\" column";
+                            var right = words.TranslatePoint(new Point(words.ActualWidth, 0), cell).X;
+                            if (right > 160.5)
+                                wrong.Add($"{where}: the words run {right - 160:F0} px past the cell");
+                            else if (words.TextTrimming != TextTrimming.None && words.ToolTip is null
+                                     && !Ancestors(words, content).Any(a => a.ToolTip is not null))
+                                wrong.Add($"{where}: the words are trimmed with nothing to show them whole on hover");
+                        }
+                    }
+                }
+            }
+        });
+
+        // Vacuity floor: 16 bound words laid out in the views' cell templates when written.
+        Assert.True(read >= 16, $"only {read} bound words were laid out in cell templates, out of 16 when written.");
+        Assert.True(wrong.Count == 0,
+            "these list cells do not keep a long value to the cell:\n  " + string.Join("\n  ", wrong));
+    }
+
+    /// <summary>An alert as App Alerts' Name cell reads it: a name, not yet acknowledged, so its badge shows.</summary>
+    private sealed record NewAlert(string Name)
+    {
+        public bool IsAcknowledged => false;
+    }
+
+    [Theory]
+    [InlineData("Contoso")]
+    [InlineData(LongRow.Words)]
+    public void ABadge_SitsRightAfterTheName_WhetherTheNameFitsOrIsTrimmed(string name)
+    {
+        StaHelper.Run(() =>
+        {
+            AppResources.Ensure();
+            var grid = Assert.Single(LogicalDescendants<DataGrid>(new SysManager.Views.AppAlertsView()));
+            var column = Assert.Single(grid.Columns.OfType<DataGridTemplateColumn>(), c => (string)c.Header == "Name");
+            var content = Assert.IsAssignableFrom<FrameworkElement>(column.CellTemplate.LoadContent());
+            content.DataContext = new NewAlert(name);
+            var cell = new Border { Width = 300, Child = content };
+            cell.Measure(new Size(300, 100));
+            cell.Arrange(new Rect(0, 0, 300, 100));
+            cell.UpdateLayout();
+
+            var words = Assert.Single(Descendants<TextBlock>(content), t => t.Text == name);
+            var badge = Assert.Single(Descendants<TextBlock>(content), t => t.Text == "New");
+            var wordsEnd = words.TranslatePoint(new Point(words.ActualWidth, 0), cell).X;
+            var badgeStart = badge.TranslatePoint(new Point(0, 0), cell).X;
+            var badgeEnd = badge.TranslatePoint(new Point(badge.ActualWidth, 0), cell).X;
+
+            // The badge's 8 px margin and its 7 px padding lie between the name's last letter and the badge's word.
+            Assert.InRange(badgeStart - wordsEnd, 14, 16);
+            Assert.True(badgeEnd <= 300.5, $"the badge ends at {badgeEnd:F0} px, past the 300 px cell");
+            Assert.Equal(name != "Contoso", CutText.IsCut(words));
+        });
     }
 
     [Fact]
@@ -129,6 +233,20 @@ public sealed class ListCellTextTests
 
     private static TextBlock CellText(DataGrid grid, string text) =>
         Assert.Single(Descendants<DataGridCell>(grid).SelectMany(Descendants<TextBlock>), t => t.Text == text);
+
+    /// <summary>Whether <paramref name="text"/> sits in a Border inside <paramref name="content"/>: a badge.</summary>
+    private static bool InABadge(TextBlock text, FrameworkElement content) =>
+        Ancestors(text, content).Any(a => a is Border);
+
+    /// <summary>The elements from <paramref name="element"/>'s parent up to and with <paramref name="top"/>.</summary>
+    private static IEnumerable<FrameworkElement> Ancestors(FrameworkElement element, FrameworkElement top)
+    {
+        for (var node = VisualTreeHelper.GetParent(element); node is not null; node = VisualTreeHelper.GetParent(node))
+        {
+            if (node is FrameworkElement framework) yield return framework;
+            if (ReferenceEquals(node, top)) yield break;
+        }
+    }
 
     private static bool BuildsOn(Style? style, Style root)
     {

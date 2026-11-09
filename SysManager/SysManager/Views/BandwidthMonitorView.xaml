@@ -169,18 +169,24 @@
                             <DataGridTemplateColumn Header="App" Width="*">
                                 <DataGridTemplateColumn.CellTemplate>
                                     <DataTemplate>
-                                        <StackPanel Orientation="Horizontal" Margin="8,4">
-                                            <Image Source="{Binding Icon}" Width="20" Height="20" Margin="0,0,10,0"
+                                        <!-- A DockPanel, not a horizontal StackPanel, so a long name has a width to
+                                             trim to (#3214). -->
+                                        <DockPanel Margin="8,4">
+                                            <Image DockPanel.Dock="Left" Source="{Binding Icon}" Width="20" Height="20" Margin="0,0,10,0"
                                                    RenderOptions.BitmapScalingMode="HighQuality"
                                                    VerticalAlignment="Center"/>
                                             <StackPanel VerticalAlignment="Center">
                                                 <TextBlock Text="{Binding ProcessName}" FontWeight="SemiBold" Style="{StaticResource Body}"
-                                                           Foreground="{DynamicResource TextPrimary}"/>
+                                                           Foreground="{DynamicResource TextPrimary}"
+                                                           TextTrimming="CharacterEllipsis" ToolTip="{Binding Text, RelativeSource={RelativeSource Self}}"
+                                                           helpers:CutText.ToolTip="True"/>
                                                 <TextBlock Text="{Binding RemoteSummary, StringFormat='ports: {0}'}"
                                                            Style="{StaticResource Micro}" Foreground="{DynamicResource TextMuted}"
-                                                           Visibility="{Binding RemoteSummary, Converter={StaticResource FlexVis}}"/>
+                                                           Visibility="{Binding RemoteSummary, Converter={StaticResource FlexVis}}"
+                                                           TextTrimming="CharacterEllipsis" ToolTip="{Binding Text, RelativeSource={RelativeSource Self}}"
+                                                           helpers:CutText.ToolTip="True"/>
                                             </StackPanel>
-                                        </StackPanel>
+                                        </DockPanel>
                                     </DataTemplate>
                                 </DataGridTemplateColumn.CellTemplate>
                             </DataGridTemplateColumn>

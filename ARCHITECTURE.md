@@ -2339,7 +2339,10 @@ Key utility classes that don't fit neatly into Services or ViewModels (not an ex
   (#3214). `GridCellText` carries the cell's words in its tooltip and sets the attached `ToolTip` property, so a cut
   value can be read whole on hover and a value that fits shows no tooltip. A tooltip that says something else, such
   as Services' plain-language explanation, always opens. Whether a text is cut is measured on `ToolTipOpening`,
-  against the width the text is shown at.
+  against the width the text is shown at. The words a template column binds, which `GridCellText` does not reach,
+  set the same three things themselves, and sit in a `DockPanel` beside their icon, or a left-aligned `Grid` beside
+  their badge, so they have a width to trim to and the badge stays right after a name that fits;
+  `ArchitectureTests.EveryWordAListTemplateBinds_TrimsOrWraps_AndShowsWholeOnHover` holds them to it.
 - `ThemeBrush` — paints a brush property in a colour a binding picks: a theme brush's name, or a
   fixed `#` colour (#2818). Given a name it sets a resource reference, as `{DynamicResource}` does, so
   the colour follows a theme switch. `ThemeService.Apply` stores a new brush under each name, and the

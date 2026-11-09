@@ -143,15 +143,24 @@
                             <DataGridTemplateColumn.CellTemplate>
                                 <DataTemplate>
                                     <StackPanel Margin="0,4">
-                                        <StackPanel Orientation="Horizontal">
+                                        <!-- A Grid that takes only the width it needs: a name too long for the column
+                                             trims to leave its badge room, and a name that fits has it right after it
+                                             (#3214). -->
+                                        <Grid HorizontalAlignment="Left">
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="*"/>
+                                                <ColumnDefinition Width="Auto"/>
+                                            </Grid.ColumnDefinitions>
                                             <TextBlock Text="{Binding Category}" FontWeight="SemiBold" Style="{StaticResource Body}"
-                                                       Foreground="{DynamicResource TextPrimary}"/>
-                                            <Border Background="{DynamicResource Surface3}" CornerRadius="{StaticResource RadiusSm}" Padding="6,1" Margin="8,0,0,0"
+                                                       Foreground="{DynamicResource TextPrimary}"
+                                                       TextTrimming="CharacterEllipsis" ToolTip="{Binding Text, RelativeSource={RelativeSource Self}}"
+                                                       helpers:CutText.ToolTip="True"/>
+                                            <Border Grid.Column="1" Background="{DynamicResource Surface3}" CornerRadius="{StaticResource RadiusSm}" Padding="6,1" Margin="8,0,0,0"
                                                     VerticalAlignment="Center"
                                                     Visibility="{Binding IsSensitive, Converter={StaticResource FlexVis}}">
                                                 <TextBlock Text="signs you out" Style="{StaticResource Micro}" Foreground="{DynamicResource WarningText}"/>
                                             </Border>
-                                        </StackPanel>
+                                        </Grid>
                                         <TextBlock Text="{Binding Description}" Style="{StaticResource Caption}"
                                                    TextWrapping="Wrap" Margin="0,2,16,0"/>
                                     </StackPanel>

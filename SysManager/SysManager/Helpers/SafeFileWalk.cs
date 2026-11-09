@@ -43,10 +43,11 @@ internal sealed record SafeWalkOptions
     /// <summary>Directory trees to skip entirely. Null entries are ignored.</summary>
     /// <remarks>
     /// The temp sweeps pass <see cref="SystemPaths.BundleExtractionRoot"/> and
-    /// <see cref="SystemPaths.OwnExtractionDirectory"/>: "Temporary files" covers all of %TEMP%, which is
+    /// <see cref="SystemPaths.OwnAppDirectory"/>: "Temporary files" covers all of %TEMP%, which is
     /// where every single-file .NET app unpacks its native libraries. Deleting those made a clean run report
     /// errors and broke a later lazy load — and excluding only this process's own leaf did that to every
-    /// OTHER app under the same root.
+    /// OTHER app under the same root. The exe's own folder is skipped so a sweep never tries to delete the
+    /// running exe, should it be run from inside a temp folder.
     /// </remarks>
     internal IReadOnlyList<string?> ExcludeSubtrees { get; init; } = [];
 

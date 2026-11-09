@@ -2453,16 +2453,25 @@ Key utility classes that don't fit neatly into Services or ViewModels (not an ex
   resolves to its admin-only-writable install for an elevated launch and to the user's own
   execution alias otherwise (#2699), so nothing launches by name off the PATH. It also owns
   the two temp exclusions every wholesale %TEMP% sweep must honour:
-  `BundleExtractionRoot`, the shared folder single-file apps unpack into, and
-  `OwnExtractionDirectory`, this build's own leaf under it. Deleting either
+  `BundleExtractionRoot`, the shared folder single-file apps unpack into, whose deletion
   breaks a running program's later lazy loads, which no in-use check can
-  prevent because nothing holds those files open yet. `BundleExtractionFolderName` names
+  prevent because nothing holds those files open yet, and `OwnAppDirectory`, the folder the exe
+  runs from, so a sweep never tries to delete the running exe. `OwnExtractionDirectory` is this
+  build's own leaf under the root, read from the host's native search directories, because
+  `AppContext.BaseDirectory` is the exe's folder and not the unpacked one (#2858). `BundleExtractionFolderName` names
   that folder for every temp root, `%WinDir%\Temp` included, where a SYSTEM service unpacks.
   `UserTempRoot` is the per-user folder those sweeps empty: `AppData\Local\Temp` under the
   account's fixed profile folder, never what TMP or TEMP name, because both are writable without
   administrator rights and a sweep deletes everything under its root (#2700).
   `SystemCleanupRoots.UserTemp` and `TuneUpService.TempRoots` both take it, so Deep Cleanup and
   Quick Cleanup clean the same folder.
+- `OldBuildFolders` — deletes the folders older builds unpacked their native libraries into under
+  `BundleExtractionRoot`, which the host never removes and the sweeps leave alone (#2858): each
+  `SysManager-v<version>` folder of an older version, and each build beside this one's own, once nothing in it
+  has been written for a week. It leaves a folder that is, is reached through or holds a link, one holding files
+  but no `wpfgfx_cor3.dll`, and one whose `wpfgfx_cor3.dll` will not delete because a running copy has it loaded,
+  which is why that file is tried first. `App` runs it once the window is up, off the UI thread, and it does
+  nothing when SysManager is elevated, since the folder is the user's to write to.
 - `CommandLine` — the program a command line starts, read the way `CreateProcess` reads it (#2708). A
   quoted program runs to its closing quote; an unquoted one is tried at each space, as a file and then
   with a runnable extension added. Right-click Menu (a verb's source, name and explanation) and Startup

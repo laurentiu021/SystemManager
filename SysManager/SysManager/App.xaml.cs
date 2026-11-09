@@ -244,6 +244,10 @@ public partial class App : Application
         // against the real machine, from a copy about to close (#2820).
         MainWindow = new MainWindow();
         MainWindow.Show();
+
+        // The folders older builds unpacked their native libraries into stay in TEMP for good otherwise (#2858). Off the
+        // UI thread, once the window is up, since it deletes files; it does nothing when SysManager runs elevated.
+        _ = Task.Run(OldBuildFolders.RemoveForThisBuild);
     }
 
     /// <summary>

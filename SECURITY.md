@@ -300,6 +300,13 @@ What the app can and cannot do by design:
   `Program Files` would still unpack to the same folder, so the machine-scope install above does
   not close this.
   [#2746](https://github.com/laurentiu021/SystemManager/issues/2746) tracks closing it.
+- **Older versions' native libraries**: once its window is up, SysManager deletes the folders its
+  older versions unpacked under `%TEMP%\.net`, and the other builds beside its own, when nothing in
+  them has been written for a week. It never follows a link, and it leaves a folder that holds one,
+  a folder without WPF's renderer, which every build of SysManager unpacks, and a folder whose
+  renderer a running copy has loaded. It does this only without administrator rights: the folder
+  is yours to write to, so a delete there as an administrator could be steered by any program
+  running as you.
 - **CSV export and formula injection**: the eleven Export CSV buttons write file, folder, program, window
   and publisher names SysManager does not control. A value starting with `=`, `+`, `-`, `@`, a tab or a
   carriage return is prefixed with a single quote before it is written, per OWASP's CSV injection guidance,
@@ -354,7 +361,7 @@ see the last two rows.
 | Disk Analyzer history | `%LocalAppData%\SysManager` | The ten biggest folders, by name and size, of each of the last 20 locations you scanned, so the next scan can show what changed |
 | Bandwidth history | `%LocalAppData%\SysManager` | Total download and upload rates, kept seven days, for the Bandwidth Monitor graph |
 | Downloaded tools and icons | `%LocalAppData%\SysManager\tools`, `…\IconCache` | The Ookla speed-test CLI, downloaded the first time you run that test; app icons, only if you turned web icons on |
-| The app's native libraries | `%TEMP%\.net\SysManager-v<version>`, one folder for each version run | Unpacked there by .NET the first time each version starts, into a folder named after the exe, because a single-file app cannot load them from inside itself |
+| The app's native libraries | `%TEMP%\.net\SysManager-v<version>`, one folder for each version run | Unpacked there by .NET the first time each version starts, into a folder named after the exe, because a single-file app cannot load them from inside itself. SysManager deletes an older version's folder once nothing in it has been written for a week, when it runs without administrator rights |
 | The original hosts file | `%SystemRoot%\System32\drivers\etc\hosts.bak` | Copied once, the first time SysManager saves the hosts file, and kept beside it so the original can be restored |
 | A copy of your environment variables | Registry: `HKCU\Software\SysManager\Backups\Environment`; machine-wide ones in `HKLM\SOFTWARE\SysManagerEnvironmentBackup` | Taken before SysManager first changes them. The machine-wide copy is locked so a standard user cannot change it |
 

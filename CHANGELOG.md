@@ -10,6 +10,32 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.136.159] - 2026-11-09
+
+**SysManager deletes the native libraries its older versions left in your temp folder, about 26 MB for each version,
+which stayed there for good.**
+
+### Fixed
+- The .NET runtime unpacks the native libraries a single-file app needs into `%TEMP%\.net`, under a folder named
+  after the exe and a folder for each build inside it, and never deletes them, and SysManager's temp clean-ups leave
+  that folder alone on purpose. So every version you ever ran kept about 26 MB there: a `SysManager-v<version>`
+  folder for each release run as downloaded from GitHub, and one more build inside `SysManager` for each winget
+  upgrade. Once its window is up, SysManager now deletes the folders of older versions, and the other builds beside
+  its own, when nothing in them has been written for a week. It leaves a folder that is or holds a link, one that
+  holds files but not WPF's renderer, which every build of SysManager unpacks, and one whose renderer a running copy
+  has loaded: Windows will not delete a loaded library, and that file is tried first. It does this only when it runs
+  without administrator rights: the folder is yours, and any program running as you can write to it, so a delete
+  there as an administrator would let such a program choose what an administrator process deletes. (#2858)
+- SysManager took the folder its exe runs from for the folder its libraries were unpacked into. Measured on a build
+  published the way the release is, the runtime gives the exe's folder as the app's base folder, and names the
+  unpacked one only in its list of folders to load native libraries from. Nothing the app did changed, since the
+  temp clean-ups skip the whole unpacking folder and still skip the exe's own; the clean-up above needed the real
+  one.
+- Tests pin each folder the clean-up deletes and each one it leaves, with every file checked: an older release, a
+  build beside its own, a folder emptied of its files, the week's boundary, the same or a newer version, other apps'
+  folders, a file written this week, a renderer held open, a folder without one, links in and above the folder, and
+  an elevated run.
+
 ## [1.136.158] - 2026-11-09
 
 **Speed Test's Ookla server picker shows the server it is set to at every window size.**

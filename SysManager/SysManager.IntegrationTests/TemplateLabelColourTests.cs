@@ -31,20 +31,6 @@ public sealed partial class TemplateLabelColourTests
     private const string Label = "Label text";
 
     /// <summary>
-    /// The labels that do not reach 4.5:1 until #3198 gives the right-click menus the theme's surface.
-    /// </summary>
-    /// <remarks>
-    /// A context menu is WPF-UI's own, drawn on its dark <c>#2C2C2C</c> on every theme, so on a light theme the red
-    /// for text is a dark red on a dark grey. Exact, both ways: a label that fails and is not here fails the check,
-    /// and one here that passes fails it too, so the list empties when #3198 lands instead of hiding a new failure.
-    /// </remarks>
-    private static readonly HashSet<string> UnreadableUntil3198 =
-    [
-        "DangerMenuItem on clean-indigo", "DangerMenuItem on lavender", "DangerMenuItem on mint-fresh",
-        "DangerMenuItem on sky-breeze", "DangerMenuItem on soft-blossom", "DangerMenuItem on warm-sand",
-    ];
-
-    /// <summary>
     /// The styles whose templates draw no content, so neither check has a label to read: the toggle switch is a track
     /// and a thumb, and the ComboBox's toggle an arrow. Exact, so a style that stops drawing its label, or one the
     /// checks would skip unmeasured, fails them.
@@ -112,9 +98,9 @@ public sealed partial class TemplateLabelColourTests
             }
         });
 
-        // Vacuity floor: 840 label layouts when measured, the 16 styles with a presenter in two kinds of content and
-        // two states, and the danger menu item in three kinds, on twelve themes.
-        Assert.True(read >= 840, $"only {read} labels were laid out across the themes, out of 840 measured.");
+        // Vacuity floor: 912 label layouts when measured, the 16 styles with a presenter in two kinds of content and
+        // two states, and the two menu items, the plain one and the danger one, in three kinds, on twelve themes.
+        Assert.True(read >= 912, $"only {read} labels were laid out across the themes, out of 912 measured.");
         var expected = NoLabel.Union(NoPresenter).ToHashSet(StringComparer.Ordinal);
         Assert.True(unread.SetEquals(expected),
             "the styles with a label this could not read through a presenter are not the ones NoLabel and NoPresenter "
@@ -201,22 +187,81 @@ public sealed partial class TemplateLabelColourTests
             }
         });
 
-        // Vacuity floor: 1,080 measurements when measured.
-        Assert.True(measured >= 1080,
-            $"only {measured} labels were measured across the themes and surfaces, out of 1,080 measured.");
+        // Vacuity floor: 1,092 measurements when measured.
+        Assert.True(measured >= 1092,
+            $"only {measured} labels were measured across the themes and surfaces, out of 1,092 measured.");
         Assert.True(unknown.Count == 0,
             "a view gives its own colour to a control in a style App.xaml does not define, so this cannot lay it out: "
             + string.Join(", ", unknown));
         Assert.True(unread.SetEquals(NoLabel),
             "the styles whose label this could not read are not the ones NoLabel lists: read none for "
             + $"{string.Join(", ", unread.Except(NoLabel))}; read one for {string.Join(", ", NoLabel.Except(unread))}");
-        var unexpected = failing.Except(UnreadableUntil3198).ToHashSet(StringComparer.Ordinal);
-        var nowReadable = UnreadableUntil3198.Except(failing).Order(StringComparer.Ordinal).ToList();
-        var shown = details.Where(d => unexpected.Contains(d[..d.IndexOf(':', StringComparison.Ordinal)]));
-        Assert.True(unexpected.Count == 0, "these labels read under 4.5:1:\n  " + string.Join("\n  ", shown));
-        Assert.True(nowReadable.Count == 0,
-            "these labels read at 4.5:1 now, so take them out of UnreadableUntil3198:\n  "
-            + string.Join("\n  ", nowReadable));
+        Assert.True(failing.Count == 0, "these labels read under 4.5:1:\n  " + string.Join("\n  ", details));
+    }
+
+    /// <summary>
+    /// A right-click menu is drawn in the theme's colours, and its words, greyed-out words and danger red read at
+    /// 4.5:1 on it and on the highlight under the pointer, on every theme (#3198).
+    /// </summary>
+    /// <remarks>
+    /// The menus were WPF-UI's, on its <c>#2C2C2C</c> whatever the theme, so on the light themes the theme's dark words
+    /// sat on a dark grey at 1.07 to 1.53:1. The menu takes the dropdown lists' look now: the card surface and its
+    /// border, the separators in the border colour and a lighter highlight. The highlight is read from the item
+    /// template's own trigger, so a change of its colour is measured here rather than taken on trust.
+    /// </remarks>
+    [Fact]
+    public void EveryMenu_IsDrawnInTheThemesColours_AndItsItemsRead()
+    {
+        var failing = new List<string>();
+        var themes = 0;
+        AcrossEveryPreset((_, preset) =>
+        {
+            themes++;
+            var resources = Application.Current.Resources;
+            Color Colour(string key) => ((SolidColorBrush)resources[key]).Color;
+
+            var plain = new MenuItem { Header = Label };
+            var off = new MenuItem { Header = Label, IsEnabled = false };
+            var danger = new MenuItem { Header = Label, Style = (Style)resources["DangerMenuItem"] };
+            var line = new Separator();
+            var menu = new ContextMenu();
+            foreach (var item in new Control[] { off, line, plain, danger }) menu.Items.Add(item);
+            Lay(menu);
+
+            var face = Descendants<Border>(menu).First();
+            Assert.Equal(Colour("Surface1"), ((SolidColorBrush)face.Background).Color);
+            Assert.Equal(Colour("Border2"), ((SolidColorBrush)face.BorderBrush).Color);
+            var rule = Assert.Single(Descendants<Border>(line));
+            Assert.Equal(Colour("Border1"), ((SolidColorBrush)rule.Background).Color);
+
+            var lit = plain.Template.Triggers.OfType<Trigger>()
+                .Single(t => t.Property == MenuItem.IsHighlightedProperty)
+                .Setters.OfType<Setter>().Single(s => s.TargetName == "Bd" && s.Property == Border.BackgroundProperty);
+            var highlight = Colour((string)((DynamicResourceExtension)lit.Value).ResourceKey);
+
+            foreach (var (name, item, key) in new[]
+                     {
+                         ("an item", plain, "TextPrimary"), ("a greyed-out item", off, "TextMuted"),
+                         ("the danger item", danger, "DangerText"),
+                     })
+            {
+                var text = Descendants<TextBlock>(item).First(Shows);
+                var ink = ((SolidColorBrush)text.Foreground).Color;
+                if (ink != Colour(key)) failing.Add($"{preset.Id}: {name} is {ink}, where {key} is {Colour(key)}");
+                var papers = item.IsEnabled
+                    ? new[] { ("the menu", Colour("Surface1")), ("the highlight", highlight) }
+                    : [("the menu", Colour("Surface1"))];
+                foreach (var (surface, paper) in papers)
+                {
+                    var ratio = Contrast(ink, paper);
+                    if (ratio < 4.5) failing.Add($"{preset.Id}: {name} reads {ratio:F2}:1 on {surface}");
+                }
+            }
+        });
+
+        Assert.Equal(ThemePreset.Defaults.Count, themes);
+        Assert.True(failing.Count == 0, "these menu items do not read on the theme's menu:\n  "
+            + string.Join("\n  ", failing));
     }
 
     /// <summary>

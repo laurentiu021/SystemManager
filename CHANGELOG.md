@@ -10,6 +10,24 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.136.147] - 2026-11-09
+
+**Right-click menus follow your theme: on the light themes their words were dark on a dark grey, and every item now
+reads clearly on every theme.**
+
+### Fixed
+- The right-click menus, Process Manager's and Services' row menus, Disk Analyzer's "Show in Explorer" and the tray
+  icon's menu, were drawn in a fixed dark grey whatever the theme, while their words took the theme's text colour, so
+  on the six light themes they read 1.07 to 1.53:1, where words need 4.5. They had since the light themes arrived in
+  1.13.0. The menus now take the drop-down lists' look: the theme's card colour and border, a lighter row under the
+  pointer or the keyboard, a line in the theme's border colour between groups, and the drop-down items' size and
+  spacing, with no shadow or slide-in. Every item reads at 5.18:1 or more on every theme, under the pointer too.
+- The tray menu's readout, CPU, memory and uptime, shows greyed out, as a line you cannot click. It was drawn in the
+  same colour as the items around it.
+- A test lays a menu out on all twelve themes and fails one not drawn in the theme's colours or with an item under
+  4.5:1, at rest or under the pointer. Another fails a menu item with an icon, a shortcut, a tick or a submenu, which
+  the menus' template does not draw.
+
 ## [1.136.146] - 2026-11-06
 
 **The Dashboard's row in the sidebar shows the moving bar while the Dashboard works, as every other tab's row

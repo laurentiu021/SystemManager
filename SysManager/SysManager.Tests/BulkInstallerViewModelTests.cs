@@ -269,6 +269,104 @@ public class BulkInstallerViewModelTests
         Assert.Contains("package sources", vm.StatusMessage, StringComparison.Ordinal);
     }
 
+    // ── emptying the search box puts the results away (#2704) ──
+
+    /// <summary>What <c>winget search</c> prints for one match: the header, its rule and the row under them.</summary>
+    private static ProcessOutput OneSearchResult() => new(0,
+    [
+        "Name".PadRight(29) + "Id".PadRight(31) + "Version   Match       Source",
+        new string('-', 90),
+        "VLC media player".PadRight(29) + "VideoLAN.VLC".PadRight(31) + "3.0.21",
+    ]);
+
+    /// <summary>A quiet runner whose <c>winget search</c> answers with <paramref name="search"/>.</summary>
+    private static IPowerShellRunner RunnerWhoseSearchAnswers(Task<ProcessOutput> search)
+    {
+        var runner = QuietRunner();
+        runner.RunProcessForOutputAsync("winget", Arg.Is<string>(a => a.StartsWith("search ", StringComparison.Ordinal)),
+                                        Arg.Any<CancellationToken>(), Arg.Any<System.Text.Encoding?>())
+              .Returns(search);
+        return runner;
+    }
+
+    [Fact]
+    public async Task EmptyingTheSearchBox_PutsTheResultsAway()
+    {
+        // The results stayed over the list of apps until the next search, and an empty box never searches (#2704).
+        var vm = VmWithSubstitutedRunner(RunnerWhoseSearchAnswers(Task.FromResult(OneSearchResult())));
+        await vm.InitializationComplete;
+        vm.SearchQuery = "vlc";
+        await vm.SearchWingetCommand.ExecuteAsync(null);
+        Assert.Equal("VideoLAN.VLC", Assert.Single(vm.SearchResults).WingetId);   // the premise
+
+        vm.SearchQuery = "";
+
+        Assert.Empty(vm.SearchResults);
+    }
+
+    [Fact]
+    public async Task EmptyingTheSearchBox_AfterASearchThatFoundNothing_PutsAwayNoPackagesFound()
+    {
+        var vm = VmWithSubstitutedRunner(QuietRunner());
+        await vm.InitializationComplete;
+        vm.SearchQuery = "qwertyasdfzxcv";
+        await vm.SearchWingetCommand.ExecuteAsync(null);
+        Assert.True(vm.SearchFoundNothing);   // the premise
+
+        vm.SearchQuery = "  ";
+
+        Assert.False(vm.SearchFoundNothing);
+    }
+
+    [Fact]
+    public async Task ClearSearch_EmptiesTheBox_AndPutsTheResultsAway()
+    {
+        // The button inside the box, so the way back to the app list is not selecting the text and deleting it.
+        var vm = VmWithSubstitutedRunner(RunnerWhoseSearchAnswers(Task.FromResult(OneSearchResult())));
+        await vm.InitializationComplete;
+        vm.SearchQuery = "vlc";
+        await vm.SearchWingetCommand.ExecuteAsync(null);
+        Assert.Single(vm.SearchResults);   // the premise
+
+        vm.ClearSearchCommand.Execute(null);
+
+        Assert.Equal("", vm.SearchQuery);
+        Assert.Empty(vm.SearchResults);
+    }
+
+    [Fact]
+    public async Task EditingTheSearchBox_KeepsTheResultsUntilTheNextSearch()
+    {
+        // Only an empty box puts them away: a word being typed again still has the last search's answer under it.
+        var vm = VmWithSubstitutedRunner(RunnerWhoseSearchAnswers(Task.FromResult(OneSearchResult())));
+        await vm.InitializationComplete;
+        vm.SearchQuery = "vlc";
+        await vm.SearchWingetCommand.ExecuteAsync(null);
+
+        vm.SearchQuery = "v";
+
+        Assert.Equal("VideoLAN.VLC", Assert.Single(vm.SearchResults).WingetId);
+    }
+
+    [Fact]
+    public async Task ASearchWhoseBoxIsEmptiedBeforeItEnds_LeavesItsResultsAway()
+    {
+        var search = new TaskCompletionSource<ProcessOutput>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var vm = VmWithSubstitutedRunner(RunnerWhoseSearchAnswers(search.Task));
+        await vm.InitializationComplete;
+        vm.SearchQuery = "vlc";
+        var running = vm.SearchWingetCommand.ExecuteAsync(null);
+        Assert.True(vm.IsSearching);   // the premise: winget has not answered yet
+
+        vm.SearchQuery = "";
+        search.SetResult(OneSearchResult());
+        await running;
+
+        Assert.Empty(vm.SearchResults);
+        Assert.False(vm.SearchFoundNothing);
+        Assert.False(vm.IsSearching);
+    }
+
     // ── an app that is already installed is not a failed install (#2462) ──
 
     /// <summary>

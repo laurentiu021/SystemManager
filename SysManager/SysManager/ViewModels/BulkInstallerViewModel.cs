@@ -113,6 +113,28 @@ public sealed partial class BulkInstallerViewModel : ElevatedViewModelBase
 
     partial void OnFilterTextChanged(string value) => ApplyFilter();
 
+    /// <summary>
+    /// Emptying the search box puts the results away, so what is under them is the app list again (#2704).
+    /// </summary>
+    /// <remarks>
+    /// The results stayed until the next search, and a box emptied or cut to one letter never searches, so the
+    /// only way back to the curated list unobstructed was a narrower search or a restart.
+    /// </remarks>
+    partial void OnSearchQueryChanged(string value)
+    {
+        if (!string.IsNullOrWhiteSpace(value)) return;
+        SearchResults.Clear();
+        SearchFoundNothing = false;
+    }
+
+    /// <summary>Empties the search box, which puts the results away (#2704).</summary>
+    /// <remarks>
+    /// Bound to the button inside the box, as the sidebar's search has, so the way back to the app list is not
+    /// selecting the text and deleting it.
+    /// </remarks>
+    [RelayCommand]
+    private void ClearSearch() => SearchQuery = "";
+
     partial void OnSelectedCategoryChanged(string value)
     {
         ApplyFilter();
@@ -452,6 +474,8 @@ public sealed partial class BulkInstallerViewModel : ElevatedViewModelBase
             // System32 WorkingDirectory (closing the binary-planting LPE vector), and the query
             // is sanitized against argument injection before it reaches the command line.
             var lines = await _service.SearchAsync(SearchQuery).ConfigureAwait(true);
+            // The box was emptied while winget searched, which put the results away: they stay away.
+            if (string.IsNullOrWhiteSpace(SearchQuery)) return;
             SearchResults.ReplaceWith(ParseSearchResults(string.Join("\n", lines)));
             SearchFoundNothing = SearchResults.Count == 0;
         }

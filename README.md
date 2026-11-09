@@ -1775,7 +1775,9 @@ Answers "what is actually using my space?" by listing the biggest files in one p
   words App Updates uses
 - **Custom winget search** — search the entire winget repository and add
   any package to your install queue; up to 30 results, listed under Custom. A search
-  that fails says why, rather than "No packages found"
+  that fails says why, rather than "No packages found". The results scroll inside the
+  search card, so the list of apps stays on the page, and emptying the box, or the cross
+  inside it, puts them away
 - **Already installed is not a failure** — an app that is already on the PC, with nothing
   newer to install, is marked "Already installed" and counted on its own, not as a failed
   install

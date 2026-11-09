@@ -367,6 +367,56 @@ public class BulkInstallerViewModelTests
         Assert.False(vm.IsSearching);
     }
 
+    // ── Add on a search result ticks the app, so Install Selected installs it (#3218) ──
+
+    [Fact]
+    public async Task AddingASearchResult_TicksIt_SoInstallSelectedInstallsIt()
+    {
+        // It was added unticked, under Custom at the end of the list, so Install Selected said "No apps selected." with
+        // nothing else ticked.
+        var installed = new List<string>();
+        var runner = QuietRunner();
+        runner.RunProcessAsync("winget", Arg.Is<string>(args => args.StartsWith("install", StringComparison.Ordinal)),
+                               Arg.Any<CancellationToken>(), Arg.Any<System.Text.Encoding?>())
+              .Returns(callInfo =>
+              {
+                  installed.Add(callInfo.ArgAt<string>(1));
+                  return Task.FromResult(0);
+              });
+        var vm = VmWithSubstitutedRunner(runner);
+        await vm.InitializationComplete;
+        vm.DeselectAllCommand.Execute(null);
+        var result = new InstallableApp { Name = "Inkscape", WingetId = "Inkscape.Inkscape", Category = "Custom" };
+
+        vm.AddToInstallListCommand.Execute(result);
+
+        Assert.True(result.IsSelected);
+        Assert.Contains(result, vm.FilteredApps);
+        Assert.Equal("Inkscape is added to the list under Custom, and ticked to install.", vm.StatusMessage);
+        using var dialog = new DialogAnswer(confirm: true);
+        await vm.InstallSelectedCommand.ExecuteAsync(null);
+        Assert.Equal("Inkscape.Inkscape", Assert.Single(installed).Split('"')[1]);
+    }
+
+    [Fact]
+    public async Task AddingASearchResultTheListHasAlready_TicksTheListedOne_AndAddsNoSecond()
+    {
+        // A result the list already had did nothing at all. The search gives winget's own capitals, which a listed ID
+        // need not share.
+        var vm = VmWithSubstitutedRunner(QuietRunner());
+        await vm.InitializationComplete;
+        vm.DeselectAllCommand.Execute(null);
+        var firefox = Assert.Single(vm.Apps, a => a.WingetId == "Mozilla.Firefox");
+        var count = vm.Apps.Count;
+
+        vm.AddToInstallListCommand.Execute(
+            new InstallableApp { Name = "Mozilla Firefox (en-US)", WingetId = "mozilla.firefox", Category = "Custom" });
+
+        Assert.True(firefox.IsSelected);
+        Assert.Equal(count, vm.Apps.Count);
+        Assert.Equal("Firefox is in the list already, and ticked to install.", vm.StatusMessage);
+    }
+
     // ── an app that is already installed is not a failed install (#2462) ──
 
     /// <summary>

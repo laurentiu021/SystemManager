@@ -504,12 +504,32 @@ public sealed partial class BulkInstallerViewModel : ElevatedViewModelBase
         finally { IsSearching = false; }
     }
 
+    /// <summary>
+    /// Puts a search result in the list ticked, so Install Selected installs it, or ticks the app the list already has
+    /// with its ID, and says which (#3218).
+    /// </summary>
+    /// <remarks>
+    /// It added the result unticked, under Custom at the end of the list, so Install Selected left it out, or said "No
+    /// apps selected." when nothing else was ticked, and a result the list already had, such as Firefox, did nothing at
+    /// all. IDs compare as the installed check compares them, without regard to case.
+    /// </remarks>
     [RelayCommand]
     private void AddToInstallList(InstallableApp? app)
     {
-        if (app == null || Apps.Any(a => a.WingetId == app.WingetId)) return;
+        if (app is null) return;
+        var listed = Apps.FirstOrDefault(a =>
+            string.Equals(a.WingetId, app.WingetId, StringComparison.OrdinalIgnoreCase));
+        if (listed is not null)
+        {
+            listed.IsSelected = true;
+            StatusMessage = $"{listed.Name} is in the list already, and ticked to install.";
+            return;
+        }
+
+        app.IsSelected = true;
         Apps.Add(app);
         ApplyFilter();
+        StatusMessage = $"{app.Name} is added to the list under {app.Category}, and ticked to install.";
     }
 
     /// <summary>

@@ -142,6 +142,8 @@ public partial class MainWindow : Window
         base.OnSourceInitialized(e);
         if (PresentationSource.FromVisual(this) is HwndSource source)
         {
+            // Before the window is first shown, so it never opens past the bottom of a short screen (#2704).
+            FitToScreen(this, source.Handle);
             source.AddHook(WndProc);
             ApplyTitleBarTheme(source.Handle, ThemeService.Instance.CurrentTheme.IsDark);
             // Re-apply on every switch: the OS title bar is not a WPF brush, so nothing else
@@ -184,6 +186,86 @@ public partial class MainWindow : Window
 
     [System.Runtime.InteropServices.LibraryImport("dwmapi.dll")]
     private static partial int DwmSetWindowAttribute(IntPtr hwnd, int attr, ref int value, int size);
+
+    /// <summary>
+    /// Fits <paramref name="window"/> to the work area of the screen it opens on, before it is first shown (#2704).
+    /// </summary>
+    /// <remarks>
+    /// The window opened 1280 by 820 whatever the screen, so on a short one its bottom, with every tab's status line
+    /// and its bottom row of buttons, was under the taskbar or off the screen. <see cref="WindowFit"/> decides where
+    /// it goes; this reads the screen and moves the window there, in the screen's pixels. A window that fits stays
+    /// where Windows put it. Nothing here throws: a screen that cannot be read leaves the window as it was.
+    /// </remarks>
+    internal static void FitToScreen(Window window, IntPtr hwnd)
+    {
+        if (WorkAreaOf(hwnd) is not { } work || BoundsOf(hwnd) is not { } bounds) return;
+
+        var scale = System.Windows.Media.VisualTreeHelper.GetDpi(window).DpiScaleX;
+        var placement = WindowFit.Place(bounds, new Size(window.MinWidth * scale, window.MinHeight * scale), work);
+        if (placement.Bounds is not { } fitted) return;
+
+        window.MinWidth = placement.Minimum.Width / scale;
+        window.MinHeight = placement.Minimum.Height / scale;
+        window.Width = fitted.Width / scale;
+        window.Height = fitted.Height / scale;
+        SetWindowPos(hwnd, IntPtr.Zero, (int)Math.Round(fitted.X), (int)Math.Round(fitted.Y), 0, 0,
+            SwpNoSize | SwpNoZOrder | SwpNoActivate);
+        if (placement.Maximize) window.WindowState = WindowState.Maximized;
+    }
+
+    /// <summary>The work area of the screen <paramref name="hwnd"/> is on, in its pixels, or null if unreadable.</summary>
+    internal static Rect? WorkAreaOf(IntPtr hwnd)
+    {
+        var screen = new MonitorInfo { Size = System.Runtime.InteropServices.Marshal.SizeOf<MonitorInfo>() };
+        var monitor = MonitorFromWindow(hwnd, MonitorDefaultToNearest);
+        return monitor != IntPtr.Zero && GetMonitorInfo(monitor, ref screen) ? screen.Work.ToRect() : null;
+    }
+
+    /// <summary>Where <paramref name="hwnd"/> is on the screen, in pixels, or null if unreadable.</summary>
+    internal static Rect? BoundsOf(IntPtr hwnd) => GetWindowRect(hwnd, out var bounds) ? bounds.ToRect() : null;
+
+    private const uint MonitorDefaultToNearest = 2;
+    private const uint SwpNoSize = 0x0001;
+    private const uint SwpNoZOrder = 0x0004;
+    private const uint SwpNoActivate = 0x0010;
+
+    /// <summary>A rectangle in a screen's pixels, as Windows gives one.</summary>
+    [System.Runtime.InteropServices.StructLayout(System.Runtime.InteropServices.LayoutKind.Sequential)]
+    private struct ScreenRect
+    {
+        public int Left;
+        public int Top;
+        public int Right;
+        public int Bottom;
+
+        public readonly Rect ToRect() => new(Left, Top, Right - Left, Bottom - Top);
+    }
+
+    /// <summary>A screen's bounds and its work area, the part the taskbar does not cover.</summary>
+    [System.Runtime.InteropServices.StructLayout(System.Runtime.InteropServices.LayoutKind.Sequential)]
+    private struct MonitorInfo
+    {
+        public int Size;
+        public ScreenRect Bounds;
+        public ScreenRect Work;
+        public uint Flags;
+    }
+
+    [System.Runtime.InteropServices.LibraryImport("user32.dll")]
+    private static partial IntPtr MonitorFromWindow(IntPtr hwnd, uint flags);
+
+    [System.Runtime.InteropServices.LibraryImport("user32.dll", EntryPoint = "GetMonitorInfoW")]
+    [return: System.Runtime.InteropServices.MarshalAs(System.Runtime.InteropServices.UnmanagedType.Bool)]
+    private static partial bool GetMonitorInfo(IntPtr monitor, ref MonitorInfo info);
+
+    [System.Runtime.InteropServices.LibraryImport("user32.dll")]
+    [return: System.Runtime.InteropServices.MarshalAs(System.Runtime.InteropServices.UnmanagedType.Bool)]
+    private static partial bool GetWindowRect(IntPtr hwnd, out ScreenRect rect);
+
+    [System.Runtime.InteropServices.LibraryImport("user32.dll")]
+    [return: System.Runtime.InteropServices.MarshalAs(System.Runtime.InteropServices.UnmanagedType.Bool)]
+    private static partial bool SetWindowPos(IntPtr hwnd, IntPtr insertAfter, int x, int y, int width, int height,
+        uint flags);
 
     private IntPtr WndProc(IntPtr hwnd, int msg, IntPtr wParam, IntPtr lParam, ref bool handled)
     {

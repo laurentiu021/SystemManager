@@ -2327,6 +2327,13 @@ Key utility classes that don't fit neatly into Services or ViewModels (not an ex
   parent, so the page's viewer scrolls. Every DataGrid has it from the implicit DataGrid style;
   `ArchitectureTests.EveryTable_HandsTheWheelItCannotUseToThePage` holds the style to it and
   `TableWheelTests` turns the wheel over a laid-out table.
+- `WindowFit` — where a window too big for its screen goes, before it is first shown (#2704). The window opened
+  1280 by 820 whatever the screen, so on a 1366 x 768 screen its bottom, with every tab's status line, was under the
+  taskbar. `Place` takes the window's bounds, its minimum size and its screen's work area, in pixels, and says: stay
+  where it is when it fits, otherwise cut to the work area and centred in it, maximized with the minimum lowered to
+  the work area when the screen is smaller than the minimum. `MainWindow.FitToScreen` reads the screen with
+  `MonitorFromWindow` and `GetMonitorInfoW` in `OnSourceInitialized` and moves the window there;
+  `WindowFitsScreenTests` runs it on a hidden window handle bigger than the screen.
 - `GridText` — gives a list's text columns the app's cell style, `GridCellText` in `App.xaml`, so a value too long
   for its column ends in "…" (#3214). WPF draws a text column's cells in its own style, which neither trims nor
   wraps, so a long name or path was cut at the column's edge, often through a letter. The attached `CellStyle`

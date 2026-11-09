@@ -188,6 +188,11 @@ bar of the open tab, so hovering never looks like opening. The foot of the sideb
 whether SysManager runs as Administrator or as a standard user, its version, and the help
 and appearance buttons.
 
+The window opens 1280 by 820 at 100% scaling. On a screen with less room than that, such as
+a 1366 x 768 laptop's, it opens cut to the space the taskbar leaves and centred in it, so
+the bottom row of buttons and the status line are never under the taskbar, and on a screen
+smaller than its minimum size it opens maximized.
+
 ### Theme customization
 The palette button at the bottom of the sidebar, beside the `?` chip, opens the Appearance panel above it,
 with:

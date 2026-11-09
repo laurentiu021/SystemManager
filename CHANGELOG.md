@@ -10,6 +10,21 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.136.153] - 2026-11-09
+
+**The window fits a small screen: on a 1366 x 768 laptop it no longer opens with its bottom row of buttons under the
+taskbar.**
+
+### Fixed
+- The window opened 1280 by 820 whatever the screen, so on one with less room than that, such as a 1366 x 768 laptop
+  at 100% or a 1920 x 1080 one at 150%, the bottom of the window, with every tab's status line and its bottom row of
+  buttons, opened under the taskbar or off the screen. Before it is first shown, the window now cuts itself to the
+  space the taskbar leaves on its screen and centres there, and on a screen smaller than its minimum size it opens
+  maximized. A window that fits opens where Windows puts it, as before.
+- Tests pin where the window goes on a large screen, a 1366 x 768 one, a 1920 x 1080 one at 150%, one smaller than
+  the minimum, a second screen, and with the window hanging over an edge, and fit a hidden window far bigger than
+  the screen they run on.
+
 ## [1.136.152] - 2026-11-09
 
 **Names shown beside an icon or a badge in a list end in "…" when they are too long for the column, and pointing at

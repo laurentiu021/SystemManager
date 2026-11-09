@@ -50,7 +50,7 @@
                                 <TextBlock Text="MIT" Margin="8,0,24,0" Foreground="{DynamicResource TextSecondary}" Style="{StaticResource Subtle}"/>
                                 <TextBlock Text="SOURCE" Style="{StaticResource SectionLabel}"/>
                                 <TextBlock Margin="8,0,0,0" Style="{StaticResource Subtle}">
-                                    <Hyperlink Command="{Binding OpenRepoCommand}" Foreground="{DynamicResource Accent}">github.com/laurentiu021/SystemManager</Hyperlink>
+                                    <Hyperlink Command="{Binding OpenRepoCommand}" Foreground="{DynamicResource InfoText}">github.com/laurentiu021/SystemManager</Hyperlink>
                                 </TextBlock>
                             </StackPanel>
                         </StackPanel>
@@ -133,7 +133,7 @@
                                  the save path by hand (#2861). -->
                             <TextBlock Style="{StaticResource Body}" Margin="0,4,0,0"
                                        Visibility="{Binding LastDiagnosticsBundlePath, Converter={StaticResource FlexVis}}">
-                                <Hyperlink Command="{Binding ShowDiagnosticsBundleInFolderCommand}" Foreground="{DynamicResource Accent}">Show in folder</Hyperlink>
+                                <Hyperlink Command="{Binding ShowDiagnosticsBundleInFolderCommand}" Foreground="{DynamicResource InfoText}">Show in folder</Hyperlink>
                             </TextBlock>
                             <!-- Rollback feedback lives beside its own button rather than in the update
                                  card below, for the same reason ReportStatus was moved here: writing to a
@@ -182,9 +182,9 @@
                             <StackPanel Grid.Column="0">
                                 <StackPanel Orientation="Horizontal">
                                     <TextBlock Text="&#xE896;" FontFamily="Segoe Fluent Icons,Segoe MDL2 Assets"
-                                               FontSize="18" Foreground="{DynamicResource Accent}" VerticalAlignment="Center" Margin="0,0,10,0"/>
+                                               FontSize="18" Foreground="{DynamicResource AccentText}" VerticalAlignment="Center" Margin="0,0,10,0"/>
                                     <TextBlock Text="Update available" Style="{StaticResource MetricCompact}"
-                                               Foreground="{DynamicResource Accent}" VerticalAlignment="Center"/>
+                                               Foreground="{DynamicResource AccentText}" VerticalAlignment="Center"/>
                                     <TextBlock Text="  ·  " Style="{StaticResource Body}" Foreground="{DynamicResource TextMuted}" VerticalAlignment="Center"/>
                                     <TextBlock Text="{Binding LatestVersionLabel}" Style="{StaticResource SectionTitle}" Foreground="{DynamicResource TextPrimary}" VerticalAlignment="Center"/>
                                     <TextBlock Text="  ·  " Style="{StaticResource Body}" Foreground="{DynamicResource TextMuted}" VerticalAlignment="Center"/>
@@ -248,7 +248,7 @@
                                            AutomationProperties.LiveSetting="Polite" helpers:LiveRegion.Announces="True"/>
                                 <TextBlock Text="  ·  " Style="{StaticResource Body}" Foreground="{DynamicResource TextMuted}" VerticalAlignment="Center"/>
                                 <TextBlock Style="{StaticResource Body}" VerticalAlignment="Center">
-                                    <Hyperlink Command="{Binding OpenDownloadFolderCommand}" Foreground="{DynamicResource Accent}">Show file</Hyperlink>
+                                    <Hyperlink Command="{Binding OpenDownloadFolderCommand}" Foreground="{DynamicResource InfoText}">Show file</Hyperlink>
                                 </TextBlock>
                             </StackPanel>
                         </Grid>
@@ -364,7 +364,7 @@
                                                            Visibility="{Binding Url, Converter={StaticResource FlexVis}}">
                                                     <Hyperlink Command="{Binding DataContext.OpenReleaseCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
                                                                CommandParameter="{Binding Url}"
-                                                               Foreground="{DynamicResource Accent}"
+                                                               Foreground="{DynamicResource InfoText}"
                                                                AutomationProperties.Name="{Binding Version, StringFormat='View on GitHub — {0}'}">View on GitHub ↗</Hyperlink>
                                                 </TextBlock>
                                             </StackPanel>

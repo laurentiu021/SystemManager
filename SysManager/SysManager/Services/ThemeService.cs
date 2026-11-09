@@ -471,9 +471,15 @@ public sealed class ThemeService
     /// lands short. That pair is prevented at the input instead, by
     /// <see cref="PanelThatAdmitsReadableText"/>, which is where the actual defect was.</para>
     /// </remarks>
-    private static Color Legible(Color text, bool isDark, params (Color Surface, double Minimum)[] targets)
+    private static Color Legible(Color text, bool isDark, params (Color Surface, double Minimum)[] targets) =>
+        LegibleToward(text, isDark ? Colors.White : Colors.Black, targets);
+
+    /// <summary>
+    /// <paramref name="text"/> walked toward <paramref name="target"/> in 2% steps until it clears every floor, or
+    /// <paramref name="target"/> itself: the walk <see cref="Legible"/> describes, toward any colour.
+    /// </summary>
+    private static Color LegibleToward(Color text, Color target, params (Color Surface, double Minimum)[] targets)
     {
-        var target = isDark ? Colors.White : Colors.Black;
 
         // All the way to the extreme, not the old 80% ceiling. The ceiling was there so a pathological
         // custom theme terminated, which the step count already guarantees, and it was the last thing keeping
@@ -522,6 +528,11 @@ public sealed class ThemeService
         // indigo #6366F1 to amber #F59E0B across the presets, so white measured 2.15:1 on warm-ember and
         // cleared AA on only two of the twelve.
         SetBrush(res, "TextOnAccent", OnColor(theme.Accent));
+
+        // Words drawn in the accent colour: the update banner's "Update available", Deep Cleanup's headings, the
+        // current DNS server and the rest. The accent is picked as a fill, and as a colour for words it read under
+        // 4.5:1 on nine presets, down to 2.37:1 on Sky Breeze (#3205).
+        SetBrush(res, "AccentText", AccentText(theme));
 
         // The OFF thumb of a toggle switch, drawn on the Surface4 track. It was hardcoded White, and
         // Surface4 is near-white on the six light presets, so the thumb measured 1.33 to 1.67:1 there —
@@ -674,6 +685,31 @@ public sealed class ThemeService
         ContrastAgainst(Colors.White, background) >= ContrastAgainst(Colors.Black, background)
             ? Colors.White
             : Colors.Black;
+
+    /// <summary>
+    /// The accent as a colour for words: moved toward the theme's main text colour until it reads at 4.5:1 on every
+    /// surface words sit on, so it stays the accent wherever the accent already reads (#3205).
+    /// </summary>
+    /// <remarks>
+    /// The surfaces are the ones the grey tiers are held to, the page, a card and the top of its sheen, an inner card,
+    /// the two derived inner shades and a hovered row, and the two the accent's own tint makes: a note tinted with
+    /// <c>AccentSoft</c> over the page and a selected row over a card. Toward the main text colour rather than white
+    /// or black, so the words keep the accent's hue, as the mockup showed. Applied to the colours <c>Apply</c> is
+    /// given, so every shade position and a custom accent get theirs. Internal so <c>ThemeStatusBrushTests</c>
+    /// measures this rather than a copy.
+    /// </remarks>
+    internal static Color AccentText(ThemePreset theme)
+    {
+        var tint = Lerp(theme.Background, theme.Accent, 24 / 255.0);
+        var selected = Lerp(theme.Surface, theme.Accent, 24 / 255.0);
+        var surface3 = Lerp(theme.Surface2, theme.TextPrimary, 0.05);
+        var surface4 = Lerp(theme.Surface2, theme.TextPrimary, 0.1);
+        var hover = Lerp(theme.Surface, theme.TextPrimary, RowHoverLerp(theme.IsDark));
+        return LegibleToward(theme.Accent, theme.TextPrimary,
+                             (theme.Background, 4.5), (theme.Surface, 4.5), (CardSheenTop(theme), 4.5),
+                             (theme.Surface2, 4.5), (surface3, 4.5), (surface4, 4.5), (hover, 4.5), (tint, 4.5),
+                             (selected, 4.5));
+    }
 
     /// <summary>WCAG 2.x relative-luminance contrast ratio between two opaque colours.</summary>
     private static double ContrastAgainst(Color a, Color b)

@@ -627,8 +627,8 @@
                         </Grid.ColumnDefinitions>
                         <StackPanel Grid.Column="0" Orientation="Horizontal">
                             <TextBlock Text="&#xE896;" FontFamily="Segoe Fluent Icons,Segoe MDL2 Assets"
-                                       FontSize="16" Foreground="{DynamicResource Accent}" VerticalAlignment="Center" Margin="0,0,10,0"/>
-                            <TextBlock Text="Update available" Style="{StaticResource SectionTitle}" Foreground="{DynamicResource Accent}" VerticalAlignment="Center"/>
+                                       FontSize="16" Foreground="{DynamicResource AccentText}" VerticalAlignment="Center" Margin="0,0,10,0"/>
+                            <TextBlock Text="Update available" Style="{StaticResource SectionTitle}" Foreground="{DynamicResource AccentText}" VerticalAlignment="Center"/>
                             <TextBlock Text="  ·  " Style="{StaticResource Body}" Foreground="{DynamicResource TextMuted}" VerticalAlignment="Center"/>
                             <TextBlock Text="{Binding About.LatestVersionLabel}" Style="{StaticResource Body}" Foreground="{DynamicResource TextPrimary}" VerticalAlignment="Center"/>
                             <TextBlock Text="  ·  " Style="{StaticResource Body}" Foreground="{DynamicResource TextMuted}" VerticalAlignment="Center"/>

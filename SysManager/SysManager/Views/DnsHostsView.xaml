@@ -32,7 +32,7 @@
                     <TextBlock Text="Current DNS:" VerticalAlignment="Center" Margin="0,0,8,0"
                                Style="{StaticResource Subtle}"/>
                     <TextBlock Text="{Binding CurrentDns}" Style="{StaticResource SectionTitle}" VerticalAlignment="Center"
-                               Foreground="{DynamicResource Accent}"/>
+                               Foreground="{DynamicResource AccentText}"/>
                 </DockPanel>
 
                 <!-- Declared in the order they are drawn, left to right, because Tab follows the declaration: docked

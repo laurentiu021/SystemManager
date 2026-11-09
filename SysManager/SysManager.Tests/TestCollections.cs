@@ -5,13 +5,6 @@
 namespace SysManager.Tests;
 
 /// <summary>
-/// Groups tests that touch the network stack so they run sequentially.
-/// Prevents cross-test interference when using ICMP sockets in parallel.
-/// </summary>
-[CollectionDefinition("Network", DisableParallelization = true)]
-public class NetworkCollection { }
-
-/// <summary>
 /// Groups tests that use the shared IconExtractorService static cache.
 /// </summary>
 [CollectionDefinition("IconCache", DisableParallelization = true)]

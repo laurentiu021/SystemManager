@@ -175,8 +175,9 @@ project defines them in `TestCollections.cs`:
   guard fails the build when a class touches one of those statics without it.
 - `[Collection("ProcessEnvironment")]` — tests that mutate the process's environment variables.
 - `[Collection("IconCache")]` — tests touching the shared icon cache.
-- `[Collection("Network")]` — defined here for tests using ICMP sockets, and used by none of them today.
 
+The unit project had a `Network` collection too, which no unit test used; xUnit's analyzer fails the build on a
+collection nothing uses, so it is gone.
 `SysManager.IntegrationTests` defines its own `Network` collection, for the classes that touch the network
 stack or share `StaHelper`'s one STA thread, and
 `SysManager.UITests` defines `App` in `AppFixture.cs`. `CatalogSignatureTests` and

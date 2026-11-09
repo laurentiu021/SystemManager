@@ -43,6 +43,9 @@ public sealed partial class AboutViewModel : ViewModelBase
     /// <summary>The running executable's full path, or null when Windows does not say.</summary>
     private readonly Func<string?> _processPath;
 
+    /// <summary>Where Open-source components writes the notices before Notepad opens them. A test's own folder.</summary>
+    private readonly string _noticesDir;
+
     /// <summary>Starts the build that installs or restores SysManager. A test records the call instead.</summary>
     private readonly Action<ProcessStartInfo> _launch;
 
@@ -251,13 +254,15 @@ public sealed partial class AboutViewModel : ViewModelBase
         Action<ProcessStartInfo>? launch = null,
         Action? shutdown = null,
         IDialogService? dialog = null,
-        Func<string?>? processPath = null)
+        Func<string?>? processPath = null,
+        string? noticesDir = null)
     {
         _updates = updates;
         _reportService = reportService;
         _preferences = preferences ?? new UpdateCheckPreferenceService();
         _updatesDir = updatesDir;
         _processPath = processPath ?? (static () => Environment.ProcessPath);
+        _noticesDir = noticesDir ?? AppDataFolders.Local;
         _launch = launch ?? StartOnlyInTheApp;
         _shutdown = shutdown ?? App.RequestShutdown;
         _dialog = dialog ?? DialogService.Instance;
@@ -731,6 +736,45 @@ public sealed partial class AboutViewModel : ViewModelBase
 
     [RelayCommand]
     private void OpenLicense() => OpenUrl($"https://github.com/{UpdateService.Owner}/{UpdateService.Repo}/blob/main/LICENSE");
+
+    /// <summary>
+    /// Opens the licenses and notices of the open-source components the exe carries (#2856): the copy embedded in it,
+    /// written to SysManager's own folder and opened in Notepad by its path under System32, so they open without a
+    /// network. Where that copy cannot be written or Notepad will not start, Notepad being an optional feature on
+    /// Windows 11, the same file opens on GitHub at this version's tag, and the status line says so.
+    /// </summary>
+    [RelayCommand]
+    private async Task OpenThirdPartyNoticesAsync()
+    {
+        ReportStatus = "";
+        try
+        {
+            // Off the UI thread: the file is about half a megabyte.
+            var path = await Task.Run(() => ThirdPartyNotices.WriteTo(_noticesDir));
+            var notepad = new ProcessStartInfo(SystemPaths.ResolveSystemTool("notepad.exe")) { UseShellExecute = false };
+            notepad.ArgumentList.Add(path);
+            _launch(notepad);
+            return;
+        }
+        catch (InvalidOperationException ex) { Log.Warning("Open-source components: {Error}", ex.Message); }
+        catch (IOException ex) { Log.Warning("Open-source components: the notices were not written: {Error}", ex.Message); }
+        catch (UnauthorizedAccessException ex)
+        {
+            Log.Warning("Open-source components: the notices were not written: {Error}", ex.Message);
+        }
+        catch (System.ComponentModel.Win32Exception ex)
+        {
+            Log.Warning("Open-source components: Notepad did not start: {Error}", ex.Message);
+        }
+
+        OpenUrl(ThirdPartyNoticesOnline(UpdateService.CurrentVersion));
+        ReportStatus = "The open-source notices could not open in Notepad, so they opened on GitHub instead.";
+    }
+
+    /// <summary>The notices of <paramref name="version"/> on GitHub, at its tag.</summary>
+    internal static string ThirdPartyNoticesOnline(Version version) =>
+        $"https://github.com/{UpdateService.Owner}/{UpdateService.Repo}/blob/v{version.ToString(3)}/"
+        + ThirdPartyNotices.FileName;
 
     /// <summary>
     /// Opens the repository's bug-report form with the version and elevation fields pre-filled. The

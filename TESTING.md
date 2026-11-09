@@ -403,6 +403,14 @@ run: every service it asks for must be registered, and each optional service the
 must reach that object. A factory that hands over another registration's object, as `ISpeedTestService`
 and `INavigationService` do, is left to that registration.
 
+### Third-party notices
+
+`ThirdPartyNoticesTests` reads the app's restore graph the way the build left it, `obj/project.assets.json`,
+and fails when `THIRD-PARTY-NOTICES.txt` leaves out a package whose code the exe carries, names one it no
+longer does, or gives one another license than its nuspec or `tools/licenses/packages.json` does (#2856).
+It also checks every license the notices refer to has its text in them, and that the exe embeds the
+committed file. Versions are not compared: the notices name none, and the SBOM carries them.
+
 ### Conventions
 
 - Pure logic tests (parsers, analyzers, converters) need no mocking.

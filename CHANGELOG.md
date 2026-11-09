@@ -10,6 +10,32 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.136.160] - 2026-11-09
+
+**The exe carries the licenses and notices of the open-source code inside it, and About opens them.**
+
+### Fixed
+- The exe carries code under the MIT, Apache 2.0, Mozilla Public 2.0 and GNU Lesser General Public 3.0 licenses, and
+  the .NET runtime, and those licenses ask for their notices and texts to go with every copy. None of them did: the
+  release published the exe, its SHA256 and the SBOM, which names the components but carries no notices, and About
+  offered only SysManager's own license. `THIRD-PARTY-NOTICES.txt` now lists every package whose code the exe
+  carries, 43 of them, with its license, copyright, project and, for the MPL and LGPL components, where their source
+  is, followed by each license's text and the notices the packages and the runtime carry themselves. It is written
+  from the app's restore graph by `tools/ThirdPartyNotices.cs`, which stops at a package whose license it has no text
+  for. (#2856)
+- The exe embeds that file, and **Open-source components** on About opens it in Notepad, from a copy written to
+  SysManager's folder, so it opens without a network. Where Notepad is not installed, an optional feature on Windows
+  11, it opens on GitHub at this version's tag instead, and About says so.
+- The release writes the file again from its own restore before it publishes, so the exe embeds the notices of exactly
+  what it is built from, and publishes it beside the exe and the SBOM.
+- The README said `publish.ps1` passes `ContinuousIntegrationBuild` and `Deterministic`; since 1.136.130 they come
+  from `Directory.Build.props` for every Release build, and the README says so.
+- Tests fail a pull request whose notices leave out a package the exe carries, name one it no longer does, or give one
+  another license, and check the exe carries the committed file and About's button opens it, or GitHub when Notepad
+  will not start. The checks that read every text file in the repository read `tools` too, and the one for the old
+  terms leaves alone another project's branch in a link to its GitHub repository, which the notices quote word for
+  word; a link to this repository is still checked.
+
 ## [1.136.159] - 2026-11-09
 
 **SysManager deletes the native libraries its older versions left in your temp folder, about 26 MB for each version,

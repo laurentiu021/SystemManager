@@ -42,8 +42,11 @@ SystemManager/                      # the repository
 │   ├── SysManager.IntegrationTests/# xUnit integration tests (CI, non-blocking)
 │   └── SysManager.UITests/         # FlaUI UI-automation tests (CI, non-blocking)
 ├── docs/                           # screenshots, GIFs, manual-smoke.ps1
+├── tools/                          # ThirdPartyNotices.cs, which writes THIRD-PARTY-NOTICES.txt from the
+│                                   #   restore graph, and licenses/, the texts it uses
 ├── .github/                        # workflows, issue and PR templates, Dependabot
 ├── global.json                     # SDK pin, and the Microsoft.Testing.Platform runner
+├── THIRD-PARTY-NOTICES.txt         # licenses and notices of the components the exe carries, embedded in it
 └── publish.ps1                     # the release build
 ```
 
@@ -375,7 +378,10 @@ to scroll.
   already running is stopped and `RefreshAsync` loads the arrival's list next (#2887).
 - `AboutViewModel` — version info, auto-update, release history. BUILD is `BuildCommitOf` the informational
   version, the commit the build stamps after its '+', rather than the exe's file date (#2611). The environment
-  info's drive lines are `StorageLines`, read through `DriveProbe.ReadFixed` (#2802).
+  info's drive lines are `StorageLines`, read through `DriveProbe.ReadFixed` (#2802). Open-source components writes
+  the notices the exe carries to `%LocalAppData%\SysManager` off the UI thread and opens them in Notepad, by its
+  path under System32, through the launcher the tab takes, and opens `ThirdPartyNoticesOnline`, the file at this
+  version's tag, when the copy cannot be written or Notepad will not start (#2856).
 - `WindowsFeaturesViewModel` — list, enable, disable Windows optional features. Takes the shared `ISessionRestorePoint` snapshot before the first toggle of the session — after the confirmation and after the elevation refusal, so neither declining nor being unelevated spends the one point Windows grants per day. After every change it reads the feature back through `ReadFeatureAsync` and writes the row from that, says DISM's reason for a refusal through `DescribeFailure`, and turns the switch back with `WindowsFeature.ResetSwitch` whenever the change did not happen (#2834, #2739). Escape and Cancel stop only a scan, while `IsScanning` is set: stopping a change ended DISM part-way. Before a change it asks `IFeatureParentsService` what the feature needs, and the confirmation names what turning it on turns on with it, or what stays on when it is turned off; after turning one on, those rows are written from DISM's answer.
 - `AppAlertsViewModel` — monitors new app installations via FileSystemWatcher + registry. Its detections are kept
   in `IAppAlertHistory`, read and written on the UI thread as the list changes, so they outlive the session and
@@ -2465,6 +2471,12 @@ Key utility classes that don't fit neatly into Services or ViewModels (not an ex
   administrator rights and a sweep deletes everything under its root (#2700).
   `SystemCleanupRoots.UserTemp` and `TuneUpService.TempRoots` both take it, so Deep Cleanup and
   Quick Cleanup clean the same folder.
+- `ThirdPartyNotices` — the licenses and notices of the open-source components the exe carries, which
+  `SysManager.csproj` embeds from `THIRD-PARTY-NOTICES.txt` at the repository root (#2856). `tools/ThirdPartyNotices.cs`
+  writes that file from the restore graph: each package that brings the exe anything for win-x64, its license from
+  the nuspec or `tools/licenses/packages.json`, its own license file where it has one, and the notices it and the
+  runtime packs carry; the release writes it again before it publishes. `ThirdPartyNoticesTests` fails a pull
+  request whose notices no longer match the packages. About writes and opens it through `WriteTo`.
 - `OldBuildFolders` — deletes the folders older builds unpacked their native libraries into under
   `BundleExtractionRoot`, which the host never removes and the sweeps leave alone (#2858): each
   `SysManager-v<version>` folder of an older version, and each build beside this one's own, once nothing in it

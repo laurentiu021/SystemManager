@@ -15,10 +15,12 @@ namespace SysManager.Tests;
 /// same word ran through its comments, log messages, identifiers and test names, and the scheduler's fixed arguments
 /// were "whitelisted" (#2617). The sweep reads every text file in the repository, not only the ones that were fixed,
 /// so the words cannot come back somewhere else.
-/// <para>Three uses stay, and they are the only ones allowed: the method names of the Windows audio interfaces
+/// <para>Four uses stay, and they are the only ones allowed: the method names of the Windows audio interfaces
 /// (<c>SetMasterVolume</c> and its relatives), the ledger file <c>notification-master-writes.json</c>, which a rename
-/// would orphan on users' PCs, and winget-pkgs' own branch, in the link and the API calls that reach it. This file
-/// has to name the words it keeps out, so it is the one file the sweep skips.</para>
+/// would orphan on users' PCs, winget-pkgs' own branch, in the link and the API calls that reach it, and another
+/// project's branch in a link to its repository on GitHub, which <c>THIRD-PARTY-NOTICES.txt</c> quotes from that
+/// project's notices word for word (#2856). A link to this repository is not one of them. This file has to name the
+/// words it keeps out, so it is the one file the sweep skips.</para>
 /// </remarks>
 public partial class InclusiveTermsTests
 {
@@ -41,7 +43,7 @@ public partial class InclusiveTermsTests
             }
         }
 
-        // Vacuity floor: 978 files were read when this was written. A file from each of the four places is named as
+        // Vacuity floor: 978 files were read when this was written. A file from each of the five places is named as
         // well, so losing one of the small places cannot hide inside the total.
         Assert.True(files.Count >= 900,
             $"only {files.Count} files were read, so the sweep is not seeing the repository");
@@ -51,6 +53,7 @@ public partial class InclusiveTermsTests
             Path.Combine(".github", "workflows", "release.yml"),
             Path.Combine("docs", "manual-smoke.ps1"),
             Path.Combine("SysManager", "SysManager", "Views", "NotificationBlockerView.xaml"),
+            Path.Combine("tools", "ThirdPartyNotices.cs"),
         ];
         foreach (var path in known)
             Assert.Contains(Path.Combine(root, path), files);
@@ -75,6 +78,11 @@ public partial class InclusiveTermsTests
         + "(https://github.com/microsoft/winget-pkgs/tree/master/manifests/l/laurentiu021/SysManager)", false)]
     [InlineData("The main switch. Off silences every notification, and the scheduler's arguments are an allowlist.",
         false)]
+    [InlineData("  https://github.com/JamesNK/Newtonsoft.Json/blob/master/LICENSE.md", false)]
+    [InlineData("    \"from\": \"https://github.com/falahati/NvAPIWrapper/blob/master/LICENSE, the package's license URL\",",
+        false)]
+    [InlineData("see https://github.com/laurentiu021/SystemManager/blob/master/README.md", true)]
+    [InlineData("the master branch, https://github.com/microsoft/DirectXMath/tree/master", true)]
     public void TheCheck_FindsTheOldWords_AndLeavesTheKeptUsesAlone(string line, bool flagged)
         => Assert.Equal(flagged, UsesAnOldTerm(line));
 
@@ -87,10 +95,12 @@ public partial class InclusiveTermsTests
     private static partial Regex OldTerm();
 
     /// <summary>
-    /// The uses that stay: the audio interfaces' method names, the ledger file, and winget-pkgs' branch, which is the
-    /// word right after a slash, colon or equals sign on a line that names winget-pkgs before it.
+    /// The uses that stay: the audio interfaces' method names, the ledger file, winget-pkgs' branch, which is the
+    /// word right after a slash, colon or equals sign on a line that names winget-pkgs before it, and another
+    /// project's branch in a GitHub link, the word right after its owner, name and <c>blob</c> or <c>tree</c>.
     /// </summary>
-    [GeneratedRegex(@"MasterVolume|notification-master-writes|(?<=\bwinget-pkgs\b.*[/:=])master\b",
+    [GeneratedRegex(@"MasterVolume|notification-master-writes|(?<=\bwinget-pkgs\b.*[/:=])master\b"
+        + @"|(?<=github\.com/(?!laurentiu021/SystemManager/)[\w.-]+/[\w.-]+/(?:blob|tree)/)master\b",
         RegexOptions.CultureInvariant)]
     private static partial Regex KeptUse();
 }

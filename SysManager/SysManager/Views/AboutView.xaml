@@ -107,6 +107,12 @@
                                     ToolTip="Open GitHub Discussions for questions and ideas — for anything that is not a bug."/>
                             <Button Content="View license" Command="{Binding OpenLicenseCommand}"
                                     Style="{StaticResource SecondaryButton}" Margin="0,0,8,8"/>
+                            <!-- The licenses and notices of the open-source components the exe carries, which their
+                                 licenses ask to go with every copy (#2856). Opened from the exe itself, so offline too. -->
+                            <Button Content="Open-source components" Command="{Binding OpenThirdPartyNoticesCommand}"
+                                    Style="{StaticResource SecondaryButton}" Margin="0,0,8,8"
+                                    AutomationProperties.Name="Open-source components: the licenses of the libraries inside SysManager"
+                                    ToolTip="The open-source libraries inside SysManager, with their licenses and notices. Opens a text file this exe carries, so it works offline."/>
                             <!-- OpenChangelogCommand existed alongside OpenRepo and OpenLicense from the
                                  start, and was the one sibling nothing ever bound: the release notes
                                  were only reachable by finding the repository by hand. Same style and

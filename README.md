@@ -1668,7 +1668,8 @@ Answers "what is actually using my space?" by listing the biggest files in one p
   on the same engine, so a slow day is visible as a slow day rather than a number you have
   to interpret
 - **Pick the Ookla server** or leave it on Auto (nearest): Bucharest, London, Frankfurt,
-  Amsterdam, Paris, New York
+  Amsterdam, Paris, New York. The picker sits under the Ookla card's title, so even the
+  smallest window shows the server it is set to
 - **Separate persistent history per engine**, the last 20 results each — date, download,
   upload, ping and server — clearable on its own, because comparing an HTTP run against an
   Ookla run is not a comparison. A quick test from the Dashboard joins the HTTP history too,

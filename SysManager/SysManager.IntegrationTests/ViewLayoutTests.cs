@@ -15,26 +15,16 @@ namespace SysManager.IntegrationTests;
 /// the card's edge instead of wrapping. That cut the caveat off Speed Test's note and the end of every line of Deep
 /// Cleanup's, and Refresh, Cancel and the search box off System Logs' filter bar near the smallest window. This builds
 /// every view with the app's resources and no data, lays it out at both page widths, and fails on any laid-out element
-/// its parent cuts across. A row a page leaves too little height is #2704's, and is not read here. Text a view fills in
-/// from its data is not there to be measured, so this holds the views' own rows,
-/// toolbars and notes; <c>ArchitectureTests.NoTextWrappingOrTrimming_IsInertInsideAHorizontalStackPanel</c> holds the
-/// rest by reading the markup.
+/// its parent cuts across. A row a page leaves too little height is <c>PageHeightTests</c>', and is not read here.
+/// Text a view fills in from its data is not there to be measured, so this holds the views' own rows, toolbars and
+/// notes; <c>ArchitectureTests.NoTextWrappingOrTrimming_IsInertInsideAHorizontalStackPanel</c> holds the rest by
+/// reading the markup.
 /// <para>Inside a <see cref="DataGrid"/> nothing is read, though the grid itself is: it works out its column widths in
 /// a dispatcher pass after layout, which this harness does not run, so its headers measure as cut here and are not on
 /// screen.</para>
 /// </remarks>
 public sealed class ViewLayoutTests
 {
-    /// <summary>
-    /// What #2704 still has to fix, still cut: Speed Test's Ookla server picker, which a narrow card leaves only the
-    /// room its title and Run do not take. It must still be cut, so this empties as #2704 lands instead of outliving
-    /// it.
-    /// </summary>
-    private static readonly (int Width, string View, string Element)[] CutUntil2704 =
-    [
-        (PageWidth.Smallest, "SpeedTestView", "the ComboBox \"Ookla server\""),
-    ];
-
     [Theory]
     [InlineData(PageWidth.Default)]
     [InlineData(PageWidth.Smallest)]
@@ -72,21 +62,10 @@ public sealed class ViewLayoutTests
                 $"only {read} elements were laid out across {views.Count} views, out of 6,333 measured, so a "
                 + "pass means little.");
 
-            var known = CutUntil2704.Where(k => k.Width == pageWidth).ToList();
-            var unexpected = cut.Where(c => !known.Any(k => k.View == c.View && k.Element == c.Element))
-                .Select(c => $"{c.View}: {c.Element} is {c.Size}")
-                .ToList();
-            Assert.True(unexpected.Count == 0,
+            Assert.True(cut.Count == 0,
                 $"at a page {pageWidth} px wide these are cut instead of wrapping. A row that can be wider than the "
                 + "page is a WrapPanel, as the Uninstaller's toolbar is, and a note is a DockPanel with its glyph "
-                + "docked left:\n  " + string.Join("\n  ", unexpected));
-
-            var fixedNow = known.Where(k => !cut.Any(c => c.View == k.View && c.Element == k.Element))
-                .Select(k => $"{k.View}: {k.Element}")
-                .ToList();
-            Assert.True(fixedNow.Count == 0,
-                $"at a page {pageWidth} px wide these are no longer cut, so take them off CutUntil2704:\n  "
-                + string.Join("\n  ", fixedNow));
+                + "docked left:\n  " + string.Join("\n  ", cut.Select(c => $"{c.View}: {c.Element} is {c.Size}")));
         });
     }
 }

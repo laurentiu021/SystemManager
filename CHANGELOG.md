@@ -10,6 +10,18 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.136.158] - 2026-11-09
+
+**Speed Test's Ookla server picker shows the server it is set to at every window size.**
+
+### Fixed
+- The Ookla card's first row held its title and subtitle, the server picker and Run side by side, which needs 437
+  px. At the smallest window the card has 300, so the picker, 180 px wide, showed 43 px of itself and the server it
+  was set to could not be read. The picker now sits under the card's subtitle, with Run beside the title, so the row
+  needs 257 px and the keyboard still reaches the picker before Run.
+- The layout test that lays every view out at both page widths no longer carries a list of cuts to fix: this was
+  the last, and it now fails on any cut at all.
+
 ## [1.136.157] - 2026-11-09
 
 **Ping, Bandwidth Monitor, Resource History and Settings Watchdog fit the default window again, and an empty state

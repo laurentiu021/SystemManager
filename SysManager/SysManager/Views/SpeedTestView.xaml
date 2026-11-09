@@ -66,26 +66,30 @@
                 <!-- Ookla card -->
                 <Border Grid.Row="0" Grid.Column="0" Style="{StaticResource Card}">
                     <StackPanel>
-                        <!-- Declared in the order they are drawn: docked right ahead of the server picker, Run was
-                             reached before it (#2883). The picker keeps the middle of the space left, as it had as the
-                             DockPanel's last child. -->
+                        <!-- Declared in the order a keyboard reaches them, title, picker, Run (#2883). The picker has a
+                             row of its own under the title: beside them, with Run, the row needed 437 px, and at the
+                             smallest window the card has 300, which left the picker 43 of its 180 (#2704). Not inside
+                             the title's panel, where the subtitle would sit beside it as its label. -->
                         <Grid>
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto"/>
+                                <RowDefinition Height="Auto"/>
+                            </Grid.RowDefinitions>
                             <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="Auto"/>
                                 <ColumnDefinition Width="*"/>
                                 <ColumnDefinition Width="Auto"/>
                             </Grid.ColumnDefinitions>
-                            <StackPanel Grid.Column="0">
+                            <StackPanel Grid.Row="0" Grid.Column="0">
                                 <TextBlock Text="Ookla speed test" Style="{StaticResource SectionTitle}"/>
                                 <TextBlock Text="Official CLI, downloaded on first run" Style="{StaticResource Subtle}" Margin="0,2,0,0"/>
                             </StackPanel>
-                            <ComboBox Grid.Column="1" ItemsSource="{Binding OoklaServerOptions}"
+                            <ComboBox Grid.Row="1" Grid.Column="0" ItemsSource="{Binding OoklaServerOptions}"
                                       SelectedItem="{Binding SelectedOoklaServer}"
                                       AutomationProperties.Name="Ookla server"
-                                      Width="180" Margin="0,0,8,0" VerticalAlignment="Center"/>
-                            <Button Grid.Column="2" Content="Run" Command="{Binding RunOoklaSpeedCommand}" Style="{StaticResource PrimaryButton}"
+                                      Width="180" Margin="0,10,0,0" HorizontalAlignment="Left"/>
+                            <Button Grid.Row="0" Grid.Column="1" Content="Run" Command="{Binding RunOoklaSpeedCommand}" Style="{StaticResource PrimaryButton}"
                                     AutomationProperties.Name="Run Ookla speed test"
-                                    HorizontalAlignment="Right" Padding="18,8"
+                                    VerticalAlignment="Top" Margin="8,0,0,0" Padding="18,8"
                                     IsEnabled="{Binding IsSpeedTesting, Converter={StaticResource BoolInvert}}"/>
                         </Grid>
                         <!-- Upload and ping are formatted by the result, which shows "—" for one that was not

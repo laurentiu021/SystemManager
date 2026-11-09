@@ -137,7 +137,7 @@
                     <DataGridTextColumn Header="PID" Binding="{Binding Pid}" Width="55" MinWidth="55"
                                         SortMemberPath="Pid" CanUserResize="False">
                         <DataGridTextColumn.ElementStyle>
-                            <Style TargetType="TextBlock">
+                            <Style TargetType="TextBlock" BasedOn="{StaticResource GridCellText}">
                                 <Setter Property="FontFamily" Value="Consolas"/>
                                 <Setter Property="FontSize" Value="12"/>
                                 <Setter Property="Foreground" Value="{DynamicResource TextMuted}"/>
@@ -191,7 +191,7 @@
                             </Style>
                         </DataGridTextColumn.HeaderStyle>
                         <DataGridTextColumn.ElementStyle>
-                            <Style TargetType="TextBlock">
+                            <Style TargetType="TextBlock" BasedOn="{StaticResource GridCellText}">
                                 <Setter Property="HorizontalAlignment" Value="Right"/>
                                 <Setter Property="FontWeight" Value="Medium"/>
                                 <Setter Property="FontSize" Value="12"/>
@@ -207,7 +207,7 @@
                             </Style>
                         </DataGridTextColumn.HeaderStyle>
                         <DataGridTextColumn.ElementStyle>
-                            <Style TargetType="TextBlock">
+                            <Style TargetType="TextBlock" BasedOn="{StaticResource GridCellText}">
                                 <Setter Property="HorizontalAlignment" Value="Right"/>
                                 <Setter Property="FontFamily" Value="Consolas"/>
                                 <Setter Property="FontSize" Value="12"/>
@@ -224,7 +224,7 @@
                             </Style>
                         </DataGridTextColumn.HeaderStyle>
                         <DataGridTextColumn.ElementStyle>
-                            <Style TargetType="TextBlock">
+                            <Style TargetType="TextBlock" BasedOn="{StaticResource GridCellText}">
                                 <Setter Property="HorizontalAlignment" Value="Center"/>
                                 <Setter Property="FontSize" Value="11"/>
                                 <Setter Property="Foreground" Value="{DynamicResource TextMuted}"/>
@@ -243,7 +243,7 @@
                     <DataGridTextColumn Header="Started" Binding="{Binding StartTimeDisplay}"
                                         Width="140" MinWidth="120" SortMemberPath="StartTime">
                         <DataGridTextColumn.ElementStyle>
-                            <Style TargetType="TextBlock">
+                            <Style TargetType="TextBlock" BasedOn="{StaticResource GridCellText}">
                                 <Setter Property="FontFamily" Value="Consolas"/>
                                 <Setter Property="FontSize" Value="11"/>
                                 <Setter Property="VerticalAlignment" Value="Center"/>
@@ -305,7 +305,7 @@
                     <DataGridTextColumn Header="Category" Binding="{Binding Category}"
                                         Width="110" MinWidth="90" SortMemberPath="Category">
                         <DataGridTextColumn.ElementStyle>
-                            <Style TargetType="TextBlock">
+                            <Style TargetType="TextBlock" BasedOn="{StaticResource GridCellText}">
                                 <Setter Property="Foreground" Value="{DynamicResource TextSecondary}"/>
                                 <Setter Property="FontSize" Value="12"/>
                                 <Setter Property="VerticalAlignment" Value="Center"/>

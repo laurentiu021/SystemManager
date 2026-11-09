@@ -60,7 +60,7 @@
                                 <DataGridTextColumn Header="Running at (MHz)" Binding="{Binding ConfiguredSpeedMHz}"
                                                     Width="130" MinWidth="90">
                                     <DataGridTextColumn.ElementStyle>
-                                        <Style TargetType="TextBlock">
+                                        <Style TargetType="TextBlock" BasedOn="{StaticResource GridCellText}">
                                             <Setter Property="ToolTip" Value="The speed this module is actually running at."/>
                                             <Style.Triggers>
                                                 <DataTrigger Binding="{Binding IsUnderclocked}" Value="True">

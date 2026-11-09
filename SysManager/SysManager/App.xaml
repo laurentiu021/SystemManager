@@ -1696,11 +1696,24 @@
             <!-- ============================================================ -->
             <!-- DataGrid — dark-friendly rows, headers, and cell focus        -->
             <!-- ============================================================ -->
+            <!--
+                A list's text cell: WPF's own cell style, with a value too long for its column ending in "…" and
+                shown whole on hover while it is cut (#3214). Every text column gets it from the DataGrid style
+                below, and a column that needs a look of its own builds its style on this one.
+            -->
+            <Style x:Key="GridCellText" TargetType="TextBlock" BasedOn="{x:Static DataGridTextColumn.DefaultElementStyle}">
+                <Setter Property="TextTrimming" Value="CharacterEllipsis"/>
+                <Setter Property="ToolTip" Value="{Binding Text, RelativeSource={RelativeSource Self}}"/>
+                <Setter Property="h:CutText.ToolTip" Value="True"/>
+            </Style>
+
             <Style TargetType="DataGrid">
                 <!-- Keyboard focus comes back to the row it was on after the rows are rebuilt (#2609). -->
                 <Setter Property="h:RebuildFocus.Keep" Value="True"/>
                 <!-- A turn of the wheel the grid cannot use scrolls the page around it (#2817). -->
                 <Setter Property="h:WheelPassThrough.ToPage" Value="True"/>
+                <!-- Every text column draws its cells in GridCellText, so a long value ends in "…" (#3214). -->
+                <Setter Property="h:GridText.CellStyle" Value="{StaticResource GridCellText}"/>
                 <Setter Property="Background" Value="Transparent"/>
                 <Setter Property="Foreground" Value="{DynamicResource TextPrimary}"/>
                 <Setter Property="BorderThickness" Value="0"/>

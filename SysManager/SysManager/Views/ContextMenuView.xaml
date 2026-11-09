@@ -305,7 +305,7 @@
                     <DataGridTextColumn Header="Type" Binding="{Binding KindLabel}" Width="100" MinWidth="80"
                                         SortMemberPath="Kind" IsReadOnly="True">
                         <DataGridTextColumn.ElementStyle>
-                            <Style TargetType="TextBlock">
+                            <Style TargetType="TextBlock" BasedOn="{StaticResource GridCellText}">
                                 <Setter Property="Foreground" Value="{DynamicResource TextSecondary}"/>
                                 <Setter Property="FontSize" Value="12"/>
                                 <Setter Property="VerticalAlignment" Value="Center"/>
@@ -316,7 +316,7 @@
                     <DataGridTextColumn Header="Applies to" Binding="{Binding Location}" Width="150" MinWidth="100"
                                         SortMemberPath="Location" IsReadOnly="True">
                         <DataGridTextColumn.ElementStyle>
-                            <Style TargetType="TextBlock">
+                            <Style TargetType="TextBlock" BasedOn="{StaticResource GridCellText}">
                                 <Setter Property="Foreground" Value="{DynamicResource TextSecondary}"/>
                                 <Setter Property="FontSize" Value="12"/>
                                 <Setter Property="VerticalAlignment" Value="Center"/>
@@ -327,10 +327,9 @@
                     <DataGridTextColumn Header="Source" Binding="{Binding Source}" Width="130" MinWidth="80"
                                         SortMemberPath="Source" IsReadOnly="True">
                         <DataGridTextColumn.ElementStyle>
-                            <Style TargetType="TextBlock">
+                            <Style TargetType="TextBlock" BasedOn="{StaticResource GridCellText}">
                                 <Setter Property="Foreground" Value="{DynamicResource TextSecondary}"/>
                                 <Setter Property="FontSize" Value="12"/>
-                                <Setter Property="TextTrimming" Value="CharacterEllipsis"/>
                                 <Setter Property="VerticalAlignment" Value="Center"/>
                             </Style>
                         </DataGridTextColumn.ElementStyle>

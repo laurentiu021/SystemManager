@@ -271,9 +271,10 @@ runner, which allows 10 s, then forced it out with exit code 1 although every te
   element is still laid out at its full width and then clipped, so its own size cannot show the cut; the layout clip
   WPF gives it can. `ViewLayoutTests` reads it over every view at both page widths (#2787), About's test over its
   version card (#2735), and `ColumnHeaderFitTests` over every list column's header at the width the column declares,
-  sorted and not, since a grid's columns get their share of the width in a dispatcher pass the harness does not run;
-  Speed Test's test reads the cells in its history lists' fixed-width columns (#3206). It leaves out what is
-  collapsed, which keeps the sizes of the last pass that showed it.
+  sorted and not (#3206), since a grid's columns get their share of the width in a dispatcher pass the harness does
+  not run. A list's cells end a value they cannot hold in "…" (#3214), which leaves the text no wider than its room,
+  so a cut cell is read with `CutText.IsCut` instead. It leaves out what is collapsed, which keeps the sizes of the
+  last pass that showed it.
 - `AppViews` — **`SysManager.IntegrationTests` only.** Every view a test can build on its own, in name order, for the
   tests that go over all of them.
 - `RunningChild` — **`SysManager.IntegrationTests` only.** A Windows PowerShell the test starts and

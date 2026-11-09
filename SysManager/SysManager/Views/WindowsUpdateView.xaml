@@ -198,10 +198,9 @@
                     <DataGridTextColumn Header="Title" Binding="{Binding Title}" Width="*" MinWidth="150" IsReadOnly="True"
                                         SortMemberPath="Title">
                         <DataGridTextColumn.ElementStyle>
-                            <Style TargetType="TextBlock">
+                            <Style TargetType="TextBlock" BasedOn="{StaticResource GridCellText}">
                                 <Setter Property="FontWeight" Value="Medium"/>
                                 <Setter Property="FontSize" Value="13"/>
-                                <Setter Property="TextTrimming" Value="CharacterEllipsis"/>
                             </Style>
                         </DataGridTextColumn.ElementStyle>
                     </DataGridTextColumn>
@@ -213,7 +212,7 @@
                                        ToolTip="KB = Microsoft Knowledge Base article ID — the unique identifier Microsoft assigns to each update. Defender Definitions, drivers, and feature upgrades may have no KB."/>
                         </DataGridTextColumn.Header>
                         <DataGridTextColumn.ElementStyle>
-                            <Style TargetType="TextBlock">
+                            <Style TargetType="TextBlock" BasedOn="{StaticResource GridCellText}">
                                 <Setter Property="FontFamily" Value="Consolas"/>
                                 <Setter Property="FontSize" Value="12"/>
                                 <Setter Property="Foreground" Value="{DynamicResource TextSecondary}"/>
@@ -224,7 +223,7 @@
                     <DataGridTextColumn IsReadOnly="True" Header="Size" Binding="{Binding SizeDisplay}" Width="80" MinWidth="60"
                                         SortMemberPath="SizeBytes">
                         <DataGridTextColumn.ElementStyle>
-                            <Style TargetType="TextBlock">
+                            <Style TargetType="TextBlock" BasedOn="{StaticResource GridCellText}">
                                 <Setter Property="HorizontalAlignment" Value="Right"/>
                                 <Setter Property="FontSize" Value="12"/>
                                 <Setter Property="Foreground" Value="{DynamicResource TextMuted}"/>
@@ -235,11 +234,9 @@
                     <DataGridTextColumn IsReadOnly="True" Header="Status" Binding="{Binding Status}" Width="200" MinWidth="120"
                                         SortMemberPath="Status">
                         <DataGridTextColumn.ElementStyle>
-                            <Style TargetType="TextBlock">
+                            <Style TargetType="TextBlock" BasedOn="{StaticResource GridCellText}">
                                 <Setter Property="FontWeight" Value="Medium"/>
                                 <Setter Property="FontSize" Value="12"/>
-                                <Setter Property="TextTrimming" Value="CharacterEllipsis"/>
-                                <Setter Property="ToolTip" Value="{Binding Status}"/>
                             </Style>
                         </DataGridTextColumn.ElementStyle>
                     </DataGridTextColumn>
@@ -247,7 +244,7 @@
                     <DataGridTextColumn IsReadOnly="True" Header="Date" Binding="{Binding DateDisplay}" Width="100" MinWidth="80"
                                         SortMemberPath="Date">
                         <DataGridTextColumn.ElementStyle>
-                            <Style TargetType="TextBlock">
+                            <Style TargetType="TextBlock" BasedOn="{StaticResource GridCellText}">
                                 <Setter Property="FontFamily" Value="Consolas"/>
                                 <Setter Property="FontSize" Value="12"/>
                                 <Setter Property="Foreground" Value="{DynamicResource TextMuted}"/>

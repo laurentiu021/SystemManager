@@ -10340,11 +10340,11 @@ public partial class ArchitectureTests
     /// implicit styles.
     /// <para><b>Excepted by name:</b> Disk Analyzer's <c>MapTile</c>, a button drawn entirely by its own template with
     /// its fill and text colour from the data, which wants none of the app's button look. A text column's element
-    /// style is left out as well: a text column gives its TextBlock the column's own style and never the app's, with
-    /// or without <c>ElementStyle</c>, and the grid already sets its font and size, so <c>BasedOn</c> there would change
-    /// a look rather than restore one. Checkbox columns were left out the same way until #2696 found that what theirs
-    /// lose is the app's whole checkbox; they build on <c>GridCheckBox</c> now, which
-    /// <see cref="EveryCheckBoxInAGrid_IsTheAppsCheckBox"/> holds.</para>
+    /// style is left out as well: a text column gives its TextBlock the column's own style and never the app's
+    /// TextBlock style, and the grid already sets its font and size. It builds on <c>GridCellText</c> instead, which
+    /// <see cref="EveryListTextColumn_DrawsItsCellsInTheSharedCellStyle"/> holds (#3214). Checkbox columns were left
+    /// out the same way until #2696 found that what theirs lose is the app's whole checkbox; they build on
+    /// <c>GridCheckBox</c> now, which <see cref="EveryCheckBoxInAGrid_IsTheAppsCheckBox"/> holds.</para>
     /// </remarks>
     [Fact]
     public void EveryStyleInAView_BuildsOnTheAppStyleItReplaces()
@@ -10397,11 +10397,12 @@ public partial class ArchitectureTests
             }
         }
 
-        // Vacuity floors: 50 styles for app-styled types and 44 text-column element styles, measured for #2696.
+        // Vacuity floors: 50 styles for app-styled types, measured for #2696, and 35 text-column element styles, the
+        // count once GridCellText took over the trimming that eight of them only repeated (#3214).
         Assert.True(inspected >= 40,
             $"only {inspected} view styles for app-styled types were inspected, out of 50 measured.");
         Assert.True(columns >= 35,
-            $"only {columns} text-column element styles were set aside, out of 44 measured — the parent match broke, "
+            $"only {columns} text-column element styles were set aside, out of 35 measured — the parent match broke, "
             + "and the count above is no longer what it says.");
         for (var i = 0; i < exceptions.Length; i++)
         {
@@ -17979,6 +17980,98 @@ public partial class ArchitectureTests
         Assert.True(turnedOff.Count == 0,
             "these views turn WheelPassThrough.ToPage off, so the page stops under their tables: "
             + string.Join(", ", turnedOff));
+    }
+
+    /// <summary>
+    /// Every list's text column draws its cells in <c>GridCellText</c>, which ends a value too long for its column in
+    /// "…" and shows it whole on hover while it is cut.
+    /// </summary>
+    /// <remarks>
+    /// #3214. WPF's own cell style neither trims nor wraps, so 108 of the 128 text columns cut a long name or path at
+    /// the column's edge, often through a letter, with nothing to say more was there. Columns had been given their own
+    /// trimming one list at a time, and the next list cut again. The app's DataGrid style gives every text column
+    /// <c>GridCellText</c> through <see cref="Helpers.GridText"/>, so this holds the style to that, <c>GridCellText</c>
+    /// to what it does, and every cell style a view writes for a text column to being built on it without doing again
+    /// what it does: trimming, or a tooltip of the column's own value on every cell. A tooltip that explains the value
+    /// stays. <c>ListCellTextTests</c> lays the views out and reads a cut cell.
+    /// </remarks>
+    [Fact]
+    public void EveryListTextColumn_DrawsItsCellsInTheSharedCellStyle()
+    {
+        var appDir = TestPaths.AppProject();
+        XNamespace x = "http://schemas.microsoft.com/winfx/2006/xaml";
+        var app = XDocument.Load(Path.Combine(appDir, "App.xaml"));
+        var grid = Assert.Single(app.Descendants(),
+            e => e.Name.LocalName == "Style" && (string?)e.Attribute("TargetType") == "DataGrid"
+                 && e.Attribute(x + "Key") is null);
+        Assert.True(Sets(grid, "h:GridText.CellStyle", "{StaticResource GridCellText}"),
+            "the app's DataGrid style no longer sets h:GridText.CellStyle to GridCellText, so a list's text "
+            + "columns cut a long value at the column's edge again");
+
+        var cell = Assert.Single(app.Descendants(),
+            e => e.Name.LocalName == "Style" && (string?)e.Attribute(x + "Key") == "GridCellText");
+        Assert.Equal("{x:Static DataGridTextColumn.DefaultElementStyle}", (string?)cell.Attribute("BasedOn"));
+        Assert.True(Sets(cell, "TextTrimming", "CharacterEllipsis"), "GridCellText no longer trims to an ellipsis");
+        Assert.True(Sets(cell, "ToolTip", "{Binding Text, RelativeSource={RelativeSource Self}}"),
+            "GridCellText no longer carries the cell's own words in its tooltip");
+        Assert.True(Sets(cell, "h:CutText.ToolTip", "True"),
+            "GridCellText no longer keeps its tooltip to a cell that is cut, so it would pop up over every cell");
+
+        var wrong = new List<string>();
+        var columns = 0;
+        var styles = 0;
+        foreach (var file in Directory.EnumerateFiles(Path.Combine(appDir, "Views"), "*.xaml")
+                     .OrderBy(f => f, StringComparer.Ordinal))
+        {
+            var view = Path.GetFileNameWithoutExtension(file);
+            foreach (var column in XDocument.Load(file).Descendants()
+                         .Where(e => e.Name.LocalName == "DataGridTextColumn"))
+            {
+                columns++;
+                var where = $"{view}'s \"{(string?)column.Attribute("Header") ?? "untitled"}\" column";
+                if (column.Attribute("ElementStyle") is { } named)
+                {
+                    wrong.Add($"{where} names its cell style, {named.Value}: write it in the column, built on "
+                              + "GridCellText, or leave the column to the list");
+                    continue;
+                }
+                var style = column.Elements().FirstOrDefault(e => e.Name.LocalName == "DataGridTextColumn.ElementStyle")
+                    ?.Elements().FirstOrDefault(e => e.Name.LocalName == "Style");
+                if (style is null) continue;
+
+                styles++;
+                if ((string?)style.Attribute("BasedOn") != "{StaticResource GridCellText}")
+                    wrong.Add($"{where} has a cell style not built on GridCellText, so its long values are cut");
+                if (style.Descendants().Any(s => s.Name.LocalName == "Setter"
+                                                 && (string?)s.Attribute("Property") == "TextTrimming"))
+                    wrong.Add($"{where} sets TextTrimming, which GridCellText does");
+                if (PathOf((string?)column.Attribute("Binding")) is { Length: > 0 } path
+                    && style.Elements().Any(s => s.Name.LocalName == "Setter"
+                                                 && (string?)s.Attribute("Property") == "ToolTip"
+                                                 && (string?)s.Attribute("Value") == $"{{Binding {path}}}"))
+                    wrong.Add($"{where} shows its own value as a tooltip on every cell, where GridCellText shows it "
+                              + "while the value is cut");
+            }
+        }
+
+        // Vacuity floors: 128 text columns in the views, 35 of them with a cell style of their own, for #3214.
+        Assert.True(columns >= 128, $"only {columns} text columns were read in the views, out of 128 when written.");
+        Assert.True(styles >= 35, $"only {styles} text-column cell styles were read, out of 35 when written.");
+        Assert.True(wrong.Count == 0,
+            "these list columns do not draw their cells in GridCellText:\n  " + string.Join("\n  ", wrong));
+
+        static bool Sets(XElement style, string property, string value) =>
+            style.Elements().Any(s => s.Name.LocalName == "Setter" && (string?)s.Attribute("Property") == property
+                                      && (string?)s.Attribute("Value") == value);
+
+        // The path a {Binding} reads, its first part or its Path=; null for anything that is not a plain binding.
+        static string? PathOf(string? binding)
+        {
+            if (binding is null || !binding.StartsWith("{Binding", StringComparison.Ordinal)) return null;
+            var parts = binding["{Binding".Length..^1].Split(',', StringSplitOptions.TrimEntries);
+            var named = parts.FirstOrDefault(p => p.StartsWith("Path=", StringComparison.Ordinal));
+            return named is not null ? named["Path=".Length..] : parts.FirstOrDefault(p => !p.Contains('='));
+        }
     }
 
     /// <summary>

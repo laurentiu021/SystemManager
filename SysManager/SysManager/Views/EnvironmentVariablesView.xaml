@@ -113,17 +113,9 @@
                              UpdateSourceTrigger=PropertyChanged is what carries each keystroke to the
                              view-model for Apply to write. A uniformity sweep must not make this read-only;
                              EveryReportTextColumn_IsReadOnly names it as the exception. -->
-                        <DataGridTextColumn Header="Value" Binding="{Binding Value, UpdateSourceTrigger=PropertyChanged}" Width="*">
-                            <!-- Trim the *display* of a long value (e.g. a full PATH) against the
-                                 Remove button and expose it on hover; the edit box still shows the
-                                 whole value for editing. -->
-                            <DataGridTextColumn.ElementStyle>
-                                <Style TargetType="TextBlock">
-                                    <Setter Property="TextTrimming" Value="CharacterEllipsis"/>
-                                    <Setter Property="ToolTip" Value="{Binding Value}"/>
-                                </Style>
-                            </DataGridTextColumn.ElementStyle>
-                        </DataGridTextColumn>
+                        <!-- A long value, such as a whole PATH, ends in "…" against the Remove button and shows
+                             whole on hover, through the grid's GridCellText; the edit box shows all of it. -->
+                        <DataGridTextColumn Header="Value" Binding="{Binding Value, UpdateSourceTrigger=PropertyChanged}" Width="*"/>
                         <DataGridTemplateColumn Header="" Width="Auto">
                             <DataGridTemplateColumn.CellTemplate>
                                 <DataTemplate>

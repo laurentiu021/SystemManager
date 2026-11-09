@@ -2327,6 +2327,19 @@ Key utility classes that don't fit neatly into Services or ViewModels (not an ex
   parent, so the page's viewer scrolls. Every DataGrid has it from the implicit DataGrid style;
   `ArchitectureTests.EveryTable_HandsTheWheelItCannotUseToThePage` holds the style to it and
   `TableWheelTests` turns the wheel over a laid-out table.
+- `GridText` — gives a list's text columns the app's cell style, `GridCellText` in `App.xaml`, so a value too long
+  for its column ends in "…" (#3214). WPF draws a text column's cells in its own style, which neither trims nor
+  wraps, so a long name or path was cut at the column's edge, often through a letter. The attached `CellStyle`
+  property gives every text column still on WPF's style the style it holds, the columns the list has and any it is
+  given later, which is when a view's own columns arrive. The implicit DataGrid style sets it to `GridCellText` with
+  a `StaticResource`, so no code looks the style up, and a column that needs a look of its own
+  builds its style on `GridCellText`, which `ArchitectureTests.EveryListTextColumn_DrawsItsCellsInTheSharedCellStyle`
+  holds every view to; `ListCellTextTests` lays the views out and reads a cut cell.
+- `CutText` — lets a text's tooltip open only while the text is cut, when the tooltip is the text's own words
+  (#3214). `GridCellText` carries the cell's words in its tooltip and sets the attached `ToolTip` property, so a cut
+  value can be read whole on hover and a value that fits shows no tooltip. A tooltip that says something else, such
+  as Services' plain-language explanation, always opens. Whether a text is cut is measured on `ToolTipOpening`,
+  against the width the text is shown at.
 - `ThemeBrush` — paints a brush property in a colour a binding picks: a theme brush's name, or a
   fixed `#` colour (#2818). Given a name it sets a resource reference, as `{DynamicResource}` does, so
   the colour follows a theme switch. `ThemeService.Apply` stores a new brush under each name, and the

@@ -10,6 +10,25 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.136.151] - 2026-11-09
+
+**A name or path too long for its column in a list ends in "…" now, and pointing at it shows the whole value.**
+
+### Fixed
+- A list drew each value on one line, and 108 of the app's 128 text columns cut a value longer than the column at
+  its edge, often through a letter, with nothing to say more was there: Speed Test's server read "speed.clo" and part
+  of a "u", and DNS & Hosts' comments, File Shredder's and Large Files' names, App Updates' names and System Logs'
+  sources were cut the same way. Every list's text columns now end a value they cannot hold in "…", and pointing at
+  it shows the whole value. A value that fits shows no tooltip, so pointing at a number or a short name shows
+  nothing extra, and a column's own explanation on hover, such as Services' plain-language reason, still shows.
+  Names drawn beside an icon, as in Process Manager, Startup and Uninstaller, are laid out another way and still
+  run to the column's edge.
+- The 35 columns with a cell style of their own build it on the shared one, so their words now line up with their
+  header, 2 px further in, as every other column's do. The eight that only repeated the trimming use the shared one
+  as it is.
+- A test fails a list column whose cell style is not built on the shared one, or repeats what it does, and another
+  lays out every view and a list with a cut value and one that fits.
+
 ## [1.136.150] - 2026-11-09
 
 **Sorting a list by one of its columns keeps the column's name whole: the arrow sits above the name now.**

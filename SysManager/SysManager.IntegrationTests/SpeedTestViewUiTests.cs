@@ -7,6 +7,7 @@ using System.Windows;
 using System.Windows.Automation;
 using System.Windows.Controls;
 using System.Windows.Media;
+using SysManager.Helpers;
 using SysManager.Models;
 using SysManager.Services;
 using SysManager.ViewModels;
@@ -210,8 +211,9 @@ public sealed class SpeedTestViewUiTests : IDisposable
                 // cells are not read.
                 var cells = Descendants<DataGridCell>(grid).Where(c => (string)c.Column.Header != "Server").ToList();
                 Assert.True(cells.Count >= 28, $"only {cells.Count} cells of the {name} were laid out");
+                // A cell ends a value it cannot hold in "…" (#3214), which leaves it no wider than its room.
                 var cut = cells.SelectMany(Descendants<TextBlock>)
-                    .Where(words => LayoutClip.IsCutAcross(words, out _))
+                    .Where(CutText.IsCut)
                     .Select(words => $"\"{words.Text}\"")
                     .Distinct()
                     .ToList();

@@ -66,8 +66,7 @@
                 <DataGrid.Columns>
                     <DataGridTextColumn Header="Task" Binding="{Binding Name}" Width="2*">
                         <DataGridTextColumn.ElementStyle>
-                            <Style TargetType="TextBlock">
-                                <Setter Property="TextTrimming" Value="CharacterEllipsis"/>
+                            <Style TargetType="TextBlock" BasedOn="{StaticResource GridCellText}">
                                 <!-- The description on hover over the NAME, which is where someone
                                      deciding whether to disable "Adobe Acrobat Update Task" is looking.
                                      It is also the only place the full text is readable: the "What it
@@ -78,13 +77,7 @@
                             </Style>
                         </DataGridTextColumn.ElementStyle>
                     </DataGridTextColumn>
-                    <DataGridTextColumn Header="Path" Binding="{Binding Path}" Width="2*">
-                        <DataGridTextColumn.ElementStyle>
-                            <Style TargetType="TextBlock">
-                                <Setter Property="TextTrimming" Value="CharacterEllipsis"/>
-                            </Style>
-                        </DataGridTextColumn.ElementStyle>
-                    </DataGridTextColumn>
+                    <DataGridTextColumn Header="Path" Binding="{Binding Path}" Width="2*"/>
                     <!-- Type is colour-coded by category (the header promises this): System = danger,
                          Telemetry = warning, Third-party = secondary. Uses theme-derived brushes so the
                          coding holds on both dark and light. SortMemberPath keeps the column sortable. -->
@@ -130,8 +123,7 @@
                     <DataGridTextColumn Header="What it does" Binding="{Binding DescriptionDisplay}"
                                         Width="*" MinWidth="120" SortMemberPath="DescriptionDisplay">
                         <DataGridTextColumn.ElementStyle>
-                            <Style TargetType="TextBlock">
-                                <Setter Property="TextTrimming" Value="CharacterEllipsis"/>
+                            <Style TargetType="TextBlock" BasedOn="{StaticResource GridCellText}">
                                 <Setter Property="ToolTip" Value="{Binding AuthorDisplay}"/>
                                 <!-- Many tasks ship no Description, and an empty TextBlock has no
                                      hit-test surface — so the publisher tooltip was unreachable on

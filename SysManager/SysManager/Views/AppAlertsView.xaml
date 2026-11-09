@@ -81,7 +81,7 @@
                     <DataGridTextColumn Header="Detected" Binding="{Binding DetectedAt, StringFormat='{}{0:HH:mm:ss dd-MMM}'}"
                                         Width="140" MinWidth="100" SortMemberPath="DetectedAt">
                         <DataGridTextColumn.ElementStyle>
-                            <Style TargetType="TextBlock">
+                            <Style TargetType="TextBlock" BasedOn="{StaticResource GridCellText}">
                                 <Setter Property="Foreground" Value="{DynamicResource TextSecondary}"/>
                                 <Setter Property="FontSize" Value="12"/>
                                 <Setter Property="VerticalAlignment" Value="Center"/>
@@ -110,7 +110,7 @@
                     <DataGridTextColumn Header="Publisher" Binding="{Binding Publisher}" Width="160" MinWidth="80"
                                         SortMemberPath="Publisher">
                         <DataGridTextColumn.ElementStyle>
-                            <Style TargetType="TextBlock">
+                            <Style TargetType="TextBlock" BasedOn="{StaticResource GridCellText}">
                                 <Setter Property="Foreground" Value="{DynamicResource TextSecondary}"/>
                                 <Setter Property="FontSize" Value="12"/>
                                 <Setter Property="VerticalAlignment" Value="Center"/>
@@ -120,10 +120,9 @@
                     <DataGridTextColumn Header="Path" Binding="{Binding InstallPath}" Width="*" MinWidth="120"
                                         SortMemberPath="InstallPath">
                         <DataGridTextColumn.ElementStyle>
-                            <Style TargetType="TextBlock">
+                            <Style TargetType="TextBlock" BasedOn="{StaticResource GridCellText}">
                                 <Setter Property="Foreground" Value="{DynamicResource TextSecondary}"/>
                                 <Setter Property="FontSize" Value="12"/>
-                                <Setter Property="TextTrimming" Value="CharacterEllipsis"/>
                                 <Setter Property="VerticalAlignment" Value="Center"/>
                             </Style>
                         </DataGridTextColumn.ElementStyle>
@@ -131,7 +130,7 @@
                     <DataGridTextColumn Header="Source" Binding="{Binding Source}" Width="90" MinWidth="60"
                                         SortMemberPath="Source">
                         <DataGridTextColumn.ElementStyle>
-                            <Style TargetType="TextBlock">
+                            <Style TargetType="TextBlock" BasedOn="{StaticResource GridCellText}">
                                 <Setter Property="Foreground" Value="{DynamicResource TextSecondary}"/>
                                 <Setter Property="FontSize" Value="12"/>
                                 <Setter Property="VerticalAlignment" Value="Center"/>

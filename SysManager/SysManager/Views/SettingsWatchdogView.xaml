@@ -149,8 +149,7 @@
                         <DataGridTextColumn Header="Now" Binding="{Binding CurrentLabel}" Width="*"/>
                         <DataGridTextColumn Header="Why it is watched" Binding="{Binding Description}" Width="3*">
                             <DataGridTextColumn.ElementStyle>
-                                <Style TargetType="TextBlock">
-                                    <Setter Property="TextTrimming" Value="CharacterEllipsis"/>
+                                <Style TargetType="TextBlock" BasedOn="{StaticResource GridCellText}">
                                     <!-- Full reason plus the exact registry location, for anyone who
                                          wants to verify the claim without reading the source. -->
                                     <Setter Property="ToolTip" Value="{Binding ToolTipText}"/>

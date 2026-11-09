@@ -64,10 +64,9 @@
                         <DataGridTextColumn Header="Device Name" Binding="{Binding DeviceName}" Width="*" MinWidth="120"
                                             SortMemberPath="DeviceName" SortDirection="Ascending">
                             <DataGridTextColumn.ElementStyle>
-                                <Style TargetType="TextBlock">
+                                <Style TargetType="TextBlock" BasedOn="{StaticResource GridCellText}">
                                     <Setter Property="FontWeight" Value="Medium"/>
                                     <Setter Property="FontSize" Value="13"/>
-                                    <Setter Property="TextTrimming" Value="CharacterEllipsis"/>
                                 </Style>
                             </DataGridTextColumn.ElementStyle>
                         </DataGridTextColumn>
@@ -75,10 +74,9 @@
                         <DataGridTextColumn Header="Manufacturer" Binding="{Binding Manufacturer}" Width="180" MinWidth="80"
                                             SortMemberPath="Manufacturer">
                             <DataGridTextColumn.ElementStyle>
-                                <Style TargetType="TextBlock">
+                                <Style TargetType="TextBlock" BasedOn="{StaticResource GridCellText}">
                                     <Setter Property="FontSize" Value="12"/>
                                     <Setter Property="Foreground" Value="{DynamicResource TextSecondary}"/>
-                                    <Setter Property="TextTrimming" Value="CharacterEllipsis"/>
                                 </Style>
                             </DataGridTextColumn.ElementStyle>
                         </DataGridTextColumn>
@@ -86,7 +84,7 @@
                         <DataGridTextColumn Header="Version" Binding="{Binding DriverVersion}" Width="140" MinWidth="80"
                                             SortMemberPath="DriverVersion">
                             <DataGridTextColumn.ElementStyle>
-                                <Style TargetType="TextBlock">
+                                <Style TargetType="TextBlock" BasedOn="{StaticResource GridCellText}">
                                     <Setter Property="FontFamily" Value="Consolas"/>
                                     <Setter Property="FontSize" Value="12"/>
                                     <Setter Property="Foreground" Value="{DynamicResource TextMuted}"/>
@@ -97,7 +95,7 @@
                         <DataGridTextColumn Header="Date" Binding="{Binding DriverDateDisplay}" Width="100" MinWidth="80"
                                             SortMemberPath="DriverDate">
                             <DataGridTextColumn.ElementStyle>
-                                <Style TargetType="TextBlock">
+                                <Style TargetType="TextBlock" BasedOn="{StaticResource GridCellText}">
                                     <Setter Property="FontFamily" Value="Consolas"/>
                                     <Setter Property="FontSize" Value="12"/>
                                     <Setter Property="Foreground" Value="{DynamicResource TextMuted}"/>
@@ -114,7 +112,7 @@
                         <DataGridTextColumn Header="Signature" Binding="{Binding SignatureDisplay}" Width="100" MinWidth="80"
                                             SortMemberPath="SignatureDisplay">
                             <DataGridTextColumn.ElementStyle>
-                                <Style TargetType="TextBlock">
+                                <Style TargetType="TextBlock" BasedOn="{StaticResource GridCellText}">
                                     <Setter Property="FontSize" Value="12"/>
                                     <Setter Property="Foreground" Value="{DynamicResource TextSecondary}"/>
                                 </Style>

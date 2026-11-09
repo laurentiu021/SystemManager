@@ -367,7 +367,8 @@ it, and a drop-down reached with `Tab` shows the same focus ring as a button. Th
 Manager's and the tray icon's, take your theme's colours the way the drop-downs do, so their items read clearly on the
 light themes too. Pointing at a row in a list draws the same neutral bar on its left edge as the sidebar's rows, over
 a tint light enough that the row's grey details stay easy to read. A list sorted by a column shows the arrow above
-that column's name, so the name stays whole however narrow the column.
+that column's name, so the name stays whole however narrow the column. A name, path or other value too long for its
+column ends in "…", and pointing at it shows the whole value.
 
 ### Right-Click Menu
 Manage Windows Explorer right-click entries — toggle them on or off without

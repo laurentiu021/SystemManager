@@ -280,7 +280,7 @@
                     <DataGridTextColumn Header="Size" Binding="{Binding SizeDisplay}" Width="80" MinWidth="60"
                                         SortMemberPath="SizeBytes" IsReadOnly="True">
                         <DataGridTextColumn.ElementStyle>
-                            <Style TargetType="TextBlock">
+                            <Style TargetType="TextBlock" BasedOn="{StaticResource GridCellText}">
                                 <Setter Property="HorizontalAlignment" Value="Right"/>
                                 <Setter Property="FontFamily" Value="Consolas"/>
                                 <Setter Property="FontSize" Value="12"/>
@@ -292,7 +292,7 @@
                     <DataGridTextColumn Header="Version" Binding="{Binding Version}" Width="120" MinWidth="80"
                                         SortMemberPath="Version" IsReadOnly="True">
                         <DataGridTextColumn.ElementStyle>
-                            <Style TargetType="TextBlock">
+                            <Style TargetType="TextBlock" BasedOn="{StaticResource GridCellText}">
                                 <Setter Property="HorizontalAlignment" Value="Right"/>
                                 <Setter Property="FontFamily" Value="Consolas"/>
                                 <Setter Property="FontSize" Value="12"/>

@@ -79,7 +79,7 @@
                     <DataGridTextColumn Header="Category" Binding="{Binding Category}" Width="120" MinWidth="80"
                                         SortMemberPath="Category" IsReadOnly="True">
                         <DataGridTextColumn.ElementStyle>
-                            <Style TargetType="TextBlock">
+                            <Style TargetType="TextBlock" BasedOn="{StaticResource GridCellText}">
                                 <Setter Property="FontSize" Value="11"/>
                                 <Setter Property="Foreground" Value="{DynamicResource TextMuted}"/>
                                 <Setter Property="VerticalAlignment" Value="Center"/>
@@ -109,7 +109,7 @@
                     <DataGridTextColumn Header="Feature" Binding="{Binding DisplayName}" Width="*" MinWidth="120"
                                         SortMemberPath="DisplayName" IsReadOnly="True">
                         <DataGridTextColumn.ElementStyle>
-                            <Style TargetType="TextBlock">
+                            <Style TargetType="TextBlock" BasedOn="{StaticResource GridCellText}">
                                 <Setter Property="FontWeight" Value="SemiBold"/>
                                 <Setter Property="FontSize" Value="13"/>
                                 <Setter Property="VerticalAlignment" Value="Center"/>

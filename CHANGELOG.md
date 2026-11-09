@@ -24,21 +24,27 @@ prospective user reads. CI fails a pull request whose newest entry is missing it
 
 ## [1.136.157] - 2026-11-09
 
-**Ping, Bandwidth Monitor, Resource History and Settings Watchdog fit the default window again, and an empty state
-inside a small card leaves out its icon.**
+**Quick Cleanup, Bandwidth Monitor and Resource History no longer scroll at the default window, Ping and Settings
+Watchdog scroll less there, and an empty state inside a small card leaves out its icon.**
 
 ### Fixed
-- Since 1.136.156 a page keeps the height its content needs and scrolls. At the default window four pages scrolled
-  only because of one thing in a card: Ping's and Bandwidth Monitor's charts asked for 200 and 160 px where the
-  window gave them 141 and 115, Resource History's charts for 180 and 120 and its temperature card's "No temperature
-  data" for 158 px in 95, and Settings Watchdog's "No changes detected" for 15 px more than its list had. An empty
-  state in a card beside or in place of a chart or a console, in Resource History, Bandwidth Monitor, Settings
-  Watchdog and every console, now leaves its icon out and keeps 12 px above and below instead of 24, and each chart's
-  minimum is the height the default window gives it: Ping's 136, Bandwidth Monitor's 104, Resource History's 160 and
-  92. Those four pages fit the default window, and on a smaller one keep their charts that tall and scroll.
+- Since 1.136.156 a page keeps the height its content needs and scrolls. Laid out with no data, as the layout tests
+  lay pages out, four pages scrolled at the default window only because of one thing in a card: Ping's and Bandwidth
+  Monitor's charts asked for 200 and 160 px where the window gave them 141 and 115, Resource History's charts for 180
+  and 120 and its temperature card's "No temperature data" for 158 px in 95, and Settings Watchdog's "No changes
+  detected" for 15 px more than its list had. An empty state in a card beside or in place of a chart or a console,
+  in Resource History, Bandwidth Monitor, Settings Watchdog and every console, now leaves its icon out and keeps 12
+  px above and below instead of 24, and each chart's minimum is the height the default window gave it there: Ping's
+  136, Bandwidth Monitor's 104, Resource History's 160 and 92. On a smaller window those pages keep their charts that
+  tall and scroll.
 - Quick Cleanup's and System Fixes' consoles and Settings Watchdog's list need no floor of their own any more, and App
-  Updates' console is 180 px again. Quick Cleanup still scrolls at the default window, by 69 px: the cards above its
-  console take 690 of the page's 781.
+  Updates' console is 180 px again.
+- Measured since with each page's own view model, nothing running and the app not elevated, three pages still
+  scroll at the default window: System Fixes by 187 px, Settings Watchdog by 101, with the eight settings it watches
+  and no baseline taken, and Ping by 92, under the four targets it starts with and the router. Quick Cleanup,
+  Bandwidth Monitor and Resource History, which scrolled by 22, 33 and 89 px in 1.136.156, fit, and so do Scheduled
+  Maintenance and Windows Update. This entry first said Ping and Settings Watchdog fitted and Quick Cleanup still
+  scrolled, by 69 px, from the no-data layout, which shows every line a page can show and none of its data.
 - Two comparisons of the scroll offset in the shell's page host tested doubles for exact equality, which code
   scanning flagged. One now asks which is smaller, as a clamp only ever lowers the offset, and the other ignores a
   move of less than a hundredth of a pixel.
@@ -53,15 +59,17 @@ the height they need.**
 ### Fixed
 - Every page was fixed rows over one stretching row, a list, a console or a chart, that took what the page had
   left, with no scrolling, so once the fixed rows filled the page that row got nothing and whatever was under it was
-  cut off with no way to reach it. At the default window System Fixes' console had no room at all and 186 px of the
-  page were past its bottom, Scheduled Maintenance ran past its bottom too and Windows Update's list had 5 px, and at
-  the smallest window seven pages ran past their bottom and fifteen left a list, a console or a chart under 160 px.
-  Each stretching row now has a floor, 160 px or what its content needs, such as Ping's chart card, and a page the
-  window is too short for keeps that height and scrolls as a whole. A page that fits fills the window as before, and
-  its lists keep their own scrolling.
-- Because nothing is cut any more, eight pages that hold more than the default window shows scroll at that size:
-  System Fixes, Scheduled Maintenance and Windows Update, which ran off the page before, and Quick Cleanup, Resource
-  History, Bandwidth Monitor, Ping and Settings Watchdog, whose console, chart or empty list was cut short.
+  cut off with no way to reach it. Laid out with no data, at the default window System Fixes' console had no room at
+  all and 186 px of the page were past its bottom, Scheduled Maintenance ran past its bottom too and Windows Update's
+  list had 5 px, and at the smallest window seven pages ran past their bottom and fifteen left a list, a console or a
+  chart under 160 px. Each stretching row now has a floor, 160 px or what its content needs, such as Ping's chart
+  card, and a page the window is too short for keeps that height and scrolls as a whole. A page that fits fills the
+  window as before, and its lists keep their own scrolling.
+- Because nothing is cut any more, six pages that hold more than the default window shows scroll at that size,
+  measured with each page's view model, nothing running and the app not elevated: System Fixes by 199 px, Ping by
+  156, Settings Watchdog by 137, Resource History by 89, Bandwidth Monitor by 33 and Quick Cleanup by 22. This entry
+  first named eight, with Scheduled Maintenance and Windows Update, from the no-data layout, which shows every line a
+  page can show and none of its data.
 - App Updates' console was 7 px too short for its "No output yet", and is now as tall as that needs.
 - Tests pin the floor and the height a page asks for, the shell filling, scrolling and bringing a control into view,
   every page that stretches a row being one that does this, and every page laid out at both windows cutting nothing.

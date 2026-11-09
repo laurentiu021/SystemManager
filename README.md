@@ -193,10 +193,11 @@ a 1366 x 768 laptop's, it opens cut to the space the taskbar leaves and centred 
 the bottom row of buttons and the status line are never under the taskbar, and on a screen
 smaller than its minimum size it opens maximized.
 
-A page fills the window when the window is tall enough for it. When it is not, the page keeps
-its lists, consoles and charts at the height they need, at least 160 px, and a scroll bar on
-its right reaches the rest, so nothing on it is cut off. A tab such as System Fixes, which
-holds more than the default window shows, scrolls at that size too.
+A page fills the window when the window is tall enough for it. When it is not, the part of
+the page that stretches with the window, such as a list, a console or a chart's card, keeps the
+height its content needs, never less than 160 px, and a scroll bar on its right reaches the
+rest, so nothing on it is cut off. A tab such as System Fixes, which holds more than the
+default window shows, scrolls at that size too.
 
 ### Theme customization
 The palette button at the bottom of the sidebar, beside the `?` chip, opens the Appearance panel above it,

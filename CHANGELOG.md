@@ -10,6 +10,23 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.136.154] - 2026-11-09
+
+**Bulk Installer's search results scroll inside the search card, so a long list of them no longer pushes the list of
+apps off the page, and a cross in the search box puts them away.**
+
+### Fixed
+- A winget search listed up to 30 results in the search card, which grew with them, so at the default window thirty
+  results left the list of apps under it no room at all, and the results past the bottom of the page, with their Add
+  buttons, and the status line could not be reached. The results now scroll in a part of the card that shows four
+  of them and the top of a fifth, which at the default window leaves the app list a category heading and two apps.
+- The results stayed until the next search, and an empty box never searches, so the way back to the whole app list
+  was another search or a restart. Emptying the box now puts the results away, and so does a cross inside the box,
+  as in the sidebar's search. A search whose box was emptied before winget answered shows nothing.
+- Tests pin the results scrolling with the app list keeping its room at the default window, the cross, and emptying
+  the box after a search and during one, and that a word typed over the last one keeps its results until the next
+  search.
+
 ## [1.136.153] - 2026-11-09
 
 **The window fits a small screen: on a 1366 x 768 laptop it no longer opens with its bottom row of buttons under the

@@ -95,12 +95,25 @@
                         <ColumnDefinition Width="Auto"/>
                     </Grid.ColumnDefinitions>
                     <Grid Grid.Column="0">
+                        <!-- The right padding is 32, as in the sidebar's search box, for the clear button over the box;
+                             the rest is the boxes' own 10,7. -->
                         <TextBox Text="{Binding SearchQuery, UpdateSourceTrigger=PropertyChanged}"
-                                 AutomationProperties.Name="Search winget packages"/>
+                                 AutomationProperties.Name="Search winget packages"
+                                 Padding="10,7,32,7"/>
                         <TextBlock Text="Search apps…" IsHitTestVisible="False"
                                    Foreground="{DynamicResource TextMuted}" Margin="6,0,0,0"
                                    VerticalAlignment="Center" Style="{StaticResource Subtle}"
                                    Visibility="{Binding SearchQuery, Converter={StaticResource FlexVis}, ConverterParameter=Inverse}"/>
+                        <!-- The sidebar's clear button. Emptying the box puts the results away, and this does it
+                             without selecting the text first (#2704). -->
+                        <Button Command="{Binding ClearSearchCommand}"
+                                Content="&#xE711;" FontFamily="Segoe Fluent Icons,Segoe MDL2 Assets"
+                                AutomationProperties.Name="Clear the winget search"
+                                ToolTip="Clear search"
+                                Style="{StaticResource GhostButton}"
+                                Padding="4,0" FontSize="10"
+                                HorizontalAlignment="Right" VerticalAlignment="Center" Margin="0,0,2,0"
+                                Visibility="{Binding SearchQuery, Converter={StaticResource FlexVis}}"/>
                     </Grid>
                     <Button Grid.Column="1" Content="Search" Command="{Binding SearchWingetCommand}"
                             Style="{StaticResource PrimaryButton}" Margin="8,0,0,0"/>
@@ -110,53 +123,57 @@
                 <ProgressBar AutomationProperties.Name="Searching for apps" IsIndeterminate="True" Height="2" Margin="0,8,0,0"
                              Visibility="{Binding IsSearching, Converter={StaticResource BoolToVis}}"/>
 
-                <!-- Search results -->
-                <ItemsControl ItemsSource="{Binding SearchResults}" helpers:RebuildFocus.Keep="True" Margin="0,8,0,0"
+                <!-- Search results, capped so a long list scrolls inside the card instead of pushing the app list off
+                     the page (#2704). 180 shows four results and part of a fifth, and at the default window leaves
+                     the app list a heading and two apps; Uninstaller's 260 left it a heading and part of one. -->
+                <ScrollViewer MaxHeight="180" VerticalScrollBarVisibility="Auto" Margin="0,8,0,0"
                               Visibility="{Binding SearchResults.Count, Converter={StaticResource FlexVis}}">
-                    <ItemsControl.ItemTemplate>
-                        <DataTemplate>
-                            <Border Padding="8,6" Margin="0,1" CornerRadius="{StaticResource RadiusMd}">
-                                <Border.Style>
-                                    <Style TargetType="Border">
-                                        <!-- A setter, not a local value: a local Background outranks the trigger below,
-                                             so the row never highlighted (#2610). -->
-                                        <Setter Property="Background" Value="Transparent"/>
-                                        <Style.Triggers>
-                                            <Trigger Property="IsMouseOver" Value="True">
-                                                <Setter Property="Background" Value="{DynamicResource RowHover}"/>
-                                            </Trigger>
-                                        </Style.Triggers>
-                                    </Style>
-                                </Border.Style>
-                                <Grid>
-                                    <Grid.ColumnDefinitions>
-                                        <ColumnDefinition Width="*"/>
-                                        <ColumnDefinition Width="Auto"/>
-                                        <ColumnDefinition Width="Auto"/>
-                                    </Grid.ColumnDefinitions>
-                                    <!-- The hover mark on the row's left edge, in its padding (#3204). -->
-                                    <Rectangle Grid.ColumnSpan="3" Margin="-8,0,0,0"
-                                               Style="{StaticResource BorderRowHoverMark}"/>
-                                    <TextBlock Grid.Column="0" Text="{Binding Name}"
-                                               Style="{StaticResource Body}" VerticalAlignment="Center"
-                                               Foreground="{DynamicResource TextPrimary}"
-                                               TextTrimming="CharacterEllipsis"/>
-                                    <TextBlock Grid.Column="1" Text="{Binding WingetId}"
-                                               Style="{StaticResource Caption}" VerticalAlignment="Center"
-                                               Foreground="{DynamicResource TextMuted}"
-                                               Margin="12,0" TextTrimming="CharacterEllipsis"
-                                               MaxWidth="220"/>
-                                    <Button Grid.Column="2" Content="Add"
-                                            Command="{Binding DataContext.AddToInstallListCommand, RelativeSource={RelativeSource AncestorType=ItemsControl}}"
-                                            CommandParameter="{Binding}"
-                                            Style="{StaticResource GhostButton}"
-                                            AutomationProperties.Name="{Binding Name, StringFormat='Add {0} to install list'}"
-                                            Padding="10,4" FontSize="11"/>
-                                </Grid>
-                            </Border>
-                        </DataTemplate>
-                    </ItemsControl.ItemTemplate>
-                </ItemsControl>
+                    <ItemsControl ItemsSource="{Binding SearchResults}" helpers:RebuildFocus.Keep="True">
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate>
+                                <Border Padding="8,6" Margin="0,1" CornerRadius="{StaticResource RadiusMd}">
+                                    <Border.Style>
+                                        <Style TargetType="Border">
+                                            <!-- A setter, not a local value: a local Background outranks the trigger below,
+                                                 so the row never highlighted (#2610). -->
+                                            <Setter Property="Background" Value="Transparent"/>
+                                            <Style.Triggers>
+                                                <Trigger Property="IsMouseOver" Value="True">
+                                                    <Setter Property="Background" Value="{DynamicResource RowHover}"/>
+                                                </Trigger>
+                                            </Style.Triggers>
+                                        </Style>
+                                    </Border.Style>
+                                    <Grid>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="*"/>
+                                            <ColumnDefinition Width="Auto"/>
+                                            <ColumnDefinition Width="Auto"/>
+                                        </Grid.ColumnDefinitions>
+                                        <!-- The hover mark on the row's left edge, in its padding (#3204). -->
+                                        <Rectangle Grid.ColumnSpan="3" Margin="-8,0,0,0"
+                                                   Style="{StaticResource BorderRowHoverMark}"/>
+                                        <TextBlock Grid.Column="0" Text="{Binding Name}"
+                                                   Style="{StaticResource Body}" VerticalAlignment="Center"
+                                                   Foreground="{DynamicResource TextPrimary}"
+                                                   TextTrimming="CharacterEllipsis"/>
+                                        <TextBlock Grid.Column="1" Text="{Binding WingetId}"
+                                                   Style="{StaticResource Caption}" VerticalAlignment="Center"
+                                                   Foreground="{DynamicResource TextMuted}"
+                                                   Margin="12,0" TextTrimming="CharacterEllipsis"
+                                                   MaxWidth="220"/>
+                                        <Button Grid.Column="2" Content="Add"
+                                                Command="{Binding DataContext.AddToInstallListCommand, RelativeSource={RelativeSource AncestorType=ItemsControl}}"
+                                                CommandParameter="{Binding}"
+                                                Style="{StaticResource GhostButton}"
+                                                AutomationProperties.Name="{Binding Name, StringFormat='Add {0} to install list'}"
+                                                Padding="10,4" FontSize="11"/>
+                                    </Grid>
+                                </Border>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                </ScrollViewer>
 
                 <!-- No-results state: a search ran and matched nothing. Gated on the view-model flag, not
                      on SearchResults.Count, so it stays out of sight until the user has actually searched. -->

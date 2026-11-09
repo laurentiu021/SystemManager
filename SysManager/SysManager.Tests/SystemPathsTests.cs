@@ -255,12 +255,13 @@ public class SystemPathsTests
         Assert.Equal(new Version(0, 0), bad);
     }
 
-    // ---------- the running build's own extraction directory (#1999) ----------
+    // ---------- the running build's own folders (#1999, #2858) ----------
     //
     // The shipped exe is single-file with IncludeNativeLibrariesForSelfExtract, so the host unpacks
-    // native libraries into %TEMP%\.net\<app>\<hash> and AppContext.BaseDirectory points there. Both
-    // wholesale %TEMP% sweeps (Tune-Up's temp cleanup and Deep Cleanup's "Temporary files") must skip
-    // that tree, so the rule lives here rather than being copied into each service.
+    // native libraries into %TEMP%\.net\<app>\<hash>, and AppContext.BaseDirectory is the folder the exe
+    // sits in. Both wholesale %TEMP% sweeps (Tune-Up's temp cleanup and Deep Cleanup's "Temporary files")
+    // must skip the unpacking root and the exe's folder, so the rule lives here rather than being copied
+    // into each service.
 
     [Theory]
     // A sibling whose name merely STARTS with the excluded path must not be swallowed: this is the
@@ -293,17 +294,49 @@ public class SystemPathsTests
     }
 
     [Fact]
-    public void OwnExtractionDirectory_IsResolvedAndAbsolute()
+    public void OwnAppDirectory_IsResolvedAndAbsolute()
     {
-        // Under the test host this is the output folder rather than a temp extraction directory, which
-        // is the point: outside a single-file run the exclusion is inert. It must still resolve to an
-        // absolute path with no trailing separator, or the boundary comparison cannot work.
-        var own = SystemPaths.OwnExtractionDirectory;
+        // Under the test host this is the output folder, which no temp root contains, so the exclusion is
+        // inert outside a run from a temp folder. It must still resolve to an absolute path with no trailing
+        // separator, or the boundary comparison cannot work.
+        var own = SystemPaths.OwnAppDirectory;
 
         Assert.False(string.IsNullOrWhiteSpace(own));
         Assert.True(Path.IsPathFullyQualified(own!));
         Assert.Equal(Path.TrimEndingDirectorySeparator(own!), own);
         Assert.True(SystemPaths.IsInsideSubtree(own!, own));
+    }
+
+    [Fact]
+    public void OwnExtractionDirectory_OutsideASingleFileRun_IsNull()
+    {
+        // The test host is not a bundle, so the host unpacked nothing and no native search directory sits
+        // under the unpacking root. Null, rather than some other folder, is what keeps the old-build clean-up
+        // from treating the output folder's neighbours as builds.
+        Assert.Null(SystemPaths.OwnExtractionDirectory);
+    }
+
+    [Theory]
+    // The shape measured on a build published as the release is: one entry, the unpacked folder, with a
+    // trailing separator and a trailing ';'.
+    [InlineData(@"C:\T\.net\SysManager-v1.2.3\Ab12\;", @"C:\T\.net", @"C:\T\.net\SysManager-v1.2.3\Ab12")]
+    [InlineData(@"C:\Out\;C:\T\.net\SysManager\Ab12", @"C:\T\.net", @"C:\T\.net\SysManager\Ab12")]
+    [InlineData(@"c:\t\.NET\SysManager\Ab12", @"C:\T\.net\", @"c:\t\.NET\SysManager\Ab12")]
+    // Not two levels under the root: the root itself, an exe folder, a folder three levels down.
+    [InlineData(@"C:\T\.net", @"C:\T\.net", null)]
+    [InlineData(@"C:\T\.net\SysManager", @"C:\T\.net", null)]
+    [InlineData(@"C:\T\.net\SysManager\Ab12\amd64", @"C:\T\.net", null)]
+    // A folder beside the root whose name only starts with it.
+    [InlineData(@"C:\T\.netX\SysManager\Ab12", @"C:\T\.net", null)]
+    // A build run from its output folder: the app's and the runtime's folders, none under the root.
+    [InlineData(@"C:\Out\;C:\Program Files\dotnet\shared\Microsoft.NETCore.App\10.0.0\", @"C:\T\.net", null)]
+    [InlineData("", @"C:\T\.net", null)]
+    [InlineData(null, @"C:\T\.net", null)]
+    [InlineData(@"C:\T\.net\SysManager\Ab12", null, null)]
+    public void ResolveOwnExtractionDirectory_TakesTheSearchDirectoryTwoLevelsUnderTheRoot(
+        string? searchDirectories, string? root, string? expected)
+    {
+        Assert.Equal(expected, SystemPaths.ResolveOwnExtractionDirectory(searchDirectories, root), ignoreCase: true);
     }
 
     [Fact]

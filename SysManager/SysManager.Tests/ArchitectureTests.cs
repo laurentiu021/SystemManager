@@ -20555,7 +20555,7 @@ public partial class ArchitectureTests
     private static partial Regex StaticTempSweep();
 
     /// <summary>
-    /// Every call into a temp-tree walker must pass the own-extraction exclusion.
+    /// Every call into a temp-tree walker must skip the extraction root and the exe's own folder.
     /// </summary>
     /// <remarks>
     /// Both cleanups sweep all of <c>%TEMP%</c> — Tune-Up's temp cleanup and Deep Cleanup's
@@ -20570,7 +20570,7 @@ public partial class ArchitectureTests
     /// test stay green.</para>
     /// </remarks>
     [Fact]
-    public void EveryTempTreeWalkerCall_PassesBothExtractionExclusions()
+    public void EveryTempTreeWalkerCall_SkipsTheExtractionRootAndTheExesOwnFolder()
     {
         var appDir = TestPaths.AppProject();
 
@@ -20608,7 +20608,7 @@ public partial class ArchitectureTests
         Assert.True(strays.Count == 0,
             "these files walk and delete inside %TEMP% without going through TuneUpService or "
             + "DeepCleanupService, so they cannot be passing SystemPaths.BundleExtractionRoot and "
-            + "SystemPaths.OwnExtractionDirectory — which means they can delete the .NET single-file "
+            + "SystemPaths.OwnAppDirectory — which means they can delete the .NET single-file "
             + "extraction root of this app and of every other running single-file app. Route the work through "
             + $"TuneUpService.CleanTempFilesAsync instead of writing a third sweeper:\n  "
             + string.Join("\n  ", strays));
@@ -20618,11 +20618,11 @@ public partial class ArchitectureTests
         // check and one way to get it wrong: passing a fresh `new SafeWalkOptions()` — which excludes nothing
         // — where the named one belongs. Both halves are asserted, because either alone passes on the bug.
         //
-        // BOTH exclusions, not either. OwnExtractionDirectory is one LEAF of BundleExtractionRoot, so on its
-        // own it spared this app's unpacked native libraries and left every other single-file .NET app's
-        // siblings under the same root to be deleted — the exact failure OwnExtractionDirectory's own
-        // documentation describes, inflicted on someone else. The leaf stays because for a non-single-file
-        // build BaseDirectory is the output folder, which no extraction root contains.
+        // BOTH exclusions, not either. The root is what keeps the unpacked native libraries, this build's and
+        // every other single-file .NET app's: sparing only this build's leaf, as the exclusion once meant to, left
+        // the siblings under the same root to be deleted. OwnAppDirectory is the exe's own folder,
+        // AppContext.BaseDirectory, which for the single-file exe is not where its libraries were unpacked (#2858);
+        // it is skipped so a sweep never tries to delete the running exe when that runs from a temp folder.
         (string File, string Options)[] tempWalks =
         [
             ("TuneUpService.cs", "TempWalk"),
@@ -20640,9 +20640,10 @@ public partial class ArchitectureTests
 
             Assert.True(
                 declaration.Contains("SystemPaths.BundleExtractionRoot", StringComparison.Ordinal)
-                && declaration.Contains("SystemPaths.OwnExtractionDirectory", StringComparison.Ordinal),
-                $"{optionsName} in {file} excludes neither or only one extraction root, so the temp sweep can "
-                + "delete the .NET single-file extraction folder of this app or of another running one.");
+                && declaration.Contains("SystemPaths.OwnAppDirectory", StringComparison.Ordinal),
+                $"{optionsName} in {file} skips neither or only one of the extraction root and the exe's own folder, "
+                + "so the temp sweep can delete the .NET single-file extraction folder of this app or of another "
+                + "running one, or try to delete the running exe.");
 
             // The two above are the current user's. Both sweeps also walk %WinDir%\Temp, where a single-file app
             // running as SYSTEM unpacks into its own .net, so each also skips that name at the top of any root.

@@ -3122,7 +3122,8 @@ To remove it completely:
    - `%AppData%\SysManager`
    - `%TEMP%\.net\SysManager-v<version>`, where the .NET runtime unpacks the app's native libraries the first
      time each version starts: one folder for each version you have run, named after the exe, so an exe you
-     renamed has its own
+     renamed has its own. SysManager deletes an older version's folder itself once nothing in it has been
+     written for a week, when it runs without administrator rights
    - `HKEY_CURRENT_USER\Software\SysManager`, the copy of your environment variables
    - `HKEY_LOCAL_MACHINE\SOFTWARE\SysManagerEnvironmentBackup`, only if you changed a machine-wide
      variable (needs administrator rights)

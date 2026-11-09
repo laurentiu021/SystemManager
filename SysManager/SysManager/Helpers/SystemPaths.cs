@@ -203,37 +203,72 @@ internal static class SystemPaths
     }
 
     /// <summary>
-    /// The directory this build extracted itself into, resolved once because the sweep visits
-    /// thousands of paths.
+    /// The folder the exe runs from, resolved once because the sweeps visit thousands of paths.
     /// </summary>
     /// <remarks>
-    /// The shipped exe is published with <c>PublishSingleFile</c> and
-    /// <c>IncludeNativeLibrariesForSelfExtract</c>, so the .NET host unpacks its native libraries to
-    /// <c>%TEMP%\.net\&lt;app&gt;\&lt;hash&gt;</c> at startup and <see cref="AppContext.BaseDirectory"/>
-    /// points there. Sweeping that tree meant the app deleting its own runtime: loaded libraries refuse
-    /// to delete and were counted as errors, so a clean machine still reported failures, and anything
-    /// extracted but not yet loaded was removed for real, breaking a later lazy load (TraceEvent's
-    /// native components, which load when ETW starts for the Bandwidth Monitor, are exactly that shape).
-    /// <para>For a normal build <c>BaseDirectory</c> is the output folder, which no temp root contains,
-    /// so the exclusion is inert outside a single-file run.</para>
+    /// <see cref="AppContext.BaseDirectory"/>, which for the shipped single-file exe is the folder the exe sits in, not
+    /// the one its native libraries were unpacked into. This was once read as the unpacked folder, under that name;
+    /// measured on a build published the way the release is, single-file with
+    /// <c>IncludeNativeLibrariesForSelfExtract</c> and compression, <c>BaseDirectory</c> was the exe's folder, and the
+    /// unpacked folder came only through the host's native search directories, as <see cref="OwnExtractionDirectory"/>
+    /// reads it (#2858).
+    /// <para>The temp sweeps skip it all the same: an exe run from inside a temp folder would otherwise have a sweep
+    /// try to delete the running exe, and whatever the user keeps beside it. For a build run from its output folder
+    /// it is that folder, which no temp root contains.</para>
     /// </remarks>
-    internal static string? OwnExtractionDirectory { get; } = Normalise(AppContext.BaseDirectory);
+    internal static string? OwnAppDirectory { get; } = Normalise(AppContext.BaseDirectory);
 
     /// <summary>
     /// The root the .NET host extracts single-file bundles into — every app's, not just this one's.
     /// </summary>
     /// <remarks>
-    /// <see cref="OwnExtractionDirectory"/> is one LEAF of this root: <c>&lt;root&gt;\&lt;app&gt;\&lt;hash&gt;</c>.
-    /// Excluding only the leaf spared this app's unpacked libraries and left every sibling exposed, so a
-    /// temp sweep deleted the extracted native libraries of any other single-file .NET app the user had
-    /// running — inflicting on them precisely the failure documented on <see cref="OwnExtractionDirectory"/>,
-    /// including the "extracted but not yet loaded" case, which no in-use check can see because nothing
-    /// holds those files open yet.
+    /// The shipped exe is published with <c>PublishSingleFile</c> and <c>IncludeNativeLibrariesForSelfExtract</c>, so
+    /// at startup the host unpacks its native libraries into <c>&lt;root&gt;\&lt;exe name&gt;\&lt;bundle id&gt;</c>
+    /// under this root, and every start loads them from there. Sweeping that tree meant the app deleting its own
+    /// runtime: loaded libraries refuse to delete and were counted as errors, so a clean machine still reported
+    /// failures, and anything extracted but not yet loaded was removed for real, breaking a later lazy load
+    /// (TraceEvent's native components, which load when ETW starts for the Bandwidth Monitor, are exactly that shape).
+    /// <para>The sweeps skip the whole root, not only this build's leaf, <see cref="OwnExtractionDirectory"/>.
+    /// Sparing only the leaf left every sibling exposed, so a temp sweep deleted the extracted native libraries of
+    /// any other single-file .NET app the user had running, including the "extracted but not yet loaded" case, which
+    /// no in-use check can see because nothing holds those files open yet.</para>
     /// <para>Resolved through <see cref="ResolveBundleExtractionRoot"/> so both branches are testable: a
     /// property computed at type initialisation cannot be re-pointed by a test.</para>
     /// </remarks>
     internal static string? BundleExtractionRoot { get; } = ResolveBundleExtractionRoot(
         Environment.GetEnvironmentVariable("DOTNET_BUNDLE_EXTRACT_BASE_DIR"), Path.GetTempPath());
+
+    /// <summary>
+    /// The folder the .NET host unpacked this build's native libraries into,
+    /// <c>&lt;root&gt;\&lt;exe name&gt;\&lt;bundle id&gt;</c> under <see cref="BundleExtractionRoot"/>, or null when it
+    /// unpacked none, as for a build run from its output folder.
+    /// </summary>
+    /// <remarks>
+    /// Read from <c>NATIVE_DLL_SEARCH_DIRECTORIES</c>, the folders the host tells the runtime to load native libraries
+    /// from, because that is the one place the host says where it put them; <see cref="OwnAppDirectory"/> is the exe's
+    /// folder (#2858). Declared after <see cref="BundleExtractionRoot"/>, which it reads: static initialisers run in
+    /// the order they are declared.
+    /// </remarks>
+    internal static string? OwnExtractionDirectory { get; } = ResolveOwnExtractionDirectory(
+        AppContext.GetData("NATIVE_DLL_SEARCH_DIRECTORIES") as string, BundleExtractionRoot);
+
+    /// <summary>
+    /// The entry of <paramref name="searchDirectories"/>, the host's native search directories separated by
+    /// <see cref="Path.PathSeparator"/>, that sits two levels under <paramref name="root"/>, or null when none does.
+    /// </summary>
+    internal static string? ResolveOwnExtractionDirectory(string? searchDirectories, string? root)
+    {
+        if (string.IsNullOrWhiteSpace(searchDirectories) || Normalise(root) is not { } extractionRoot) return null;
+        foreach (var entry in searchDirectories.Split(Path.PathSeparator,
+                     StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+        {
+            if (Normalise(entry) is not { } folder) continue;
+            var exeFolder = Path.GetDirectoryName(folder);
+            if (Path.GetDirectoryName(exeFolder) is not { } parent) continue;
+            if (string.Equals(Normalise(parent), extractionRoot, StringComparison.OrdinalIgnoreCase)) return folder;
+        }
+        return null;
+    }
 
     /// <summary>
     /// The folder the .NET host unpacks single-file apps into, inside the temp folder each app runs with:

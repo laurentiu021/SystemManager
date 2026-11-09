@@ -275,7 +275,7 @@ public sealed partial class CleanupViewModel : ElevatedViewModelBase
         {
             // Delegated to TuneUpService rather than kept as a third temp sweeper. The inline PowerShell this
             // replaces walked %TEMP% with no exclusions at all, while both C# sweepers pass
-            // SystemPaths.BundleExtractionRoot and SystemPaths.OwnExtractionDirectory — so this command could
+            // SystemPaths.BundleExtractionRoot and SystemPaths.OwnAppDirectory — so this command could
             // delete the .NET single-file extraction root, its own and that of every other running single-file
             // app, which is the failure SystemPaths documents (an app whose payload is extracted but not yet
             // loaded cannot be detected as in use).

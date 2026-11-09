@@ -208,12 +208,12 @@
                                   VirtualizingPanel.IsVirtualizing="True"
                                   VirtualizingPanel.VirtualizationMode="Recycling">
                             <DataGrid.Columns>
-                                <DataGridTextColumn Header="Date" Binding="{Binding CompletedAt, StringFormat={}{0:dd MMM HH:mm}}" Width="110" MinWidth="80"/>
-                                <DataGridTextColumn Header="Down (Mbps)" Binding="{Binding DownloadMbps, StringFormat={}{0:F1}}" Width="90" MinWidth="70"/>
+                                <DataGridTextColumn Header="Date" Binding="{Binding CompletedAt, StringFormat={}{0:dd MMM HH:mm}}" Width="103" MinWidth="80"/>
+                                <DataGridTextColumn Header="Down (Mbps)" Binding="{Binding DownloadMbps, StringFormat={}{0:F1}}" Width="94" MinWidth="70"/>
                                 <!-- The same "—" in the rows, with the sort kept on the numbers: sorting the text
                                      would put 100.0 before 41.7. -->
-                                <DataGridTextColumn Header="Up (Mbps)" Binding="{Binding UploadMbpsDisplay}" SortMemberPath="UploadMbps" Width="80" MinWidth="60"/>
-                                <DataGridTextColumn Header="Ping (ms)" Binding="{Binding PingMsDisplay}" SortMemberPath="PingMs" Width="70" MinWidth="60"/>
+                                <DataGridTextColumn Header="Up (Mbps)" Binding="{Binding UploadMbpsDisplay}" SortMemberPath="UploadMbps" Width="79" MinWidth="60"/>
+                                <DataGridTextColumn Header="Ping (ms)" Binding="{Binding PingMsDisplay}" SortMemberPath="PingMs" Width="74" MinWidth="60"/>
                                 <DataGridTextColumn Header="Server" Binding="{Binding Server}" Width="*" MinWidth="80"/>
                             </DataGrid.Columns>
                         </DataGrid>
@@ -265,10 +265,13 @@
                                   VirtualizingPanel.IsVirtualizing="True"
                                   VirtualizingPanel.VirtualizationMode="Recycling">
                             <DataGrid.Columns>
-                                <DataGridTextColumn Header="Date" Binding="{Binding CompletedAt, StringFormat={}{0:dd MMM HH:mm}}" Width="110" MinWidth="80"/>
-                                <DataGridTextColumn Header="Down (Mbps)" Binding="{Binding DownloadMbps, StringFormat={}{0:F1}}" Width="90" MinWidth="70"/>
-                                <DataGridTextColumn Header="Up (Mbps)" Binding="{Binding UploadMbpsDisplay}" SortMemberPath="UploadMbps" Width="80" MinWidth="60"/>
-                                <DataGridTextColumn Header="Ping (ms)" Binding="{Binding PingMsDisplay}" SortMemberPath="PingMs" Width="70" MinWidth="60"/>
+                                <!-- 430 px in all, what this list keeps at the default window once its scroll bar
+                                     shows: a column widened here takes the width from another, or a history of
+                                     eight runs or more scrolls sideways (#3206). -->
+                                <DataGridTextColumn Header="Date" Binding="{Binding CompletedAt, StringFormat={}{0:dd MMM HH:mm}}" Width="103" MinWidth="80"/>
+                                <DataGridTextColumn Header="Down (Mbps)" Binding="{Binding DownloadMbps, StringFormat={}{0:F1}}" Width="94" MinWidth="70"/>
+                                <DataGridTextColumn Header="Up (Mbps)" Binding="{Binding UploadMbpsDisplay}" SortMemberPath="UploadMbps" Width="79" MinWidth="60"/>
+                                <DataGridTextColumn Header="Ping (ms)" Binding="{Binding PingMsDisplay}" SortMemberPath="PingMs" Width="74" MinWidth="60"/>
                                 <DataGridTextColumn Header="Server" Binding="{Binding Server}" Width="*" MinWidth="80"/>
                             </DataGrid.Columns>
                         </DataGrid>

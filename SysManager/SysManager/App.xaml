@@ -623,6 +623,112 @@
                 </Setter>
             </Style>
 
+            <!-- ============================================================ -->
+            <!-- Right-click menus                                              -->
+            <!-- ============================================================ -->
+            <!--
+                The right-click menus, Process Manager's, Services', Disk Analyzer's and the tray icon's, take the
+                dropdown lists' look: the theme's card surface and border, and a lighter row under the pointer or
+                the keyboard. They were WPF-UI's, drawn on its #2C2C2C whatever the theme, because this file loads
+                WPF-UI's dictionary fixed to Dark, so on the six light themes the theme's dark words sat on a dark
+                grey at 1.07 to 1.53:1 (#3198). The tooltip had the same defect and the same fix.
+            -->
+            <Style TargetType="ContextMenu">
+                <Setter Property="Background" Value="{DynamicResource Surface1}"/>
+                <Setter Property="BorderBrush" Value="{DynamicResource Border2}"/>
+                <Setter Property="BorderThickness" Value="1"/>
+                <Setter Property="Foreground" Value="{DynamicResource TextPrimary}"/>
+                <Setter Property="FontFamily" Value="{StaticResource UiFont}"/>
+                <Setter Property="FontSize" Value="13"/>
+                <Setter Property="Padding" Value="0,2"/>
+                <Setter Property="HasDropShadow" Value="False"/>
+                <Setter Property="Template">
+                    <Setter.Value>
+                        <ControlTemplate TargetType="ContextMenu">
+                            <Border Background="{TemplateBinding Background}"
+                                    BorderBrush="{TemplateBinding BorderBrush}"
+                                    BorderThickness="{TemplateBinding BorderThickness}"
+                                    CornerRadius="{StaticResource RadiusMd}" Padding="{TemplateBinding Padding}">
+                                <StackPanel IsItemsHost="True" KeyboardNavigation.DirectionalNavigation="Cycle"/>
+                            </Border>
+                        </ControlTemplate>
+                    </Setter.Value>
+                </Setter>
+            </Style>
+
+            <!--
+                An item draws its header and nothing else: no icon, no shortcut, no tick and no submenu, which no
+                menu here has. EveryMenuItem_IsOneTheMenuTemplateDraws keeps it so; a menu that needs one of them
+                needs it here first. The header keeps its access key, as WPF-UI's did, and carries the scope TextBase
+                describes, so a header given as words or in a panel takes the item's colour (#2926). The spacing is
+                the item's own margin rather than its template's, so the keyboard's FocusRing fits inside the menu.
+            -->
+            <Style TargetType="MenuItem">
+                <Style.Resources>
+                    <Style TargetType="TextBlock" BasedOn="{StaticResource TextBase}"/>
+                </Style.Resources>
+                <Setter Property="Foreground" Value="{DynamicResource TextPrimary}"/>
+                <Setter Property="FontFamily" Value="{StaticResource UiFont}"/>
+                <Setter Property="FontSize" Value="13"/>
+                <Setter Property="Margin" Value="4,2"/>
+                <Setter Property="Padding" Value="10,7"/>
+                <Setter Property="FocusVisualStyle" Value="{StaticResource FocusRing}"/>
+                <Setter Property="Template">
+                    <Setter.Value>
+                        <ControlTemplate TargetType="MenuItem">
+                            <Border x:Name="Bd" Background="Transparent" CornerRadius="{StaticResource RadiusSm}"
+                                    Padding="{TemplateBinding Padding}">
+                                <ContentPresenter ContentSource="Header" RecognizesAccessKey="True"
+                                                  VerticalAlignment="Center"
+                                                  TextElement.Foreground="{TemplateBinding Foreground}">
+                                    <ContentPresenter.Resources>
+                                        <Style TargetType="TextBlock" BasedOn="{StaticResource TextBase}"/>
+                                    </ContentPresenter.Resources>
+                                </ContentPresenter>
+                            </Border>
+                            <ControlTemplate.Triggers>
+                                <Trigger Property="IsHighlighted" Value="True">
+                                    <Setter TargetName="Bd" Property="Background" Value="{DynamicResource Surface3}"/>
+                                </Trigger>
+                                <Trigger Property="IsEnabled" Value="False">
+                                    <Setter Property="Foreground" Value="{DynamicResource TextMuted}"/>
+                                </Trigger>
+                            </ControlTemplate.Triggers>
+                        </ControlTemplate>
+                    </Setter.Value>
+                </Setter>
+            </Style>
+
+            <!-- The line between a menu's groups, in the theme's border colour; WPF-UI's was a white at 4%. -->
+            <Style x:Key="{x:Static MenuItem.SeparatorStyleKey}" TargetType="Separator">
+                <Setter Property="Template">
+                    <Setter.Value>
+                        <ControlTemplate TargetType="Separator">
+                            <Border Height="1" Margin="10,4" Background="{DynamicResource Border1}"/>
+                        </ControlTemplate>
+                    </Setter.Value>
+                </Setter>
+            </Style>
+
+            <!--
+                A row context-menu item that ends something for good (#1551). The row BUTTON for the same
+                action wears DangerGhostButton; a menu item cannot, because that style targets Button, so
+                without this the second path to a destructive action looked exactly like "Open file
+                location". EveryImmediatelyDestructiveButton_WearsADestructiveStyle enforces that every
+                path carries a destructive treatment, and it is what caught the gap.
+
+                Foreground only, no fill: this sits in a menu whose other items are ordinary, and a filled
+                red row would read as "this menu is dangerous" rather than "this item is" — the same
+                reasoning that made the row button DangerGhostButton instead of DangerButton. Disabled, the
+                template greys it out as it does any item, so a greyed-out item does not still shout.
+
+                DangerText rather than Danger, the red made for words: 5.18:1 or more on the menu, under the
+                pointer too, on every theme (#3198).
+            -->
+            <Style x:Key="DangerMenuItem" TargetType="MenuItem" BasedOn="{StaticResource {x:Type MenuItem}}">
+                <Setter Property="Foreground" Value="{DynamicResource DangerText}"/>
+            </Style>
+
             <!--
                 DangerGhostButton — a destructive action that repeats once per row.
 
@@ -642,46 +748,6 @@
                 to guess. A style can be reused and can be found; a pair of attributes in a DataTemplate
                 cannot.
             -->
-            <!--
-                A row context-menu item that ends something for good (#1551). The row BUTTON for the same
-                action wears DangerGhostButton; a menu item cannot, because that style targets Button, so
-                without this the second path to a destructive action looked exactly like "Open file
-                location". EveryImmediatelyDestructiveButton_WearsADestructiveStyle enforces that every
-                path carries a destructive treatment, and it is what caught the gap.
-
-                Foreground only, no fill: this sits in a menu whose other items are ordinary, and a filled
-                red row would read as "this menu is dangerous" rather than "this item is" — the same
-                reasoning that made the row button DangerGhostButton instead of DangerButton. The disabled
-                trigger drops back to the muted colour so a greyed-out item does not still shout.
-
-                DangerText rather than Danger: on the menu's #2C2C2C the red made for fills reads 3.71:1 and the
-                red made for text 5.05:1. The template is WPF-UI's, so the scope TextBase describes cannot go on its
-                header presenter; the header template presents the header again, as that presenter does, with access
-                keys and an element shown as itself, and carries the scope (#2926).
-            -->
-            <Style x:Key="DangerMenuItem" TargetType="MenuItem">
-                <Style.Resources>
-                    <Style TargetType="TextBlock" BasedOn="{StaticResource TextBase}"/>
-                </Style.Resources>
-                <Setter Property="Foreground" Value="{DynamicResource DangerText}"/>
-                <Setter Property="HeaderTemplate">
-                    <Setter.Value>
-                        <DataTemplate>
-                            <ContentPresenter Content="{Binding}" RecognizesAccessKey="True">
-                                <ContentPresenter.Resources>
-                                    <Style TargetType="TextBlock" BasedOn="{StaticResource TextBase}"/>
-                                </ContentPresenter.Resources>
-                            </ContentPresenter>
-                        </DataTemplate>
-                    </Setter.Value>
-                </Setter>
-                <Style.Triggers>
-                    <Trigger Property="IsEnabled" Value="False">
-                        <Setter Property="Foreground" Value="{DynamicResource TextMuted}"/>
-                    </Trigger>
-                </Style.Triggers>
-            </Style>
-
             <Style x:Key="DangerGhostButton" TargetType="Button" BasedOn="{StaticResource ButtonBase}">
                 <Setter Property="Background" Value="Transparent"/>
                 <Setter Property="BorderThickness" Value="1"/>

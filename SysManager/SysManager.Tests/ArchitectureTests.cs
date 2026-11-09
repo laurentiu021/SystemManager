@@ -10426,8 +10426,8 @@ public partial class ArchitectureTests
     /// <see cref="EveryStyleInAView_BuildsOnTheAppStyleItReplaces"/> did not see them: it reads the views, for the types
     /// App.xaml styles. This reads App.xaml as well, for the controls whose hover, press or selection a template draws.
     /// App.xaml's DataGrid, ProgressBar and TabControl styles set colours on Windows' templates on purpose and are
-    /// outside it. So is a MenuItem: Windows' style picks its template by role from keys WPF-UI fills, so Process
-    /// Manager's Kill item, whose style has neither, measured the same template as the items around it.
+    /// outside it. A MenuItem and a ContextMenu are inside it since App.xaml began drawing the right-click menus
+    /// (#3198): a menu item style with neither would take WPF-UI's template again, by role, on WPF-UI's dark grey.
     /// </remarks>
     [Fact]
     public void NoStyle_LeavesAButtonOrListItemToWindowsTemplate()
@@ -10435,7 +10435,7 @@ public partial class ArchitectureTests
         string[] drawnByTheirTemplate =
         [
             "Button", "ToggleButton", "RepeatButton", "CheckBox", "RadioButton", "ComboBoxItem", "ListBoxItem",
-            "ListViewItem", "TreeViewItem", "TabItem",
+            "ListViewItem", "TreeViewItem", "TabItem", "MenuItem", "ContextMenu",
         ];
         var appDir = TestPaths.AppProject();
         var files = Directory.GetFiles(Path.Combine(appDir, "Views"), "*.xaml")
@@ -10469,6 +10469,92 @@ public partial class ArchitectureTests
             "these styles leave their control to Windows' template, which hovers and selects in blue. Give the style "
             + "a template, or base it on the style it varies:\n  " + string.Join("\n  ", offenders));
     }
+
+    /// <summary>
+    /// Every menu item is one the app's menu template draws: words in a right-click menu, with no icon, shortcut, tick
+    /// or submenu (#3198).
+    /// </summary>
+    /// <remarks>
+    /// App.xaml draws the right-click menus itself, in the dropdown lists' look, because WPF-UI's were its dark grey on
+    /// every theme. Its item template draws the header and nothing else, which is all the menus here use: a submenu
+    /// would open nothing, and an icon, a shortcut or a tick would not show. So this fails on the first of them, in the
+    /// markup or in code, as the prompt to draw it in App.xaml first, and on a menu bar, whose items would need the
+    /// top-level templates the app does not have.
+    /// </remarks>
+    [Fact]
+    public void EveryMenuItem_IsOneTheMenuTemplateDraws()
+    {
+        var appDir = TestPaths.AppProject();
+        bool InSource(string file) => !Path.GetRelativePath(appDir, file).Split(Path.DirectorySeparatorChar)
+            .Any(s => s.Equals("obj", StringComparison.OrdinalIgnoreCase)
+                      || s.Equals("bin", StringComparison.OrdinalIgnoreCase));
+        string[] undrawn = ["Icon", "InputGestureText", "IsCheckable", "IsChecked", "ItemsSource", "Items"];
+        var offenders = new List<string>();
+        var inMarkup = 0;
+        var inCode = 0;
+
+        foreach (var file in Directory.EnumerateFiles(appDir, "*.xaml", SearchOption.AllDirectories).Where(InSource))
+        {
+            var name = Path.GetFileName(file);
+            foreach (var element in XDocument.Load(file, LoadOptions.SetLineInfo).Descendants())
+            {
+                var line = ((System.Xml.IXmlLineInfo)element).LineNumber;
+                if (element.Name.LocalName == "Menu") offenders.Add($"{name}:{line}: a menu bar");
+                if (element.Name.LocalName != "MenuItem") continue;
+                inMarkup++;
+                foreach (var attribute in element.Attributes().Where(a => undrawn.Contains(a.Name.LocalName)))
+                    offenders.Add($"{name}:{line}: a menu item sets {attribute.Name.LocalName}");
+                foreach (var inner in element.Elements().Select(e => e.Name.LocalName))
+                {
+                    var dot = inner.LastIndexOf('.');
+                    if (dot < 0) offenders.Add($"{name}:{line}: a menu item holds a {inner}, a submenu");
+                    else if (undrawn.Contains(inner[(dot + 1)..]))
+                        offenders.Add($"{name}:{line}: a menu item sets {inner[(dot + 1)..]}");
+                }
+            }
+        }
+
+        foreach (var file in Directory.EnumerateFiles(appDir, "*.cs", SearchOption.AllDirectories).Where(InSource))
+        {
+            var name = Path.GetFileName(file);
+            var code = WithoutComments(File.ReadAllText(file));
+            foreach (Match made in MenuItemMadeInCode().Matches(code))
+            {
+                inCode++;
+                if (made.Groups["init"].Success)
+                {
+                    var open = made.Groups["init"].Index;
+                    var body = code[open..(SourceBraces.MatchingBrace(code, open) + 1)];
+                    foreach (Match set in UndrawnMenuItemMember().Matches(body))
+                        offenders.Add($"{name}: a menu item made in code sets {set.Groups["member"].Value}");
+                }
+                if (made.Groups["target"].Value is not { Length: > 0 } target) continue;
+                var variable = Regex.Escape(target);
+                var setsUndrawn = new Regex(@"\b" + variable
+                    + @"\s*\.\s*(?<member>Icon|InputGestureText|IsCheckable|IsChecked|ItemsSource)\s*=(?!=)");
+                foreach (Match set in setsUndrawn.Matches(code))
+                    offenders.Add($"{name}: {target} sets {set.Groups["member"].Value}");
+                if (new Regex(@"\b" + variable + @"\s*\.\s*Items\s*\.\s*Add\s*\(").IsMatch(code))
+                    offenders.Add($"{name}: {target} is given items, a submenu");
+            }
+        }
+
+        // Vacuity floor: 8 menu items in the markup and 4 made in code, the tray icon's, when written.
+        Assert.True(inMarkup >= 8, $"only {inMarkup} menu items were found in the markup, out of 8 when written.");
+        Assert.True(inCode >= 4, $"only {inCode} menu items were found made in code, out of 4 when written.");
+        Assert.True(offenders.Count == 0,
+            "these menus need what App.xaml's menu item template does not draw. Draw it there first, then let it "
+            + "through here:\n  " + string.Join("\n  ", offenders));
+    }
+
+    /// <summary>A menu item made in code, with the variable it goes into and its initializer's brace, if any.</summary>
+    [GeneratedRegex(
+        @"(?:(?<target>[\w.]+)\s*=\s*)?new\s+(?:System\.Windows\.Controls\.)?MenuItem\b\s*(?:\(\s*\))?\s*(?<init>\{)?")]
+    private static partial Regex MenuItemMadeInCode();
+
+    /// <summary>A member a menu item initializer sets that the app's menu item template does not draw.</summary>
+    [GeneratedRegex(@"\b(?<member>Icon|InputGestureText|IsCheckable|IsChecked|ItemsSource|Items)\s*=(?!=)")]
+    private static partial Regex UndrawnMenuItemMember();
 
     /// <summary>
     /// Every checkbox in a grid is the app's checkbox, through <c>GridCheckBox</c> (#2696).
@@ -20284,7 +20370,7 @@ public partial class ArchitectureTests
     {
         // Controls a keyboard user drives directly. Deliberately not every control: a Border or a
         // TextBlock is not focusable, and a Button family style is already covered above.
-        string[] keyboardDriven = ["Slider", "CheckBox", "RadioButton", "ToggleButton", "ComboBox"];
+        string[] keyboardDriven = ["Slider", "CheckBox", "RadioButton", "ToggleButton", "ComboBox", "MenuItem"];
 
         var appXaml = File.ReadAllText(Path.Combine(TestPaths.AppProject(), "App.xaml"));
         var offenders = new List<string>();

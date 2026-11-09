@@ -186,10 +186,14 @@ TextBlock made for a string finds. Neither reaches the other's, so both are need
 control's `Foreground` rather than the presenter's, or words given in a panel keep the old colour. The colour stays on
 the keyless style rather than moving to the window because WPF-UI's dictionary is fixed to Dark: the controls
 `App.xaml` does not restyle carry WPF-UI's white or the system's black, and the keyless style is what gives their text
-the theme's colour. `DangerMenuItem` cannot reach WPF-UI's header presenter, so its header template presents the header
-again, with access keys, and carries the scope. `TemplateLabelColourTests` lays every button, chip, checkbox, header and
+the theme's colour. The right-click menus were among those controls: `App.xaml` did not restyle them, so they
+kept WPF-UI's `#2C2C2C` under the theme's words, 1.07 to 1.53:1 on the light themes, until #3198 gave `ContextMenu`,
+`MenuItem` and the menu separator styles of their own in the dropdown lists' look. The item template draws a header
+and nothing else, and `ArchitectureTests.EveryMenuItem_IsOneTheMenuTemplateDraws` fails a menu item with an icon, a
+shortcut, a tick or a submenu, or a menu bar. `TemplateLabelColourTests` lays every button, chip, checkbox, header and
 menu item style out on all twelve themes and fails a label that is not its control's colour, as words, in a panel or,
-on a menu item, with an access key, enabled or not, or that reads under 4.5:1 where the views put it.
+on a menu item, with an access key, enabled or not, or that reads under 4.5:1 where the views put it, and a menu that
+is not drawn in the theme's colours or whose items read under 4.5:1 on it or on its highlight.
 
 These guards hold the scale. `ArchitectureTests.EveryTextBlockSize_ComesFromAToken` fails on a raw `FontSize`
 on a text `TextBlock` at any size; on a token whose size is overwritten on the element, which is how `Subtle`

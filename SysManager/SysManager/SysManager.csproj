@@ -15,9 +15,9 @@
          Assembly.Location and the APIs marked RequiresAssemblyFiles). Set here, every build runs it, so a pull
          request fails on what would otherwise fail only the release, after its tag exists (#2806). -->
     <EnableSingleFileAnalyzer>true</EnableSingleFileAnalyzer>
-    <Version>1.136.146</Version>
-    <FileVersion>1.136.146.0</FileVersion>
-    <AssemblyVersion>1.136.146.0</AssemblyVersion>
+    <Version>1.136.147</Version>
+    <FileVersion>1.136.147.0</FileVersion>
+    <AssemblyVersion>1.136.147.0</AssemblyVersion>
     <Product>SysManager</Product>
     <Description>SysManager — Windows system monitoring toolkit by laurentiu021. Network, updates, health, logs, safe deep cleanup.</Description>
     <PackageProjectUrl>https://github.com/laurentiu021/SystemManager</PackageProjectUrl>

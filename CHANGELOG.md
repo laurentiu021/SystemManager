@@ -10,6 +10,18 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.136.155] - 2026-11-09
+
+**Add on a Bulk Installer search result ticks the app, so Install Selected installs it.**
+
+### Fixed
+- Add put a search result in the list of apps unticked, under Custom at the end of the list, so Install Selected left
+  it out, or said "No apps selected." when nothing else was ticked, and nothing on screen showed that it still had to
+  be ticked. A result the list already had, such as Firefox, did nothing at all. Add now ticks the app it adds, or the
+  one the list already has with that ID, and the status line says which.
+- Tests pin a result added ticked and installed by Install Selected, and a result the list already has ticking the
+  listed app without adding a second, whatever the ID's capitals.
+
 ## [1.136.154] - 2026-11-09
 
 **Bulk Installer's search results scroll inside the search card, so a long list of them no longer pushes the list of

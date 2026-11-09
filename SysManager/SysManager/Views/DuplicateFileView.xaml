@@ -11,7 +11,7 @@
              mc:Ignorable="d"
              Background="{DynamicResource Surface0}">
 
-    <Grid Margin="28,24,28,16">
+    <helpers:PageGrid Margin="28,24,28,16">
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto"/>
             <RowDefinition Height="Auto"/>
@@ -233,5 +233,5 @@
                 </TextBlock.Style>
             </TextBlock>
         </DockPanel>
-    </Grid>
+    </helpers:PageGrid>
 </UserControl>

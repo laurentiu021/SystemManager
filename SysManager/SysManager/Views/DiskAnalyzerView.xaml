@@ -77,12 +77,13 @@
         </Style>
     </UserControl.Resources>
 
-    <Grid Margin="28,24,28,16">
+    <helpers:PageGrid Margin="28,24,28,16">
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto"/>
             <RowDefinition Height="Auto"/>
             <RowDefinition Height="Auto"/>
-            <RowDefinition Height="*"/>
+            <!-- Its floor: the map and a few rows of the list under it (#2704). -->
+            <RowDefinition Height="*" MinHeight="440"/>
             <RowDefinition Height="Auto"/>
         </Grid.RowDefinitions>
 
@@ -358,5 +359,5 @@
                 </TextBlock.Style>
             </TextBlock>
         </DockPanel>
-    </Grid>
+    </helpers:PageGrid>
 </UserControl>

@@ -11,7 +11,7 @@
              mc:Ignorable="d"
              Background="{DynamicResource Surface0}">
 
-    <Grid Margin="28,24,28,16">
+    <helpers:PageGrid Margin="28,24,28,16">
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto"/>
             <RowDefinition Height="Auto"/>
@@ -157,5 +157,5 @@
                          Visibility="{Binding IsBusy, Converter={StaticResource BoolToVis}}"/>
             <TextBlock Text="{Binding StatusMessage}" Style="{StaticResource StatusLine}"/>
         </DockPanel>
-    </Grid>
+    </helpers:PageGrid>
 </UserControl>

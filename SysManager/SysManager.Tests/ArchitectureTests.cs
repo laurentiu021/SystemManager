@@ -6658,6 +6658,56 @@ public partial class ArchitectureTests
     }
 
     /// <summary>
+    /// Every page whose root grid stretches a row is a <c>PageGrid</c>, and the shell shows the page in a
+    /// <c>PageFit</c> that a scroll viewer hands its scrolling to (#2704).
+    /// </summary>
+    /// <remarks>
+    /// A stretching row got what the fixed rows above and below it left, which on a short window was nothing, and what
+    /// was under it was cut off the bottom of the page with no way to reach it: System Fixes' console had 0 px at the
+    /// default window, with 186 px of the page past its edge. <c>PageGrid</c> keeps the row a floor and says how tall
+    /// the page has to be, and <c>PageFit</c> scrolls only a page the window is too short for. A page left a plain
+    /// <c>Grid</c> gets neither. A shell without the scroll viewer cuts the page again, and one whose scroll viewer
+    /// does not hand <c>PageFit</c> the scrolling offers the page an endless height, so its lists would make every row
+    /// and scroll with it. <c>PageHeightTests</c> lays every page out at both windows.
+    /// <para>A row with no <c>Height</c> is a star row too, as WPF reads it.</para>
+    /// </remarks>
+    [Fact]
+    public void EveryPageThatStretchesARow_IsAPageGrid_ShownInTheShellsPageFit()
+    {
+        var viewsDir = Path.Combine(TestPaths.AppProject(), "Views");
+        var plain = new List<string>();
+        var pages = 0;
+        foreach (var file in Directory.GetFiles(viewsDir, "*.xaml"))
+        {
+            var root = XDocument.Load(file).Root!.Elements().FirstOrDefault(e => !e.Name.LocalName.Contains('.'));
+            if (root is null) continue;
+            var stretches = root.Elements()
+                .Where(e => e.Name.LocalName.EndsWith(".RowDefinitions", StringComparison.Ordinal))
+                .Elements()
+                .Any(row => ((string?)row.Attribute("Height") ?? "*").Contains('*', StringComparison.Ordinal));
+            if (!stretches) continue;
+            if (root.Name.LocalName == "PageGrid") pages++;
+            else plain.Add($"{Path.GetFileName(file)}: a {root.Name.LocalName}");
+        }
+
+        // Vacuity floor: 53 pages stretch a row, measured when they became PageGrids.
+        Assert.True(pages >= 50, $"only {pages} pages are PageGrids, out of 53 measured, so the root match is reading "
+            + "almost nothing.");
+        Assert.True(plain.Count == 0,
+            "These pages stretch a row in a root that is not a PageGrid, so a short window gives the row nothing and "
+            + "cuts what is under it:\n  " + string.Join("\n  ", plain));
+
+        XNamespace xaml = "http://schemas.microsoft.com/winfx/2006/xaml";
+        var shell = XDocument.Load(TestPaths.AppFile("MainWindow.xaml"));
+        var fit = Assert.Single(shell.Descendants(), e => e.Name.LocalName == "PageFit");
+        var scroller = fit.Parent!;
+        Assert.Equal("ScrollViewer", scroller.Name.LocalName);
+        Assert.Equal("True", (string?)scroller.Attribute("CanContentScroll"));
+        Assert.Equal("Disabled", (string?)scroller.Attribute("HorizontalScrollBarVisibility"));
+        Assert.Equal("ContentHost", (string?)Assert.Single(fit.Elements()).Attribute(xaml + "Name"));
+    }
+
+    /// <summary>
     /// A picker bound to a list of enum values renders a label, not the enum's <c>ToString()</c>.
     /// </summary>
     /// <remarks>

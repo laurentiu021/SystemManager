@@ -36,7 +36,7 @@
         </DataTemplate>
     </UserControl.Resources>
 
-    <Grid Margin="28,24,28,16">
+    <helpers:PageGrid Margin="28,24,28,16">
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto"/>
             <RowDefinition Height="Auto"/>
@@ -249,5 +249,5 @@
 
         <!-- Status bar -->
         <v:StatusFooter Grid.Row="4" Margin="0,8,0,0" ProgressName="Refresh progress"/>
-    </Grid>
+    </helpers:PageGrid>
 </UserControl>

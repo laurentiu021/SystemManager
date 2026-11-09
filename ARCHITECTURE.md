@@ -2334,6 +2334,20 @@ Key utility classes that don't fit neatly into Services or ViewModels (not an ex
   the work area when the screen is smaller than the minimum. `MainWindow.FitToScreen` reads the screen with
   `MonitorFromWindow` and `GetMonitorInfoW` in `OnSourceInitialized` and moves the window there;
   `WindowFitsScreenTests` runs it on a hidden window handle bigger than the screen.
+- `PageGrid` — the root grid of every page that stretches a row to the window (#2704). A page is fixed rows over a
+  list, a console or a chart that takes what the page has left, and with nothing to stop it that row got nothing once
+  the fixed rows filled the page, and what was under it was cut off the bottom. A star row with no `MinHeight` of its
+  own gets `StretchFloor`, 160 px; a row whose content needs more, such as Ping's chart card, declares its own.
+  `Required` is the height the grid's own measure asked for, its margin included, before `FrameworkElement` cuts a
+  desired size to the space offered: offered less than it needs, a grid still works out its fixed rows and its
+  floors, and only that cut hides the sum.
+- `PageFit` — shows the shell's page at the window's height when that is enough for it, and at its `PageGrid`'s
+  `Required` height, scrolled, when it is not (#2704). It is the content of the shell's `ScrollViewer` with
+  `CanContentScroll` on, and implements `IScrollInfo`, so it is offered the height on screen rather than an endless
+  one, and a page that fits fills the window as before with its lists keeping their own scrolling. Vertical only;
+  `MakeVisible` scrolls a control that keyboard focus moves to into view.
+  `ArchitectureTests.EveryPageThatStretchesARow_IsAPageGrid_ShownInTheShellsPageFit` holds the views and the shell to
+  it, and `PageHeightTests` lays every page out in it at both windows.
 - `GridText` — gives a list's text columns the app's cell style, `GridCellText` in `App.xaml`, so a value too long
   for its column ends in "…" (#3214). WPF draws a text column's cells in its own style, which neither trims nor
   wraps, so a long name or path was cut at the column's edge, often through a letter. The attached `CellStyle`

@@ -639,10 +639,19 @@
                     </Grid>
                 </Border>
 
-                <!-- UserControl supplies the UIA peer used to scope automation to the live tab. -->
-                <UserControl Grid.Row="1" x:Name="ContentHost"
-                             AutomationProperties.AutomationId="CurrentViewHost"
-                             Content="{Binding SelectedNav.View}"/>
+                <!-- The page fills the window when the window is tall enough for it, and when it is not, keeps the
+                     height its PageGrid requires and scrolls as a whole (#2704). CanContentScroll hands the scrolling
+                     to PageFit, which is then offered the height on screen rather than an endless one, so a page's
+                     lists keep their own scrolling. -->
+                <ScrollViewer Grid.Row="1" CanContentScroll="True" Focusable="False"
+                              VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+                    <helpers:PageFit>
+                        <!-- UserControl supplies the UIA peer used to scope automation to the live tab. -->
+                        <UserControl x:Name="ContentHost"
+                                     AutomationProperties.AutomationId="CurrentViewHost"
+                                     Content="{Binding SelectedNav.View}"/>
+                    </helpers:PageFit>
+                </ScrollViewer>
 
             </Grid>
         </Border>

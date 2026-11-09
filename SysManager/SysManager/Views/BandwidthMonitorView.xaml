@@ -12,13 +12,14 @@
              d:DataContext="{d:DesignInstance vm:BandwidthMonitorViewModel}"
              Background="{DynamicResource Surface0}">
 
-    <Grid>
+    <helpers:PageGrid>
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto"/>
             <RowDefinition Height="Auto"/>
             <RowDefinition Height="Auto"/>
             <RowDefinition Height="Auto"/>
-            <RowDefinition Height="*"/>
+            <!-- Its floor: the chart card at the chart's 160, and the app list's empty state whole (#2704). -->
+            <RowDefinition Height="*" MinHeight="444"/>
             <RowDefinition Height="Auto"/>
         </Grid.RowDefinitions>
 
@@ -222,5 +223,5 @@
                        HorizontalAlignment="Right" TextTrimming="CharacterEllipsis" MaxWidth="420"/>
             <TextBlock Text="{Binding StatusMessage}" Style="{StaticResource StatusLine}" TextWrapping="Wrap"/>
         </DockPanel>
-    </Grid>
+    </helpers:PageGrid>
 </UserControl>

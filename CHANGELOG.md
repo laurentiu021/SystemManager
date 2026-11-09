@@ -10,6 +10,22 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.136.152] - 2026-11-09
+
+**Names shown beside an icon or a badge in a list end in "…" when they are too long for the column, and pointing at
+one shows the whole name.**
+
+### Fixed
+- Process Manager's, Startup's and Uninstaller's names, Bandwidth Monitor's apps and App Blocker's programs sat beside
+  their icon in a row that gave them all the width they asked for, so a long one ran to the column's edge and was
+  cut there. So did the names beside a badge in App Alerts, Debloater and Browser Cleaner, and Right-click Menu's
+  names. Each now ends in "…" within its column and shows whole when pointed at, with its badge still beside it, and
+  Right-click Menu's details on hover start with the entry's whole name. Uninstaller's package id, Debloater's
+  package name and Bandwidth Monitor's ports end in "…" the same way.
+- A test fails a word a list's template column binds that neither trims nor wraps, or trims with nothing to show it
+  whole on hover, and another lays out every template column's cell with long words and fails one that runs past
+  the cell.
+
 ## [1.136.151] - 2026-11-09
 
 **A name or path too long for its column in a list ends in "…" now, and pointing at it shows the whole value.**

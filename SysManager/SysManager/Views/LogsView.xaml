@@ -370,7 +370,8 @@
                         <DataGridTemplateColumn Header="Time" Width="150" MinWidth="80" SortMemberPath="Timestamp">
                             <DataGridTemplateColumn.CellTemplate>
                                 <DataTemplate>
-                                    <TextBlock Text="{Binding RelativeTime}" ToolTip="{Binding FullTimestamp}" VerticalAlignment="Center"/>
+                                    <TextBlock Text="{Binding RelativeTime}" ToolTip="{Binding FullTimestamp}" VerticalAlignment="Center"
+                                               TextTrimming="CharacterEllipsis"/>
                                 </DataTemplate>
                             </DataGridTemplateColumn.CellTemplate>
                         </DataGridTemplateColumn>

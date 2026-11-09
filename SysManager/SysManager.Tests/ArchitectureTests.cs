@@ -18075,6 +18075,73 @@ public partial class ArchitectureTests
     }
 
     /// <summary>
+    /// Every word a list's template column binds to data trims or wraps, and a trimmed one can be read whole on hover.
+    /// </summary>
+    /// <remarks>
+    /// #3214. A template column draws its own cells, so <c>GridCellText</c> does not reach them. Process Manager's,
+    /// Startup's and Uninstaller's names sat beside the app's icon in a horizontal StackPanel, which gives its children
+    /// all the width they ask for, so a long name ran to the column's edge, and so did the names beside a badge in App
+    /// Alerts, Debloater and Browser Cleaner. Each now sits in a DockPanel beside its icon, or a Grid beside its badge,
+    /// either of which gives it a width to trim to, and
+    /// <see cref="NoTextWrappingOrTrimming_IsInertInsideAHorizontalStackPanel"/> fails trimming that has none. This
+    /// holds every TextBlock in a cell template whose words come from a binding to trimming or wrapping, and a trimmed
+    /// one to something that shows it whole on hover: its own words through <c>helpers:CutText.ToolTip</c>, a tooltip
+    /// of its own, or one on a panel around it. Words in a Border are a badge's, from a short fixed set, and words in a
+    /// tooltip are read there; both are left out.
+    /// </remarks>
+    [Fact]
+    public void EveryWordAListTemplateBinds_TrimsOrWraps_AndShowsWholeOnHover()
+    {
+        var wrong = new List<string>();
+        var read = 0;
+        foreach (var file in Directory.EnumerateFiles(Path.Combine(TestPaths.AppProject(), "Views"), "*.xaml")
+                     .OrderBy(f => f, StringComparer.Ordinal))
+        {
+            var view = Path.GetFileNameWithoutExtension(file);
+            foreach (var template in XDocument.Load(file).Descendants()
+                         .Where(e => e.Name.LocalName == "DataGridTemplateColumn.CellTemplate"))
+            {
+                var where = $"{view}'s \"{(string?)template.Parent?.Attribute("Header") ?? "untitled"}\" column";
+                foreach (var words in template.Descendants().Where(e => e.Name.LocalName == "TextBlock" && Bound(e)))
+                {
+                    var around = words.Ancestors().TakeWhile(a => a != template).ToList();
+                    if (around.Any(a => a.Name.LocalName == "Border" || a.Name.LocalName == "ToolTip"
+                                        || a.Name.LocalName.EndsWith(".ToolTip", StringComparison.Ordinal)))
+                        continue;
+
+                    read++;
+                    var trims = (string?)words.Attribute("TextTrimming") is "CharacterEllipsis" or "WordEllipsis";
+                    var wraps = (string?)words.Attribute("TextWrapping") is "Wrap" or "WrapWithOverflow";
+                    if (!trims && !wraps)
+                        wrong.Add($"{where}: {WordsOf(words)} neither trims nor wraps, so a long value runs to the "
+                                  + "column's edge");
+                    else if (trims && !HasToolTip(words) && !around.Any(HasToolTip))
+                        wrong.Add($"{where}: {WordsOf(words)} trims with nothing to show it whole on hover");
+                }
+            }
+        }
+
+        // Vacuity floor: 20 bound words in the views' cell templates when written, for #3214.
+        Assert.True(read >= 20, $"only {read} bound words were read in the views' cell templates, out of 20.");
+        Assert.True(wrong.Count == 0,
+            "these list cells cut a long value at the column's edge or hide the rest of it:\n  "
+            + string.Join("\n  ", wrong));
+
+        // Words from the data: a bound Text, or a style that sets one.
+        static bool Bound(XElement text) =>
+            ((string?)text.Attribute("Text"))?.StartsWith("{Binding", StringComparison.Ordinal) == true
+            || text.Descendants().Any(s => s.Name.LocalName == "Setter" && (string?)s.Attribute("Property") == "Text"
+                                           && ((string?)s.Attribute("Value"))?.StartsWith("{Binding",
+                                               StringComparison.Ordinal) == true);
+
+        static bool HasToolTip(XElement element) =>
+            element.Attribute("ToolTip") is not null
+            || element.Elements().Any(c => c.Name.LocalName.EndsWith(".ToolTip", StringComparison.Ordinal));
+
+        static string WordsOf(XElement text) => (string?)text.Attribute("Text") ?? "the words its style binds";
+    }
+
+    /// <summary>
     /// A template or style that changes the same thing on hover and on focus puts its focus trigger last.
     /// </summary>
     /// <remarks>

@@ -148,12 +148,15 @@
                     <DataGridTemplateColumn Header="Name" Width="*" MinWidth="200" SortMemberPath="Name">
                         <DataGridTemplateColumn.CellTemplate>
                             <DataTemplate>
-                                <StackPanel Orientation="Horizontal">
-                                    <Image Source="{Binding Icon}" Width="20" Height="20"
+                                <!-- A DockPanel, not a horizontal StackPanel, so a long name has a width to trim to (#3214). -->
+                                <DockPanel>
+                                    <Image DockPanel.Dock="Left" Source="{Binding Icon}" Width="20" Height="20"
                                            VerticalAlignment="Center" Margin="0,0,8,0"
                                            RenderOptions.BitmapScalingMode="HighQuality"/>
                                     <StackPanel VerticalAlignment="Center">
-                                        <TextBlock Text="{Binding Name}" FontWeight="SemiBold" Style="{StaticResource Body}"/>
+                                        <TextBlock Text="{Binding Name}" FontWeight="SemiBold" Style="{StaticResource Body}"
+                                                   TextTrimming="CharacterEllipsis" ToolTip="{Binding Text, RelativeSource={RelativeSource Self}}"
+                                                   helpers:CutText.ToolTip="True"/>
 
                                         <!-- The 108-entry database (Data/ProcessDescriptions.json) supplies a
                                              plain-English line for each known process, and this column bound the raw
@@ -178,7 +181,7 @@
                                             </TextBlock.Style>
                                         </TextBlock>
                                     </StackPanel>
-                                </StackPanel>
+                                </DockPanel>
                             </DataTemplate>
                         </DataGridTemplateColumn.CellTemplate>
                     </DataGridTemplateColumn>

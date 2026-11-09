@@ -10,6 +10,29 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.136.157] - 2026-11-09
+
+**Ping, Bandwidth Monitor, Resource History and Settings Watchdog fit the default window again, and an empty state
+inside a small card leaves out its icon.**
+
+### Fixed
+- Since 1.136.156 a page keeps the height its content needs and scrolls. At the default window four pages scrolled
+  only because of one thing in a card: Ping's and Bandwidth Monitor's charts asked for 200 and 160 px where the
+  window gave them 141 and 115, Resource History's charts for 180 and 120 and its temperature card's "No temperature
+  data" for 158 px in 95, and Settings Watchdog's "No changes detected" for 15 px more than its list had. An empty
+  state in a card beside or in place of a chart or a console, in Resource History, Bandwidth Monitor, Settings
+  Watchdog and every console, now leaves its icon out and keeps 12 px above and below instead of 24, and each chart's
+  minimum is the height the default window gives it: Ping's 136, Bandwidth Monitor's 104, Resource History's 160 and
+  92. Those four pages fit the default window, and on a smaller one keep their charts that tall and scroll.
+- Quick Cleanup's and System Fixes' consoles and Settings Watchdog's list need no floor of their own any more, and App
+  Updates' console is 180 px again. Quick Cleanup still scrolls at the default window, by 69 px: the cards above its
+  console take 690 of the page's 781.
+- Two comparisons of the scroll offset in the shell's page host tested doubles for exact equality, which code
+  scanning flagged. One now asks which is smaller, as a clamp only ever lowers the offset, and the other ignores a
+  move of less than a hundredth of a pixel.
+- Tests pin the compact empty state, with its icon left out and 12 px above and below, and that a state with no icon
+  shows none, full or compact.
+
 ## [1.136.156] - 2026-11-09
 
 **A page too tall for the window scrolls instead of cutting off its bottom, and its lists, consoles and charts keep

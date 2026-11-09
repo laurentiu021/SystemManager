@@ -84,7 +84,7 @@
 
             <!-- Empty state -->
             <v:EmptyState Grid.Row="1" Glyph="&#xE946;"
-                          Title="No output yet"
+                          Title="No output yet" Compact="True"
                           Message="Output from running operations will stream here."
                           Visibility="{Binding Lines.Count, Converter={StaticResource FlexVis}, ConverterParameter=Inverse}"/>
         </Grid>

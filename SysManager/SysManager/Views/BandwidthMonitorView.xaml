@@ -18,8 +18,8 @@
             <RowDefinition Height="Auto"/>
             <RowDefinition Height="Auto"/>
             <RowDefinition Height="Auto"/>
-            <!-- Its floor: the chart card at the chart's 160, and the app list's empty state whole (#2704). -->
-            <RowDefinition Height="*" MinHeight="444"/>
+            <!-- Its floor: the chart card at the chart's 104, and the app list's empty state whole (#2704, #3221). -->
+            <RowDefinition Height="*" MinHeight="344"/>
             <RowDefinition Height="Auto"/>
         </Grid.RowDefinitions>
 
@@ -134,7 +134,7 @@
                                    TextTrimming="CharacterEllipsis" MaxWidth="480"
                                    Visibility="{Binding HistorySummary, Converter={StaticResource FlexVis}}"/>
                     </DockPanel>
-                    <lvc:CartesianChart Grid.Row="1" Background="Transparent" MinHeight="160"
+                    <lvc:CartesianChart Grid.Row="1" Background="Transparent" MinHeight="104"
                                         Visibility="{Binding HistoryIsEmpty, Converter={StaticResource FlexVis}, ConverterParameter=Inverse}"
                                         Series="{Binding ThroughputSeries}"
                                         XAxes="{Binding ThroughputXAxes}" YAxes="{Binding ThroughputYAxes}"
@@ -145,7 +145,7 @@
                                         TooltipBackgroundPaint="{Binding TooltipBackgroundPaint}"/>
                     <!-- A chosen range with nothing recorded in it would otherwise render as a blank chart -->
                     <v:EmptyState Grid.Row="1" Glyph="&#xE9D9;"
-                                  Title="No history for this range"
+                                  Title="No history for this range" Compact="True"
                                   Message="Throughput is recorded while this tab is open, and kept for 7 days. Leave the tab open for a while, then pick a range again."
                                   Visibility="{Binding HistoryIsEmpty, Converter={StaticResource FlexVis}}"/>
                 </Grid>
@@ -207,7 +207,7 @@
 
                     <!-- Empty state -->
                     <v:EmptyState Glyph="&#xE968;"
-                                  Title="No network activity"
+                                  Title="No network activity" Compact="True"
                                   Message="No user apps are using the network right now. Activity appears here as soon as an app sends or receives data."
                                   Visibility="{Binding HasProcesses, Converter={StaticResource FlexVis}, ConverterParameter=Inverse}"/>
                 </Grid>

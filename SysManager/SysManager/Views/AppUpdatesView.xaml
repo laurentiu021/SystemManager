@@ -11,8 +11,7 @@
             <RowDefinition Height="Auto"/>
             <RowDefinition Height="Auto"/>
             <RowDefinition Height="*"/>
-            <!-- The console, with its "No output yet" whole: 180 cut it by 7 px (#2704). -->
-            <RowDefinition Height="188"/>
+            <RowDefinition Height="180"/>
             <RowDefinition Height="Auto"/>
         </Grid.RowDefinitions>
 

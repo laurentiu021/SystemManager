@@ -39,7 +39,7 @@
         </DataTemplate>
     </UserControl.Resources>
 
-    <Grid Background="{DynamicResource Surface0}">
+    <helpers:PageGrid Background="{DynamicResource Surface0}">
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto"/>
             <RowDefinition Height="*"/>
@@ -283,5 +283,5 @@
                 </Border>
             </Grid>
         </ScrollViewer>
-    </Grid>
+    </helpers:PageGrid>
 </UserControl>

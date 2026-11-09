@@ -6,12 +6,13 @@
              xmlns:lvc="clr-namespace:LiveChartsCore.SkiaSharpView.WPF;assembly=LiveChartsCore.SkiaSharpView.WPF"
              xmlns:v="clr-namespace:SysManager.Views">
 
-    <Grid Background="{DynamicResource Surface0}">
+    <helpers:PageGrid Background="{DynamicResource Surface0}">
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto"/>
             <RowDefinition Height="Auto"/>
             <RowDefinition Height="Auto"/>
-            <RowDefinition Height="*"/>
+            <!-- Its floor: the chart card at the chart's 200 (#2704). -->
+            <RowDefinition Height="*" MinHeight="296"/>
             <!-- Status line. This tab was one of only two in the app with no status line at all, so
                  Clear History wiped the chart and history with no confirmation on screen. -->
             <RowDefinition Height="Auto"/>
@@ -234,5 +235,5 @@
         <TextBlock Grid.Row="4" Text="{Binding StatusMessage}" Style="{StaticResource StatusLine}"
                    Margin="28,12,28,24" TextWrapping="Wrap"/>
 
-    </Grid>
+    </helpers:PageGrid>
 </UserControl>

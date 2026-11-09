@@ -43,7 +43,7 @@
         </Style>
     </UserControl.Resources>
 
-    <Grid Background="{DynamicResource Surface0}">
+    <helpers:PageGrid Background="{DynamicResource Surface0}">
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto"/>
             <RowDefinition Height="Auto"/>
@@ -330,5 +330,5 @@
 
         <!-- Status bar -->
         <v:StatusFooter Grid.Row="4" Margin="28,12,28,24" ProgressName="Audio device refresh progress"/>
-    </Grid>
+    </helpers:PageGrid>
 </UserControl>

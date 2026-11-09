@@ -5,12 +5,13 @@
              xmlns:helpers="clr-namespace:SysManager.Helpers"
              xmlns:v="clr-namespace:SysManager.Views">
 
-    <Grid Background="{DynamicResource Surface0}">
+    <helpers:PageGrid Background="{DynamicResource Surface0}">
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto"/>
             <RowDefinition Height="Auto"/>
             <RowDefinition Height="Auto"/>
-            <RowDefinition Height="*"/>
+            <!-- Its floor: the console with its "No output yet" whole (#2704). -->
+            <RowDefinition Height="*" MinHeight="188"/>
             <RowDefinition Height="Auto"/>
         </Grid.RowDefinitions>
 
@@ -133,5 +134,5 @@
                          Visibility="{Binding IsBusy, Converter={StaticResource BoolToVis}}"/>
             <TextBlock Text="{Binding StatusMessage}" Style="{StaticResource StatusLine}"/>
         </DockPanel>
-    </Grid>
+    </helpers:PageGrid>
 </UserControl>

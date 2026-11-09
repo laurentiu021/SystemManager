@@ -2,10 +2,11 @@
 <UserControl x:Class="SysManager.Views.TracerouteView"
              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:helpers="clr-namespace:SysManager.Helpers"
              xmlns:lvc="clr-namespace:LiveChartsCore.SkiaSharpView.WPF;assembly=LiveChartsCore.SkiaSharpView.WPF"
              xmlns:v="clr-namespace:SysManager.Views">
 
-    <Grid Background="{DynamicResource Surface0}">
+    <helpers:PageGrid Background="{DynamicResource Surface0}">
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto"/>
             <RowDefinition Height="*"/>
@@ -120,5 +121,5 @@
         <TextBlock Grid.Row="2" Text="{Binding StatusMessage}" Style="{StaticResource StatusLine}"
                    Margin="28,12,28,24" TextWrapping="Wrap"/>
 
-    </Grid>
+    </helpers:PageGrid>
 </UserControl>

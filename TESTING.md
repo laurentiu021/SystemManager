@@ -272,7 +272,9 @@ runner, which allows 10 s, then forced it out with exit code 1 although every te
   WPF gives it can. `ViewLayoutTests` reads it over every view at both page widths (#2787), About's test over its
   version card (#2735), and `ColumnHeaderFitTests` over every list column's header at the width the column declares,
   sorted and not (#3206), since a grid's columns get their share of the width in a dispatcher pass the harness does
-  not run. A list's cells end a value they cannot hold in "…" (#3214), which leaves the text no wider than its room,
+  not run. `PageHeightTests` reads it over every page that stretches a row, laid out in the shell's scroll viewer and
+  `PageFit` at both windows, from the shell's host down, so a page laid out shorter than its rows shows as its host
+  cut (#2704). A list's cells end a value they cannot hold in "…" (#3214), which leaves the text no wider than its room,
   so a cut cell is read with `CutText.IsCut` instead. It leaves out what is collapsed, which keeps the sizes of the
   last pass that showed it.
 - `AppViews` — **`SysManager.IntegrationTests` only.** Every view a test can build on its own, in name order, for the

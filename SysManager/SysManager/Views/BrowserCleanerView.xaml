@@ -51,7 +51,7 @@
         </DataTemplate>
     </UserControl.Resources>
 
-    <Grid Margin="28,24,28,16">
+    <helpers:PageGrid Margin="28,24,28,16">
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto"/>
             <RowDefinition Height="Auto"/>
@@ -282,5 +282,5 @@
 
         <!-- Status bar -->
         <v:StatusFooter Grid.Row="3" Margin="0,8,0,0" ProgressName="Browser cleanup progress"/>
-    </Grid>
+    </helpers:PageGrid>
 </UserControl>

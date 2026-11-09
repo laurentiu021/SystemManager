@@ -11,7 +11,7 @@
              d:DataContext="{d:DesignInstance vm:CpuAffinityViewModel}"
              Background="{DynamicResource Surface0}">
 
-    <Grid Margin="28,24,28,16">
+    <helpers:PageGrid Margin="28,24,28,16">
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto"/>
             <RowDefinition Height="Auto"/>
@@ -133,5 +133,5 @@
                     Style="{StaticResource PrimaryButton}" Padding="16,8"
                     AutomationProperties.Name="Apply affinity — the selected CPU cores"/>
         </Grid>
-    </Grid>
+    </helpers:PageGrid>
 </UserControl>

@@ -7,6 +7,7 @@ using System.Windows;
 using System.Windows.Automation;
 using System.Windows.Controls;
 using System.Windows.Media;
+using SysManager.Helpers;
 using SysManager.Models;
 using SysManager.Services;
 using SysManager.ViewModels;
@@ -41,7 +42,7 @@ public sealed class BulkInstallerViewUiTests
             {
                 var view = Laid(vm);
 
-                var page = Assert.IsType<Grid>(view.Content);
+                var page = Assert.IsType<PageGrid>(view.Content);
                 var list = Assert.Single(page.Children.OfType<Border>(), b => Grid.GetRow(b) == 4);
                 // 160 px is a category heading and two apps.
                 Assert.True(list.ActualHeight >= 160,

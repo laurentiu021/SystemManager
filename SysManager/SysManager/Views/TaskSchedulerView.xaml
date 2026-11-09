@@ -11,7 +11,7 @@
              d:DataContext="{d:DesignInstance vm:TaskSchedulerViewModel}"
              Background="{DynamicResource Surface0}">
 
-    <Grid Margin="28,24,28,16">
+    <helpers:PageGrid Margin="28,24,28,16">
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto"/>
             <RowDefinition Height="Auto"/>
@@ -173,5 +173,5 @@
                     Style="{StaticResource PrimaryButton}" Padding="16,8"
                     AutomationProperties.Name="Enable / Disable — the selected task"/>
         </Grid>
-    </Grid>
+    </helpers:PageGrid>
 </UserControl>

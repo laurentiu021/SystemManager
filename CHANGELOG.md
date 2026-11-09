@@ -10,6 +10,27 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.136.156] - 2026-11-09
+
+**A page too tall for the window scrolls instead of cutting off its bottom, and its lists, consoles and charts keep
+the height they need.**
+
+### Fixed
+- Every page was fixed rows over one stretching row, a list, a console or a chart, that took what the page had
+  left, with no scrolling, so once the fixed rows filled the page that row got nothing and whatever was under it was
+  cut off with no way to reach it. At the default window System Fixes' console had no room at all and 186 px of the
+  page were past its bottom, Scheduled Maintenance ran past its bottom too and Windows Update's list had 5 px, and at
+  the smallest window seven pages ran past their bottom and fifteen left a list, a console or a chart under 160 px.
+  Each stretching row now has a floor, 160 px or what its content needs, such as Ping's chart card, and a page the
+  window is too short for keeps that height and scrolls as a whole. A page that fits fills the window as before, and
+  its lists keep their own scrolling.
+- Because nothing is cut any more, eight pages that hold more than the default window shows scroll at that size:
+  System Fixes, Scheduled Maintenance and Windows Update, which ran off the page before, and Quick Cleanup, Resource
+  History, Bandwidth Monitor, Ping and Settings Watchdog, whose console, chart or empty list was cut short.
+- App Updates' console was 7 px too short for its "No output yet", and is now as tall as that needs.
+- Tests pin the floor and the height a page asks for, the shell filling, scrolling and bringing a control into view,
+  every page that stretches a row being one that does this, and every page laid out at both windows cutting nothing.
+
 ## [1.136.155] - 2026-11-09
 
 **Add on a Bulk Installer search result ticks the app, so Install Selected installs it.**

@@ -128,7 +128,7 @@
                                         <Run Text="{Binding FileSize, Mode=OneWay, StringFormat='{}{0:N0} bytes each'}"/>
                                     </TextBlock>
                                     <TextBlock DockPanel.Dock="Right" HorizontalAlignment="Right"
-                                               Foreground="{DynamicResource Accent}" Style="{StaticResource Subtle}">
+                                               Foreground="{DynamicResource AccentText}" Style="{StaticResource Subtle}">
                                         <Run Text="Hash: "/>
                                         <Run Text="{Binding Hash, Mode=OneWay}" FontFamily="Consolas" FontSize="11"/>
                                     </TextBlock>

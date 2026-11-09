@@ -266,6 +266,95 @@ public class ThemeTextContrastTests
             + "it.");
     }
 
+    // ── Words in the accent colour (#3205) ──────────────────────────────────────
+
+    /// <summary>
+    /// The surfaces words sit on, as <c>ThemeService.AccentText</c> measures them: the page, a card and the top of
+    /// its sheen, an inner card, the two derived inner shades, a hovered row, and the accent's own tint over the
+    /// page and over a card.
+    /// </summary>
+    private static (string Name, Color Surface)[] SurfacesWordsSitOn(ThemePreset p) =>
+    [
+        ("Background", p.Background), ("Surface", p.Surface), ("the top of a card", ThemeService.CardSheenTop(p)),
+        ("Surface2", p.Surface2), ("Surface3 (derived)", Lerp(p.Surface2, p.TextPrimary, 0.05)),
+        ("Surface4 (derived)", Lerp(p.Surface2, p.TextPrimary, 0.10)),
+        ("RowHover (derived)", Lerp(p.Surface, p.TextPrimary, ThemeService.RowHoverLerp(p.IsDark))),
+        ("the accent-tinted note", Lerp(p.Background, p.Accent, 24 / 255.0)),
+        ("a selected row", Lerp(p.Surface, p.Accent, 24 / 255.0)),
+    ];
+
+    /// <summary>
+    /// Words drawn in the accent colour read at 4.5:1 on every surface words sit on, on every preset and at every
+    /// position of the shade slider (#3205).
+    /// </summary>
+    /// <remarks>
+    /// The accent is picked as a fill, and twelve places wrote words in it: the update banner's "Update available",
+    /// About's, Deep Cleanup's heading, scan line and selected total, the current DNS server, Duplicate Finder's
+    /// hashes and Uninstaller's source. Nothing held it as a colour for words, and it read under 4.5:1 on nine
+    /// presets where they sit, down to 2.37:1 on Sky Breeze. <c>AccentText</c> is derived for words; this holds it
+    /// on the surfaces the grey tiers are held to and the two the accent's own tint makes.
+    /// </remarks>
+    [Theory]
+    [MemberData(nameof(AllPresets))]
+    public void AccentText_ReadsOnEverySurfaceWordsSitOn_AtEveryShadePosition(string presetId)
+    {
+        var seeded = ThemePreset.Defaults[presetId];
+        var offenders = new List<string>();
+        var positions = 0;
+        for (var step = 0; step <= 20; step++)
+        {
+            var shaded = ThemeService.Shade(seeded, step * 0.05);
+            var words = ThemeService.AccentText(shaded);
+            positions++;
+            foreach (var (name, surface) in SurfacesWordsSitOn(shaded))
+            {
+                var ratio = ContrastRatio(words, surface);
+                if (ratio < 4.5) offenders.Add($"shade {step * 0.05:F2}: {ratio:F2}:1 on {name}");
+            }
+        }
+
+        Assert.Equal(21, positions);
+        Assert.True(offenders.Count == 0,
+            $"{presetId}: AccentText reads under 4.5:1 here:\n  " + string.Join("\n  ", offenders));
+    }
+
+    /// <summary>
+    /// Where the accent already reads, AccentText is the accent, and where it does not, AccentText moves (#3205).
+    /// </summary>
+    /// <remarks>
+    /// Dark Forest's and Warm Ember's accents read at 4.87:1 or better on every surface words sit on, so their words
+    /// keep the accent exactly. The default theme's does not, so a derivation that returned the accent unchanged
+    /// everywhere would pass the floor above only by luck of a palette and fail here.
+    /// </remarks>
+    [Fact]
+    public void AccentText_IsTheAccent_OnlyWhereTheAccentReads()
+    {
+        foreach (var id in new[] { "dark-forest", "warm-ember" })
+        {
+            var p = ThemePreset.Defaults[id];
+            Assert.Equal(p.Accent, ThemeService.AccentText(p));
+        }
+        var midnight = ThemePreset.Defaults["midnight-indigo"];
+        Assert.NotEqual(midnight.Accent, ThemeService.AccentText(midnight));
+    }
+
+    /// <summary>A custom accent's words read too: a pale accent on a light page, a dark one on a dark page.</summary>
+    [Theory]
+    [InlineData("#FFE066", "#FFFFFF", "#F8FAFC", "#1E1B4B")]
+    [InlineData("#1E1B4B", "#070A0F", "#0E1218", "#F1F3F7")]
+    public void AccentText_ReadsForACustomAccent(string accent, string background, string surface, string text)
+    {
+        var custom = ThemeService.Shade(ThemeService.CustomPreset(Hex(accent), Hex(background), Hex(surface),
+            Hex(text)), 0.5);
+        var words = ThemeService.AccentText(custom);
+        Assert.NotEqual(custom.Accent, words);
+        foreach (var (name, surfaceColour) in SurfacesWordsSitOn(custom))
+        {
+            var ratio = ContrastRatio(words, surfaceColour);
+            Assert.True(ratio >= 4.5, $"a custom accent {accent}'s words read {ratio:F2}:1 on {name}");
+        }
+    }
+
     /// <summary>Composites <paramref name="fg"/> at <paramref name="alpha"/> over <paramref name="bg"/>.</summary>
     /// <remarks>
     /// <c>AccentSoft</c> is the accent at alpha 24, and an alpha brush's contrast is meaningless until it is

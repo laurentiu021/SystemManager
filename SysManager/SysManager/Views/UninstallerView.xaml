@@ -352,7 +352,7 @@
                                                 <TextBlock.Style>
                                                     <Style TargetType="TextBlock" BasedOn="{StaticResource Caption}">
                                                         <Setter Property="Text" Value="{Binding Source}"/>
-                                                        <Setter Property="Foreground" Value="{DynamicResource Accent}"/>
+                                                        <Setter Property="Foreground" Value="{DynamicResource AccentText}"/>
                                                         <Style.Triggers>
                                                             <DataTrigger Binding="{Binding Source}" Value="">
                                                                 <Setter Property="Text" Value="Local"/>

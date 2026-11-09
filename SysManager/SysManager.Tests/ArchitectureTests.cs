@@ -18249,6 +18249,58 @@ public partial class ArchitectureTests
     }
 
     /// <summary>
+    /// No words are drawn in the accent colour itself; they take <c>AccentText</c>, and links <c>InfoText</c> (#3205).
+    /// </summary>
+    /// <remarks>
+    /// The accent is picked as a fill, under <c>TextOnAccent</c>, and as a colour for words it read under 4.5:1 on
+    /// nine presets, down to 2.37:1 on Sky Breeze. Fills, bars, borders and the like keep it. This fails a
+    /// <c>TextBlock</c>, <c>Run</c>, <c>Hyperlink</c> or other text element given it, a style for one that sets it,
+    /// and a <c>TextElement.Foreground</c> that passes it down.
+    /// </remarks>
+    [Fact]
+    public void NoWords_AreDrawnInTheAccent()
+    {
+        var appDir = TestPaths.AppProject();
+        var files = Directory.GetFiles(Path.Combine(appDir, "Views"), "*.xaml")
+            .Append(Path.Combine(appDir, "MainWindow.xaml"))
+            .Append(Path.Combine(appDir, "App.xaml"));
+        string[] words =
+            ["TextBlock", "Run", "Hyperlink", "Span", "Bold", "Italic", "Underline", "AccessText", "Label"];
+        const string Accent = "{DynamicResource Accent}";
+        var offenders = new List<string>();
+        var accentText = 0;
+
+        foreach (var file in files)
+        {
+            var name = Path.GetFileName(file);
+            foreach (var element in XDocument.Load(file, LoadOptions.SetLineInfo).Descendants())
+            {
+                var line = ((System.Xml.IXmlLineInfo)element).LineNumber;
+                var local = element.Name.LocalName;
+                if ((string?)element.Attribute("Foreground") == "{DynamicResource AccentText}") accentText++;
+                if (words.Contains(local, StringComparer.Ordinal) && (string?)element.Attribute("Foreground") == Accent)
+                    offenders.Add($"{name}:{line}: a {local} is drawn in the accent");
+                if (element.Attributes().Any(a => a.Name.LocalName == "TextElement.Foreground" && a.Value == Accent))
+                    offenders.Add($"{name}:{line}: a {local} passes the accent down to its words");
+                if (local != "Setter" || (string?)element.Attribute("Value") is not { } value) continue;
+                if (value == "{DynamicResource AccentText}") accentText++;
+                var property = (string?)element.Attribute("Property");
+                if (value != Accent || property is not ("Foreground" or "TextElement.Foreground")) continue;
+                var style = element.Ancestors().FirstOrDefault(a => a.Name.LocalName == "Style");
+                var target = ((string?)style?.Attribute("TargetType"))?.Split(':')[^1].Trim('{', '}');
+                if (target is not null && words.Contains(target, StringComparer.Ordinal))
+                    offenders.Add($"{name}:{line}: a {target} style draws its words in the accent");
+            }
+        }
+
+        // Vacuity floor: 11 places draw words in AccentText when written.
+        Assert.True(accentText >= 11, $"only {accentText} uses of AccentText were found, out of 11 when written.");
+        Assert.True(offenders.Count == 0,
+            "these draw words in the accent, which is picked as a fill and reads under 4.5:1 as words on most themes. "
+            + "Use AccentText, or InfoText for a link:\n  " + string.Join("\n  ", offenders));
+    }
+
+    /// <summary>
     /// Every text box and drop-down template dims when it is disabled, as the other controls do.
     /// </summary>
     /// <remarks>

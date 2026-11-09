@@ -38,9 +38,9 @@
                          of every line (#2787). -->
                     <DockPanel>
                         <TextBlock Text="&#xE946;" FontFamily="Segoe Fluent Icons,Segoe MDL2 Assets" DockPanel.Dock="Left"
-                                   FontSize="18" Foreground="{DynamicResource Accent}" VerticalAlignment="Top" Margin="0,2,12,0"/>
+                                   FontSize="18" Foreground="{DynamicResource AccentText}" VerticalAlignment="Top" Margin="0,2,12,0"/>
                         <StackPanel>
-                            <TextBlock Text="Safe by design" Style="{StaticResource SectionTitle}" Foreground="{DynamicResource Accent}"/>
+                            <TextBlock Text="Safe by design" Style="{StaticResource SectionTitle}" Foreground="{DynamicResource AccentText}"/>
                             <TextBlock TextWrapping="Wrap" Foreground="{DynamicResource TextSecondary}" Margin="0,4,0,0" Style="{StaticResource Subtle}">
                                 Only a fixed list of folders is scanned: driver installer leftovers, Windows' own caches, logs and leftovers, the Recycle Bin, and
                                 game launchers' caches and logs.
@@ -77,7 +77,7 @@
                                 <!-- Announced: this is the coarse "what is happening" line. The percentage
                                      beside it deliberately is not — a live region on a number that changes
                                      every tick produces continuous speech instead of information. -->
-                                <TextBlock Grid.Column="0" Text="{Binding ScanStatusLine}" Style="{StaticResource SectionTitle}" Foreground="{DynamicResource Accent}" VerticalAlignment="Center"
+                                <TextBlock Grid.Column="0" Text="{Binding ScanStatusLine}" Style="{StaticResource SectionTitle}" Foreground="{DynamicResource AccentText}" VerticalAlignment="Center"
                                            AutomationProperties.LiveSetting="Polite" helpers:LiveRegion.Announces="True"/>
                                 <TextBlock Grid.Column="1" Text="{Binding ScanProgress, StringFormat={}{0}%}" Style="{StaticResource Body}" Foreground="{DynamicResource TextSecondary}" VerticalAlignment="Center" Margin="12,0,0,0"/>
                             </Grid>
@@ -140,7 +140,7 @@
                                 <StackPanel Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Center">
                                     <TextBlock Text="Selected total:" Style="{StaticResource Body}" Foreground="{DynamicResource TextSecondary}" VerticalAlignment="Center"/>
                                     <TextBlock Text="{Binding TotalSelectedDisplay}" Style="{StaticResource MetricCompact}"
-                                               Foreground="{DynamicResource Accent}" VerticalAlignment="Center" Margin="8,0,0,0"/>
+                                               Foreground="{DynamicResource AccentText}" VerticalAlignment="Center" Margin="8,0,0,0"/>
                                 </StackPanel>
                                 <StackPanel Grid.Column="1" Orientation="Horizontal">
                                     <Button Content="Clean selected" Command="{Binding CleanCommand}"

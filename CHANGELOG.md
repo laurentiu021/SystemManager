@@ -10,6 +10,23 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.136.149] - 2026-11-09
+
+**Words drawn in the theme's accent colour, such as "Update available" or the current DNS server, are easy to read
+on every theme, and About's links match the links on the Dashboard.**
+
+### Fixed
+- Twelve places wrote words in the theme's accent colour: the update banner's and About's "Update available", About's
+  four links, Deep Cleanup's "Safe by design", scan line and selected total, the current DNS server on DNS & Hosts,
+  Duplicate Finder's hashes and each row's source on Uninstaller. The accent is chosen to fill buttons, and as a
+  colour for words it read under 4.5:1 on nine of the twelve themes, down to 2.37:1 on Sky Breeze, where words need
+  4.5. Words now take a shade of the accent moved toward the theme's main text colour just far enough to read at
+  4.64:1 or more where they sit, a hovered row included, on every theme. On Dark Forest and Warm Ember it is the
+  accent itself. A custom accent and every position of the background shade slider get their own. About's links are
+  the blue the Dashboard's and Boot Analyzer's links use. Buttons, bars and borders keep the accent.
+- Tests hold that colour at 4.5:1 on every surface words sit on, on every theme, at every shade position and for a
+  custom accent, and fail any words drawn in the accent itself.
+
 ## [1.136.148] - 2026-11-09
 
 **Pointing at a row in a list keeps its grey details easy to read, and a bar on the row's left edge shows where the

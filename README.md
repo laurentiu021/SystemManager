@@ -211,6 +211,8 @@ and a panel colour that leaves no room for readable text at all — a near-white
 near-black background, say — is nudged toward the background until it does. The twelve built-in themes
 are unaffected by that correction; their surfaces already sit near their backgrounds. If a result is
 still not what you wanted, Reset to default theme puts the shipped theme back and survives a restart.
+Words drawn in the theme's accent colour, such as "Update available" or the current DNS server, use a
+shade of it that reads on every theme and every custom accent, while buttons and bars keep the accent itself.
 
 A switch reaches everything at once, on the tab you are on and on the ones you opened before: console
 output, verdicts, health cards, status chips and the cards in the Appearance panel itself redraw in the

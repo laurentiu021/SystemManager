@@ -1734,28 +1734,24 @@
                                         BorderBrush="{TemplateBinding BorderBrush}"
                                         BorderThickness="{TemplateBinding BorderThickness}"
                                         Padding="{TemplateBinding Padding}">
-                                    <Grid>
-                                        <Grid.ColumnDefinitions>
-                                            <ColumnDefinition Width="*"/>
-                                            <ColumnDefinition Width="Auto"/>
-                                        </Grid.ColumnDefinitions>
-                                        <ContentPresenter Grid.Column="0"
-                                                          HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}"
-                                                          VerticalAlignment="Center"
-                                                          Content="{TemplateBinding Content}"
-                                                          ContentTemplate="{TemplateBinding ContentTemplate}">
-                                            <ContentPresenter.Resources>
-                                                <Style TargetType="TextBlock" BasedOn="{StaticResource TextBase}"/>
-                                            </ContentPresenter.Resources>
-                                        </ContentPresenter>
-                                        <Path x:Name="SortArrow" Grid.Column="1"
-                                              Visibility="Collapsed"
-                                              Fill="{DynamicResource TextSecondary}"
-                                              Margin="6,0,0,0"
-                                              VerticalAlignment="Center"
-                                              RenderTransformOrigin="0.5,0.5"/>
-                                    </Grid>
+                                    <ContentPresenter HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}"
+                                                      VerticalAlignment="Center"
+                                                      Content="{TemplateBinding Content}"
+                                                      ContentTemplate="{TemplateBinding ContentTemplate}">
+                                        <ContentPresenter.Resources>
+                                            <Style TargetType="TextBlock" BasedOn="{StaticResource TextBase}"/>
+                                        </ContentPresenter.Resources>
+                                    </ContentPresenter>
                                 </Border>
+                                <!-- Above the words, in the header's top padding, as File Explorer draws it: beside
+                                     them it took 14 px, and sorting by a narrow column cut its name (#3206). -->
+                                <Path x:Name="SortArrow"
+                                      Visibility="Collapsed"
+                                      Fill="{DynamicResource TextSecondary}"
+                                      HorizontalAlignment="Center"
+                                      VerticalAlignment="Top"
+                                      Margin="0,2,0,0"
+                                      IsHitTestVisible="False"/>
                                 <Thumb x:Name="PART_RightHeaderGripper" HorizontalAlignment="Right"
                                        Width="6" Cursor="SizeWE" BorderThickness="0">
                                     <Thumb.Template>
@@ -1773,11 +1769,11 @@
                                 </Trigger>
                                 <Trigger Property="SortDirection" Value="Ascending">
                                     <Setter TargetName="SortArrow" Property="Visibility" Value="Visible"/>
-                                    <Setter TargetName="SortArrow" Property="Data" Value="M 0,6 L 4,0 L 8,6 Z"/>
+                                    <Setter TargetName="SortArrow" Property="Data" Value="M 0,5 L 4,0 L 8,5 Z"/>
                                 </Trigger>
                                 <Trigger Property="SortDirection" Value="Descending">
                                     <Setter TargetName="SortArrow" Property="Visibility" Value="Visible"/>
-                                    <Setter TargetName="SortArrow" Property="Data" Value="M 0,0 L 4,6 L 8,0 Z"/>
+                                    <Setter TargetName="SortArrow" Property="Data" Value="M 0,0 L 4,5 L 8,0 Z"/>
                                 </Trigger>
                             </ControlTemplate.Triggers>
                         </ControlTemplate>

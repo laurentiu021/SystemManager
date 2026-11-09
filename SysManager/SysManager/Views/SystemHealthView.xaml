@@ -51,7 +51,7 @@
                                   VirtualizingPanel.VirtualizationMode="Recycling">
                             <DataGrid.Columns>
                                 <DataGridTextColumn Header="Slot" Binding="{Binding Slot}" Width="*" MinWidth="80"/>
-                                <DataGridTextColumn Header="Manufacturer" Binding="{Binding Manufacturer}" Width="*" MinWidth="80"/>
+                                <DataGridTextColumn Header="Manufacturer" Binding="{Binding Manufacturer}" Width="*" MinWidth="94"/>
                                 <DataGridTextColumn Header="Capacity (GB)" Binding="{Binding CapacityGB, StringFormat={}{0:F1}}" Width="110" MinWidth="80"/>
                                 <DataGridTextColumn Header="Rated (MHz)" Binding="{Binding SpeedMHz}" Width="105" MinWidth="80"/>
                                 <!-- Running vs rated is what tells someone their RAM is below its rated

@@ -169,6 +169,57 @@ public sealed class SpeedTestViewUiTests : IDisposable
         });
     }
 
+    [Fact]
+    public async Task TheHistoryLists_FitTheDefaultWindow_WithTheirScrollBarShowing()
+    {
+        // A list shows its scroll bar from eight runs, and the bar takes 14 px of its width. The HTTP list is 444 px
+        // wide at the default window and its columns take 430, so widening one for its header put a sideways scroll
+        // bar under every longer history (#3206). Twelve runs shown as 28 May 23:58, as wide as a date is drawn, with
+        // four-digit speeds.
+        var shared = new NetworkSharedState(new PingMonitorService(), new TracerouteService(),
+            new TracerouteMonitorService(), new SpeedTestService(new PowerShellRunner()),
+            new NetworkRepairService(new PowerShellRunner()));
+        var vm = new SpeedTestViewModel(shared, new SpeedTestHistoryService(_dir));
+        await vm.InitializationComplete;
+        for (var run = 0; run < 12; run++)
+        {
+            var when = new DateTime(2026, 5, 28, 23, 58, 0).AddSeconds(run);
+            vm.AddToHistory(new SpeedTestResult("HTTP", 1312.4, 920.1, 112.3, "speed.cloudflare.com", when));
+            vm.AddToHistory(new SpeedTestResult("Ookla", 1480.2, 995.1, 109.4, "Bucharest", when));
+        }
+
+        StaHelper.Run(() =>
+        {
+            AppResources.Ensure();
+            var view = new SpeedTestView { DataContext = vm };
+            view.Measure(new Size(PageWidth.Default, 1600));
+            view.Arrange(new Rect(0, 0, PageWidth.Default, 1600));
+            view.UpdateLayout();
+
+            foreach (var name in new[] { "HTTP speed test history", "Ookla speed test history" })
+            {
+                var grid = GridNamed(view, name);
+                var scroller = Assert.IsType<ScrollViewer>(grid.Template.FindName("DG_ScrollViewer", grid));
+                // The bar is up and takes its width, or this would measure the easy case.
+                Assert.Equal(Visibility.Visible, scroller.ComputedVerticalScrollBarVisibility);
+                Assert.True(scroller.ComputedHorizontalScrollBarVisibility != Visibility.Visible,
+                    $"the {name} scrolls sideways at the default window: its columns take "
+                    + $"{scroller.ExtentWidth:F0} px of the {scroller.ViewportWidth:F0} its scroll bar leaves.");
+
+                // Server takes the width the others leave, and a server's name can be longer than any width, so its
+                // cells are not read.
+                var cells = Descendants<DataGridCell>(grid).Where(c => (string)c.Column.Header != "Server").ToList();
+                Assert.True(cells.Count >= 28, $"only {cells.Count} cells of the {name} were laid out");
+                var cut = cells.SelectMany(Descendants<TextBlock>)
+                    .Where(words => LayoutClip.IsCutAcross(words, out _))
+                    .Select(words => $"\"{words.Text}\"")
+                    .Distinct()
+                    .ToList();
+                Assert.True(cut.Count == 0, $"the {name} cuts {string.Join(", ", cut)}");
+            }
+        });
+    }
+
     /// <summary>
     /// The text actually on screen under <paramref name="root"/>: a collapsed element still holds its bound text,
     /// so its subtree is skipped rather than read.

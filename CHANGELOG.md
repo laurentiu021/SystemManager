@@ -10,6 +10,22 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.136.150] - 2026-11-09
+
+**Sorting a list by one of its columns keeps the column's name whole: the arrow sits above the name now.**
+
+### Fixed
+- A sorted column drew its arrow beside the column's name, and fourteen columns were too narrow for both, so
+  sorting by one of them cut its name: Traceroute's "#" disappeared, DNS & Hosts' "On" kept 2 of its 15 px, and
+  Speed Test's "Down (Mbps)" read "Down (Mb". The arrow sits above the name, as File Explorer draws it, so sorting
+  takes no width from any column.
+- Three headers were cut by a pixel or two without sorting. Speed Test's "Down (Mbps)" and "Ping (ms)" are 4 px
+  wider, with the room taken from the date and upload columns, so a long history still fits the default window
+  without scrolling sideways. System Health's "Manufacturer" keeps room for its name at the smallest window.
+- Tests lay out every list column's header at the width the column gives it, unsorted and sorted both ways, and
+  fail one whose name is cut or that the arrow draws over. Another fails a Speed Test history that scrolls sideways
+  at the default window or cuts a date.
+
 ## [1.136.149] - 2026-11-09
 
 **Words drawn in the theme's accent colour, such as "Update available" or the current DNS server, are easy to read

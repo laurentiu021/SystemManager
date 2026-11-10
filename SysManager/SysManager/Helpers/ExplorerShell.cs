@@ -211,7 +211,12 @@ public static class ExplorerShell
                 try
                 {
                     var size = new FileInfo(file).Length;
-                    File.SetAttributes(file, FileAttributes.Normal);
+                    // ReadOnly is the one attribute that blocks a delete, so it is the only one cleared. Normal is not
+                    // a mask: it replaced the whole set, Hidden, System and Archive with it, and a cache database
+                    // Explorer still held stayed on disk without them, as Deep Cleanup's did before #2376.
+                    var attributes = File.GetAttributes(file);
+                    if ((attributes & FileAttributes.ReadOnly) != 0)
+                        File.SetAttributes(file, attributes & ~FileAttributes.ReadOnly);
                     File.Delete(file);
                     // Counted only after the delete returns, so a locked file is never reported as freed.
                     deleted++;

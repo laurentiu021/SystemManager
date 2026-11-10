@@ -15,6 +15,13 @@ namespace SysManager.Tests;
 [Collection("ProcessWideStatics")]
 public class ShortcutCleanerViewModelTests
 {
+    [Theory]
+    [InlineData(0, "")]
+    [InlineData(1, " 1 works again and was kept.")]
+    [InlineData(3, " 3 work again and were kept.")]
+    public void TheDeleteSummary_SaysHowManyWorkAgain(int count, string expected) =>
+        Assert.Equal(expected, ShortcutCleanerViewModel.DescribeWorkingAgain(count));
+
     [Fact]
     public void InitialState_IsCorrect()
     {

@@ -1484,7 +1484,9 @@ Answers "what is actually using my space?" by listing the biggest files in one p
   The line under the toolbar says where it was saved, or that it could not be, and why
 - Select all / deselect individual items — and **unticking one survives a rescan**, so
   scanning again cannot quietly put back a shortcut you decided to keep
-- Move to Recycle Bin or permanent delete, with confirmation dialog
+- Move to Recycle Bin or permanent delete, with confirmation dialog. **Each shortcut is judged again just
+  before it goes**, by the same rules as the scan, so one that works again by then, its program installed
+  again or its document put back, is kept and taken off the list, and the status line says how many
 - COM-based IShellLink resolution for accurate target validation
 
 ### Scheduled Maintenance 🔬

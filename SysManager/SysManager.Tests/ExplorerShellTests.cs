@@ -134,6 +134,27 @@ public class ExplorerShellTests : IDisposable
         Assert.False(File.Exists(path));
     }
 
+    /// <summary>
+    /// A cache file Explorer still holds stays, and stays as it was: Hidden and System are not taken off it on the way
+    /// to a delete that then fails. Setting the attributes to Normal replaced the whole set.
+    /// </summary>
+    [Fact]
+    public void DeleteCacheFiles_AFileItCannotDelete_KeepsItsAttributes()
+    {
+        var held = Write("thumbcache_held.db", 64);
+        var attributes = FileAttributes.Hidden | FileAttributes.System | FileAttributes.Archive;
+        File.SetAttributes(held, attributes);
+
+        using (new FileStream(held, FileMode.Open, FileAccess.Read, FileShare.None))
+        {
+            var sweep = ExplorerShell.DeleteCacheFiles(_dir);
+
+            Assert.Equal(1, sweep.Failed);
+        }
+
+        Assert.Equal(attributes, File.GetAttributes(held));
+    }
+
     [Fact]
     public void DeleteCacheFiles_OnAnEmptyFolder_ReportsNothing()
     {

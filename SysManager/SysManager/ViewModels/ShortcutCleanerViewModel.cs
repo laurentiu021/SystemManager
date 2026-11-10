@@ -147,17 +147,19 @@ public sealed partial class ShortcutCleanerViewModel : ElevatedViewModelBase
 
         // The shell delete (SHFileOperation) is synchronous and can take a while for
         // many items — run it off the UI thread so the window stays responsive.
-        var deleted = await Task.Run(() => ShortcutCleanerService.DeleteShortcuts(selected, MoveToRecycleBin));
+        var result = await Task.Run(() => ShortcutCleanerService.DeleteShortcuts(selected, MoveToRecycleBin));
+        var deleted = result.Deleted;
 
-        // Remove deleted items from the list
-        foreach (var s in selected.Where(s => !System.IO.File.Exists(s.ShortcutPath)))
+        // Remove deleted items from the list, and the ones that work again: they are not broken any more.
+        foreach (var s in selected.Where(s => !System.IO.File.Exists(s.ShortcutPath)).Concat(result.WorkAgain).ToList())
         {
             BrokenShortcuts.Remove(s);
         }
 
         BrokenCount = BrokenShortcuts.Count;
         SelectedCount = BrokenShortcuts.Count(x => x.IsSelected);
-        ScanStatus = $"Deleted {deleted} shortcut{(deleted == 1 ? "" : "s")}. {BrokenCount} remaining.";
+        ScanStatus = $"Deleted {deleted} shortcut{(deleted == 1 ? "" : "s")}."
+                     + $"{DescribeWorkingAgain(result.WorkAgain.Count)} {BrokenCount} remaining.";
         ToastService.Instance.Show("Shortcuts deleted", $"{deleted} shortcut{(deleted == 1 ? "" : "s")} removed");
         // Records whether the shortcuts are recoverable, which is the part that matters if the user
         // later wonders where one went. Counts only, no shortcut names.
@@ -167,6 +169,16 @@ public sealed partial class ShortcutCleanerViewModel : ElevatedViewModelBase
             (MoveToRecycleBin ? " to the Recycle Bin" : ""));
         Log.Information("Deleted {Count} broken shortcuts (recycle bin: {RecycleBin})", deleted, MoveToRecycleBin);
     }
+
+    /// <summary>
+    /// The sentence for the ticked shortcuts kept because they work again, with a space before it, or nothing.
+    /// </summary>
+    internal static string DescribeWorkingAgain(int count) => count switch
+    {
+        0 => "",
+        1 => " 1 works again and was kept.",
+        _ => $" {count} work again and were kept.",
+    };
 
     [RelayCommand]
     private void SelectAll()

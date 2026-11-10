@@ -30,6 +30,14 @@ public sealed partial class BrokenShortcut : ObservableObject, Helpers.ISelectab
     [ObservableProperty] private bool _isSelected = true;
 }
 
+/// <summary>What deleting the ticked broken shortcuts did.</summary>
+/// <param name="Deleted">How many were deleted, or moved to the Recycle Bin.</param>
+/// <param name="WorkAgain">
+/// The ticked shortcuts whose targets were back by the time of the delete, so they were kept: the program was installed
+/// again, say, or a document put back.
+/// </param>
+public sealed record ShortcutDeletion(int Deleted, IReadOnlyList<BrokenShortcut> WorkAgain);
+
 /// <summary>
 /// What a shortcut scan found: the shortcuts whose target is CONFIRMED gone, and how many it could not
 /// decide about.

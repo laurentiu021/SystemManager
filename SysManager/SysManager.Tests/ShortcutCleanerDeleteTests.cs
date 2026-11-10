@@ -37,13 +37,17 @@ public sealed class ShortcutCleanerDeleteTests : IDisposable
     /// <summary>A permanent delete must never reach the Recycle Bin.</summary>
     private static bool NeverCalled(string path) => throw new InvalidOperationException($"{path} was recycled");
 
+    /// <summary>Every shortcut is still broken when it is judged again.</summary>
+    private static bool StillBroken(string path) => true;
+
     [Fact]
     public void Permanently_DeletesTheTickedShortcutsAndNoOthers()
     {
         var kept = Shortcut("Kept", selected: false);
         List<BrokenShortcut> rows = [Shortcut("First"), kept, Shortcut("Second")];
 
-        var deleted = ShortcutCleanerService.DeleteShortcuts(rows, toRecycleBin: false, NeverCalled);
+        var deleted = ShortcutCleanerService.DeleteShortcuts(rows, toRecycleBin: false, NeverCalled, StillBroken)
+            .Deleted;
 
         Assert.Equal(2, deleted);
         Assert.Equal([kept.ShortcutPath], Directory.GetFiles(_dir));
@@ -62,7 +66,7 @@ public sealed class ShortcutCleanerDeleteTests : IDisposable
         {
             handed.Add(path);
             return true;
-        });
+        }, StillBroken).Deleted;
 
         Assert.Equal(2, deleted);
         Assert.Equal([first.ShortcutPath, second.ShortcutPath], handed);
@@ -74,7 +78,8 @@ public sealed class ShortcutCleanerDeleteTests : IDisposable
     {
         var refused = Shortcut("Refused");
 
-        var deleted = ShortcutCleanerService.DeleteShortcuts([refused], toRecycleBin: true, _ => false);
+        var deleted = ShortcutCleanerService.DeleteShortcuts([refused], toRecycleBin: true, _ => false, StillBroken)
+            .Deleted;
 
         Assert.Equal(0, deleted);
         Assert.True(File.Exists(refused.ShortcutPath));
@@ -86,7 +91,8 @@ public sealed class ShortcutCleanerDeleteTests : IDisposable
         var gone = Shortcut("Gone");
         File.Delete(gone.ShortcutPath);
 
-        Assert.Equal(1, ShortcutCleanerService.DeleteShortcuts([gone, Shortcut("Here")], toRecycleBin: false, NeverCalled));
+        Assert.Equal(1, ShortcutCleanerService.DeleteShortcuts(
+            [gone, Shortcut("Here")], toRecycleBin: false, NeverCalled, StillBroken).Deleted);
     }
 
     [Fact]
@@ -99,11 +105,43 @@ public sealed class ShortcutCleanerDeleteTests : IDisposable
         using var held = new FileStream(open.ShortcutPath, FileMode.Open, FileAccess.Read, FileShare.None);
         var deletable = Shortcut("Deletable");
 
-        var deleted = ShortcutCleanerService.DeleteShortcuts([readOnly, open, deletable], toRecycleBin: false, NeverCalled);
+        var deleted = ShortcutCleanerService.DeleteShortcuts(
+            [readOnly, open, deletable], toRecycleBin: false, NeverCalled, StillBroken).Deleted;
 
         Assert.Equal(1, deleted);
         Assert.True(File.Exists(readOnly.ShortcutPath));
         Assert.True(File.Exists(open.ShortcutPath));
         Assert.False(File.Exists(deletable.ShortcutPath));
+    }
+
+    [Fact]
+    public void AShortcutThatWorksAgain_IsKept_AndSaidToWorkAgain()
+    {
+        // The list is the scan's, and the delete can come long after it: a program installed again since rewrote its
+        // shortcut, and the shortcut was deleted anyway, permanently when the Recycle Bin was not ticked.
+        var back = Shortcut("Back");
+        var still = Shortcut("Still");
+
+        var result = ShortcutCleanerService.DeleteShortcuts([back, still], toRecycleBin: false, NeverCalled,
+            path => path != back.ShortcutPath);
+
+        Assert.Equal(1, result.Deleted);
+        Assert.Same(back, Assert.Single(result.WorkAgain));
+        Assert.True(File.Exists(back.ShortcutPath));
+        Assert.False(File.Exists(still.ShortcutPath));
+    }
+
+    [Fact]
+    public void AShortcutTheShellCannotReadAgain_IsKept()
+    {
+        // Not shown to be broken, so not deleted; nor said to work again.
+        var unreadable = Shortcut("Unreadable");
+
+        var result = ShortcutCleanerService.DeleteShortcuts([unreadable], toRecycleBin: false, NeverCalled,
+            _ => throw new System.Runtime.InteropServices.COMException("cannot load the shortcut"));
+
+        Assert.Equal(0, result.Deleted);
+        Assert.Empty(result.WorkAgain);
+        Assert.True(File.Exists(unreadable.ShortcutPath));
     }
 }

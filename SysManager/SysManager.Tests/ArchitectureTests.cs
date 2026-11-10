@@ -24356,6 +24356,45 @@ public partial class ArchitectureTests
     private static partial Regex WindowCallWithAnArgument();
 
     /// <summary>
+    /// Nothing in the app clears a file's attributes by setting them to <see cref="FileAttributes.Normal"/>.
+    /// </summary>
+    /// <remarks>
+    /// Normal is not a mask: it replaces the whole set, so Hidden, System and Archive went with ReadOnly, and a
+    /// delete that then failed, a cache database another process held open, left the file on disk stripped of them.
+    /// ReadOnly is the one attribute that blocks a delete, and the only one to clear. Deep Cleanup was fixed for this
+    /// (#2376) and Explorer's cache rebuild kept the old line. Read with comments stripped, so the remarks that explain
+    /// the rule are not taken for a use of it, and the pattern is first shown to catch the line it exists for.
+    /// </remarks>
+    [Fact]
+    public void NoFileAttributesAreClearedBySettingThemToNormal()
+    {
+        Assert.Matches(AttributesSetToNormal(), "File.SetAttributes(file, FileAttributes.Normal);");
+        Assert.Matches(AttributesSetToNormal(), "new FileInfo(path).Attributes = FileAttributes.Normal;");
+
+        var files = 0;
+        var offenders = new List<string>();
+        var obj = $"{Path.DirectorySeparatorChar}obj{Path.DirectorySeparatorChar}";
+        var bin = $"{Path.DirectorySeparatorChar}bin{Path.DirectorySeparatorChar}";
+        foreach (var file in Directory.EnumerateFiles(TestPaths.AppProject(), "*.cs", SearchOption.AllDirectories)
+                     .Where(f => !f.Contains(obj, StringComparison.Ordinal))
+                     .Where(f => !f.Contains(bin, StringComparison.Ordinal)))
+        {
+            files++;
+            foreach (Match use in AttributesSetToNormal().Matches(WithoutComments(File.ReadAllText(file))))
+                offenders.Add($"{Path.GetFileName(file)}: {use.Value}");
+        }
+
+        Assert.True(files > 100, $"only {files} source files were read, so the app was not.");
+        Assert.True(offenders.Count == 0,
+            "These replace a file's attributes with Normal, which drops Hidden, System and Archive too. Clear "
+            + "ReadOnly alone, with attributes & ~FileAttributes.ReadOnly:\n  " + string.Join("\n  ", offenders));
+    }
+
+    [GeneratedRegex(@"(?:\.SetAttributes\s*\([^;]*|\.Attributes\s*=\s*)FileAttributes\.Normal\b",
+        RegexOptions.CultureInvariant)]
+    private static partial Regex AttributesSetToNormal();
+
+    /// <summary>
     /// How many services sit behind a constructor-injected interface seam is spelled out in ARCHITECTURE.md,
     /// and the list beside the number names each one — so both are derived here from the registrations
     /// themselves, which is the only place a seam actually becomes injectable.

@@ -58,25 +58,20 @@ public sealed partial class ShortcutCleanerService
 
                 try
                 {
-                    var target = ResolveShortcutTarget(lnk);
-                    if (string.IsNullOrWhiteSpace(target)) continue;
-
-                    // Skip URLs, shell objects, and special targets
-                    if (target.StartsWith("::") || target.StartsWith("http", StringComparison.OrdinalIgnoreCase))
-                        continue;
+                    if (JudgeShortcut(lnk, synced) is not { } judged) continue;
 
                     // "Broken" must mean the scan ESTABLISHED the target is gone, never that it failed to
                     // reach it — see ClassifyTarget. An undecided target is counted and left alone, because
                     // the rows this produces arrive pre-ticked for deletion (#2378). See Judge for a shortcut
                     // in a folder OneDrive shares.
-                    switch (Judge(ClassifyTarget(target), SystemPaths.IsInsideAnySubtree(lnk, synced)))
+                    switch (judged.Outcome)
                     {
                         case ShortcutOutcome.Broken:
                             results.Add(new BrokenShortcut
                             {
                                 Name = Path.GetFileNameWithoutExtension(lnk),
                                 ShortcutPath = lnk,
-                                TargetPath = target,
+                                TargetPath = judged.Target,
                                 Location = label
                             });
                             break;
@@ -105,6 +100,25 @@ public sealed partial class ShortcutCleanerService
         ct.ThrowIfCancellationRequested();
 
         return new ShortcutScanReport { Broken = results, UnreachableTargets = unreachable, SharedTargets = shared };
+    }
+
+    /// <summary>
+    /// What becomes of the shortcut at <paramref name="lnk"/>, and the target it points at, or null when it is not
+    /// judged at all: it names no target, or a web address or a shell object. The one judgement the scan lists a
+    /// shortcut by, and a deletion makes again.
+    /// </summary>
+    /// <param name="lnk">The shortcut file.</param>
+    /// <param name="synced">The folders OneDrive keeps in step with the user's other PCs.</param>
+    private static (ShortcutOutcome Outcome, string Target)? JudgeShortcut(string lnk, string?[] synced)
+    {
+        var target = ResolveShortcutTarget(lnk);
+        if (string.IsNullOrWhiteSpace(target)) return null;
+
+        // Skip URLs, shell objects, and special targets
+        if (target.StartsWith("::") || target.StartsWith("http", StringComparison.OrdinalIgnoreCase))
+            return null;
+
+        return (Judge(ClassifyTarget(target), SystemPaths.IsInsideAnySubtree(lnk, synced)), target);
     }
 
     /// <summary>What becomes of one shortcut, once its target has been judged.</summary>
@@ -252,24 +266,43 @@ public sealed partial class ShortcutCleanerService
     private static SafeWalkOptions LnkWalk { get; } = new() { SearchPattern = "*.lnk" };
 
     /// <summary>
-    /// Deletes selected shortcuts. Returns count of successfully deleted items.
+    /// Deletes the ticked shortcuts that are still broken, judged again first by the rules the scan used.
     /// </summary>
-    public static int DeleteShortcuts(IEnumerable<BrokenShortcut> shortcuts, bool toRecycleBin) =>
-        DeleteShortcuts(shortcuts, toRecycleBin, Helpers.RecycleBinHelper.SendToRecycleBin);
+    /// <remarks>
+    /// The list is the scan's, the tab keeps it for the whole session, and its rows arrive ticked, so the delete can
+    /// come long after the scan. A shortcut that works again by then, its program installed again and the shortcut
+    /// rewritten at the same place say, or a Recent item whose document was put back, was deleted anyway, permanently
+    /// when the Recycle Bin was not ticked, after a confirmation that still called it broken. It is kept now, and named
+    /// in <see cref="ShortcutDeletion.WorkAgain"/>.
+    /// </remarks>
+    public static ShortcutDeletion DeleteShortcuts(IEnumerable<BrokenShortcut> shortcuts, bool toRecycleBin)
+    {
+        string?[] synced = [.. SyncRoots(Environment.GetEnvironmentVariable)];
+        return DeleteShortcuts(shortcuts, toRecycleBin, Helpers.RecycleBinHelper.SendToRecycleBin,
+            lnk => JudgeShortcut(lnk, synced)?.Outcome == ShortcutOutcome.Broken);
+    }
 
     /// <summary>
-    /// <see cref="DeleteShortcuts(IEnumerable{BrokenShortcut}, bool)"/> with the Recycle Bin handed in, so a test
-    /// sees what is recycled without putting files in the Recycle Bin of the machine running it. No test reached
-    /// this before (#2741).
+    /// <see cref="DeleteShortcuts(IEnumerable{BrokenShortcut}, bool)"/> with the Recycle Bin and the judgement handed
+    /// in, so a test sees what is recycled without putting files in the Recycle Bin of the machine running it, and
+    /// decides which shortcuts are still broken without writing real ones. No test reached this before (#2741).
     /// </summary>
-    internal static int DeleteShortcuts(IEnumerable<BrokenShortcut> shortcuts, bool toRecycleBin, Func<string, bool> recycle)
+    /// <param name="stillBroken">Whether the shortcut at a path is broken now.</param>
+    internal static ShortcutDeletion DeleteShortcuts(IEnumerable<BrokenShortcut> shortcuts, bool toRecycleBin,
+                                                     Func<string, bool> recycle, Func<string, bool> stillBroken)
     {
         int deleted = 0;
+        List<BrokenShortcut> workAgain = [];
         foreach (var s in shortcuts.Where(x => x.IsSelected))
         {
             try
             {
                 if (!File.Exists(s.ShortcutPath)) continue;
+                if (!stillBroken(s.ShortcutPath))
+                {
+                    workAgain.Add(s);
+                    continue;
+                }
 
                 if (toRecycleBin)
                 {
@@ -287,8 +320,13 @@ public sealed partial class ShortcutCleanerService
             }
             catch (IOException ex) { Log.Warning(ex, "Failed to delete shortcut: {Path}", s.ShortcutPath); }
             catch (UnauthorizedAccessException ex) { Log.Warning(ex, "Access denied deleting shortcut: {Path}", s.ShortcutPath); }
+            catch (COMException ex)
+            {
+                // A shortcut the shell can no longer read is not shown to be broken, so it is left.
+                Log.Warning(ex, "Could not read shortcut again before deleting it: {Path}", s.ShortcutPath);
+            }
         }
-        return deleted;
+        return new ShortcutDeletion(deleted, workAgain);
     }
 
     private static List<(string Label, string Path)> GetScanLocations()

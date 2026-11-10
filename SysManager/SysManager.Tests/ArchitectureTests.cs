@@ -24395,6 +24395,81 @@ public partial class ArchitectureTests
     private static partial Regex AttributesSetToNormal();
 
     /// <summary>
+    /// No workflow writes a value an event or an input carries into a script: a script reads only what an earlier step
+    /// of its own job computed, and every other value arrives through the step's environment.
+    /// </summary>
+    /// <remarks>
+    /// <c>${{ }}</c> is replaced in the script's text before the shell sees it, so a tag name, a branch name or a
+    /// dispatch input written there is read as script. The release guard job wrote <c>github.ref_name</c> into its
+    /// script before the tag's shape was checked, though the build job beside it already passed the tag through its
+    /// environment for that reason. Step outputs and outcomes are what the job made itself, from values it validated.
+    /// Read as text, a run block being every line indented past its <c>run:</c>, and the reader is first shown to find
+    /// the expression it exists for.
+    /// </remarks>
+    [Fact]
+    public void NoWorkflowScript_WritesInAValueAnEventOrInputCarries()
+    {
+        string[] sample = ["      - run: |", "          tag=\"${{ github.ref_name }}\"", "      - name: next"];
+        Assert.Equal(["github.ref_name"], WorkflowScriptExpressions(sample));
+
+        var dir = Path.Combine(TestPaths.RepoRoot(), ".github", "workflows");
+        var files = Directory.GetFiles(dir, "*.yml");
+        var expressions = 0;
+        var offenders = new List<string>();
+        foreach (var file in files)
+        {
+            foreach (var expression in WorkflowScriptExpressions(File.ReadAllLines(file)))
+            {
+                expressions++;
+                if (!StepResult().IsMatch(expression))
+                    offenders.Add($"{Path.GetFileName(file)}: ${{{{ {expression} }}}}");
+            }
+        }
+
+        Assert.True(files.Length >= 5 && expressions >= 5,
+            $"{files.Length} workflows and {expressions} expressions in their scripts were read, so the workflows "
+            + "were not.");
+        Assert.True(offenders.Count == 0,
+            "These scripts have a value written into their text that someone other than the job chose. Pass it "
+            + "through the step's env: and read it as a variable:\n  " + string.Join("\n  ", offenders));
+    }
+
+    /// <summary>The <c>${{ }}</c> expressions inside the <c>run:</c> scripts of a workflow's lines.</summary>
+    private static List<string> WorkflowScriptExpressions(IReadOnlyList<string> lines)
+    {
+        var found = new List<string>();
+        for (var i = 0; i < lines.Count; i++)
+        {
+            var run = RunKey().Match(lines[i]);
+            if (!run.Success) continue;
+            var rest = run.Groups["rest"].Value;
+            var script = new List<string> { rest };
+            if (rest.TrimStart().StartsWith('|') || rest.TrimStart().StartsWith('>'))
+            {
+                var indent = run.Groups["indent"].Length;
+                while (i + 1 < lines.Count && (lines[i + 1].Trim().Length == 0 || IndentOf(lines[i + 1]) > indent))
+                    script.Add(lines[++i]);
+            }
+            foreach (var line in script)
+                found.AddRange(WorkflowExpression().Matches(line).Select(m => m.Groups["expr"].Value.Trim()));
+        }
+        return found;
+
+        static int IndentOf(string line) => line.Length - line.TrimStart().Length;
+    }
+
+    /// <summary>A <c>run:</c> key, alone or as a step's first key, with the column the key sits at.</summary>
+    [GeneratedRegex(@"^(?<indent>\s*(?:-\s+)?)run:(?<rest>.*)$", RegexOptions.CultureInvariant)]
+    private static partial Regex RunKey();
+
+    [GeneratedRegex(@"\$\{\{(?<expr>.*?)\}\}", RegexOptions.CultureInvariant)]
+    private static partial Regex WorkflowExpression();
+
+    /// <summary>What an earlier step of the job made: an output, or how the step ended.</summary>
+    [GeneratedRegex(@"\Asteps\.[\w-]+\.(?:outputs\.[\w-]+|outcome|conclusion)\z", RegexOptions.CultureInvariant)]
+    private static partial Regex StepResult();
+
+    /// <summary>
     /// How many services sit behind a constructor-injected interface seam is spelled out in ARCHITECTURE.md,
     /// and the list beside the number names each one — so both are derived here from the registrations
     /// themselves, which is the only place a seam actually becomes injectable.

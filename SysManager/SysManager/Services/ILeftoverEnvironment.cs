@@ -75,6 +75,19 @@ public interface ILeftoverEnvironment
 /// <summary>The real machine's folders and registry.</summary>
 public sealed class SystemLeftoverEnvironment : ILeftoverEnvironment
 {
+    private readonly Func<UninstallList> _readEntries;
+
+    /// <summary>The environment production uses: every uninstall entry the registry holds.</summary>
+    public SystemLeftoverEnvironment() : this(UninstallEntries.ReadAll)
+    {
+    }
+
+    /// <summary>An environment whose uninstall entries come from <paramref name="readEntries"/>, for a test.</summary>
+    internal SystemLeftoverEnvironment(Func<UninstallList> readEntries)
+    {
+        _readEntries = readEntries ?? throw new ArgumentNullException(nameof(readEntries));
+    }
+
     public string RoamingAppData { get; } = Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData);
 
     public string LocalAppData { get; } = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
@@ -119,7 +132,7 @@ public sealed class SystemLeftoverEnvironment : ILeftoverEnvironment
     /// <summary>Every entry <see cref="UninstallEntries"/> reads, hidden components and updates included.</summary>
     public (IReadOnlyList<UninstallProbe> Apps, bool Complete) RegisteredApps()
     {
-        var list = UninstallEntries.ReadAll();
+        var list = _readEntries();
         return ([.. list.Entries.Select(e => new UninstallProbe(e.Name, e.Publisher, "", e.InstallLocation, e.UninstallCommand))],
             list.Complete);
     }

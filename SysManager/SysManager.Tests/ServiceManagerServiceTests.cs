@@ -191,6 +191,7 @@ public class ServiceManagerServiceTests
     [InlineData("name|pipe")]
     [InlineData("name\"quote")]
     [InlineData("name\nnewline")]
+    [InlineData("svc\n")]         // a trailing newline, which only the \z anchor refuses
     public async Task SetStartupTypeAsync_InvalidServiceName_Throws(string serviceName)
     {
         var ps = new PowerShellRunner();
@@ -232,6 +233,7 @@ public class ServiceManagerServiceTests
     [InlineData("name&calc")]
     [InlineData("name\"quote")]
     [InlineData("name\nnewline")]
+    [InlineData("svc\n")]
     // Legal in Windows — only / and \ are not — and still refused: the check is deliberately narrower than
     // Windows, because the name goes on a command line. Refusing one must end in words, not the crash dialog.
     [InlineData("Vendor(R) Updater")]

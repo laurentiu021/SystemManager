@@ -43,7 +43,8 @@ public sealed record UninstallList(IReadOnlyList<UninstallEntry> Entries, bool C
 /// </remarks>
 public static class UninstallEntries
 {
-    private static readonly (RegistryKey Hive, string Path)[] Keys =
+    /// <summary>The lists production reads, in order: the machine's 64-bit and 32-bit lists, then the user's.</summary>
+    internal static readonly (RegistryKey Hive, string Path)[] Keys =
     [
         (Registry.LocalMachine, UninstallerService.UninstallKey),
         (Registry.LocalMachine, UninstallerService.UninstallKeyWow64),
@@ -57,11 +58,18 @@ public static class UninstallEntries
     };
 
     /// <summary>Every entry, machine first and then user, and whether every list there could be read.</summary>
-    public static UninstallList ReadAll()
+    public static UninstallList ReadAll() => ReadAll(Keys);
+
+    /// <summary>Every entry under <paramref name="keys"/>, in their order, and whether each could be read.</summary>
+    /// <remarks>
+    /// The leftover search's "another installed app lives here" refusal is built from this list, so a test reads a
+    /// tree it wrote under a throwaway key rather than trusting a fake to read the registry the way this does.
+    /// </remarks>
+    internal static UninstallList ReadAll(IReadOnlyList<(RegistryKey Hive, string Path)> keys)
     {
         var entries = new List<UninstallEntry>();
         var complete = true;
-        foreach (var (hive, path) in Keys)
+        foreach (var (hive, path) in keys)
         {
             try
             {

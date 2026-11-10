@@ -205,6 +205,7 @@ public class DebloaterServiceTests
     [InlineData("App.Name'; Remove-Item C:\\ -Recurse #")]
     [InlineData("App Name with spaces")]
     [InlineData("App$(rm)")]
+    [InlineData("Contoso.App_1.0.0.0_x64__abc\n")]   // a trailing newline, which only the \z anchor refuses
     public async Task RemoveAsync_RejectsInjectionInFullName_WithoutInvokingRunner(string badFull)
     {
         var runner = Substitute.For<IPowerShellRunner>();

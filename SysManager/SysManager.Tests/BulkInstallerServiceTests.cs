@@ -32,6 +32,7 @@ public class BulkInstallerServiceTests
         yield return ["App`whoami`"];             // backtick subexpression
         yield return ["App$(whoami)"];            // $() subexpression
         yield return ["App\nGit.Git"];            // newline injection
+        yield return ["Git.Git\n"];              // a trailing newline, which only the \z anchor refuses
         yield return [new string('A', 300)];      // exceeds the 256-char cap
         yield return ["   "];                      // whitespace only
     }

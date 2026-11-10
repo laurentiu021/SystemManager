@@ -35,7 +35,8 @@ public class WingetIdTests
     [InlineData("pkg`whoami`")]
     [InlineData("pkg$(whoami)")]
     [InlineData("pkg\"quote")]
-    [InlineData("pkg\nnewline")]      // trailing/embedded newline — the \z anchor must reject
+    [InlineData("pkg\nnewline")]      // a newline inside, which the character class refuses under any anchor
+    [InlineData("pkg\n")]             // a trailing newline: only \z refuses it, since $ also matches before a last \n
     [InlineData("pkg\ttab")]
     public void IsValid_RejectsInjectionAndBlank(string? id) =>
         Assert.False(WingetId.IsValid(id));
@@ -72,6 +73,13 @@ public class WingetIdTests
     [InlineData(@"ARP\Machine\X64\Some App 3.12 (64-bit)_is1")]
     public void IsLocalUninstallId_AcceptsTheShapesWingetEmits(string id) =>
         Assert.True(WingetId.IsLocalUninstallId(id));
+
+    [Theory]
+    [InlineData("MSIX\\Microsoft.WindowsCalculator_11.2210.0.0_x64__8wekyb3d8bbwe\n")]
+    [InlineData("ARP\\Machine\\X64\\{90160000-008C-0000-1000-0000000FF1CE}\n")]
+    public void IsLocalUninstallId_RefusesATrailingLineBreak(string id) =>
+        // The one input that tells \A...\z from ^...$: $ also matches just before a last line break.
+        Assert.False(WingetId.IsLocalUninstallId(id));
 
     /// <summary>
     /// The id is interpolated into <c>--id "{id}"</c>, so these must all be refused.

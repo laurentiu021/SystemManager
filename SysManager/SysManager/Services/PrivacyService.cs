@@ -48,7 +48,8 @@ public sealed class PrivacyService : IPrivacyService
     }
 
     /// <summary>
-    /// Creates the full toggle list with current state read from the registry.
+    /// Creates the full toggle list with current state read from the registry. A switch the Windows on this PC no
+    /// longer reads (<see cref="PrivacyToggle.IsRetired"/>) is in it only while it is on, so it can be turned off.
     /// </summary>
     public List<PrivacyToggle> LoadToggles()
     {
@@ -59,6 +60,8 @@ public sealed class PrivacyService : IPrivacyService
             toggle.IsEnabled = ReadCurrentState(toggle);
         }
 
+        // Listed while off, it would be a switch that changes nothing when it is turned on.
+        toggles.RemoveAll(t => t.IsRetired && !t.IsEnabled);
         return toggles;
     }
 
@@ -288,14 +291,25 @@ public sealed class PrivacyService : IPrivacyService
         "Lowers the diagnostic data Windows sends to Microsoft as far as your edition allows: off on Enterprise and "
         + "Education, the required level on Home and Pro.";
 
+    private const string WindowsCopilotPane =
+        "Turns off the Windows Copilot pane and its taskbar button on versions of Windows that have them, and keeps an "
+        + "upgrade from adding the Windows Copilot app. An app already installed is not affected: Preinstalled Apps "
+        + "can remove it.";
+
+    private const string WindowsCopilotIgnored =
+        "Windows 11 version 24H2 and later no longer read this setting, so it changes nothing on this PC. Turn it off "
+        + "and press Apply to clear it. To remove the Windows Copilot app, use Preinstalled Apps.";
+
     /// <summary>
     /// Builds the full set of toggle definitions with their registry mappings, for the edition and build of
-    /// <paramref name="windows"/>: the diagnostic data switch is worded for the edition, and the widgets switch writes
-    /// Windows 10's news and interests policy on Windows 10 (#2778).
+    /// <paramref name="windows"/>: the diagnostic data switch is worded for the edition, the widgets switch writes
+    /// Windows 10's news and interests policy on Windows 10 (#2778), and the Windows Copilot switch is retired from
+    /// Windows 11 version 24H2 on.
     /// </summary>
     private static List<PrivacyToggle> CreateToggleDefinitions(InstalledWindows windows)
     {
         var diagnosticData = DiagnosticDataWording(windows.EditionId);
+        var windowsCopilotIgnored = windows.IsWindows11Version24H2OrLater;
         return
         [
             // ── Telemetry ─────────────────────────────────────────────────
@@ -396,16 +410,22 @@ public sealed class PrivacyService : IPrivacyService
             },
 
             // ── Features ──────────────────────────────────────────────────
+            // The policy turns off the Windows Copilot pane and its taskbar button, and keeps an upgrade from adding
+            // the Windows Copilot app. Windows 11 24H2 has the app and no pane, the app ignores the policy, and
+            // Microsoft lists the policy as deprecated, so there the switch read back as applied and changed nothing.
             new PrivacyToggle
             {
                 Key = "ai-assistant",
-                Name = "Disable Copilot",
-                Description = "Turns off Windows Copilot AI assistant integration.",
+                Name = windowsCopilotIgnored
+                    ? "Disable Windows Copilot (no effect on this PC)"
+                    : "Disable Windows Copilot",
+                Description = windowsCopilotIgnored ? WindowsCopilotIgnored : WindowsCopilotPane,
                 Category = "Features",
                 RegistryPath = @"HKCU\Software\Policies\Microsoft\Windows\WindowsCopilot",
                 ValueName = "TurnOffWindowsCopilot",
                 EnabledValue = 1,
-                DisabledValue = 0
+                DisabledValue = 0,
+                IsRetired = windowsCopilotIgnored
             },
             new PrivacyToggle
             {

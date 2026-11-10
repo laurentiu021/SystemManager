@@ -17,10 +17,11 @@ internal static class FakePrivacy
     /// <summary>
     /// A toggle with this key and state. Its path names the hive, and with <paramref name="policy"/> the policies
     /// Windows keeps for the account, which is what decides whether a write needs administrator rights, under a key
-    /// no test writes: the service it comes from is a substitute.
+    /// no test writes: the service it comes from is a substitute. <paramref name="retired"/> makes it a switch the
+    /// Windows on this PC no longer reads.
     /// </summary>
     public static PrivacyToggle Toggle(string key, bool on, string hive = "HKCU", string category = "Telemetry",
-                                       bool policy = false)
+                                       bool policy = false, bool retired = false)
     {
         return new()
         {
@@ -35,6 +36,7 @@ internal static class FakePrivacy
             EnabledValue = 1,
             DisabledValue = 0,
             IsEnabled = on,
+            IsRetired = retired,
         };
     }
 
@@ -65,5 +67,6 @@ internal static class FakePrivacy
         EnabledValue = toggle.EnabledValue,
         DisabledValue = toggle.DisabledValue,
         IsEnabled = toggle.IsEnabled,
+        IsRetired = toggle.IsRetired,
     };
 }

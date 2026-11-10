@@ -1532,13 +1532,19 @@ Answers "what is actually using my space?" by listing the biggest files in one p
   you save the schedule says what each run deletes, and it is the only time you are asked
 
 ### Privacy & Telemetry
-- 12 registry-based toggles across 3 categories (Telemetry, UI Declutter, Features)
+- 12 registry-based toggles across 3 categories (Telemetry, UI Declutter, Features), 11 on
+  Windows 11 version 24H2 and later, where the Windows Copilot switch has no effect
 - **Telemetry**: limit diagnostic data (off on Enterprise and Education; on Home and Pro, which
   cannot turn it off, the required level, and the switch says which your edition gets), and
   disable activity history, advertising ID, feedback prompts
 - **UI Declutter**: disable Start suggestions, tips, lock screen tips (with the promotions shown
   there), and the suggestions in the Settings app
-- **Features**: disable Copilot, Cortana, web search in Start, widgets
+- **Features**: disable Windows Copilot, Cortana, web search in Start, widgets
+- The Windows Copilot switch turns off the Windows Copilot pane and its taskbar button on the
+  versions of Windows that have them, and keeps an upgrade from adding the Windows Copilot app.
+  It does not affect the app once it is installed; Preinstalled Apps can remove it. Windows 11
+  version 24H2 and later have only the app, which ignores the switch's policy, so there the
+  switch is listed only while it is on, says it has no effect, and can be turned off to clear it
 - On Windows 10 the widgets switch turns off news and interests, the taskbar's weather and news
   button, through Windows 10's own policy for it
 - Explicit apply — flip toggles to stage changes, press **Apply** to write to the

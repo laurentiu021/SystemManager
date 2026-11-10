@@ -32,6 +32,15 @@ internal readonly record struct InstalledWindows(string? EditionId, int? Build)
     /// </summary>
     internal bool IsWindows10 => Build is < FirstWindows11Build;
 
+    /// <summary>The first build of Windows 11 version 24H2.</summary>
+    internal const int FirstWindows11Version24H2Build = 26100;
+
+    /// <summary>
+    /// True on Windows 11 version 24H2 and later. A build that could not be read counts as earlier, which every switch
+    /// assumed before the build was read.
+    /// </summary>
+    internal bool IsWindows11Version24H2OrLater => Build is >= FirstWindows11Version24H2Build;
+
     /// <summary>The edition and build under <paramref name="hklmRoot"/>; null for either that cannot be read.</summary>
     internal static InstalledWindows Read(RegistryKey hklmRoot)
     {

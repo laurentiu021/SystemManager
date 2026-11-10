@@ -169,8 +169,8 @@ public sealed class ProfileService
     /// The privacy section as the registry reads now, or null while no protection is on.
     /// </summary>
     /// <remarks>
-    /// Every toggle is carried, on or off, because the section is the whole privacy posture: imported on a PC
-    /// where a protection is on that the profile has off, the Privacy &amp; Telemetry tab shows that switch
+    /// Every toggle this PC lists is carried, on or off, because the section is the whole privacy posture: imported on
+    /// a PC where a protection is on that the profile has off, the Privacy &amp; Telemetry tab shows that switch
     /// turning off, and the user decides. With no protection on, this PC is on Windows' own defaults and there
     /// is nothing to carry, the same way a file section is listed only once its file exists.
     /// </remarks>
@@ -231,13 +231,14 @@ public sealed class ProfileService
     }
 
     /// <summary>
-    /// The privacy choices an imported privacy section carries, keeping only the toggles this build knows.
+    /// The privacy choices an imported privacy section carries, keeping only the toggles this build lists on this PC.
     /// Returns null when the content cannot be read or names none of them, so the caller reports that rather
     /// than staging nothing.
     /// </summary>
     /// <remarks>
-    /// Checked against the toggles <see cref="IPrivacyService"/> defines, as <see cref="ApplySections"/> checks a
-    /// file section against <see cref="Catalog"/>: a key this build does not know is dropped and logged. Nothing
+    /// Checked against the toggles <see cref="IPrivacyService"/> lists, as <see cref="ApplySections"/> checks a file
+    /// section against <see cref="Catalog"/>: a key this build does not know is dropped and logged, and so is one for a
+    /// switch the Windows on this PC no longer reads, which is listed only while it is on. Nothing
     /// in the section reaches the registry from here. The choices only say which known switch goes which way,
     /// and the registry path each switch writes comes from the toggle's own definition.
     /// </remarks>
@@ -263,7 +264,7 @@ public sealed class ProfileService
             .Where(choice => known.Contains(choice.Key))
             .ToDictionary(choice => choice.Key, choice => choice.Value, StringComparer.Ordinal);
         if (kept.Count < protections.Count)
-            Log.Warning("Profile: skipping {Count} privacy choice(s) this version does not know",
+            Log.Warning("Profile: skipping {Count} privacy choice(s) this version does not list on this PC",
                 protections.Count - kept.Count);
         if (kept.Count == 0) return null;
 

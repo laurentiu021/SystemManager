@@ -66,4 +66,17 @@ public sealed class InstalledWindowsTests : IDisposable
     [Fact]
     public void ABuildThatCouldNotBeRead_CountsAsWindows11_AsEverySwitchAssumedBefore()
         => Assert.False(new InstalledWindows("Core", null).IsWindows10);
+
+    [Theory]
+    [InlineData(19045, false)]
+    [InlineData(22631, false)]
+    [InlineData(26099, false)]
+    [InlineData(26100, true)]
+    [InlineData(26200, true)]
+    public void Windows11Version24H2OrLater_IsEveryBuildFrom24H2sFirst(int build, bool from24H2)
+        => Assert.Equal(from24H2, new InstalledWindows(null, build).IsWindows11Version24H2OrLater);
+
+    [Fact]
+    public void ABuildThatCouldNotBeRead_CountsAsEarlierThan24H2_AsEverySwitchAssumedBefore()
+        => Assert.False(new InstalledWindows("Core", null).IsWindows11Version24H2OrLater);
 }

@@ -29,6 +29,7 @@ public class WingetServiceValidationTests
         ["pkg$(whoami)"],
         ["pkg\"quote"],
         ["pkg\nnewline"],
+        ["pkg\n"],                // a trailing newline, which only the \z anchor refuses
         [new string('a', 257)],   // exceeds the 256-char cap
     ];
 

@@ -886,6 +886,23 @@ public class UpdateApplierTests
     }
 
     [Fact]
+    public void ApplyTarget_ResolvesDotSegments_BeforeTheSystemFolderCheck()
+    {
+        // The test above passes with the canonicalisation deleted: the file checks resolve ".." themselves, and "hosts"
+        // is refused as not a build either way. The one check canonicalisation protects is the system folders' prefix
+        // comparison. Here the raw string does not start with the Windows folder and its canonical form does, so
+        // without canonicalisation the refusal is "does not exist" instead.
+        var windows = Environment.GetFolderPath(Environment.SpecialFolder.Windows);
+        var root = Path.GetPathRoot(windows)!;
+        var target = Path.Combine(
+            root, "Users", "..", Path.GetRelativePath(root, windows), "System32", "SysManager-vX.Y.Z.exe");
+        Assert.False(target.StartsWith(windows, StringComparison.OrdinalIgnoreCase), "the raw path starts with it");
+
+        Assert.False(UpdateApplier.IsValidApplyTarget(target, out var reason));
+        Assert.Contains("system directory", reason);
+    }
+
+    [Fact]
     public void Run_WithAHostileTarget_LeavesThatFileUntouched()
     {
         // The end-to-end proof: Run is what writes, so Run is what must refuse. Drives the real entry

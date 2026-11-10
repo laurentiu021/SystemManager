@@ -29,6 +29,22 @@ internal readonly partial record struct FileIdentity(ulong VolumeSerialNumber, U
             : null;
 
     /// <summary>
+    /// The identity of the file <paramref name="handle"/> is open on, from the 128-bit ID where the file system keeps
+    /// one and from the 64-bit index where it does not, or null when Windows says neither.
+    /// </summary>
+    /// <remarks>
+    /// For telling whether two handles are open on one file, both read the same way: the two handles are on one
+    /// volume, so one file system answers both. A FAT or exFAT drive, a USB stick say, may have no 128-bit ID, and
+    /// its index stays the same while the file keeps its name and folder, which is all a comparison made moments
+    /// apart needs.
+    /// </remarks>
+    internal static FileIdentity? OfAnyFileSystem(SafeFileHandle handle) =>
+        Of(handle)
+        ?? (NativeMethods.GetFileInformationByHandle(handle, out var info)
+            ? new FileIdentity(info.VolumeSerialNumber, ((ulong)info.FileIndexHigh << 32) | info.FileIndexLow)
+            : null);
+
+    /// <summary>
     /// How many names the file <paramref name="handle"/> is open on has, or null when Windows does not say.
     /// </summary>
     internal static uint? LinksOf(SafeFileHandle handle) =>

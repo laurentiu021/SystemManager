@@ -1594,6 +1594,12 @@ Answers "what is actually using my space?" by listing the biggest files in one p
   in place, so the original bytes would stay readable in the space the old clusters occupied. A file
   it cannot overwrite is left where it is and named, never deleted the ordinary way, and keeps its
   read-only flag, as one cancelled before its first byte does
+- **Refuses a file on a network share**, this PC's own `C$` among them, and one a link or a mapped drive
+  leads to: the computer that holds the share decides where an overwrite lands and can keep copies, so
+  a file there is shredded on that computer
+- **Removes only the file it overwrote.** The file goes through a handle checked to be open on the file
+  the overwrite wrote; when its name leads to another file by then, nothing is removed and the tab says
+  the contents were overwritten and the name stayed
 - A write error partway through an overwrite (a full disk, a removed drive) still finishes the job —
   the file is truncated and removed rather than left half-overwritten under its original name — and
   says so plainly instead of reporting it as left untouched
@@ -1601,9 +1607,9 @@ Answers "what is actually using my space?" by listing the biggest files in one p
   still syncs to OneDrive, whose own version history and recycle bin can keep the original — the same
   kind of plain warning the tab already gives for SSDs
 - **Overwrites a file's named streams, not just its main content.** Windows adds a `Zone.Identifier`
-  stream to every file downloaded from the internet, recording where it came from, and `File.Delete`
-  removes streams like it unoverwritten alongside the file — now every named stream is overwritten
-  with the same passes first
+  stream to every file downloaded from the internet, recording where it came from, and deleting a file
+  removes streams like it unoverwritten alongside it, so every named stream is overwritten with the
+  same passes first
 - **Never writes a shredded file's name or location anywhere SysManager keeps.** The activity log holds
   only a count, and the diagnostic log — kept for weeks and bundled into a bug report from the About
   tab — holds only the outcome, the method and, for a failure, the exception type and HResult

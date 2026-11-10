@@ -10,6 +10,22 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.136.164] - 2026-11-10
+
+**File Shredder refuses files on network shares, and removes only the file it overwrote.**
+
+### Security
+- The refusal of Windows' own folders compared paths in their drive-letter form, and a path through a network share
+  kept its share form at every step, so `\\localhost\C$\Program Files\...`, this PC's own folders under another name,
+  passed it. A file on a network share is now refused before the share is reached, and again when the path, or the
+  file the overwrite holds open, turns out to lead to one through a link or a mapped drive. An overwrite sent over the
+  network is not a secure one anyway: the computer that holds the share decides where it lands and can keep copies.
+- The overwrite holds one exclusive handle from the check of what it opened to the truncate, and the file was then
+  deleted by its name once that handle had closed, so the delete acted on whatever the path led to by then. The
+  file's named streams are now overwritten while that handle is still held, and the file is removed through a handle
+  checked to be open on the file that was overwritten. When the name leads to another file, nothing is removed, and
+  the tab says the contents were overwritten and the name stayed.
+
 ## [1.136.163] - 2026-11-10
 
 **When two installed apps share a name, the Uninstaller runs each one's own uninstaller, and what an uninstall left

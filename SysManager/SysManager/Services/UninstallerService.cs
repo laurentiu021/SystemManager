@@ -132,12 +132,29 @@ public sealed partial class UninstallerService
     /// The uninstall lists Windows keeps, in the order an app is looked up in them: the 64-bit list, the 32-bit
     /// one, then the user's own (per-user installs like Discord, VS Code, etc.).
     /// </summary>
-    private (Microsoft.Win32.RegistryKey Root, string Path)[] UninstallLists =>
+    private (Microsoft.Win32.RegistryKey Root, string Path, UninstallListOf Which)[] UninstallLists =>
     [
-        (_machineRoot, UninstallKey),
-        (_machineRoot, UninstallKeyWow64),
-        (_userRoot, UninstallKey),
+        (_machineRoot, UninstallKey, UninstallListOf.Machine),
+        (_machineRoot, UninstallKeyWow64, UninstallListOf.Machine32Bit),
+        (_userRoot, UninstallKey, UninstallListOf.User),
     ];
+
+    /// <summary>Which of Windows' uninstall lists an entry is in.</summary>
+    private enum UninstallListOf { Machine, Machine32Bit, User }
+
+    /// <summary>One uninstall entry as the enrichment reads it: where it is, and the values it takes.</summary>
+    private sealed record ListedEntry(
+        UninstallListOf List, string SubKey, string DisplayName, string DisplayVersion, int EstimatedSizeKb,
+        string Publisher, string UninstallString, string QuietUninstallString, string InstallLocation,
+        string DisplayIcon)
+    {
+        /// <summary>Windows' Installed apps list shows an entry only when it has an uninstall command.</summary>
+        public bool IsShownByWindows => !string.IsNullOrWhiteSpace(UninstallString);
+
+        /// <summary>What running and finding the app come down to: its two commands and its folder.</summary>
+        public (string, string, string) WhatActs =>
+            (UninstallString, QuietUninstallString, InstallLocation.Trim());
+    }
 
     /// <summary>
     /// Reads EstimatedSize and Publisher from the Uninstall registry keys
@@ -147,101 +164,164 @@ public sealed partial class UninstallerService
     /// Over the service's own roots, as <see cref="IsStillRegistered"/> reads them. It read the machine's hives
     /// directly, so its tests could only check that it did not throw, and every parse test read the uninstall
     /// list of the machine running it (#2741).
+    /// <para>Each row takes what acts, its commands and its folder, from the one entry that is its own. An
+    /// <c>ARP\</c> id names that entry by its list and key: winget gives one to every app it found only in the
+    /// registry, the rows SysManager removes with the entry's own command. Any other row is matched by its name, and
+    /// among several entries of that name by its version. Rows were matched by name alone, the first row of a name
+    /// taking the first entry of it, so of two programs with one name, a 32-bit and a 64-bit build say, one row ran
+    /// the other's uninstaller, its own program stayed, and the second row had no command at all. Entries of one name
+    /// that still run different commands, or live in different folders, give the row neither: none is known to be its
+    /// own. Its size, publisher and icon are only shown, and still come from the first entry of its name that has
+    /// one.</para>
     /// </remarks>
     internal void EnrichFromRegistry(List<InstalledApp> apps)
     {
         if (apps.Count == 0) return;
 
-        var lookup = new Dictionary<string, InstalledApp>(StringComparer.OrdinalIgnoreCase);
+        var entries = ReadListedEntries();
+        var byName = entries.ToLookup(e => e.DisplayName, StringComparer.OrdinalIgnoreCase);
         foreach (var app in apps.Where(a => !string.IsNullOrWhiteSpace(a.Name)))
         {
-            lookup.TryAdd(app.Name, app);
+            var candidates = EntriesOf(app, entries, byName);
+            if (candidates.Count == 0) continue;
+
+            if (app.SizeBytes == 0 && candidates.FirstOrDefault(e => e.EstimatedSizeKb > 0) is { } sized)
+                app.SizeBytes = sized.EstimatedSizeKb * 1024L;
+
+            if (string.IsNullOrWhiteSpace(app.Publisher)
+                && candidates.FirstOrDefault(e => !string.IsNullOrWhiteSpace(e.Publisher)) is { } published)
+                app.Publisher = published.Publisher;
+
+            if (candidates.Select(e => e.WhatActs).Distinct().Count() == 1)
+                TakeWhatActs(app, candidates[0]);
+
+            foreach (var entry in candidates)
+            {
+                if (app.Icon is not null) break;
+                app.Icon = IconExtractorService.GetInstalledAppIcon(IconFile(entry.DisplayIcon), entry.InstallLocation,
+                    app.Name);
+            }
+        }
+    }
+
+    /// <summary>
+    /// The entries <paramref name="app"/> is matched to: the one its <c>ARP\</c> id names, or those of its name, the
+    /// ones Windows shows first, then the ones of its version.
+    /// </summary>
+    private static List<ListedEntry> EntriesOf(InstalledApp app, List<ListedEntry> entries,
+                                               ILookup<string, ListedEntry> byName)
+    {
+        if (ArpEntry(app.Id) is { } named)
+        {
+            return [.. entries.Where(e =>
+                e.List == named.List && string.Equals(e.SubKey, named.SubKey, StringComparison.OrdinalIgnoreCase))];
         }
 
-        foreach (var (root, path) in UninstallLists)
+        var ofItsName = byName[app.Name].ToList();
+        // An entry Windows does not show, with only a quiet command, is the leftover of an older version more often
+        // than the app (#2741). It is used only when it is the only kind there is.
+        if (ofItsName.Any(e => e.IsShownByWindows)) ofItsName = [.. ofItsName.Where(e => e.IsShownByWindows)];
+        if (ofItsName.Count > 1 && !string.IsNullOrWhiteSpace(app.Version))
+        {
+            var version = app.Version.Trim();
+            var ofItsVersion = ofItsName
+                .Where(e => string.Equals(e.DisplayVersion.Trim(), version, StringComparison.OrdinalIgnoreCase))
+                .ToList();
+            if (ofItsVersion.Count > 0) ofItsName = ofItsVersion;
+        }
+        return ofItsName;
+    }
+
+    /// <summary>
+    /// The list and key an <c>ARP\</c> id names, or null for any other id: <c>ARP\Machine\X64\&lt;key&gt;</c> is in
+    /// the machine's 64-bit list, <c>ARP\Machine\X86\&lt;key&gt;</c> in its 32-bit one, <c>ARP\User\…\&lt;key&gt;</c>
+    /// in the user's.
+    /// </summary>
+    /// <remarks>
+    /// Read only to find the entry among those already read, never passed to a command line, so any key name is
+    /// taken. An id winget's table cut short ends in an ellipsis and names no key.
+    /// </remarks>
+    private static (UninstallListOf List, string SubKey)? ArpEntry(string? id)
+    {
+        if (string.IsNullOrWhiteSpace(id)) return null;
+        var parts = id.Trim().Split('\\');
+        if (parts.Length != 4 || !parts[0].Equals("ARP", StringComparison.OrdinalIgnoreCase)
+            || parts[2].Length == 0 || parts[3].Length == 0 || parts[3].EndsWith('\u2026'))
+            return null;
+
+        if (parts[1].Equals("User", StringComparison.OrdinalIgnoreCase)) return (UninstallListOf.User, parts[3]);
+        if (!parts[1].Equals("Machine", StringComparison.OrdinalIgnoreCase)) return null;
+        // On 32-bit Windows there is no 32-bit list of its own: everything is in the one list.
+        var thirtyTwoBit = parts[2].Equals("X86", StringComparison.OrdinalIgnoreCase)
+                           && Environment.Is64BitOperatingSystem;
+        return (thirtyTwoBit ? UninstallListOf.Machine32Bit : UninstallListOf.Machine, parts[3]);
+    }
+
+    /// <summary>
+    /// The commands and folder of <paramref name="entry"/>, for a row that has none of its own yet. An entry with only
+    /// a quiet command gives that.
+    /// </summary>
+    private static void TakeWhatActs(InstalledApp app, ListedEntry entry)
+    {
+        if (string.IsNullOrWhiteSpace(app.UninstallString) && !string.IsNullOrWhiteSpace(entry.UninstallString))
+        {
+            app.UninstallString = entry.UninstallString;
+            app.QuietUninstallString =
+                string.IsNullOrWhiteSpace(entry.QuietUninstallString) ? "" : entry.QuietUninstallString;
+        }
+        else if (string.IsNullOrWhiteSpace(app.UninstallString) && string.IsNullOrWhiteSpace(app.QuietUninstallString)
+                 && !string.IsNullOrWhiteSpace(entry.QuietUninstallString))
+        {
+            app.QuietUninstallString = entry.QuietUninstallString;
+        }
+
+        if (string.IsNullOrWhiteSpace(app.InstallLocation) && !string.IsNullOrWhiteSpace(entry.InstallLocation))
+            app.InstallLocation = entry.InstallLocation.Trim();
+    }
+
+    /// <summary>The file a <c>DisplayIcon</c> value names, without the icon's index after the last comma.</summary>
+    private static string IconFile(string displayIcon)
+    {
+        var commaIdx = displayIcon.LastIndexOf(',');
+        return commaIdx > 0 ? displayIcon[..commaIdx].Trim('"', ' ') : displayIcon;
+    }
+
+    /// <summary>Every entry with a name in the three lists, in the order Windows keeps them.</summary>
+    private List<ListedEntry> ReadListedEntries()
+    {
+        var entries = new List<ListedEntry>();
+        foreach (var (root, path, which) in UninstallLists)
         {
             try
             {
                 using var key = root.OpenSubKey(path);
                 if (key is null) continue;
 
-                EnrichFromRegistryKey(key, lookup);
+                foreach (var subName in key.GetSubKeyNames())
+                {
+                    try
+                    {
+                        using var sub = key.OpenSubKey(subName);
+                        if (sub is null) continue;
+
+                        var displayName = Text(sub, "DisplayName");
+                        if (string.IsNullOrWhiteSpace(displayName)) continue;
+
+                        entries.Add(new ListedEntry(which, subName, displayName, Text(sub, "DisplayVersion"),
+                            sub.GetValue("EstimatedSize") is int kb && kb > 0 ? kb : 0, Text(sub, "Publisher"),
+                            Text(sub, "UninstallString"), Text(sub, "QuietUninstallString"),
+                            Text(sub, "InstallLocation"), Text(sub, "DisplayIcon")));
+                    }
+                    catch (System.Security.SecurityException) { /* skip protected subkey */ }
+                    catch (UnauthorizedAccessException) { /* skip protected subkey */ }
+                }
             }
             catch (System.Security.SecurityException) { /* skip protected registry key */ }
             catch (UnauthorizedAccessException) { /* skip protected registry key */ }
         }
-    }
+        return entries;
 
-    private static void EnrichFromRegistryKey(
-        Microsoft.Win32.RegistryKey key,
-        Dictionary<string, InstalledApp> lookup)
-    {
-        foreach (var subName in key.GetSubKeyNames())
-        {
-            try
-            {
-                using var sub = key.OpenSubKey(subName);
-                if (sub is null) continue;
-
-                var displayName = sub.GetValue("DisplayName") as string;
-                if (string.IsNullOrWhiteSpace(displayName)) continue;
-
-                if (!lookup.TryGetValue(displayName, out var app)) continue;
-
-                if (app.SizeBytes == 0)
-                {
-                    var sizeKb = sub.GetValue("EstimatedSize");
-                    if (sizeKb is int kb && kb > 0)
-                        app.SizeBytes = kb * 1024L;
-                }
-
-                if (string.IsNullOrWhiteSpace(app.Publisher))
-                {
-                    var pub = sub.GetValue("Publisher") as string;
-                    if (!string.IsNullOrWhiteSpace(pub))
-                        app.Publisher = pub;
-                }
-
-                // Both commands from the first entry with an uninstall command, which is the entry Windows lists.
-                // They were taken one at a time, so an entry with only a quiet command, a leftover of an older
-                // version say, kept its command beside the uninstall command of the next entry of the same name,
-                // and the quiet one is the one launched (#2741). An entry with only a quiet command is used until
-                // one with an uninstall command turns up.
-                var uninst = sub.GetValue("UninstallString") as string;
-                var quietUninst = sub.GetValue("QuietUninstallString") as string;
-                if (string.IsNullOrWhiteSpace(app.UninstallString) && !string.IsNullOrWhiteSpace(uninst))
-                {
-                    app.UninstallString = uninst;
-                    app.QuietUninstallString = string.IsNullOrWhiteSpace(quietUninst) ? "" : quietUninst;
-                }
-                else if (string.IsNullOrWhiteSpace(app.UninstallString) && string.IsNullOrWhiteSpace(app.QuietUninstallString)
-                    && !string.IsNullOrWhiteSpace(quietUninst))
-                {
-                    app.QuietUninstallString = quietUninst;
-                }
-
-                var installLoc = sub.GetValue("InstallLocation") as string;
-                if (string.IsNullOrWhiteSpace(app.InstallLocation) && !string.IsNullOrWhiteSpace(installLoc))
-                    app.InstallLocation = installLoc.Trim();
-
-                if (app.Icon is null)
-                {
-                    var iconPath = sub.GetValue("DisplayIcon") as string;
-
-                    if (!string.IsNullOrWhiteSpace(iconPath))
-                    {
-                        var commaIdx = iconPath.LastIndexOf(',');
-                        if (commaIdx > 0)
-                            iconPath = iconPath[..commaIdx].Trim('"', ' ');
-                    }
-
-                    app.Icon = IconExtractorService.GetInstalledAppIcon(
-                        iconPath, installLoc, app.Name);
-                }
-            }
-            catch (System.Security.SecurityException) { /* skip protected subkey */ }
-            catch (UnauthorizedAccessException) { /* skip protected subkey */ }
-        }
+        static string Text(Microsoft.Win32.RegistryKey key, string name) => key.GetValue(name) as string ?? "";
     }
 
     /// <summary>
@@ -295,9 +375,13 @@ public sealed partial class UninstallerService
             // MsiExec take their payload from the (HKCU-writable) arguments. rundll32
             // will load ANY DLL at ANY entry point, and MsiExec will run an arbitrary
             // package. Validate the payload before handing the command to the shell.
+            // /I opens an installed product's own setup, /X removes it. Turned into a removal here, for the program
+            // that runs: done in the parse, it reached only the bare spelling, and the same command quoted or as a full
+            // path was refused as no plain removal.
+            var isMsiExec = resolvedName.Equals("MsiExec.exe", StringComparison.OrdinalIgnoreCase);
+            if (isMsiExec) args = MsiInstallSwitchPattern().Replace(args, "/X");
             args = ValidateTrustedBinaryArgs(resolvedName, args, runningElevated);
-            if (resolvedName.Equals("MsiExec.exe", StringComparison.OrdinalIgnoreCase))
-                args = WithInstallerUi(args);
+            if (isMsiExec) args = WithInstallerUi(args);
         }
         else
         {
@@ -326,7 +410,7 @@ public sealed partial class UninstallerService
     /// </remarks>
     public bool IsStillRegistered(InstalledApp app)
     {
-        foreach (var (root, path) in UninstallLists)
+        foreach (var (root, path, _) in UninstallLists)
         {
             try
             {
@@ -428,38 +512,57 @@ public sealed partial class UninstallerService
         // Case 1: Quoted executable path. Its own characters are not checked: the shell starts the file the quotes
         // name and hands it the rest, and no command interpreter reads the path, so "Smith & Sons" in a folder name
         // chains nothing. It is still bound to a real file before it starts (#2783).
-        if (command.StartsWith('"'))
+        if (QuotedProgram(command) is { } quoted)
         {
-            var endQuote = command.IndexOf('"', 1);
-            if (endQuote > 0)
-            {
-                var exe = command[1..endQuote];
-                var args = endQuote + 1 < command.Length
-                    ? command[(endQuote + 1)..].TrimStart()
-                    : "";
-                RefuseChaining(args, command);
-                return (exe, args);
-            }
+            RefuseChaining(quoted.Args, command);
+            return quoted;
         }
 
         // Reject obviously malicious patterns before parsing the other forms (#403): with no quotes, nothing tells
         // the executable from its arguments until the parse below has guessed.
         RefuseChaining(command, command);
 
-        // Case 2: MsiExec — common pattern: MsiExec.exe /I{GUID} or /X{GUID}
+        // No fallback: if we can't parse it safely, reject it (#403).
+        // The old fallback treated the entire string as an executable, which
+        // could execute arbitrary commands if the string was crafted.
+        return UnquotedProgram(command) ?? throw CannotStart($"its uninstall command names no program: '{command}'");
+    }
+
+    /// <summary>
+    /// The program an uninstall command runs and its arguments, split by the rules
+    /// <see cref="ParseUninstallCommand"/> launches with but without its refusals, or null when no rule finds one.
+    /// </summary>
+    /// <remarks>
+    /// For a caller that only needs to know where an uninstaller is and never runs it: the leftover search takes its
+    /// folder as one more place the app lives. A command SysManager will not run still names where its program is,
+    /// and reading a refused one as "names no folder" offered the folder that app lives in.
+    /// </remarks>
+    internal static (string Exe, string Args)? SplitUninstallCommand(string command)
+    {
+        command = command.Trim();
+        return QuotedProgram(command) ?? UnquotedProgram(command);
+    }
+
+    /// <summary>A command that starts with a quoted path: that path, and the rest as its arguments.</summary>
+    private static (string Exe, string Args)? QuotedProgram(string command)
+    {
+        if (!command.StartsWith('"')) return null;
+        var endQuote = command.IndexOf('"', 1);
+        if (endQuote <= 0) return null;
+        var args = endQuote + 1 < command.Length ? command[(endQuote + 1)..].TrimStart() : "";
+        return (command[1..endQuote], args);
+    }
+
+    /// <summary>The program an unquoted command runs and its arguments, or null when no rule finds one.</summary>
+    private static (string Exe, string Args)? UnquotedProgram(string command)
+    {
+        // Case 2: MsiExec, as MsiExec.exe /I{GUID} or /X{GUID}. Its switches, /I turned into a removal
+        // among them, are set at launch, for this spelling, a quoted path and a full one alike.
         if (command.StartsWith("MsiExec", StringComparison.OrdinalIgnoreCase))
         {
             var spaceIdx = command.IndexOf(' ');
             if (spaceIdx > 0)
-            {
-                var exe = command[..spaceIdx];
-                var args = command[(spaceIdx + 1)..].TrimStart();
-                // Convert /I (modify) to /X (uninstall) if needed. The switches it runs with are set at launch, by
-                // WithInstallerUi, for this form and a quoted MsiExec path alike.
-                // Use regex to match /I only as a standalone switch (not inside GUIDs).
-                args = MsiInstallSwitchPattern().Replace(args, "/X");
-                return (exe, args);
-            }
+                return (command[..spaceIdx], command[(spaceIdx + 1)..].TrimStart());
         }
 
         // Case 3: rundll32 — pass as-is
@@ -495,10 +598,7 @@ public sealed partial class UninstallerService
             searchStart = exeEnd;
         }
 
-        // No fallback — if we can't parse it safely, reject it (#403).
-        // The old fallback treated the entire string as an executable, which
-        // could execute arbitrary commands if the string was crafted.
-        throw CannotStart($"its uninstall command names no program: '{command}'");
+        return null;
     }
 
     /// <summary>

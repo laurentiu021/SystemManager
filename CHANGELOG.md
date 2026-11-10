@@ -10,6 +10,28 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.136.163] - 2026-11-10
+
+**When two installed apps share a name, the Uninstaller runs each one's own uninstaller, and what an uninstall left
+behind no longer includes a folder another installed app lives in.**
+
+### Fixed
+- The Uninstaller matched the apps it lists to Windows' uninstall entries by name alone, the first app of a name
+  taking the first entry of that name. Of two programs with one name, a 32-bit and a 64-bit build, or a copy for one
+  user beside a copy for everyone, one ran the other's uninstaller and stayed installed, and the other had no
+  uninstall command at all. An app winget found only in the registry carries an id that names its own entry, and now
+  takes that entry; any other app is matched by name and then by version, and takes no command and no folder from
+  entries of its name that still differ.
+- A Windows Installer command that opens a program's setup (`/I`) was turned into one that removes it (`/X`) only
+  when written as a bare `MsiExec.exe`. The same command quoted, or with MsiExec's full path, was refused as not a
+  plain removal. The removal switch now follows the program that runs, however the command is written.
+- The search for what an uninstall left behind keeps a folder off the list when another installed app lives in it
+  or around it, and it worked out where that app lives through the check the Uninstaller applies before it runs a
+  command. A command it would not run, with an `&` outside quotes say, read as "lives nowhere", so a folder holding
+  that app could be offered as the uninstalled app's install folder, ticked. The search now reads where the
+  uninstaller is without that check, and also keeps a folder off the list when another app's uninstall command names
+  it anywhere, which covers the DLL a `rundll32` command loads and a command no rule can split.
+
 ## [1.136.162] - 2026-11-10
 
 **Removing what an uninstall left behind checks again what is installed by then, so the folders and settings of an

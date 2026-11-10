@@ -10,8 +10,9 @@ using SysManager.Services;
 namespace SysManager.Tests;
 
 /// <summary>
-/// What the Uninstaller takes from Windows' uninstall lists for each app winget lists: its size, publisher and folder,
-/// and the commands that remove it, from the first entry of its name in the order Windows keeps the lists.
+/// What the Uninstaller takes from Windows' uninstall lists for each app winget lists: the commands that remove it and
+/// its folder from the one entry that is its own, and its size and publisher from the first entry of its name in the
+/// order Windows keeps the lists.
 /// </summary>
 /// <remarks>
 /// The read went straight to the machine's hives, so its two tests checked only that it did not throw, and every parse
@@ -48,14 +49,27 @@ public sealed class UninstallerRegistryDetailsTests : IDisposable
         foreach (var (name, value) in values) key.SetValue(name, value);
     }
 
+    /// <summary>An uninstall entry under the key <paramref name="key"/>, the name an <c>ARP\</c> id gives it.</summary>
+    private static void EntryAt(RegistryKey root, string list, string key, string displayName,
+                                params (string Name, object Value)[] values)
+    {
+        using var entry = root.CreateSubKey($@"{list}\{key}", writable: true);
+        entry.SetValue("DisplayName", displayName);
+        foreach (var (name, value) in values) entry.SetValue(name, value);
+    }
+
     /// <summary>An app as winget lists it, enriched from the throwaway lists.</summary>
     private InstalledApp Enriched(string name = "Test App")
     {
         var app = new InstalledApp { Name = name, Id = "Test.App" };
-        new UninstallerService(Substitute.For<IPowerShellRunner>(), () => false, machineRoot: _machine, userRoot: _user)
-            .EnrichFromRegistry([app]);
+        Enrich(app);
         return app;
     }
+
+    /// <summary>Enriches <paramref name="apps"/>, all in one read, as the list is enriched.</summary>
+    private void Enrich(params InstalledApp[] apps) =>
+        new UninstallerService(Substitute.For<IPowerShellRunner>(), () => false, machineRoot: _machine, userRoot: _user)
+            .EnrichFromRegistry([.. apps]);
 
     [Fact]
     public void AnAppWithAnEntry_GetsItsSizePublisherFolderAndCommands()
@@ -79,13 +93,93 @@ public sealed class UninstallerRegistryDetailsTests : IDisposable
     [Fact]
     public void TheListsAreReadInWindowsOrder_SixtyFourBitThenThirtyTwoBitThenTheUsers()
     {
-        Entry(_user, SixtyFourBit, "Test App", ("Publisher", "the user's"), ("UninstallString", "user.exe"));
-        Entry(_machine, ThirtyTwoBit, "Test App", ("Publisher", "32-bit"), ("UninstallString", "32.exe"));
-        Entry(_machine, SixtyFourBit, "Test App", ("Publisher", "64-bit"), ("UninstallString", "64.exe"));
+        Entry(_user, SixtyFourBit, "Test App", ("Publisher", "the user's"), ("UninstallString", "app.exe"));
+        Entry(_machine, ThirtyTwoBit, "Test App", ("Publisher", "32-bit"), ("UninstallString", "app.exe"));
+        Entry(_machine, SixtyFourBit, "Test App", ("Publisher", "64-bit"), ("UninstallString", "app.exe"));
 
         var app = Enriched();
 
-        Assert.Equal(("64-bit", "64.exe"), (app.Publisher, app.UninstallString));
+        Assert.Equal(("64-bit", "app.exe"), (app.Publisher, app.UninstallString));
+    }
+
+    // ── Two programs of one name ──────────────────────────────────────────
+    // A 32-bit and a 64-bit build, a copy for one user and one for all, two versions side by side. Matched by name, the
+    // first row of the name took the first entry's commands, so it ran the other copy's uninstaller, and a second row
+    // of the name had none.
+
+    [Fact]
+    public void ARowWithAnArpId_TakesTheEntryItNames_AndAnotherRowOfTheNameTakesItsOwn()
+    {
+        EntryAt(_machine, SixtyFourBit, "{A}", "Test App",
+            ("UninstallString", "x64.exe"), ("InstallLocation", @"C:\Program Files\Test App"));
+        EntryAt(_machine, ThirtyTwoBit, "{B}", "Test App",
+            ("UninstallString", "x86.exe"), ("InstallLocation", @"C:\Program Files (x86)\Test App"));
+        var x86 = new InstalledApp { Name = "Test App", Id = @"ARP\Machine\X86\{B}" };
+        var x64 = new InstalledApp { Name = "Test App", Id = @"ARP\Machine\X64\{A}" };
+
+        Enrich(x86, x64);
+
+        Assert.Equal(("x86.exe", @"C:\Program Files (x86)\Test App"), (x86.UninstallString, x86.InstallLocation));
+        Assert.Equal(("x64.exe", @"C:\Program Files\Test App"), (x64.UninstallString, x64.InstallLocation));
+    }
+
+    [Fact]
+    public void AUsersArpId_IsLookedUpInTheUsersList()
+    {
+        EntryAt(_machine, SixtyFourBit, "Test App", "Test App", ("UninstallString", "machine.exe"));
+        EntryAt(_user, SixtyFourBit, "Test App", "Test App", ("UninstallString", "user.exe"));
+        var app = new InstalledApp { Name = "Test App", Id = @"ARP\User\X64\Test App" };
+
+        Enrich(app);
+
+        Assert.Equal("user.exe", app.UninstallString);
+    }
+
+    [Fact]
+    public void AnArpIdNamingNoEntry_TakesNothingFromAnotherEntryOfItsName()
+    {
+        EntryAt(_machine, SixtyFourBit, "{A}", "Test App", ("UninstallString", "other.exe"));
+        var app = new InstalledApp { Name = "Test App", Id = @"ARP\Machine\X64\{Gone}" };
+
+        Enrich(app);
+
+        Assert.Equal(("", ""), (app.UninstallString, app.QuietUninstallString));
+    }
+
+    [Fact]
+    public void TwoProgramsOfOneName_GiveARowWithoutAnArpId_NeitherCommandNorFolder()
+    {
+        // Nothing says which is the row's own. winget removes a row it lists by the row's own id instead.
+        EntryAt(_machine, SixtyFourBit, "{A}", "Test App", ("Publisher", "First"),
+            ("UninstallString", "x64.exe"), ("InstallLocation", @"C:\Program Files\Test App"));
+        EntryAt(_machine, ThirtyTwoBit, "{B}", "Test App", ("Publisher", "Second"),
+            ("UninstallString", "x86.exe"), ("InstallLocation", @"C:\Program Files (x86)\Test App"));
+
+        var app = Enriched();
+
+        Assert.Equal(("First", "", "", ""),
+            (app.Publisher, app.UninstallString, app.QuietUninstallString, app.InstallLocation));
+    }
+
+    [Fact]
+    public void AmongEntriesOfOneName_TheRowsVersionPicksItsOwn()
+    {
+        EntryAt(_machine, SixtyFourBit, "{A}", "Test App", ("DisplayVersion", "1.0"), ("UninstallString", "old.exe"));
+        EntryAt(_machine, ThirtyTwoBit, "{B}", "Test App", ("DisplayVersion", "2.0"), ("UninstallString", "new.exe"));
+        var app = new InstalledApp { Name = "Test App", Id = "Test.App", Version = "2.0" };
+
+        Enrich(app);
+
+        Assert.Equal("new.exe", app.UninstallString);
+    }
+
+    [Fact]
+    public void EntriesOfOneName_ThatRunTheSameCommandFromTheSameFolder_GiveIt()
+    {
+        EntryAt(_machine, SixtyFourBit, "{A}", "Test App", ("UninstallString", "same.exe"));
+        EntryAt(_user, SixtyFourBit, "{A}", "Test App", ("UninstallString", "same.exe"));
+
+        Assert.Equal("same.exe", Enriched().UninstallString);
     }
 
     [Fact]

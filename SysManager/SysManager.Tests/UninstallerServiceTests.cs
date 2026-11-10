@@ -714,13 +714,39 @@ public class UninstallerServiceTests
     }
 
     [Fact]
-    public void ParseUninstallCommand_MsiExec_ConvertsToUninstall()
+    public void ParseUninstallCommand_MsiExec_SplitsOffItsArgumentsAsWritten()
     {
-        // The switches it runs with are set at launch, by WithInstallerUi (#2724).
+        // The switches it runs with, /I turned into the removal /X among them, are set at launch (#2724), for every
+        // spelling of MsiExec alike.
         var (exe, args) = UninstallerService.ParseUninstallCommand(
             "MsiExec.exe /I{12345-GUID}");
         Assert.Equal("MsiExec.exe", exe);
-        Assert.Equal("/X{12345-GUID}", args);
+        Assert.Equal("/I{12345-GUID}", args);
+    }
+
+    [Theory]
+    [InlineData("MsiExec.exe /I{0}")]
+    [InlineData("\"{1}\" /I{0}")]
+    [InlineData("{1} /I{0}")]
+    public async Task UninstallLocalAsync_AnMsiInstallSwitch_IsARemoval_HoweverMsiExecIsWritten(string shape)
+    {
+        // Done in the parse, the rewrite reached the bare spelling only: the same command quoted or as a full path kept
+        // /I and was refused as no plain removal.
+        var msiExec = System.IO.Path.Join(Environment.GetFolderPath(Environment.SpecialFolder.System), "MsiExec.exe");
+        var runner = Substitute.For<IPowerShellRunner>();
+        runner.RunProcessWithShellAsync(Arg.Any<string>(), Arg.Any<string>(), Arg.Any<CancellationToken>()).Returns(0);
+        var service = new UninstallerService(runner, () => false);
+        var app = new InstalledApp
+        {
+            Name = "OEM utility",
+            UninstallString = string.Format(
+                System.Globalization.CultureInfo.InvariantCulture, shape, ProductCode, msiExec),
+        };
+
+        await service.UninstallLocalAsync(app);
+
+        await runner.Received(1).RunProcessWithShellAsync(msiExec, "/X" + ProductCode + " /passive /norestart",
+                                                          Arg.Any<CancellationToken>());
     }
 
     [Fact]
@@ -788,6 +814,20 @@ public class UninstallerServiceTests
     [InlineData(@"""C:\Windows\System32\cmd.exe"" /c calc.exe | evil.exe")]
     public void ParseUninstallCommand_ChainingInTheArgumentsOfAQuotedPath_IsStillRefused(string command)
         => Assert.Throws<InvalidOperationException>(() => UninstallerService.ParseUninstallCommand(command));
+
+    [Theory]
+    [InlineData(@"C:\Users\Bob\Acme & Co\uninstall.exe /S", @"C:\Users\Bob\Acme & Co\uninstall.exe")]
+    [InlineData(@"""C:\Program Files\Contoso\unins000.exe"" /S & more", @"C:\Program Files\Contoso\unins000.exe")]
+    public void SplitUninstallCommand_FindsTheProgram_OfACommandTheLaunchRefuses(string command, string exe)
+    {
+        // The leftover search reads where an app's uninstaller is, and a command SysManager will not run still says.
+        Assert.Throws<InvalidOperationException>(() => UninstallerService.ParseUninstallCommand(command));
+        Assert.Equal(exe, UninstallerService.SplitUninstallCommand(command)?.Exe);
+    }
+
+    [Fact]
+    public void SplitUninstallCommand_OfACommandNamingNoProgram_IsNothing() =>
+        Assert.Null(UninstallerService.SplitUninstallCommand("some-command"));
 
     [Fact]
     public void ParseUninstallCommand_ExeInMiddleOfPath_FindsCorrectBoundary()

@@ -2096,7 +2096,9 @@ offers, "rate us" prompts:
 - **Can be put back** — folders go to the Recycle Bin, and if one is too big for it, Windows asks
   before deleting it for good. A registry key is saved as a `.reg` file in
   `%LocalAppData%\SysManager\Backups\Uninstaller` before it is deleted; double-click the file to put
-  the key back. You confirm the exact list first, and every folder is checked again just before it goes
+  the key back. You confirm the exact list first, and every item is checked again just before it goes,
+  against the same rules and what is installed by then: anything an app was installed into since, or that
+  belongs to an app installed again, stays, and so does a folder SysManager could not look all the way through
 - **Leftovers that need administrator rights wait for them** — uninstalling runs without them,
   so a leftover under Program Files or ProgramData is kept on a list and offered again, unticked,
   the next time you open Uninstaller with SysManager running as administrator. The list lives in

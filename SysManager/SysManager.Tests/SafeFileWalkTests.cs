@@ -349,6 +349,40 @@ public class SafeFileWalkTests
         Assert.Empty(entries);
     }
 
+    [Fact]
+    public void EnumerateGuarded_NamesEveryDirectoryWhoseListingFailed_AndNoOther()
+    {
+        List<string> unreadable = [];
+
+        SafeFileWalk.EnumerateGuarded(() => ThrowAfter(2), "stopped", unreadable);
+        SafeFileWalk.EnumerateGuarded<string>(
+            () => throw new UnauthorizedAccessException("cannot list"), "denied", unreadable);
+        SafeFileWalk.EnumerateGuarded(() => new[] { "first" }, "listed", unreadable);
+
+        Assert.Equal(["stopped", "denied"], unreadable);
+    }
+
+    [Fact]
+    public void Files_SaysWhichFoldersItCouldNotList()
+    {
+        // A caller that reads "no link inside" from the walk has to know what the walk never looked at.
+        var root = NewTempRoot();
+        Directory.CreateDirectory(Path.Combine(root, "listed"));
+        File.WriteAllText(Path.Combine(root, "listed", "file.txt"), "ordinary file");
+        try
+        {
+            using var unopenable = UnopenableFolder.In(root);
+            List<string> unreadable = [];
+
+            var options = new SafeWalkOptions { Unreadable = unreadable };
+            var found = SafeFileWalk.Files(root, CancellationToken.None, options).ToList();
+
+            Assert.Equal([Path.Combine(root, "listed", "file.txt")], found);
+            Assert.Equal([unopenable.OrdinaryPath], unreadable.Distinct(StringComparer.OrdinalIgnoreCase));
+        }
+        finally { Directory.Delete(root, recursive: true); }
+    }
+
     private static IEnumerable<string> ThrowAfter(int count)
     {
         var names = new[] { "first", "second", "third" };

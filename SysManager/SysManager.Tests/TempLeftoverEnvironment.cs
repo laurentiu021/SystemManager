@@ -54,6 +54,9 @@ public sealed class TempLeftoverEnvironment : ILeftoverEnvironment, IDisposable
 
     public bool IsElevated { get; set; }
 
+    /// <summary>Runs each time <see cref="DriveTypeOf"/> is asked, so a test can act during a check.</summary>
+    public Action? DriveTypeAsked { get; set; }
+
     public TempLeftoverEnvironment()
     {
         var root = Path.Combine(Path.GetTempPath(), "SysManagerLeftovers", Guid.NewGuid().ToString("N"));
@@ -77,8 +80,11 @@ public sealed class TempLeftoverEnvironment : ILeftoverEnvironment, IDisposable
     public (IReadOnlyList<UninstallProbe> Apps, bool Complete) RegisteredApps() => (Registered, RegisteredComplete);
 
     /// <summary>A root nobody set reports <see cref="DriveType.NoRootDirectory"/>, which is never this PC's own drive.</summary>
-    public DriveType DriveTypeOf(string root) =>
-        DriveTypes.TryGetValue(root, out var type) ? type : DriveType.NoRootDirectory;
+    public DriveType DriveTypeOf(string root)
+    {
+        DriveTypeAsked?.Invoke();
+        return DriveTypes.TryGetValue(root, out var type) ? type : DriveType.NoRootDirectory;
+    }
 
     /// <summary>Creates <paramref name="path"/> and puts a file of <paramref name="bytes"/> bytes in it; returns the path.</summary>
     public static string Folder(string path, int bytes = 0)

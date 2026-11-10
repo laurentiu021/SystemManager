@@ -77,6 +77,8 @@ public static partial class LeftoverFinder
         var (others, othersComplete) = OthersStillInstalled(stillInstalled, env);
         var items = new List<LeftoverItem>();
         var notOffered = new List<string>();
+        // The folders a refusal has been written for, so each is reported once however many names find it.
+        var said = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         var names = AppNames(probe);
         var publishers = PublisherNames(probe, env);
         // Only folders that resolve to a full path: an empty one would turn every name into a path relative to
@@ -95,8 +97,8 @@ public static partial class LeftoverFinder
             && IsOnOwnFixedDrive(installLocation, env)
             && Directory.Exists(installLocation))
         {
-            AddFolder(items, notOffered, installLocation, LeftoverConfidence.Certain, "",
-                Refusal(installLocation, env) ?? SharedWith(installLocation, others, env), env);
+            AddFolder(items, notOffered, said, installLocation, LeftoverConfidence.Certain, "",
+                Refusal(installLocation, env) ?? SharedWith(installLocation, others, env), probe.Name, env);
         }
 
         // The user's own folders are searched only to say what was seen there and left alone — independent of
@@ -106,7 +108,7 @@ public static partial class LeftoverFinder
             if (Normalize(folderPath) is not { } folder) continue;
             foreach (var name in names)
             {
-                if (Normalize(Path.Combine(folder, name)) is { } path && Directory.Exists(path))
+                if (Normalize(Path.Combine(folder, name)) is { } path && Directory.Exists(path) && said.Add(path))
                     notOffered.Add($"Not offered: {path} is in {folderName}, which SysManager never offers.");
             }
         }
@@ -133,7 +135,7 @@ public static partial class LeftoverFinder
                 var why = Refusal(path, env)
                     ?? SharedWith(path, others, env)
                     ?? (IsShared(name, others) ? "may belong to another installed app" : null);
-                AddFolder(items, notOffered, path, LeftoverConfidence.Probably, "", why, env);
+                AddFolder(items, notOffered, said, path, LeftoverConfidence.Probably, "", why, probe.Name, env);
             }
         }
 
@@ -156,6 +158,7 @@ public static partial class LeftoverFinder
                     Location = key,
                     Kind = LeftoverKind.RegistryKey,
                     Confidence = LeftoverConfidence.OwnKey,
+                    AppName = probe.Name,
                 });
             }
         }
@@ -169,7 +172,7 @@ public static partial class LeftoverFinder
                 var why = Refusal(path, env)
                     ?? SharedWith(path, others, env)
                     ?? (IsShared(publisher, others) ? $"is shared with another installed {publisher} app" : null);
-                AddFolder(items, notOffered, path, LeftoverConfidence.Guess, publisher, why, env);
+                AddFolder(items, notOffered, said, path, LeftoverConfidence.Guess, publisher, why, probe.Name, env);
             }
         }
 
@@ -383,18 +386,19 @@ public static partial class LeftoverFinder
         && Path.GetPathRoot(full) is { Length: > 0 } root
         && env.DriveTypeOf(root) == DriveType.Fixed;
 
-    private static void AddFolder(List<LeftoverItem> items, List<string> notOffered, string path,
-                                  LeftoverConfidence confidence, string publisher, string? refusal, ILeftoverEnvironment env)
+    private static void AddFolder(List<LeftoverItem> items, List<string> notOffered, HashSet<string> said, string path,
+                                  LeftoverConfidence confidence, string publisher, string? refusal, string appName,
+                                  ILeftoverEnvironment env)
     {
         // A folder already listed, or inside one that is, adds nothing: removing the outer one removes it.
         if (items.Any(i => i.Kind == LeftoverKind.Folder && SystemPaths.IsInsideSubtree(path, i.Location))) return;
 
         if (refusal is not null)
         {
-            // Said once per folder: the install folder refused as Certain comes round again by its name.
-            var said = $"Not offered: {path} ";
-            if (!notOffered.Any(n => n.StartsWith(said, StringComparison.OrdinalIgnoreCase)))
-                notOffered.Add($"{said}{refusal}.");
+            // Said once per folder: the install folder refused as Certain comes round again by its name. Kept by the
+            // path itself. Matching the start of the sentences already written also matched a sibling's, "Acme Notes"
+            // for "Acme", and the refusal of the folder with the shorter name was never shown.
+            if (said.Add(path)) notOffered.Add($"Not offered: {path} {refusal}.");
             return;
         }
 
@@ -407,6 +411,7 @@ public static partial class LeftoverFinder
             Publisher = publisher,
             NeedsAdministrator = needsAdmin,
             IsSelected = confidence == LeftoverConfidence.Certain && !needsAdmin,
+            AppName = appName,
         });
     }
 

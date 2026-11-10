@@ -10,6 +10,23 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.136.165] - 2026-11-10
+
+**Shortcut Cleaner keeps a shortcut that works again by the time you delete, and rebuilding Explorer's icon and
+thumbnail cache no longer strips the attributes of a cache file it cannot delete.**
+
+### Fixed
+- Delete selected removed the shortcuts on the list the scan had made, checking only that each file was still there.
+  The tab keeps that list for the whole session and its rows arrive ticked, so a shortcut that worked again by then,
+  its program installed again and the shortcut rewritten in place, or a Recent item whose document was put back, was
+  deleted anyway, permanently when Move to Recycle Bin was not ticked. Each ticked shortcut is now judged again just
+  before it goes, by the same rules as the scan; one that works again is kept and taken off the list, and the status
+  line says how many.
+- Rebuild icon & thumbnail cache set each cache file's attributes to Normal before deleting it, which replaces the
+  whole set, so a file Explorer still held stayed on disk without its Hidden and System flags. Only ReadOnly, the one
+  attribute that blocks a delete, is cleared now, as Deep Cleanup already did, and
+  `ArchitectureTests.NoFileAttributesAreClearedBySettingThemToNormal` fails a build that sets them to Normal anywhere.
+
 ## [1.136.164] - 2026-11-10
 
 **File Shredder refuses files on network shares, and removes only the file it overwrote.**

@@ -42,14 +42,24 @@ jobs:
         id: check
         env:
           GH_TOKEN: ${{ github.token }}
+          # Through the environment, as the build job below passes them, never written into the script: the tag's
+          # name is whatever was pushed, and the trigger's v*.*.* filter lets through names that are not a version.
+          EVENT_NAME: ${{ github.event_name }}
+          REF_NAME: ${{ github.ref_name }}
+          REPOSITORY: ${{ github.repository }}
         run: |
           # Manual dispatch is an explicit, intentional request — always allow it.
-          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+          if [ "$EVENT_NAME" = "workflow_dispatch" ]; then
             echo "should_release=true" >> "$GITHUB_OUTPUT"
             echo "Manual dispatch — proceeding."
             exit 0
           fi
-          tag="${{ github.ref_name }}"
+          tag="$REF_NAME"
+          # The shape the build job also requires, checked before the name is used here at all.
+          if [[ ! "$tag" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "::error::The pushed tag is not of the form vMAJOR.MINOR.PATCH, so nothing is built."
+            exit 1
+          fi
           # A push event fires both for brand-new tags AND for moved/re-pushed tags.
           # A brand-new release has no GitHub Release yet; a moved tag already does.
           # Only release when none exists, so moving old tags can't re-trigger a
@@ -59,7 +69,7 @@ jobs:
           # network error, a 5xx, a rate limit or a token problem on a moved tag rebuilt it and replaced
           # the published release's exe and hash with different ones (#2805). Any other answer fails here,
           # which skips the build and leaves the run red.
-          if found=$(gh api "repos/${{ github.repository }}/releases/tags/$tag" --jq .id 2>&1); then
+          if found=$(gh api "repos/$REPOSITORY/releases/tags/$tag" --jq .id 2>&1); then
             echo "should_release=false" >> "$GITHUB_OUTPUT"
             echo "Release for $tag already exists — skipping (tag move or re-push)."
           elif [[ "$found" == *"(HTTP 404)"* ]]; then

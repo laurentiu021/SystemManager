@@ -79,6 +79,20 @@ public sealed class LeftoverServiceTests : IDisposable
         Assert.Contains($"Not offered: {folder} holds a link to another folder.", group.NotOffered);
     }
 
+    [Fact]
+    public async Task Find_DoesNotOfferAFolderItCouldNotLookThroughWhole()
+    {
+        // A folder inside that cannot be opened was never checked for a link, so the folder holding it is not offered.
+        var folder = TempLeftoverEnvironment.Folder(Path.Combine(_env.RoamingAppData, "Acme Notes"), bytes: 10);
+        using var unopenable = UnopenableFolder.In(folder);
+
+        var group = await Service().FindAsync(new UninstallProbe("Acme Notes", "Acme", "", ""), []);
+
+        Assert.Empty(group.Items);
+        Assert.Contains($"Not offered: {folder} has a folder inside that SysManager could not open, so it could not "
+                        + "be checked for links.", group.NotOffered);
+    }
+
     // ── Folders ───────────────────────────────────────────────────────────
 
     [Fact]
@@ -175,6 +189,39 @@ public sealed class LeftoverServiceTests : IDisposable
     }
 
     [Fact]
+    public async Task AFolderWithAFolderInsideThatCannotBeOpened_IsNotRemoved()
+    {
+        // The walk skips what it cannot open, and "no link inside" was read from a walk that never looked there.
+        var path = TempLeftoverEnvironment.Folder(Path.Combine(_env.RoamingAppData, "Acme Notes"), bytes: 10);
+        using var unopenable = UnopenableFolder.In(path);
+
+        var result = await Service().RemoveAsync([Folder(path)]);
+
+        Assert.Empty(_recycled);
+        Assert.Equal($"{path}: not removed, because it has a folder inside that SysManager could not open, so it could "
+                     + "not be checked for links.", Assert.Single(result.Errors));
+    }
+
+    [Fact]
+    public async Task CancelledWhileAFolderIsCheckedAgain_TheFolderStays()
+    {
+        // The walk stops without a word when the token fires, and what it never reached was never checked for a link.
+        // Cancelled during the checks before the walk, the removal walked nothing, found no link, and sent a folder
+        // holding one to the Recycle Bin.
+        var path = TempLeftoverEnvironment.Folder(Path.Combine(_env.RoamingAppData, "Acme Notes"), bytes: 10);
+        var elsewhere = TempLeftoverEnvironment.Folder(Path.Combine(_env.Documents, "Taxes"), bytes: 10);
+        Symlinks.RequireJunction(Path.Combine(path, "cache"), elsewhere);
+        using var cts = new CancellationTokenSource();
+        _env.DriveTypeAsked = cts.Cancel;
+
+        var result = await Service().RemoveAsync([Folder(path)], cts.Token);
+
+        Assert.Empty(_recycled);
+        Assert.Empty(result.Removed);
+        Assert.True(result.Stopped);
+    }
+
+    [Fact]
     public async Task AFolderThatIsNowRefused_IsNotRemoved()
     {
         // The finder's rules run again at removal: a folder that moved under Documents is no longer a leftover.
@@ -223,6 +270,118 @@ public sealed class LeftoverServiceTests : IDisposable
         Assert.Empty(result.Removed);
         Assert.Equal(2, result.Errors.Count);
         Assert.True(Directory.Exists(path));
+    }
+
+    // ── Installed since the search ────────────────────────────────────────
+    // The card stays until it is dismissed, so an app can be installed again, or another into the same folder, before
+    // Remove is pressed. The search's rules run again against what Windows lists then.
+
+    [Fact]
+    public async Task AFolderAnAppWasInstalledIntoSinceTheSearch_IsNotRemoved()
+    {
+        var path = TempLeftoverEnvironment.Folder(Path.Combine(_env.LocalAppData, "Acme Notes"), bytes: 10);
+        var item = Folder(path, size: 10);
+        _env.Registered.Add(new UninstallProbe("Acme Notes Beta", "", "", path));
+
+        var result = await Service().RemoveAsync([item]);
+
+        Assert.Empty(_recycled);
+        Assert.Empty(result.Removed);
+        Assert.Equal($"{path}: not removed, because it is also where another installed app lives.",
+            Assert.Single(result.Errors));
+    }
+
+    [Fact]
+    public async Task WhatAnAppInstalledAgainLeft_IsKept_FolderAndKeyAlike()
+    {
+        // Uninstalled, then installed again to fix it. Its new entry names no folder, so only its name says it is back.
+        var path = TempLeftoverEnvironment.Folder(Path.Combine(_env.LocalAppData, "Acme Notes"), bytes: 10);
+        _env.RegistryKeys.Add(@"Software\Acme\Notes");
+        RegExport(0, "Windows Registry Editor Version 5.00");
+        LeftoverItem[] items =
+        [
+            new()
+            {
+                Location = path, Kind = LeftoverKind.Folder, Confidence = LeftoverConfidence.Certain,
+                AppName = "Acme Notes",
+            },
+            new()
+            {
+                Location = @"Software\Acme\Notes", Kind = LeftoverKind.RegistryKey,
+                Confidence = LeftoverConfidence.OwnKey, AppName = "Acme Notes",
+            },
+        ];
+        _env.Registered.Add(new UninstallProbe("Acme Notes", "Acme", "", ""));
+
+        var result = await Service().RemoveAsync(items);
+
+        Assert.Empty(_recycled);
+        Assert.Empty(_deletedKeys);
+        await _runner.DidNotReceiveWithAnyArgs().RunProcessAsync(default!, default!, default, default);
+        Assert.Equal(
+            [
+                $"{path}: not removed, because it was left by an app that is installed again.",
+                @"HKEY_CURRENT_USER\Software\Acme\Notes: not removed, because it was left by an app that is installed "
+                + "again.",
+            ],
+            result.Errors);
+    }
+
+    [Fact]
+    public async Task AFolderFoundByItsName_IsNotRemoved_OnceAnInstalledAppAnswersToThatName()
+    {
+        var path = TempLeftoverEnvironment.Folder(Path.Combine(_env.RoamingAppData, "Acme Notes"), bytes: 10);
+        _env.Registered.Add(new UninstallProbe("Acme Notes Lite", "", "", ""));
+
+        var result = await Service().RemoveAsync([Folder(path, LeftoverConfidence.Probably)]);
+
+        Assert.Empty(_recycled);
+        Assert.Equal($"{path}: not removed, because it may belong to another installed app.",
+            Assert.Single(result.Errors));
+    }
+
+    [Fact]
+    public async Task APublisherFolder_IsNotRemoved_OnceAnotherAppOfThatPublisherIsInstalled()
+    {
+        var path = TempLeftoverEnvironment.Folder(Path.Combine(_env.RoamingAppData, "Acme Software"), bytes: 10);
+        var guess = new LeftoverItem
+        {
+            Location = path,
+            Kind = LeftoverKind.Folder,
+            Confidence = LeftoverConfidence.Guess,
+            Publisher = "Acme Software",
+        };
+        _env.Registered.Add(new UninstallProbe("Acme Draw", "Acme Software", "", ""));
+
+        var result = await Service().RemoveAsync([guess]);
+
+        Assert.Empty(_recycled);
+        Assert.Equal($"{path}: not removed, because it is shared with another installed Acme Software app.",
+            Assert.Single(result.Errors));
+    }
+
+    [Fact]
+    public async Task WhileTheUninstallListCannotBeReadWhole_OnlyTheInstallFolderCanGo()
+    {
+        // As in the search: what was found by a name cannot be checked against a list that is missing programs. The
+        // install folder came from the app's own entry, so it is held to the rules that need no name.
+        var install = TempLeftoverEnvironment.Folder(Path.Combine(_env.LocalAppData, "Acme Notes"), bytes: 10);
+        var named = TempLeftoverEnvironment.Folder(Path.Combine(_env.RoamingAppData, "Acme Notes"), bytes: 10);
+        _env.RegistryKeys.Add(@"Software\Acme\Notes");
+        _env.RegisteredComplete = false;
+
+        var result = await Service().RemoveAsync(
+            [Folder(install), Folder(named, LeftoverConfidence.Probably), Key(@"Software\Acme\Notes")]);
+
+        Assert.Equal([install], _recycled);
+        Assert.Empty(_deletedKeys);
+        Assert.Equal(
+            [
+                $"{named}: not removed, because it could not be checked against every installed program.",
+                @"HKEY_CURRENT_USER\Software\Acme\Notes: not removed, because it could not be checked against every "
+                + "installed program.",
+            ],
+            result.Errors);
     }
 
     // ── Keys ──────────────────────────────────────────────────────────────

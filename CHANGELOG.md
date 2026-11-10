@@ -10,6 +10,27 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.136.162] - 2026-11-10
+
+**Removing what an uninstall left behind checks again what is installed by then, so the folders and settings of an
+app you installed again since are kept.**
+
+### Fixed
+- The Left behind card stays until it is dismissed, so an app can be installed again, or another app into one of the
+  listed folders, before Remove ticked… is pressed. The removal checked each folder's location and links again and
+  nothing else, so the install folder, the AppData folder and the settings key of an app installed again since went
+  to the Recycle Bin or were deleted. Every item is now held to the search's rules again, against what Windows lists
+  as installed at that moment: nothing an installed app lives in, inside or around; nothing left by an app of the
+  same name that is installed again; and nothing found by a name an installed app answers to. While the list of
+  installed programs cannot be read whole, only the install folder can go, as in the search.
+- Just before a folder goes, it is walked again for links inside, and that check read a walk it had not finished as
+  "no link". A folder inside that SysManager could not open was skipped, and a Cancel during the walk ended it early;
+  either way the folder went to the Recycle Bin with part of it never looked at. A folder the walk cannot list all
+  the way through is now neither offered nor removed, and a Cancel during the check stops before that folder.
+- A folder refused by two of the searches was reported once by matching the start of the sentences already written,
+  which also matched another folder whose name starts the same way: once "Acme Notes" was refused, the refusal of
+  "Acme" was never shown. Each refusal is now kept by the folder's own path.
+
 ## [1.136.161] - 2026-11-09
 
 **SysManager no longer runs code that a variable in your environment names before it starts, so another program

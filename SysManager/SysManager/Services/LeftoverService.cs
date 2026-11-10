@@ -36,8 +36,10 @@ public interface ILeftoverService
 
     /// <summary>
     /// Sends the folders to the Recycle Bin and deletes the keys after exporting each to a <c>.reg</c> file. Every
-    /// folder is checked again first, so one that turned into a link, or gained one, since it was found is refused.
-    /// Cancelled, it stops before the next item and returns what it removed, marked <c>Stopped</c>.
+    /// item is checked again first, against the search's rules and what Windows lists as installed now: a folder that
+    /// turned into a link, gained one, or could not be looked through whole since it was found is refused, and so is
+    /// anything an app installed since lives in or answers to. Cancelled, it stops before the next item and returns
+    /// what it removed, marked <c>Stopped</c>.
     /// </summary>
     Task<LeftoverRemoval> RemoveAsync(IReadOnlyList<LeftoverItem> items, CancellationToken ct = default);
 
@@ -71,6 +73,13 @@ public sealed class LeftoverService : ILeftoverService
 {
     /// <summary>How many exports are kept for one key, as Right-Click Menu keeps.</summary>
     private const int BackupsKeptPerKey = ContextMenuService.BackupsKeptPerKey;
+
+    /// <summary>Why a folder whose walk met a link is refused, as the end of a sentence.</summary>
+    private const string HoldsALink = "holds a link to another folder";
+
+    /// <summary>Why a folder the walk could not list all of is refused, as the end of a sentence.</summary>
+    private const string NotLookedThroughWhole =
+        "has a folder inside that SysManager could not open, so it could not be checked for links";
 
     /// <summary>
     /// Confidence is written by name, so the record still reads correctly if the enum is ever reordered.
@@ -138,10 +147,10 @@ public sealed class LeftoverService : ILeftoverService
                 ct.ThrowIfCancellationRequested();
                 if (item.Kind == LeftoverKind.Folder)
                 {
-                    var (bytes, holdsLink) = MeasureFolder(item.Location, ct);
-                    if (holdsLink)
+                    var (bytes, holdsLink, whole) = MeasureFolder(item.Location, ct);
+                    if (WalkRefusal(holdsLink, whole) is { } refused)
                     {
-                        notOffered.Add($"Not offered: {item.Location} holds a link to another folder.");
+                        notOffered.Add($"Not offered: {item.Location} {refused}.");
                         continue;
                     }
                     item.SizeBytes = bytes;
@@ -172,6 +181,9 @@ public sealed class LeftoverService : ILeftoverService
             var recycled = new List<LeftoverItem>();
             var errors = new List<string>();
             var stopped = false;
+            // What Windows lists as installed now, read once for the whole removal. The card stays until it is
+            // dismissed, so the app can have been installed again, or another app into the same folder, since.
+            var installed = LeftoverFinder.OthersStillInstalled([], _env);
 
             foreach (var item in items)
             {
@@ -185,13 +197,13 @@ public sealed class LeftoverService : ILeftoverService
                 {
                     if (item.Kind == LeftoverKind.Folder)
                     {
-                        switch (RemoveFolder(item, errors, ct))
+                        switch (RemoveFolder(item, installed, errors, ct))
                         {
                             case FolderOutcome.Recycled: removed.Add(item); recycled.Add(item); break;
                             case FolderOutcome.AlreadyGone: removed.Add(item); break;
                         }
                     }
-                    else if (await RemoveKeyAsync(item, errors, ct).ConfigureAwait(false))
+                    else if (await RemoveKeyAsync(item, installed, errors, ct).ConfigureAwait(false))
                     {
                         removed.Add(item);
                     }
@@ -208,16 +220,22 @@ public sealed class LeftoverService : ILeftoverService
 
     private enum FolderOutcome { Recycled, AlreadyGone, Kept }
 
-    private FolderOutcome RemoveFolder(LeftoverItem item, List<string> errors, CancellationToken ct)
+    private FolderOutcome RemoveFolder(LeftoverItem item, (IReadOnlyList<UninstallProbe> Apps, bool Complete) installed,
+                                       List<string> errors, CancellationToken ct)
     {
         // Gone already, most often because a folder that held it went first: nothing is left to remove.
         if (!Directory.Exists(item.Location)) return FolderOutcome.AlreadyGone;
 
         // Checked again now rather than trusted from the search: a folder can be swapped for a link in between,
-        // or have one put inside it. The shell takes a path, so the moment between this check and its move is not
-        // closed; it is the same window File Shredder documents, kept as small as doing the check last makes it.
-        var why = LeftoverFinder.Refusal(item.Location, _env)
-            ?? (MeasureFolder(item.Location, ct).HoldsLink ? "holds a link to another folder" : null);
+        // or have one put inside it, or an app can be installed into it. The shell takes a path, so the moment between
+        // this check and its move is not closed; it is the same window File Shredder documents, kept as small as
+        // doing the walk last makes it.
+        var why = LeftoverFinder.Refusal(item.Location, _env) ?? InstalledSince(item, installed);
+        if (why is null)
+        {
+            var (_, holdsLink, whole) = MeasureFolder(item.Location, ct);
+            why = WalkRefusal(holdsLink, whole);
+        }
         if (why is not null)
         {
             errors.Add($"{item.Location}: not removed, because it {why}.");
@@ -229,7 +247,9 @@ public sealed class LeftoverService : ILeftoverService
         return FolderOutcome.Kept;
     }
 
-    private async Task<bool> RemoveKeyAsync(LeftoverItem item, List<string> errors, CancellationToken ct)
+    private async Task<bool> RemoveKeyAsync(
+        LeftoverItem item, (IReadOnlyList<UninstallProbe> Apps, bool Complete) installed, List<string> errors,
+        CancellationToken ct)
     {
         var shown = item.DisplayLocation;
         if (!LeftoverFinder.IsSafeKeyPath(item.Location))
@@ -238,6 +258,11 @@ public sealed class LeftoverService : ILeftoverService
             return false;
         }
         if (!_env.RegistryKeyExists(item.Location)) return true;
+        if (InstalledSince(item, installed) is { } why)
+        {
+            errors.Add($"{shown}: not removed, because it {why}.");
+            return false;
+        }
 
         var backup = await ExportKeyAsync(item.Location, ct).ConfigureAwait(false);
         if (backup is null)
@@ -253,6 +278,39 @@ public sealed class LeftoverService : ILeftoverService
         }
         errors.Add($"{shown}: Windows did not let SysManager delete it. Its backup is in {backup}.");
         return false;
+    }
+
+    /// <summary>
+    /// Why an app installed since the search now owns <paramref name="item"/>, as the end of a sentence, or null.
+    /// </summary>
+    /// <remarks>
+    /// The rules the search applied, and <see cref="LoadPending"/> applies, run again against the uninstall entries
+    /// Windows holds now: the app's own name registered again; another app living in the folder, inside it or around
+    /// it; and, for what was found by a name, an installed app answering to that name. As in the search, nothing found
+    /// by a name is removed while that list cannot be read whole; the install folder came from the app's own entry,
+    /// so it is held to the first two rules only.
+    /// </remarks>
+    private string? InstalledSince(LeftoverItem item, (IReadOnlyList<UninstallProbe> Apps, bool Complete) installed)
+    {
+        var (apps, complete) = installed;
+        if (item.AppName.Length > 0
+            && apps.Any(a => string.Equals(a.Name, item.AppName, StringComparison.OrdinalIgnoreCase)))
+            return "was left by an app that is installed again";
+        if (item.Kind == LeftoverKind.Folder && LeftoverFinder.SharedWith(item.Location, apps, _env) is { } shared)
+            return shared;
+        if (item.Confidence == LeftoverConfidence.Certain) return null;
+        if (!complete) return "could not be checked against every installed program";
+
+        if (item.Confidence == LeftoverConfidence.Guess && item.Publisher.Length > 0)
+        {
+            return LeftoverFinder.IsShared(item.Publisher, apps)
+                ? $"is shared with another installed {item.Publisher} app"
+                : null;
+        }
+        var name = item.Kind == LeftoverKind.RegistryKey
+            ? item.Location.Split('\\')[^1]
+            : Path.GetFileName(item.Location);
+        return LeftoverFinder.IsShared(name, apps) ? "may belong to another installed app" : null;
     }
 
     /// <summary>Exports a key to a new <c>.reg</c> file and returns its path, or null when no export was written.</summary>
@@ -324,8 +382,8 @@ public sealed class LeftoverService : ILeftoverService
                     // answering to that name has been installed since.
                     if (folder.Confidence == LeftoverConfidence.Probably
                         && LeftoverFinder.IsShared(Path.GetFileName(folder.Path), others)) continue;
-                    var (bytes, holdsLink) = MeasureFolder(folder.Path, CancellationToken.None);
-                    if (holdsLink) continue;
+                    var (bytes, holdsLink, whole) = MeasureFolder(folder.Path, CancellationToken.None);
+                    if (WalkRefusal(holdsLink, whole) is not null) continue;
 
                     // Nothing arrives ticked, Certain included. The record sits in the user's own profile, where
                     // anything running as the user could have rewritten it since; a session with administrator
@@ -339,6 +397,7 @@ public sealed class LeftoverService : ILeftoverService
                         Publisher = folder.Publisher,
                         NeedsAdministrator = LeftoverFinder.NeedsAdministrator(folder.Path, _env),
                         SizeBytes = bytes,
+                        AppName = group.AppName,
                     });
                 }
 
@@ -464,21 +523,34 @@ public sealed class LeftoverService : ILeftoverService
     }
 
     /// <summary>
-    /// The bytes in a folder, walked without following links as Deep Cleanup walks, and whether a link was met on the
-    /// way: a folder holding one is never offered.
+    /// The bytes in a folder, walked without following links as Deep Cleanup walks; whether a link was met on the way,
+    /// since a folder holding one is never offered; and whether the walk listed every folder inside.
     /// </summary>
-    private static (long Bytes, bool HoldsLink) MeasureFolder(string path, CancellationToken ct)
+    /// <remarks>
+    /// "No link inside" is known only for what the walk listed. A folder inside that cannot be opened is skipped, and a
+    /// walk the token stops ends without a word; both read as "no link" with part of the folder never looked at, and
+    /// that was the last check before the Recycle Bin. So the folders it could not list are reported, and a cancelled
+    /// walk throws rather than return a verdict it never reached.
+    /// </remarks>
+    private static (long Bytes, bool HoldsLink, bool Whole) MeasureFolder(string path, CancellationToken ct)
     {
         var links = new List<string>();
+        var unreadable = new List<string>();
         long bytes = 0;
-        foreach (var file in SafeFileWalk.Files(path, ct, new SafeWalkOptions { SkippedLinks = links }))
+        var options = new SafeWalkOptions { SkippedLinks = links, Unreadable = unreadable };
+        foreach (var file in SafeFileWalk.Files(path, ct, options))
         {
             try { bytes += new FileInfo(file).Length; }
             catch (IOException) { /* gone or locked mid-walk: counts as nothing */ }
             catch (UnauthorizedAccessException) { /* unreadable: counts as nothing */ }
         }
-        return (bytes, links.Count > 0);
+        ct.ThrowIfCancellationRequested();
+        return (bytes, links.Count > 0, unreadable.Count == 0);
     }
+
+    /// <summary>Why a folder is refused for what its walk found, as the end of a sentence, or null.</summary>
+    private static string? WalkRefusal(bool holdsLink, bool whole) =>
+        holdsLink ? HoldsALink : whole ? null : NotLookedThroughWhole;
 
     private static bool DeleteCurrentUserKey(string subKey)
     {

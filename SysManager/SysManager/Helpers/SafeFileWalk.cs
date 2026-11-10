@@ -29,6 +29,17 @@ internal sealed record SafeWalkOptions
     internal ICollection<string>? SkippedLinks { get; init; }
 
     /// <summary>
+    /// Receives every directory the walk could not list, whole or in part, or null to drop them silently.
+    /// </summary>
+    /// <remarks>
+    /// A directory that cannot be listed is skipped rather than ending the walk, which is right for a caller that acts
+    /// on what the walk returns. A caller that decides from what the walk did NOT find has to know what it never
+    /// looked at: the Uninstaller's leftover search and removal read "no link inside" from the walk, and a folder it
+    /// could not open was never checked for one.
+    /// </remarks>
+    internal ICollection<string>? Unreadable { get; init; }
+
+    /// <summary>
     /// Refuse to walk a root that IS a link or is REACHED THROUGH one. True by default, so a caller added
     /// later is protected without having to know this exists.
     /// </summary>
@@ -110,7 +121,8 @@ internal static class SafeFileWalk
 
             // Files first, then subdirectories, so a directory that fails to list its children still
             // contributes the files it did list.
-            foreach (var file in EnumerateGuarded(() => dir.EnumerateFiles(options.SearchPattern), current))
+            foreach (var file in EnumerateGuarded(
+                         () => dir.EnumerateFiles(options.SearchPattern), current, options.Unreadable))
             {
                 if ((file.Attributes & FileAttributes.ReparsePoint) != 0)
                 {
@@ -120,7 +132,7 @@ internal static class SafeFileWalk
                 yield return file.FullName;
             }
 
-            foreach (var sub in EnumerateGuarded(dir.EnumerateDirectories, current))
+            foreach (var sub in EnumerateGuarded(dir.EnumerateDirectories, current, options.Unreadable))
             {
                 if ((sub.Attributes & FileAttributes.ReparsePoint) != 0)
                 {
@@ -159,7 +171,7 @@ internal static class SafeFileWalk
         while (stack.Count > 0 && !ct.IsCancellationRequested)
         {
             var dir = new DirectoryInfo(stack.Pop());
-            foreach (var sub in EnumerateGuarded(dir.EnumerateDirectories, dir.FullName))
+            foreach (var sub in EnumerateGuarded(dir.EnumerateDirectories, dir.FullName, options.Unreadable))
             {
                 if ((sub.Attributes & FileAttributes.ReparsePoint) != 0)
                 {
@@ -283,16 +295,26 @@ internal static class SafeFileWalk
     /// iteration and costs the widest directory, not the tree.</para>
     /// <para>The caller stays lazy: <see cref="Files"/> yields as it goes and holds one directory's entries
     /// at a time, so a walk over %TEMP% never builds a list of every file in it.</para>
+    /// <para>A failed listing adds <paramref name="dir"/> to <paramref name="unreadable"/>, if one is given.</para>
     /// </remarks>
-    internal static List<T> EnumerateGuarded<T>(Func<IEnumerable<T>> enumerate, string dir)
+    internal static List<T> EnumerateGuarded<T>(Func<IEnumerable<T>> enumerate, string dir,
+                                                ICollection<string>? unreadable = null)
     {
         List<T> entries = [];
         try
         {
             foreach (var entry in enumerate()) entries.Add(entry);
         }
-        catch (IOException ex) { Log.Debug(ex, "SafeFileWalk: stopped listing {Dir}", dir); }
-        catch (UnauthorizedAccessException ex) { Log.Debug(ex, "SafeFileWalk: denied listing {Dir}", dir); }
+        catch (IOException ex)
+        {
+            Log.Debug(ex, "SafeFileWalk: stopped listing {Dir}", dir);
+            unreadable?.Add(dir);
+        }
+        catch (UnauthorizedAccessException ex)
+        {
+            Log.Debug(ex, "SafeFileWalk: denied listing {Dir}", dir);
+            unreadable?.Add(dir);
+        }
         return entries;
     }
 

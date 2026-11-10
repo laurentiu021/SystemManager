@@ -77,6 +77,11 @@ public sealed partial class LeftoverItem : ObservableObject
     /// <summary>The publisher a <see cref="LeftoverConfidence.Guess"/> was named after, for its reason text.</summary>
     public string Publisher { get; init; } = "";
 
+    /// <summary>
+    /// The app whose uninstall left it behind. Removing it is refused once an app of that name is installed again.
+    /// </summary>
+    public string AppName { get; init; } = "";
+
     /// <summary>The folder's size when it was found. Zero for a registry key.</summary>
     public long SizeBytes { get; set; }
 

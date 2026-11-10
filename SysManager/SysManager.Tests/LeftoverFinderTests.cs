@@ -396,6 +396,39 @@ public sealed class LeftoverFinderTests : IDisposable
         Assert.Equal($"Not offered: {own} belongs to SysManager.", Assert.Single(findings.NotOffered));
     }
 
+    [Fact]
+    public void AFolderWhoseNameStartsAnotherRefusedOne_HasItsOwnRefusalShown()
+    {
+        // "Acme Notes" is refused by its name first. "Acme", refused after it as the publisher's folder, was never
+        // mentioned: the once-per-folder check matched the start of the sentence already written for "Acme Notes".
+        TempLeftoverEnvironment.Folder(Roaming("Acme Notes"));
+        TempLeftoverEnvironment.Folder(Roaming("Acme"));
+
+        var findings = Find(Probe("Acme Notes", "Acme"), new UninstallProbe("Acme Notes Lite", "Acme", "", ""));
+
+        Assert.Empty(findings.Items);
+        Assert.Contains($"Not offered: {Roaming("Acme Notes")} may belong to another installed app.",
+            findings.NotOffered);
+        Assert.Contains($"Not offered: {Roaming("Acme")} is shared with another installed Acme app.",
+            findings.NotOffered);
+    }
+
+    [Fact]
+    public void EveryItem_SaysWhichAppLeftIt()
+    {
+        // A removal refuses what an app installed again since left, and knows the app by this name.
+        _env.IsElevated = true;
+        var install = TempLeftoverEnvironment.Folder(ProgramFiles("Acme Notes"));
+        TempLeftoverEnvironment.Folder(Roaming("Acme Notes"));
+        TempLeftoverEnvironment.Folder(Roaming("Acme Software"));
+        _env.RegistryKeys.Add(@"Software\Acme Software\Acme Notes");
+
+        var findings = Find(Probe(installLocation: install));
+
+        Assert.Equal(4, findings.Items.Count);
+        Assert.All(findings.Items, i => Assert.Equal("Acme Notes", i.AppName));
+    }
+
     // ── Sizes ─────────────────────────────────────────────────────────────
 
     [Fact]

@@ -380,6 +380,95 @@ public class FileShredderServiceTests
         }
     }
 
+    // ---------- a file on a network share is never shredded ----------
+
+    private const string NetworkShareRefusal = "Shredding files on a network share is not allowed: ";
+
+    /// <summary>This PC's own protected folders, reached through a share in each spelling a path can take.</summary>
+    /// <remarks>None of the files exists, so nothing could be overwritten should the refusal stop working.</remarks>
+    public static IEnumerable<object[]> NetworkPaths()
+    {
+        var windows = Environment.GetFolderPath(Environment.SpecialFolder.Windows);
+        var programFiles = Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles);
+        var share = $"{windows[0]}$";
+        var underWindows = Path.GetRelativePath(Path.GetPathRoot(windows)!, windows);
+        var underProgramFiles = Path.GetRelativePath(Path.GetPathRoot(programFiles)!, programFiles);
+        yield return [$@"\\localhost\{share}\{underWindows}\System32\smtest_should_never_shred.dat"];
+        yield return [$@"\\127.0.0.1\{share}\{underProgramFiles}\smtest_should_never_shred.dat"];
+        yield return [$@"\\?\UNC\localhost\{share}\{underWindows}\smtest_should_never_shred.dat"];
+        yield return [$"//localhost/{share}/{underWindows.Replace('\\', '/')}/smtest_should_never_shred.dat"];
+    }
+
+    [Theory]
+    [MemberData(nameof(NetworkPaths))]
+    public async Task ShredFileAsync_APathOnANetworkShare_IsRefused(string path)
+    {
+        // \\localhost\C$\Program Files is C:\Program Files by another name, and every resolution step left it in that
+        // form, so it passed the protected roots its drive-letter form is refused by. Refused before the share is
+        // reached at all.
+        var ex = await Assert.ThrowsAsync<SecurityException>(
+            () => NewService().ShredFileAsync(path, ShredMethod.Quick, null, CancellationToken.None));
+        Assert.StartsWith(NetworkShareRefusal, ex.Message, StringComparison.Ordinal);
+    }
+
+    [Theory]
+    [MemberData(nameof(NetworkPaths))]
+    public async Task ShredFolderAsync_AFolderOnANetworkShare_IsRefused(string path)
+    {
+        var ex = await Assert.ThrowsAsync<SecurityException>(() => NewService().ShredFolderAsync(
+            Path.GetDirectoryName(path)!, ShredMethod.Quick, null, CancellationToken.None));
+        Assert.StartsWith(NetworkShareRefusal, ex.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task ShredFileAsync_AFileReachedThroughALinkToAShare_IsRefused_AndLeftAsItWas()
+    {
+        // Every name in the path is on this PC; only the link in the middle leads to a share, so what the path resolves
+        // to decides. This PC's own temp folder, through its administrative share, stands in for another computer's.
+        var dir = Directory.CreateTempSubdirectory("smtest_shred_viashare_");
+        var link = dir.FullName + "_link";
+        try
+        {
+            var file = Path.Combine(dir.FullName, "secret.dat");
+            byte[] bytes = [.. Enumerable.Range(0, 256).Select(i => (byte)i)];
+            File.WriteAllBytes(file, bytes);
+            var asShare = $@"\\localhost\{dir.FullName[0]}$\{dir.FullName[3..]}";
+            if (!Directory.Exists(asShare))
+                Assert.Skip($"{asShare} cannot be reached here, so no link can lead to a share.");
+            Symlinks.RequireDirectoryLink(link, asShare);
+
+            var ex = await Assert.ThrowsAsync<SecurityException>(() => NewService().ShredFileAsync(
+                Path.Combine(link, "secret.dat"), ShredMethod.Quick, null, CancellationToken.None));
+
+            Assert.StartsWith(NetworkShareRefusal, ex.Message, StringComparison.Ordinal);
+            Assert.Equal(bytes, File.ReadAllBytes(file));
+        }
+        finally
+        {
+            Symlinks.RemoveLinkThenTree(link, dir.FullName);
+        }
+    }
+
+    [Theory]
+    [InlineData(@"\\server\share")]
+    [InlineData(@"\\localhost\C$\Windows")]
+    [InlineData("//server/share/file.txt")]
+    [InlineData(@"\\?\UNC\server\share\file.txt")]
+    [InlineData(@"\\.\UNC\server\share\file.txt")]
+    public void IsOnANetworkShare_SaysSoForAShare_InEverySpelling(string path) =>
+        // The canonical name a held handle is checked by comes back in the first form when it is on a share.
+        Assert.True(FileShredderService.IsOnANetworkShare(path));
+
+    [Fact]
+    public void IsOnANetworkShare_IsFalseForThisPCsOwnDrive_AlsoAsADevicePath()
+    {
+        var windows = Environment.GetFolderPath(Environment.SpecialFolder.Windows);
+
+        Assert.False(FileShredderService.IsOnANetworkShare(windows));
+        Assert.False(FileShredderService.IsOnANetworkShare(@"\\?\" + windows));
+        Assert.False(FileShredderService.IsOnANetworkShare(@"\\.\" + windows));
+    }
+
     [Fact]
     public async Task ValidatePath_SiblingOfProtectedRoot_IsAllowed()
     {
@@ -1040,6 +1129,55 @@ public class FileShredderServiceTests
         Assert.False(Directory.Exists(dir), "both files were destroyed, so the now-empty folder should be gone too");
         Assert.NotNull(report.Notice);
         Assert.Contains("write error", report.Notice, StringComparison.OrdinalIgnoreCase);
+    }
+
+    // ---------- the file removed is the file overwritten ----------
+
+    /// <summary>
+    /// A write handle that, once closed, moves the file it held away and puts another file at its name, so by the time
+    /// the shred removes the file, its path leads to a different one.
+    /// </summary>
+    private sealed class ReplacedOnCloseStream(string path, string movedTo, string replacement)
+        : FileStream(path, FileMode.Open, FileAccess.Write, FileShare.None, 64 * 1024,
+                     FileOptions.WriteThrough | FileOptions.SequentialScan)
+    {
+        private readonly string _path = path;
+        private bool _replaced;
+
+        public override async ValueTask DisposeAsync()
+        {
+            await base.DisposeAsync();
+            if (_replaced) return;
+            _replaced = true;
+            File.Move(_path, movedTo);
+            File.WriteAllText(_path, replacement);
+        }
+    }
+
+    [Fact]
+    public async Task ShredFileAsync_RemovesOnlyTheFileItOverwrote_WhenItsNameLeadsElsewhereByThen()
+    {
+        // The delete went by the name once the handle that was checked and written had closed, so it removed whatever
+        // the path led to by then, here a file nobody asked to shred.
+        var dir = Directory.CreateTempSubdirectory("smtest_shred_replaced_");
+        var path = Path.Combine(dir.FullName, "secret.dat");
+        var movedTo = Path.Combine(dir.FullName, "moved.dat");
+        File.WriteAllBytes(path, new byte[4096]);
+        var svc = new FileShredderService(candidate =>
+            candidate.Equals(path, StringComparison.OrdinalIgnoreCase)
+                ? new ReplacedOnCloseStream(candidate, movedTo, "another file has this name now")
+                : new FileStream(candidate, FileMode.Open, FileAccess.Write, FileShare.None, 64 * 1024,
+                                 FileOptions.WriteThrough | FileOptions.SequentialScan));
+        try
+        {
+            var ex = await Assert.ThrowsAsync<IOException>(
+                () => svc.ShredFileAsync(path, ShredMethod.Quick, null, CancellationToken.None));
+
+            Assert.Contains("no longer leads to the file that was overwritten", ex.Message, StringComparison.Ordinal);
+            Assert.Equal("another file has this name now", File.ReadAllText(path));
+            Assert.Equal(0, new FileInfo(movedTo).Length);   // what was overwritten, truncated, where it was moved to
+        }
+        finally { dir.Delete(recursive: true); }
     }
 
     // ---------- compressed/sparse/encrypted files are not overwritten in place (#2824 point 1) ----------

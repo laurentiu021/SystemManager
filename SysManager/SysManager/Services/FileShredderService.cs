@@ -158,8 +158,12 @@ public sealed partial class FileShredderService
 
         // Set once a write-time fault (a full disk, a removed drive) hits after at least one byte of a
         // pass was already written. Declared here, not inside the block below, so it is still visible at
-        // the throw site after the exclusive handle has been disposed and File.Delete has run.
+        // the throw site after the exclusive handle has been disposed and the file removed.
         IOException? writeFault = null;
+
+        // The file the held handle is open on, read once its path has been checked, so the removal at the end
+        // acts on that file and on nothing a changed path leads to instead.
+        FileIdentity? shredded = null;
 
         // Open the file ONCE with an exclusive (FileShare.None) write handle and keep it open
         // for every pass and the final truncate. This closes the validate-by-path/act-by-path
@@ -170,7 +174,7 @@ public sealed partial class FileShredderService
         // redirect the overwrite — the handle is already bound to the resolved object, and
         // FileShare.None blocks anyone from moving/replacing it mid-shred.
         // The explicit block scopes the `await using` so the exclusive handle is disposed
-        // BEFORE the File.Delete below — deleting while we still hold FileShare.None would fail.
+        // BEFORE the removal below, which opens the file again for deletion.
         {
             await using var stream = _openExclusiveWrite(filePath);
 
@@ -180,7 +184,16 @@ public sealed partial class FileShredderService
             // same object we will overwrite, so there is no residual race.
             var heldCanonical = GetFinalPathFromHandle(stream.SafeFileHandle);
             if (heldCanonical is not null)
+            {
+                // The path checked may have been a local one, a drive letter mapped to a share say, or a folder
+                // swapped for a link to one since; where the handle actually is decides.
+                ThrowIfOnANetworkShare(heldCanonical);
                 ThrowIfProtected(ExpandShortPath(heldCanonical));
+            }
+
+            // Which file this handle is open on. The file is removed at the end through a handle checked to be open
+            // on the same one, never by its name alone.
+            shredded = FileIdentity.OfAnyFileSystem(stream.SafeFileHandle);
 
             // Refuse to overwrite a file that has more than one hard link. Overwriting the
             // bytes destroys the data for EVERY name that points at this file — including links
@@ -274,32 +287,21 @@ public sealed partial class FileShredderService
             // unrecoverable and must still be removed.
             stream.SetLength(0);
             await stream.FlushAsync(CancellationToken.None).ConfigureAwait(false);
-        } // `await using` disposes the exclusive handle here, releasing FileShare.None for Delete.
 
-        // Named streams (e.g. the Zone.Identifier Windows adds to every downloaded file, recording
-        // where it came from) share the unnamed one's bytes on disk but are a SEPARATE handle — the
-        // overwrite above never touches them, and File.Delete below removes them unoverwritten right
-        // alongside the file (#2824).
-        await OverwriteNamedStreamsAsync(filePath, patterns).ConfigureAwait(false);
+            // Named streams (e.g. the Zone.Identifier Windows adds to every downloaded file, recording
+            // where it came from) share the unnamed one's directory entry but each has a handle of its own.
+            // The overwrite above never touches them, and the removal below takes them unoverwritten right
+            // alongside the file (#2824). Overwritten while the exclusive handle is still held, which no
+            // named stream's own handle is refused by, so the file cannot be moved or replaced in between and
+            // the streams written are this file's.
+            await OverwriteNamedStreamsAsync(filePath, patterns).ConfigureAwait(false);
+        } // `await using` disposes the exclusive handle here.
 
         // The file contents are already securely overwritten and truncated to zero at
         // this point, so the shred guarantee holds even if the directory-entry removal
-        // fails. Surface a delete failure as a clear IOException rather than letting a
+        // fails. Surface a removal failure as a clear IOException rather than letting a
         // raw one escape — the caller can report "overwritten but not removed".
-        try
-        {
-            File.Delete(filePath);
-        }
-        catch (IOException ex)
-        {
-            throw new IOException(
-                $"File contents were securely overwritten, but the file could not be removed: {ex.Message}", ex);
-        }
-        catch (UnauthorizedAccessException ex)
-        {
-            throw new IOException(
-                $"File contents were securely overwritten, but removal was denied: {ex.Message}", ex);
-        }
+        RemoveShreddedFile(filePath, shredded);
 
         if (writeFault is not null)
         {
@@ -332,6 +334,50 @@ public sealed partial class FileShredderService
     }
 
     /// <summary>
+    /// Removes the file the shred overwrote, through a handle checked to be open on that same file.
+    /// </summary>
+    /// <remarks>
+    /// The overwrite holds one exclusive handle from the check of what it opened to the truncate, and the file could
+    /// not be moved or replaced while it was held. The delete came after that handle closed and went by the name,
+    /// so it removed whatever the path led to by then, with no check of what that was, and it was the one step not
+    /// bound to the file that was checked and written. Now the name is opened again for deletion, a link at it as the
+    /// link rather than followed, and the file goes only when that handle is open on the file the overwrite held.
+    /// When it is not, nothing is removed, and the caller hears that the contents were overwritten and the name
+    /// stayed.
+    /// </remarks>
+    private static void RemoveShreddedFile(string filePath, FileIdentity? shredded)
+    {
+        using var handle = NativeMethods.CreateFile(
+            filePath,
+            NativeMethods.DELETE | NativeMethods.FILE_READ_ATTRIBUTES,
+            FileShare.ReadWrite | FileShare.Delete,
+            IntPtr.Zero,
+            FileMode.Open,
+            NativeMethods.FILE_FLAG_OPEN_REPARSE_POINT,
+            IntPtr.Zero);
+        if (handle.IsInvalid) throw NotRemoved(Marshal.GetLastPInvokeError());
+
+        if (shredded is null || FileIdentity.OfAnyFileSystem(handle) != shredded)
+            throw new IOException(
+                "File contents were securely overwritten, but the file could not be removed: its name no longer "
+                + "leads to the file that was overwritten, so nothing was removed.");
+
+        var disposition = new NativeMethods.FileDispositionInfo { DeleteFile = 1 };
+        if (!NativeMethods.SetFileInformationByHandle(handle, NativeMethods.FileDispositionInfoClass, ref disposition,
+                (uint)Marshal.SizeOf<NativeMethods.FileDispositionInfo>()))
+            throw NotRemoved(Marshal.GetLastPInvokeError());
+    }
+
+    /// <summary>The failure a removal refused with Windows error <paramref name="error"/> is reported as.</summary>
+    private static IOException NotRemoved(int error)
+    {
+        var why = new System.ComponentModel.Win32Exception(error).Message;
+        return error == NativeMethods.ERROR_ACCESS_DENIED
+            ? new IOException($"File contents were securely overwritten, but removal was denied: {why}")
+            : new IOException($"File contents were securely overwritten, but the file could not be removed: {why}");
+    }
+
+    /// <summary>
     /// Overwrites every NAMED stream on <paramref name="filePath"/> with <paramref name="patterns"/> —
     /// never the unnamed <c>::$DATA</c> one, which the caller already handled. Best-effort: a stream
     /// that cannot be opened is left for the delete that follows to remove, same as the main stream
@@ -339,11 +385,11 @@ public sealed partial class FileShredderService
     /// </summary>
     /// <remarks>
     /// Measured: opening a named stream with <see cref="FileShare.None"/> succeeds even while the
-    /// unnamed stream is held exclusively — they are independent handles on disk sharing one directory
-    /// entry — so this runs AFTER the main <c>await using</c> block above has already disposed that
-    /// handle, not because it has to, but because there is no reason to hold two exclusive handles open
-    /// at once. Enumeration and overwrite both run to completion unconditionally — no cancellation
-    /// token is threaded in here: by the time this is reached the main data is already unrecoverable,
+    /// unnamed stream is held exclusively, since they are independent handles on disk sharing one directory
+    /// entry. So this runs while the main handle is still held, which keeps the file at its name until
+    /// every stream of it has been written. Enumeration and overwrite both run to completion unconditionally,
+    /// and no cancellation token is threaded in here: by the time this is reached the main data is already
+    /// unrecoverable,
     /// these streams are typically a few hundred bytes (Windows' own <c>Zone.Identifier</c> is one line
     /// of text), and the delete that follows removes every stream together regardless of how far this
     /// got (#2824).
@@ -616,9 +662,15 @@ public sealed partial class FileShredderService
         }
     }
 
-    private void ValidatePath(string path)
+    internal void ValidatePath(string path)
     {
         var fullPath = Path.GetFullPath(path);
+
+        // Before anything else, and before any of it reaches out to the share: every check below compares against
+        // this PC's own drive-letter paths, and a share leads back to them. \\localhost\C$\Program Files is
+        // C:\Program Files, and every resolution step here leaves it in that form, so it passed the protected
+        // roots that its drive-letter form is refused by.
+        ThrowIfOnANetworkShare(fullPath);
 
         // Resolve symlinks/junctions before validating. Path.GetFullPath only
         // canonicalizes '.'/'..' — it does NOT follow reparse points, so a symlink
@@ -651,8 +703,53 @@ public sealed partial class FileShredderService
         // point anywhere in the chain, and validate that too. Best-effort: when the path
         // can't be opened (missing, locked) we keep the already-validated literal form.
         var canonical = ResolveFinalPath(fullPath);
-        if (canonical is not null && !canonical.Equals(fullPath, StringComparison.OrdinalIgnoreCase))
+        if (canonical is null) return;
+        // A link anywhere on the way can lead to a share, with every name of the path itself on this PC.
+        ThrowIfOnANetworkShare(canonical);
+        if (!canonical.Equals(fullPath, StringComparison.OrdinalIgnoreCase))
             ThrowIfProtected(ExpandShortPath(canonical));
+    }
+
+    /// <summary>
+    /// Throws <see cref="SecurityException"/> when <paramref name="path"/> is on a network share.
+    /// </summary>
+    /// <remarks>
+    /// A file on a share is never shredded. The protected roots are this PC's own drive-letter paths, and a share,
+    /// the PC's own <c>C$</c> among them, reaches the same folders by another name. And an overwrite sent over the
+    /// network is not a secure one: the computer holding the share writes it where it chooses, and can keep copies
+    /// of the file in its caches and snapshots.
+    /// </remarks>
+    private static void ThrowIfOnANetworkShare(string path)
+    {
+        if (IsOnANetworkShare(path))
+            throw new SecurityException(
+                $"Shredding files on a network share is not allowed: {path}. The computer that holds the share "
+                + "decides where an overwrite lands and can keep copies of the file, so shred it on that computer.");
+    }
+
+    /// <summary>
+    /// Whether <paramref name="path"/> names a network share: a UNC path, in any of its spellings, or a drive letter
+    /// Windows maps to one.
+    /// </summary>
+    /// <remarks>
+    /// A device path to a volume of this PC (<c>\\?\C:\</c>) is not one: the check of its canonical form sees where
+    /// it leads. Decided from the text, and for a drive letter from the drive's kind, so nothing reaches the share.
+    /// </remarks>
+    internal static bool IsOnANetworkShare(string path)
+    {
+        var text = path.TrimStart().Replace('/', '\\');
+        if (text.StartsWith(@"\\?\UNC\", StringComparison.OrdinalIgnoreCase)
+            || text.StartsWith(@"\\.\UNC\", StringComparison.OrdinalIgnoreCase))
+            return true;
+        if (text.StartsWith(@"\\?\", StringComparison.Ordinal) || text.StartsWith(@"\\.\", StringComparison.Ordinal))
+            return false;
+        if (text.StartsWith(@"\\", StringComparison.Ordinal)) return true;
+
+        try
+        {
+            return Path.GetPathRoot(text) is { Length: > 0 } root && new DriveInfo(root).DriveType == DriveType.Network;
+        }
+        catch (ArgumentException) { return false; }
     }
 
     /// <summary>
@@ -828,6 +925,31 @@ public sealed partial class FileShredderService
     private static partial class NativeMethods
     {
         internal const uint FILE_FLAG_BACKUP_SEMANTICS = 0x0200_0000;
+
+        /// <summary>Opens a link itself rather than following it.</summary>
+        internal const uint FILE_FLAG_OPEN_REPARSE_POINT = 0x0020_0000;
+
+        internal const uint DELETE = 0x0001_0000;
+        internal const uint FILE_READ_ATTRIBUTES = 0x0080;
+        internal const int ERROR_ACCESS_DENIED = 5;
+
+        /// <summary><c>FileDispositionInfo</c> in <c>FILE_INFO_BY_HANDLE_CLASS</c>.</summary>
+        internal const int FileDispositionInfoClass = 4;
+
+        /// <summary><c>FILE_DISPOSITION_INFO</c>: <c>DeleteFile</c> set deletes the file on its last close.</summary>
+        [StructLayout(LayoutKind.Sequential)]
+        internal struct FileDispositionInfo
+        {
+            public byte DeleteFile;
+        }
+
+        [LibraryImport("kernel32.dll", SetLastError = true)]
+        [return: MarshalAs(UnmanagedType.Bool)]
+        internal static partial bool SetFileInformationByHandle(
+            SafeFileHandle hFile,
+            int fileInformationClass,
+            ref FileDispositionInfo lpFileInformation,
+            uint dwBufferSize);
 
         [LibraryImport("kernel32.dll", StringMarshalling = StringMarshalling.Utf16, EntryPoint = "GetLongPathNameW")]
         internal static partial uint GetLongPathName(

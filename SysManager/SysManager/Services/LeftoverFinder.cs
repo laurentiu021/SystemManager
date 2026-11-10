@@ -296,8 +296,29 @@ public static partial class LeftoverFinder
                 if (SystemPaths.IsInsideSubtree(home, path) || SystemPaths.IsInsideSubtree(path, home))
                     return "is also where another installed app lives";
             }
+            if (CommandNames(other.UninstallCommand, path)) return "is also where another installed app lives";
         }
         return null;
+    }
+
+    /// <summary>Whether <paramref name="command"/> names <paramref name="path"/> or anything inside it.</summary>
+    /// <remarks>
+    /// The folder of the program a command runs is the one place <see cref="HomesOf"/> works out from it. The rest of
+    /// the command can name others: the DLL a <c>rundll32</c> command loads, a folder an argument gives, or the whole
+    /// of a command no rule splits into a program and its arguments. Read as "lives nowhere", each of those offered the
+    /// folder that app sits in, ticked when it was the install folder. So the text itself is searched, for the path
+    /// followed by a separator, a quote or the end, which a longer name that merely starts the same way never is.
+    /// </remarks>
+    private static bool CommandNames(string? command, string path)
+    {
+        if (string.IsNullOrWhiteSpace(command) || path.Length == 0) return false;
+        for (var at = command.IndexOf(path, StringComparison.OrdinalIgnoreCase); at >= 0;
+             at = command.IndexOf(path, at + 1, StringComparison.OrdinalIgnoreCase))
+        {
+            var end = at + path.Length;
+            if (end == command.Length || command[end] is '\\' or '/' or '"' or '\'') return true;
+        }
+        return false;
     }
 
     /// <summary>
@@ -434,20 +455,15 @@ public static partial class LeftoverFinder
 
     /// <summary>The folder an uninstall command's executable sits in, or null when it names none.</summary>
     /// <remarks>
-    /// Parsed by the rule the Uninstaller runs the command with, so both agree on which executable it names.
+    /// Split by the rules the Uninstaller runs the command with, so both agree on which executable it names, but
+    /// without the refusals that keep a command from running: a command SysManager will not run still says where the
+    /// app's uninstaller is, and taking it as "names no folder" offered the folder that app lives in.
     /// <c>MsiExec</c> and <c>rundll32</c> come back as bare names and name no folder of the app's own.
     /// </remarks>
-    private static string? UninstallerFolder(string? command)
-    {
-        if (string.IsNullOrWhiteSpace(command)) return null;
-        try
-        {
-            var (exe, _) = UninstallerService.ParseUninstallCommand(command);
-            return Normalize(Path.GetDirectoryName(exe));
-        }
-        catch (InvalidOperationException) { return null; }
-        catch (ArgumentException) { return null; }
-    }
+    private static string? UninstallerFolder(string? command) =>
+        string.IsNullOrWhiteSpace(command) || UninstallerService.SplitUninstallCommand(command) is not { } split
+            ? null
+            : Normalize(Path.GetDirectoryName(split.Exe));
 
     /// <summary>The roots, the user's folders and SysManager's own: what no offered folder may be, or hold.</summary>
     private static IEnumerable<string> ProtectedFolders(ILeftoverEnvironment env)

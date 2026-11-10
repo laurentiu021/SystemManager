@@ -343,6 +343,50 @@ public sealed class LeftoverFinderTests : IDisposable
     }
 
     [Fact]
+    public void AnApp_StillLivesAroundItsUninstaller_WhenSysManagerWouldNotRunItsCommand()
+    {
+        // The launch refuses an unquoted command with '&' in it. Read as "lives nowhere", that offered a folder inside
+        // the other app's, as this app's install folder, ticked.
+        var vendor = TempLeftoverEnvironment.Folder(Local("Acme & Co"));
+        var install = TempLeftoverEnvironment.Folder(Path.Combine(vendor, "Notes"));
+        _env.Registered.Add(new UninstallProbe("Acme Agent", "", "", "", $@"{vendor}\uninstall.exe /S"));
+
+        var findings = Find(Probe(installLocation: install));
+
+        Assert.DoesNotContain(findings.Items, i => i.Location == install);
+        Assert.Contains($"Not offered: {install} is also where another installed app lives.", findings.NotOffered);
+    }
+
+    [Theory]
+    [InlineData("rundll32.exe \"{0}\\helper.dll\",Uninstall")]
+    [InlineData("{0}\\uninstall.cmd /S")]
+    public void AnApp_LivesInAFolderItsUninstallCommandNames_ThoughNotAsTheProgramItRuns(string shape)
+    {
+        // rundll32 runs from Windows' own folder, and a command no rule splits names no program at all: the folder the
+        // command names is where that app is.
+        var install = TempLeftoverEnvironment.Folder(Local("Acme Notes"));
+        _env.Registered.Add(new UninstallProbe("Acme Helper", "", "", "",
+            string.Format(System.Globalization.CultureInfo.InvariantCulture, shape, install)));
+
+        var findings = Find(Probe(installLocation: install));
+
+        Assert.DoesNotContain(findings.Items, i => i.Location == install);
+        Assert.Contains($"Not offered: {install} is also where another installed app lives.", findings.NotOffered);
+    }
+
+    [Fact]
+    public void ACommandNamingAFolderWhoseNameStartsTheSame_DoesNotClaimThisOne()
+    {
+        var install = TempLeftoverEnvironment.Folder(Local("Acme"));
+        _env.Registered.Add(new UninstallProbe("Acme Notes", "", "", "",
+            $"rundll32.exe \"{Local("Acme Notes")}\\helper.dll\",Uninstall"));
+
+        var findings = Find(Probe("Acme Draw", "", "", install));
+
+        Assert.Contains(findings.Items, i => i.Location == install && i.Confidence == LeftoverConfidence.Certain);
+    }
+
+    [Fact]
     public void AnEntryNamingARootAsItsHome_DoesNotMakeEverythingUnderItShared()
     {
         // Entries that give C:\Program Files as their install location exist; one of them must not stop every

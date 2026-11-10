@@ -277,12 +277,12 @@ public class RestorePointServiceTests
     }
 
     [Fact]
-    public void BuildCreateScript_StopsOnTheWarningWindowsUsesForTheDailyLimit()
+    public void CreateScript_StopsOnTheWarningWindowsUsesForTheDailyLimit()
     {
         // The shape that does the work: the rate-limit refusal is a WARNING in Windows PowerShell 5.1, so it is
         // -WarningAction Stop on the Checkpoint-Computer command itself that keeps the sentinel from printing.
         // The integration suite runs this text in real PowerShell; this pins it in the blocking one.
-        var checkpoint = RestorePointService.BuildCreateScript("d")
+        var checkpoint = RestorePointService.CreateScript
             .Split(';')
             .Single(part => part.Contains("Checkpoint-Computer", StringComparison.Ordinal));
 
@@ -290,24 +290,45 @@ public class RestorePointServiceTests
         Assert.Contains("-ErrorAction Stop", checkpoint, StringComparison.Ordinal);
     }
 
+    /// <summary>
+    /// The description reaches the script as its parameter, whatever quotes it holds, and the script's text is the
+    /// same for every description.
+    /// </summary>
+    /// <remarks>
+    /// PowerShell ends a single-quoted string at ' and at the typographic quotes ‘ ’ ‚ ‛. The description was written
+    /// into the script with only ' doubled, so "Bob’s point" ended the string after "Bob" and no point was made.
+    /// </remarks>
     [Theory]
-    [InlineData("Bob's point", "'Bob''s point'")]
-    [InlineData("x'; Remove-Item C:\\Windows; '", "'x''; Remove-Item C:\\Windows; '''")]
-    public void BuildCreateScript_KeepsTheDescriptionInsideOneQuotedString(string description, string expected)
+    [InlineData("Bob's point")]
+    [InlineData("Bob\u2019s point")]
+    [InlineData("\u2018Before\u2019 the \u201Aupdate\u201B")]
+    public async Task CreateAsync_GivesTheScriptTheDescriptionAsItsParameter(string description)
     {
-        // The description is the one user-supplied value in the script, and single-quote escaping is the only
-        // thing standing between it and the command line — so it is asserted, not assumed.
-        Assert.Contains($"-Description {expected} ", RestorePointService.BuildCreateScript(description), StringComparison.Ordinal);
+        var runner = RunnerReturning(RestorePointService.CreateOkSentinel);
+
+        Assert.True(await new RestorePointService(runner).CreateAsync(description));
+
+        await runner.Received(1).RunAsync(RestorePointService.CreateScript,
+            Arg.Is<IDictionary<string, object?>?>(p =>
+                p != null && p.Count == 1 && Equals(p["Description"], description)),
+            Arg.Any<CancellationToken>());
     }
 
     [Theory]
     [InlineData(null)]
     [InlineData("")]
     [InlineData("   ")]
-    public void BuildCreateScript_WithNoDescription_UsesTheDefaultName(string? description)
+    public void CreateParameters_WithNoDescription_UseTheDefaultName(string? description)
+        => Assert.Equal(new Dictionary<string, object?> { ["Description"] = "SysManager Restore Point" },
+            RestorePointService.CreateParameters(description));
+
+    [Fact]
+    public void CreateScript_TakesTheDescriptionItIsGiven()
     {
-        Assert.Contains("-Description 'SysManager Restore Point' ",
-            RestorePointService.BuildCreateScript(description), StringComparison.Ordinal);
+        // The parameter the script declares is the one it passes on, so a value bound to it is the description used.
+        Assert.StartsWith("param([string]$Description) ", RestorePointService.CreateScript, StringComparison.Ordinal);
+        Assert.Contains("Checkpoint-Computer -Description $Description ", RestorePointService.CreateScript,
+            StringComparison.Ordinal);
     }
 
     [Fact]

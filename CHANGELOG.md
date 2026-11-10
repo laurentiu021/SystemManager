@@ -10,6 +10,22 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.136.167] - 2026-11-10
+
+**A restore point description with a curly apostrophe, the kind Word and phone keyboards type, no longer stops
+Windows from making the point.**
+
+### Fixed
+- Restore Points wrote the description into the PowerShell script that makes the point, inside single quotes with each
+  `'` doubled. PowerShell also ends a single-quoted string at the typographic quotes ‘ ’ ‚ ‛, so a description such as
+  "Bob’s point" ended the string after "Bob", the script could not run, and no point was made. It has been that way
+  since the tab came in 1.23.0. The description is now the script's parameter and never part of its text, the way
+  SysManager's other scripts already take their values.
+- Preinstalled Apps' removal script takes the package name the same way. The name was already checked to hold only
+  characters that cannot end a string, and it still is.
+- `ArchitectureTests.NoScriptTakesAValue_ByDoublingItsQuotes` fails a build that puts a value into a script's text by
+  doubling its quotes.
+
 ## [1.136.166] - 2026-11-10
 
 **On Windows 11 version 24H2 and later, Privacy & Telemetry no longer offers a Windows Copilot switch that Windows

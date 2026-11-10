@@ -36,12 +36,25 @@ public class RestorePointScriptTests
         "function Checkpoint-Computer { [CmdletBinding()] param($Description, $RestorePointType) " +
         "throw 'System Restore is turned off for this drive.' } ; ";
 
+    // Writes the code points of the description it was given, so what arrived is read back exactly, whatever the
+    // console's encoding does to the characters themselves.
+    private const string CheckpointEchoes =
+        "function Checkpoint-Computer { [CmdletBinding()] param($Description, $RestorePointType) " +
+        "'DESCRIPTION=' + (($Description.ToCharArray() | ForEach-Object { [int]$_ }) -join ',') } ; ";
+
     private static readonly string CreateGuard =
         WindowsPowerShellScript.StubsInEffect("Enable-ComputerRestore", "Checkpoint-Computer");
 
     private static readonly string RestoreGuard = WindowsPowerShellScript.StubsInEffect("Restore-Computer");
 
     private static readonly string ListGuard = WindowsPowerShellScript.StubsInEffect("Get-ComputerRestorePoint");
+
+    /// <summary>
+    /// <see cref="RestorePointService.CreateScript"/> called with a description, as the runner binds it: a script block
+    /// invoked with the parameter named. The stubs defined before it are in scope inside it.
+    /// </summary>
+    private static string Create(string description) =>
+        "& { " + RestorePointService.CreateScript + " } -Description " + description;
 
     // Printed by the statement after the list, so it shows whether a failed list STOPPED the script. Stopping is what
     // makes the runner throw, and the throw is how ListAsync tells a refusal from an empty answer.
@@ -77,7 +90,7 @@ public class RestorePointScriptTests
     public async Task CreateScript_WhenWindowsDeclinesForTheDay_DoesNotConfirm()
     {
         var (_, output, _) = await WindowsPowerShellScript.RunAsync(
-            EnableStub + CheckpointRefusesForTheDay + CreateGuard + RestorePointService.BuildCreateScript("Probe"));
+            EnableStub + CheckpointRefusesForTheDay + CreateGuard + Create("'Probe'"));
 
         Assert.DoesNotContain(RestorePointService.CreateOkSentinel, output, StringComparison.Ordinal);
     }
@@ -86,16 +99,34 @@ public class RestorePointScriptTests
     public async Task CreateScript_WhenCheckpointFails_DoesNotConfirm()
     {
         var (_, output, _) = await WindowsPowerShellScript.RunAsync(
-            EnableStub + CheckpointFails + CreateGuard + RestorePointService.BuildCreateScript("Probe"));
+            EnableStub + CheckpointFails + CreateGuard + Create("'Probe'"));
 
         Assert.DoesNotContain(RestorePointService.CreateOkSentinel, output, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// A description with the quotes that end a single-quoted PowerShell string reaches Checkpoint-Computer whole.
+    /// </summary>
+    /// <remarks>
+    /// It was written into the script's text with only ' doubled, so a typographic apostrophe ended the string there.
+    /// The description is made in PowerShell from its code points: Bob’s ‘p’ 'x.
+    /// </remarks>
+    [Fact]
+    public async Task CreateScript_HandsCheckpointTheDescriptionWhole()
+    {
+        const string CodePoints = "66,111,98,8217,115,32,8216,112,8217,32,39,120";
+        var (_, output, _) = await WindowsPowerShellScript.RunAsync(
+            EnableStub + CheckpointEchoes + CreateGuard + Create($"([string]::new([char[]]({CodePoints})))"));
+
+        Assert.Contains("DESCRIPTION=" + CodePoints, output, StringComparison.Ordinal);
+        Assert.Contains(RestorePointService.CreateOkSentinel, output, StringComparison.Ordinal);
     }
 
     [Fact]
     public async Task CreateScript_WhenWindowsMakesThePoint_Confirms()
     {
         var (_, output, _) = await WindowsPowerShellScript.RunAsync(
-            EnableStub + CheckpointSucceeds + CreateGuard + RestorePointService.BuildCreateScript("Probe"));
+            EnableStub + CheckpointSucceeds + CreateGuard + Create("'Probe'"));
 
         Assert.Contains(RestorePointService.CreateOkSentinel, output, StringComparison.Ordinal);
     }

@@ -710,7 +710,8 @@ Edit Windows environment variables without the cramped built-in dialog:
 ### Restore Points
 - List every Windows System Restore point — sequence number, date, description,
   and type in words (App install, Automatic, Manual / settings, …) — newest first
-- **Create** a restore point with an optional custom description (enables System
+- **Create** a restore point with an optional custom description, kept exactly as you
+  type it, curly apostrophes included (enables System
   Restore on the system drive first if it's off). Windows makes at most one a day;
   when it declines, this tab says so rather than reporting a point that was
   never made, and the tabs that take one automatically mention a restore point only

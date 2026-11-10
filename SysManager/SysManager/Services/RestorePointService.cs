@@ -27,7 +27,7 @@ public sealed class RestorePointService
     private readonly IPowerShellRunner _ps;
     private readonly TimeProvider _clock;
 
-    /// <summary>Printed by <see cref="BuildCreateScript"/> only after Windows confirmed a new restore point.</summary>
+    /// <summary>Printed by <see cref="CreateScript"/> only after Windows confirmed a new restore point.</summary>
     internal const string CreateOkSentinel = "__SM_RP_CREATED__";
 
     /// <summary>Printed by <see cref="BuildRestoreScript"/> only after Windows accepted the restore request.</summary>
@@ -37,7 +37,7 @@ public sealed class RestorePointService
     /// What every confirmation that can lead to a new restore point says about System Protection.
     /// </summary>
     /// <remarks>
-    /// Creating a point runs <c>Enable-ComputerRestore</c> first (<see cref="BuildCreateScript"/>), because
+    /// Creating a point runs <c>Enable-ComputerRestore</c> first (<see cref="CreateScript"/>), because
     /// <c>Checkpoint-Computer</c> fails while protection is off. Turning it back on for someone who switched it
     /// off to save space is a real, lasting change, so it is said before it happens: on the Restore Points tab,
     /// on Performance Mode's button, and in the notice <see cref="ISessionRestorePoint.ConfirmationNotice"/> gives
@@ -81,7 +81,7 @@ public sealed class RestorePointService
     /// standard user was told "No restore points found. System Restore may be turned off for this PC." about
     /// a PC that had several (#2476).
     /// <para>Internal so the integration suite can run this exact text in a real Windows PowerShell 5.1 with
-    /// the cmdlet shadowed by a function, as it does for <see cref="BuildCreateScript"/>.</para>
+    /// the cmdlet shadowed by a function, as it does for <see cref="CreateScript"/>.</para>
     /// </remarks>
     internal const string ListScript =
         "Get-ComputerRestorePoint -ErrorAction Stop | Select-Object SequenceNumber, Description, " +
@@ -167,7 +167,7 @@ public sealed class RestorePointService
         Task<Collection<PSObject>>? running = null;
         try
         {
-            running = _ps.RunAsync(BuildCreateScript(description), cancellationToken: run.Token);
+            running = _ps.RunAsync(CreateScript, CreateParameters(description), run.Token);
             var results = await running.WaitAsync(run.Token).ConfigureAwait(false);
             var ok = Confirms(results, CreateOkSentinel);
             if (!ok)
@@ -211,20 +211,32 @@ public sealed class RestorePointService
     /// script went on to print the sentinel and every caller reported "Restore point created" for a point
     /// Windows had declined to make (#2436). An earlier comment here called the refusal a non-terminating
     /// error, which is what the design was built around.
+    /// <para>The description, the one value in it the user chooses, is its <c>Description</c> parameter (see
+    /// <see cref="CreateParameters"/>) and never part of its text. It was written in, inside single quotes with each
+    /// <c>'</c> doubled, but PowerShell also ends a single-quoted string at the typographic quotes ‘ ’ ‚ ‛, which
+    /// word processors and phone keyboards type for an apostrophe. A description such as "Bob’s point" ended the string
+    /// after "Bob", the script could not run, and no restore point was made.</para>
     /// <para>Internal so the integration suite can run this exact text in a real Windows PowerShell 5.1 with the
     /// restore-point cmdlets shadowed by functions, which is the only way to test the semantics it depends
-    /// on. The single user-supplied value, the description, is single-quote-escaped.</para>
+    /// on.</para>
     /// </remarks>
-    internal static string BuildCreateScript(string? description)
+    internal const string CreateScript =
+        "param([string]$Description) " +
+        "try { " +
+        "Enable-ComputerRestore -Drive $env:SystemDrive -ErrorAction SilentlyContinue; " +
+        "Checkpoint-Computer -Description $Description -RestorePointType 'MODIFY_SETTINGS' " +
+        "-ErrorAction Stop -WarningAction Stop; " +
+        "'" + CreateOkSentinel + "' " +
+        "} catch { Write-Error $_; exit 1 }";
+
+    /// <summary>
+    /// The parameters <see cref="CreateScript"/> runs with: the description the caller gave, or SysManager's own name
+    /// for the point when it gave none. Pure, so a test can read what reaches the script.
+    /// </summary>
+    internal static Dictionary<string, object?> CreateParameters(string? description) => new()
     {
-        var safeDesc = (string.IsNullOrWhiteSpace(description) ? "SysManager Restore Point" : description)
-            .Replace("'", "''");
-        return "try { " +
-               "Enable-ComputerRestore -Drive $env:SystemDrive -ErrorAction SilentlyContinue; " +
-               $"Checkpoint-Computer -Description '{safeDesc}' -RestorePointType 'MODIFY_SETTINGS' -ErrorAction Stop -WarningAction Stop; " +
-               $"'{CreateOkSentinel}' " +
-               "} catch { Write-Error $_; exit 1 }";
-    }
+        ["Description"] = string.IsNullOrWhiteSpace(description) ? "SysManager Restore Point" : description,
+    };
 
     /// <summary>
     /// Restores the system to the given restore point. Requires admin and TRIGGERS A REBOOT.
@@ -249,7 +261,7 @@ public sealed class RestorePointService
     }
 
     /// <summary>
-    /// The script <see cref="RestoreAsync"/> runs, confirmed the same way as <see cref="BuildCreateScript"/>.
+    /// The script <see cref="RestoreAsync"/> runs, confirmed the same way as <see cref="CreateScript"/>.
     /// </summary>
     /// <remarks>
     /// It used to report success whenever <c>RunAsync</c> did not throw. The <c>catch</c> ends in

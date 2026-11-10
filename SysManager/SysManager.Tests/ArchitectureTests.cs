@@ -2732,7 +2732,7 @@ public partial class ArchitectureTests
                 .Select(name => (File: Path.GetFileName(f), Name: name)))
             .ToList();
         Assert.True(declared.Count >= 20,
-            $"only {declared.Count} script parameters were found, and the app's scripts declare 23 — this guard is "
+            $"only {declared.Count} script parameters were found, and the app's scripts declare 25 — this guard is "
             + "reading the wrong text.");
 
         var offenders = declared.Where(p => PowerShellAutomaticVariables.Contains(p.Name))
@@ -2742,6 +2742,44 @@ public partial class ArchitectureTests
             "these script parameters are named after a PowerShell automatic variable, which PowerShell sets itself, so "
             + "the value passed never reaches the script. Rename them:\n  " + string.Join("\n  ", offenders));
     }
+
+    /// <summary>
+    /// No value reaches a PowerShell script by being written into its text with its quotes doubled.
+    /// </summary>
+    /// <remarks>
+    /// Doubling each <c>'</c> is how a value was put inside a single-quoted string in a script, and it is not enough:
+    /// PowerShell also ends that string at the typographic quotes ‘ ’ ‚ ‛. A restore point description with a
+    /// typographic apostrophe ended its string early, the script could not run, and no point was made. A value
+    /// goes to a script as a parameter its <c>param()</c> block declares, passed in the runner's parameters, where it
+    /// is data whatever it holds. The scan reads the app's code without its comments, and first shows that it finds
+    /// the doubling as it was written.
+    /// </remarks>
+    [Fact]
+    public void NoScriptTakesAValue_ByDoublingItsQuotes()
+    {
+        Assert.Matches(QuoteDoubling(), "var safe = (description ?? \"\").Replace(\"'\", \"''\");");
+        Assert.Matches(QuoteDoubling(), "name.Replace( '\\'', \"''\")");
+
+        var separator = Path.DirectorySeparatorChar;
+        var files = Directory.GetFiles(TestPaths.AppProject(), "*.cs", SearchOption.AllDirectories)
+            .Where(f => !f.Contains($"{separator}obj{separator}", StringComparison.Ordinal)
+                        && !f.Contains($"{separator}bin{separator}", StringComparison.Ordinal))
+            .ToList();
+        var offenders = files
+            .Where(f => QuoteDoubling().IsMatch(WithoutComments(File.ReadAllText(f))))
+            .Select(Path.GetFileName)
+            .ToList();
+
+        Assert.True(files.Count >= 300, $"only {files.Count} source files were read, so this checks nothing.");
+        Assert.True(offenders.Count == 0,
+            "these files double quotes to put a value inside a script's text, which the typographic quotes get past. "
+            + "Declare the value in the script's param() block and pass it in the runner's parameters:\n  "
+            + string.Join("\n  ", offenders));
+    }
+
+    /// <summary>A Replace that turns each ASCII single quote into two, in either spelling of the quote.</summary>
+    [GeneratedRegex(@"\.Replace\(\s*(?:""'""|'\\''|'\\u0027')\s*,\s*""''""\s*\)")]
+    private static partial Regex QuoteDoubling();
 
     /// <summary>PowerShell's automatic variables, from about_Automatic_Variables.</summary>
     private static readonly HashSet<string> PowerShellAutomaticVariables = new(StringComparer.OrdinalIgnoreCase)

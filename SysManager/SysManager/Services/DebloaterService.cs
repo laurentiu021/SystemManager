@@ -242,6 +242,16 @@ public sealed partial class DebloaterService
     private static partial Regex SpaceCamelCase();
 
     /// <summary>
+    /// The script <see cref="RemoveAsync"/> runs, with the package's full name as its <c>Package</c> parameter. The
+    /// name is still checked against <see cref="PackageFullNameRegex"/> first, and it is never part of the script's
+    /// text, where it was written in single quotes: a value that arrives as a parameter is data whatever it holds.
+    /// </summary>
+    internal const string RemoveScript =
+        "param([string]$Package) " +
+        "try { Remove-AppxPackage -Package $Package -ErrorAction Stop; '__SM_RM_OK__' } " +
+        "catch { Write-Error $_; exit 1 }";
+
+    /// <summary>
     /// Removes a Store app for the current user. Refuses protected packages and validates
     /// the package full name before use. Returns true on success.
     /// </summary>
@@ -260,14 +270,10 @@ public sealed partial class DebloaterService
             return false;
         }
 
-        var safeFull = app.PackageFullName.Replace("'", "''");
-        var script =
-            "try { " +
-            $"Remove-AppxPackage -Package '{safeFull}' -ErrorAction Stop; '__SM_RM_OK__' " +
-            "} catch { Write-Error $_; exit 1 }";
         try
         {
-            var results = await _ps.RunAsync(script, cancellationToken: ct).ConfigureAwait(false);
+            var results = await _ps.RunAsync(RemoveScript,
+                new Dictionary<string, object?> { ["Package"] = app.PackageFullName }, ct).ConfigureAwait(false);
             var ok = results.Any(o => string.Equals(o?.BaseObject?.ToString(), "__SM_RM_OK__", StringComparison.Ordinal));
             if (!ok) Log.Warning("Debloater: removal of {Name} did not confirm success", app.Name);
             return ok;

@@ -229,9 +229,14 @@ public class DebloaterServiceTests
         var result = await svc.RemoveAsync(App("Contoso.RandomApp", "Contoso.RandomApp_1.0.0.0_x64__abc"));
 
         Assert.True(result);
-        await runner.Received(1).RunAsync(
-            Arg.Is<string>(s => s != null && s.Contains("Remove-AppxPackage") && s.Contains("Contoso.RandomApp_1.0.0.0_x64__abc")),
-            Arg.Any<IDictionary<string, object?>?>(), Arg.Any<CancellationToken>());
+        // The package's name is the script's parameter, never part of its text.
+        await runner.Received(1).RunAsync(DebloaterService.RemoveScript,
+            Arg.Is<IDictionary<string, object?>?>(p => p != null && p.Count == 1
+                && Equals(p["Package"], "Contoso.RandomApp_1.0.0.0_x64__abc")),
+            Arg.Any<CancellationToken>());
+        Assert.StartsWith("param([string]$Package) ", DebloaterService.RemoveScript, StringComparison.Ordinal);
+        Assert.Contains("Remove-AppxPackage -Package $Package ", DebloaterService.RemoveScript,
+            StringComparison.Ordinal);
     }
 
     [Fact]

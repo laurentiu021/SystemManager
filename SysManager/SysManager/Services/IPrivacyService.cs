@@ -17,7 +17,10 @@ namespace SysManager.Services;
 /// </remarks>
 public interface IPrivacyService
 {
-    /// <summary>Creates the full toggle list with the current state read from the registry.</summary>
+    /// <summary>
+    /// Creates the full toggle list with the current state read from the registry. A switch the Windows on this PC no
+    /// longer reads is in it only while it is on, so it can be turned off.
+    /// </summary>
     List<PrivacyToggle> LoadToggles();
 
     /// <summary>

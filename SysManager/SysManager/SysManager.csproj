@@ -20,9 +20,9 @@
          administrator. Nothing in SysManager uses one. Set in every configuration, so a test run in Debug reads the
          same runtime configuration the release ships. -->
     <StartupHookSupport>false</StartupHookSupport>
-    <Version>1.136.165</Version>
-    <FileVersion>1.136.165.0</FileVersion>
-    <AssemblyVersion>1.136.165.0</AssemblyVersion>
+    <Version>1.136.166</Version>
+    <FileVersion>1.136.166.0</FileVersion>
+    <AssemblyVersion>1.136.166.0</AssemblyVersion>
     <Product>SysManager</Product>
     <Description>SysManager — Windows system monitoring toolkit by laurentiu021. Network, updates, health, logs, safe deep cleanup.</Description>
     <PackageProjectUrl>https://github.com/laurentiu021/SystemManager</PackageProjectUrl>

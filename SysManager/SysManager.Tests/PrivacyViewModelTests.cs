@@ -365,6 +365,27 @@ public sealed class PrivacyViewModelTests : IDisposable
 
     private static PrivacyToggle Switch(PrivacyViewModel vm, string key) => vm.Toggles.Single(t => t.Key == key);
 
+    /// <summary>
+    /// A switch the Windows on this PC no longer reads is listed while it is on, so it can be turned off, and the
+    /// status line does not count it among the protections that are active, on or off.
+    /// </summary>
+    [Fact]
+    public async Task ASwitchWindowsNoLongerReads_IsNotCountedAmongTheProtectionsActive()
+    {
+        var vm = await StagingVmAsync(FakePrivacy.Returning(
+            FakePrivacy.Toggle("tips", on: true),
+            FakePrivacy.Toggle("web-search", on: false, category: "Features", policy: true),
+            FakePrivacy.Toggle("ai-assistant", on: true, category: "Features", policy: true, retired: true)),
+            new PrivacyChoicesHandoff());
+
+        Assert.Equal(3, vm.Toggles.Count);
+        Assert.Equal("1 of 2 privacy protections active.", vm.StatusMessage);
+
+        Switch(vm, "ai-assistant").IsEnabled = false;
+
+        Assert.Equal("1 of 2 privacy protections active. 1 pending change — press Apply.", vm.StatusMessage);
+    }
+
     [Fact]
     public async Task ImportedChoices_LeftBeforeTheTabWasBuilt_AreStagedWhenItsTogglesLoad()
     {
@@ -795,11 +816,13 @@ public sealed class PrivacyViewModelTests : IDisposable
     /// </summary>
     /// <remarks>
     /// Against the real definitions rather than a substitute, because a substitute would be asserting the fixture.
+    /// Over the test's own key, which names no build, so every switch is offered: on this PC's own registry, its
+    /// Windows and its settings would decide whether the Windows Copilot switch is listed.
     /// </remarks>
     [Fact]
     public void TheRealSwitches_FillEveryReach()
     {
-        var toggles = new PrivacyService(ledger: Ledger()).LoadToggles();
+        var toggles = Privacy().LoadToggles();
         Assert.True(toggles.Count >= 10,
             $"only {toggles.Count} switch definitions, so this would pass over a short list");
 

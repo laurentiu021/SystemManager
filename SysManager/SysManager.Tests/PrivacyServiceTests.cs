@@ -81,12 +81,15 @@ public sealed class PrivacyServiceTests : IDisposable
     /// A key is a promise to every profile already exported. Renamed, the profile's choice for that toggle is
     /// dropped as unknown on import, and the user is told one choice could not be read instead of seeing the
     /// switch move. So the list is pinned exactly: changing a key has to be a decision made here, and adding a
-    /// toggle means adding its key.
+    /// toggle means adding its key. Read over a key of the test's own, which names no build, so every switch is
+    /// offered: on this PC's own registry, its Windows and its settings would decide whether the Windows Copilot
+    /// switch is listed.
     /// </remarks>
     [Fact]
     public void EveryToggle_KeepsTheKeyProfilesNameItBy()
     {
-        var keys = new PrivacyService(ledger: Ledger()).LoadToggles().Select(t => t.Key);
+        using var root = new RedirectedRoot();
+        var keys = root.Service().LoadToggles().Select(t => t.Key);
 
         Assert.Equal(
             ["diagnostic-data", "activity-history", "advertising-id", "feedback-prompts",
@@ -204,15 +207,13 @@ public sealed class PrivacyServiceTests : IDisposable
     private const string Cdm = @"HKCU\Software\Microsoft\Windows\CurrentVersion\ContentDeliveryManager";
 
     /// <summary>
-    /// What every switch writes, by key, on Windows 11: its key, its values, and the value that means protected. The
-    /// assistant switch in Features is left out; its value is as it was, and its path is pinned by its reach.
+    /// What every switch writes, by key, on Windows 11: its key, its values, and the value that means protected.
     /// </summary>
     [Fact]
     public void EverySwitch_WritesTheValuesItsKeyStandsFor()
     {
         using var root = new RedirectedRoot();
         var written = root.Service().LoadToggles()
-            .Where(t => t.Key != "ai-assistant")
             .ToDictionary(t => t.Key, t => (t.RegistryPath, string.Join(" + ", t.ValueNames), t.EnabledValue));
 
         Assert.Equal(new Dictionary<string, (string, string, int)>
@@ -227,6 +228,7 @@ public sealed class PrivacyServiceTests : IDisposable
             ["spotlight-ads"] = (Cdm,
                 "SubscribedContent-338393Enabled + SubscribedContent-353694Enabled"
                 + " + SubscribedContent-353696Enabled", 0),
+            ["ai-assistant"] = (@"HKCU\Software\Policies\Microsoft\Windows\WindowsCopilot", "TurnOffWindowsCopilot", 1),
             ["cortana"] = (@"HKLM\SOFTWARE\Policies\Microsoft\Windows\Windows Search", "AllowCortana", 0),
             ["web-search"] = (@"HKCU\Software\Policies\Microsoft\Windows\Explorer", "DisableSearchBoxSuggestions", 1),
             ["widgets"] = (@"HKLM\SOFTWARE\Policies\Microsoft\Dsh", "AllowNewsAndInterests", 0),
@@ -312,6 +314,82 @@ public sealed class PrivacyServiceTests : IDisposable
         Assert.Equal((path, value, 0, name),
             (widgets.RegistryPath, widgets.ValueName, widgets.EnabledValue, widgets.Name));
         Assert.Empty(widgets.AlsoWrites);
+    }
+
+    // ── The Windows Copilot switch, by build ─────────────────────────────
+    // Its policy turns off the Windows Copilot pane. Windows 11 24H2 has the Windows Copilot app instead, which ignores
+    // the policy, so there the switch read back as applied after Apply and changed nothing.
+
+    private const string WindowsCopilotPolicy = @"Software\Policies\Microsoft\Windows\WindowsCopilot";
+
+    /// <summary>
+    /// Before Windows 11 24H2, and on a build that cannot be read, the switch is offered, and says what its policy
+    /// does and what it does not.
+    /// </summary>
+    [Theory]
+    [InlineData("19045")]
+    [InlineData("22631")]
+    [InlineData("26099")]
+    [InlineData(null)]
+    [InlineData("not a build")]
+    public void BeforeWindows11Version24H2_TheWindowsCopilotSwitch_IsOfferedForWhatItDoes(string? build)
+    {
+        using var root = new RedirectedRoot(build);
+
+        var windowsCopilot = root.Service().LoadToggles().Single(t => t.Key == "ai-assistant");
+
+        Assert.Equal(("Disable Windows Copilot", false, false),
+            (windowsCopilot.Name, windowsCopilot.IsRetired, windowsCopilot.IsEnabled));
+        Assert.Equal("Turns off the Windows Copilot pane and its taskbar button on versions of Windows that have "
+            + "them, and keeps an upgrade from adding the Windows Copilot app. An app already installed is not "
+            + "affected: Preinstalled Apps can remove it.", windowsCopilot.Description);
+    }
+
+    /// <summary>
+    /// From Windows 11 24H2 on, the switch is not listed while it is off: turned on, it would change nothing. Every
+    /// other switch still is.
+    /// </summary>
+    [Theory]
+    [InlineData("26100")]
+    [InlineData("26200")]
+    public void FromWindows11Version24H2_AWindowsCopilotSwitchThatIsOff_IsNotListed(string build)
+    {
+        using var root = new RedirectedRoot(build);
+
+        var keys = root.Service().LoadToggles().Select(t => t.Key);
+
+        Assert.Equal(
+            ["diagnostic-data", "activity-history", "advertising-id", "feedback-prompts",
+             "start-suggestions", "tips", "lock-screen-tips", "spotlight-ads",
+             "cortana", "web-search", "widgets"],
+            keys);
+    }
+
+    /// <summary>
+    /// From Windows 11 24H2 on, a switch that is on is listed, says it changes nothing there, and turning it off
+    /// clears its policy, after which it is no longer listed.
+    /// </summary>
+    [Fact]
+    public void FromWindows11Version24H2_AWindowsCopilotSwitchThatIsOn_IsListedSoItCanBeTurnedOff()
+    {
+        using var root = new RedirectedRoot("26100");
+        using (var policy = root.Key.CreateSubKey(WindowsCopilotPolicy, writable: true))
+            policy.SetValue("TurnOffWindowsCopilot", 1, RegistryValueKind.DWord);
+        var service = root.Service();
+
+        var windowsCopilot = service.LoadToggles().Single(t => t.Key == "ai-assistant");
+        Assert.Equal(("Disable Windows Copilot (no effect on this PC)", true, true),
+            (windowsCopilot.Name, windowsCopilot.IsRetired, windowsCopilot.IsEnabled));
+        Assert.Equal("Windows 11 version 24H2 and later no longer read this setting, so it changes nothing on this "
+            + "PC. Turn it off and press Apply to clear it. To remove the Windows Copilot app, use Preinstalled Apps.",
+            windowsCopilot.Description);
+
+        windowsCopilot.IsEnabled = false;
+        Assert.Equal(PrivacyWriteOutcome.Written, service.ApplyToggle(windowsCopilot));
+
+        using (var policy = root.Key.OpenSubKey(WindowsCopilotPolicy))
+            Assert.Null(policy?.GetValue("TurnOffWindowsCopilot"));
+        Assert.DoesNotContain(service.LoadToggles(), t => t.Key == "ai-assistant");
     }
 
     // ── Revert behavior (F07 regression) ──────────────────────────────────

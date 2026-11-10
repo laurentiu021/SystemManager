@@ -77,6 +77,13 @@ public sealed partial class PrivacyToggle : ObservableObject
     /// </remarks>
     public bool TakesValue(int value) => value == EnabledValue || value == DisabledValue || KnownValues.Contains(value);
 
+    /// <summary>
+    /// True when the Windows on this PC no longer reads this switch's setting, so the switch changes nothing here. It
+    /// is listed only while it is on, so it can be turned off and its value cleared, and it is not counted among the
+    /// protections that are active.
+    /// </summary>
+    public bool IsRetired { get; init; }
+
     /// <summary>Whose settings this switch changes, read from <see cref="RegistryPath"/>.</summary>
     public PrivacyReach Reach => ReachOf(RegistryPath);
 

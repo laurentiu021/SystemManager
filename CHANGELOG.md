@@ -10,6 +10,26 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.136.166] - 2026-11-10
+
+**On Windows 11 version 24H2 and later, Privacy & Telemetry no longer offers a Windows Copilot switch that Windows
+ignores there, and on earlier Windows the switch says what it turns off and what it does not.**
+
+### Fixed
+- The Windows Copilot switch in Features writes one policy, TurnOffWindowsCopilot, which turns off the Windows Copilot
+  pane and its taskbar button. Windows 11 version 24H2 replaced the pane with the Windows Copilot app, which ignores
+  the policy, and Microsoft now lists the policy as deprecated, so from 24H2 on the switch read back as on after Apply,
+  the tab counted it among the protections that are active, and the app kept working. It has been that way there
+  since the switch was added in 1.5.0. On those versions the switch is now listed only while it is on, so it can be
+  turned off to clear the policy, says it has no effect on this PC, and is not counted as a protection.
+
+### Changed
+- Before 24H2 the switch is "Disable Windows Copilot", and its description says what the policy does: it turns off the
+  pane and its taskbar button where Windows has them and keeps an upgrade from adding the Windows Copilot app, but it
+  does not affect the app once installed, which Preinstalled Apps can remove.
+- A profile imported on 24H2 or later drops its choice for that switch while the switch is off there, as it drops a
+  switch the version does not know, and the log says the choice is not listed on this PC.
+
 ## [1.136.165] - 2026-11-10
 
 **Shortcut Cleaner keeps a shortcut that works again by the time you delete, and rebuilding Explorer's icon and

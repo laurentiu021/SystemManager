@@ -471,8 +471,10 @@ public sealed partial class PrivacyViewModel : ElevatedViewModelBase, ISearchDes
 
     private void UpdateStatus()
     {
-        var enabledCount = Toggles.Count(t => t.IsEnabled);
-        var summary = $"{enabledCount} of {Toggles.Count} privacy protections active.";
+        // A switch the Windows on this PC no longer reads protects nothing, on or off.
+        List<PrivacyToggle> protections = [.. Toggles.Where(t => !t.IsRetired)];
+        var enabledCount = protections.Count(t => t.IsEnabled);
+        var summary = $"{enabledCount} of {protections.Count} privacy protections active.";
         if (PendingChangeCount > 0)
             summary += $" {PendingChangeCount} pending change{(PendingChangeCount == 1 ? "" : "s")} — press Apply.";
         StatusMessage = summary;

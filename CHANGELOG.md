@@ -10,6 +10,33 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.136.169] - 2026-11-12
+
+**File Shredder refuses to shred a whole drive, your profile or one of your own folders such as Downloads, and a file
+deep in a folder tree is now removed after its overwrite instead of being left behind.**
+
+### Fixed
+- File Shredder refused Windows, System32 and Program Files and anything inside them, but not a folder that holds
+  them, so the root of a drive passed its check, and so did the profile folder, AppData, ProgramData and your own
+  folders (Documents, Downloads, Desktop and the rest). A shred of one of those after a question that counted one
+  item destroyed everything in it. They are now refused as a whole, together with any folder that holds one of them;
+  the files and folders inside them can still be shredded. A drive root has passed since the File Shredder came in 1.4.0.
+- A file whose path has 260 characters or more was overwritten and then left on disk: the overwrite reached it, but
+  the shredder's own removal, its named-stream search and two of its path checks took the path in a form Windows
+  limits to 259 characters unless long paths are turned on. Every one of those calls now uses the long form when a
+  path needs it. The removal has been that way since 1.136.164 and the named-stream search since 1.131.8.
+- A file refused partway through a folder shred, for a reason found before its first byte was written, stopped the
+  whole folder with only that reason, and the files already destroyed went unreported. It is now left in place and
+  named with the others the shred could not reach, the message says how many were destroyed, and the folders above
+  it are left as they are.
+- A folder whose real location could not be read is refused before anything in it is touched, rather than checked
+  only by the name it was picked by.
+
+### Changed
+- On a PC without long paths turned on, a folder whose path has 260 characters or more is now checked for links and
+  walked like any other: Disk Analyzer, Duplicate Finder, Large Files, the cleanup sweeps and the leftover search
+  refused it as one whose real location could not be read.
+
 ## [1.136.168] - 2026-11-12
 
 **File Shredder's Shred All now destroys only the items its question counted, never a folder that finished loading

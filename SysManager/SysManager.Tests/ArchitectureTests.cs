@@ -6,6 +6,7 @@ using System.Globalization;
 using System.IO;
 using System.Reflection;
 using System.Runtime.CompilerServices;
+using System.Runtime.InteropServices;
 using System.Text.RegularExpressions;
 using System.Xml.Linq;
 using NetArchTest.Rules;
@@ -21933,6 +21934,66 @@ public partial class ArchitectureTests
     /// <summary>A file swapped into place by hand, in either of the two forms the app used.</summary>
     [GeneratedRegex(@"File\.(Move|Replace)\s*\(")]
     private static partial Regex HandRolledSwap();
+
+    /// <summary>
+    /// Every library SysManager's own native calls name is a Windows DLL loaded from System32, and nothing in the
+    /// assembly asks for another folder.
+    /// </summary>
+    /// <remarks>
+    /// Only <c>dismapi.dll</c> was pinned to System32. Every other import (pdh, dxgi, wtsapi32, rstrtmgr, powrprof,
+    /// wintrust, iphlpapi, dwmapi and the rest) was looked for in the exe's folder first, a folder the user's account
+    /// can write to, and SysManager runs elevated; pdh is opened at every start. Read by reflection over the built
+    /// assembly, the declarations the <c>LibraryImport</c> generator emits included, so a new import cannot slip past a
+    /// source pattern. A floor on the count keeps the scan from passing having seen nothing.
+    /// </remarks>
+    [Fact]
+    public void EveryNativeImport_LoadsItsLibraryFromSystem32Only()
+    {
+        Assert.Equal(DllImportSearchPath.System32,
+            AppAssembly.GetCustomAttribute<DefaultDllImportSearchPathsAttribute>()?.Paths);
+
+        const BindingFlags all = BindingFlags.Static | BindingFlags.Instance | BindingFlags.Public
+                                 | BindingFlags.NonPublic | BindingFlags.DeclaredOnly;
+        var methods = AppAssembly.GetTypes().SelectMany(t => t.GetMethods(all)).ToList();
+
+        // An override on either side of a LibraryImport (the partial the author writes, or the stub generated for it).
+        var elsewhere = methods
+            .Where(m => m.GetCustomAttribute<DefaultDllImportSearchPathsAttribute>() is { } a
+                        && a.Paths != DllImportSearchPath.System32)
+            .Select(m => $"{m.DeclaringType?.Name}.{m.Name}")
+            .ToList();
+        Assert.True(elsewhere.Count == 0,
+            "these declarations ask for a library outside System32:\n  " + string.Join("\n  ", elsewhere));
+
+        var imports = methods.Where(m => m.Attributes.HasFlag(MethodAttributes.PinvokeImpl)).ToList();
+        Assert.True(imports.Count >= 80,
+            $"only {imports.Count} native imports were found; the scan is looking at the wrong assembly.");
+
+        var notInSystem32 = imports
+            .Select(m => m.GetCustomAttribute<DllImportAttribute>()?.Value ?? "")
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .Where(name => !File.Exists(Path.Join(Environment.SystemDirectory,
+                Path.HasExtension(name) ? name : name + ".dll")))
+            .ToList();
+        Assert.True(notInSystem32.Count == 0,
+            "these imports name a library that is not in System32, so loading it from there is not the rule they "
+            + "need:\n  " + string.Join("\n  ", notInSystem32));
+    }
+
+    /// <summary>
+    /// SysManager's assembly has its own library resolver in place as soon as it loads, so each import is loaded from
+    /// System32 by full path, ahead of the folders the single-file host names (its unpacking folder under the user's
+    /// temp folder). A second resolver for the same assembly is refused, which is how its presence shows.
+    /// </summary>
+    [Fact]
+    public void TheAppAssembly_ResolvesItsNativeLibrariesItself()
+    {
+        // Runs the module initializer if nothing has yet; once run, it runs no more.
+        RuntimeHelpers.RunModuleConstructor(AppAssembly.ManifestModule.ModuleHandle);
+
+        Assert.Throws<InvalidOperationException>(
+            () => NativeLibrary.SetDllImportResolver(AppAssembly, (_, _, _) => 0));
+    }
 
     [Fact]
     public void EveryStringMarshallingInterop_BindsTheWideEntryPoint()

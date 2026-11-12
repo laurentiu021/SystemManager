@@ -153,35 +153,28 @@ public sealed partial class FeatureParentsService : IFeatureParentsService
         }
     }
 
-    // Loaded from System32 only: dismapi.dll is not one of the DLLs Windows always takes from there, and SysManager
-    // runs elevated, so a copy beside the exe must not be loaded in its place.
+    // dismapi.dll is loaded from System32 like every library SysManager imports (AssemblyInfo, SystemLibraries).
     private static partial class NativeMethods
     {
         [LibraryImport("dismapi.dll", StringMarshalling = StringMarshalling.Utf16)]
-        [DefaultDllImportSearchPaths(DllImportSearchPath.System32)]
         internal static partial int DismInitialize(int logLevel, string? logFilePath, string? scratchDirectory);
 
         [LibraryImport("dismapi.dll")]
-        [DefaultDllImportSearchPaths(DllImportSearchPath.System32)]
         internal static partial int DismShutdown();
 
         [LibraryImport("dismapi.dll", StringMarshalling = StringMarshalling.Utf16)]
-        [DefaultDllImportSearchPaths(DllImportSearchPath.System32)]
         internal static partial int DismOpenSession(
             string imagePath, string? windowsDirectory, string? systemDrive, out uint session);
 
         [LibraryImport("dismapi.dll")]
-        [DefaultDllImportSearchPaths(DllImportSearchPath.System32)]
         internal static partial int DismCloseSession(uint session);
 
         [LibraryImport("dismapi.dll", StringMarshalling = StringMarshalling.Utf16)]
-        [DefaultDllImportSearchPaths(DllImportSearchPath.System32)]
         internal static partial int DismGetFeatureParent(
             uint session, string featureName, string? identifier, int packageIdentifier, out IntPtr feature,
             out uint count);
 
         [LibraryImport("dismapi.dll")]
-        [DefaultDllImportSearchPaths(DllImportSearchPath.System32)]
         internal static partial int DismDelete(IntPtr dismStructure);
     }
 }

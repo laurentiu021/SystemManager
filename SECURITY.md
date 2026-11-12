@@ -198,6 +198,11 @@ What the app can and cannot do by design:
   ends, so the file that was checked is the file that runs. The CLI does not run while
   SysManager is running as administrator: Windows loads a DLL from the exe's own folder
   first, and that folder is yours to write to.
+- **Windows libraries come from System32**: every Windows library SysManager's own code calls is
+  loaded by its full path from System32, never from the exe's folder or the folder the single-file
+  exe unpacks into, both of which your account can write to. The libraries those Windows DLLs load
+  for themselves, and the native files the .NET host and WPF load, follow Windows' own search order
+  (#2746).
 - **A kernel driver for temperatures, only as administrator, and only if you installed it**:
   when SysManager runs elevated, the Dashboard and Resource History read temperatures through
   the bundled LibreHardwareMonitor library. It reaches the CPU and motherboard sensors only

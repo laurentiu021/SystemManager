@@ -2461,6 +2461,13 @@ Key utility classes that don't fit neatly into Services or ViewModels (not an ex
   below 22000, Windows 10's news and interests policy, which Windows 11's widgets policy does not govern.
 - `KnownFolders` — resolves Windows Known Folder paths via shell API. `TryGetPath` resolves
   any known folder by its ID, and returns null for one Windows does not resolve.
+- `SystemLibraries` — loads every library SysManager's own native imports name from System32 by its full path. A
+  `[ModuleInitializer]` registers a `DllImportResolver` for the app assembly before any of its code runs, ahead of the
+  folders the single-file host names, and a name carrying a folder is refused rather than handed back to the
+  runtime's search. AssemblyInfo's `[assembly: DefaultDllImportSearchPaths(DllImportSearchPath.System32)]` is the
+  declarative half. Held by `ArchitectureTests.EveryNativeImport_LoadsItsLibraryFromSystem32Only` and
+  `TheAppAssembly_ResolvesItsNativeLibrariesItself`. Libraries a Windows DLL loads for itself, and the host's and
+  WPF's own native files, are outside it (#2746).
 - `SystemPaths` — the one place the tools SysManager launches are resolved. A bare tool
   name becomes a full path under System32 (or the Windows PowerShell 5.1 folder), and winget
   resolves to its admin-only-writable install for an elevated launch and to the user's own

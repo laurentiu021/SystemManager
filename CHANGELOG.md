@@ -10,6 +10,18 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.136.168] - 2026-11-12
+
+**File Shredder's Shred All now destroys only the items its question counted, never a folder that finished loading
+while the question was open.**
+
+### Fixed
+- Shred All asked "You are about to permanently shred N item(s)", and after Yes it read the queue again. Windows keeps
+  running queued work while a question is open, so a folder still being measured when you pressed Shred All could
+  join the queue during the question and was then shredded without being counted or named. It has been that way
+  since 1.136.76, which moved the measuring off the window's thread. The run now takes the items when it asks and
+  shreds exactly those; a folder that arrives later stays in the queue, waiting.
+
 ## [1.136.167] - 2026-11-10
 
 **A restore point description with a curly apostrophe, the kind Word and phone keyboards type, no longer stops

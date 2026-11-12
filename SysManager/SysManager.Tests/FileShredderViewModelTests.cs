@@ -14,8 +14,8 @@ namespace SysManager.Tests;
 /// <summary>
 /// Tests for <see cref="FileShredderViewModel"/>. Verifies initial state,
 /// item management, default configuration, and that the irreversible
-/// ShredAll command routes through <see cref="DialogService.Instance"/>.Confirm
-/// (#822: the "every destructive op needs Confirm" contract).
+/// ShredAll command asks first through its dialog service, <see cref="DialogService.Instance"/> unless one is
+/// given (#822: the "every destructive op needs Confirm" contract).
 /// </summary>
 [Collection("ProcessWideStatics")]
 public class FileShredderViewModelTests
@@ -174,6 +174,73 @@ public class FileShredderViewModelTests
             Assert.Equal(42, Assert.Single(vm.Items).SizeBytes);
         }
         finally { Directory.Delete(folder, recursive: true); }
+    }
+
+    /// <summary>
+    /// Shred All destroys only what its question counted. WPF keeps running queued work while the box is open, so a
+    /// folder whose sizing finished then joined the queue, and the run read the queue again after Yes and shredded
+    /// it without asking. Here the folder's sizing is released from inside the question, and the question answers
+    /// only once the folder is in the queue, so the run starts with it there.
+    /// </summary>
+    [Fact]
+    public async Task ShredAll_ShredsOnlyWhatItsQuestionCounted_NotAFolderAddedWhileItWasOpen()
+    {
+        var file = Path.Combine(Path.GetTempPath(), "smtest_shred_batch_" + Guid.NewGuid().ToString("N") + ".dat");
+        await File.WriteAllTextAsync(file, "queued before the question");
+        var folder = Directory.CreateTempSubdirectory("smtest_shred_batch_dir_").FullName;
+        var kept = Path.Combine(folder, "kept.dat");
+        byte[] content = [1, 2, 3, 4, 5, 6, 7, 8];
+        await File.WriteAllBytesAsync(kept, content);
+        var sizingReleased = new TaskCompletionSource();
+        var folderQueued = new TaskCompletionSource();
+        string? question = null;
+
+        var dialog = Substitute.For<IDialogService>();
+        dialog.PickFolder(Arg.Any<string>()).Returns(folder);
+        dialog.Confirm(Arg.Any<string>(), Arg.Any<string>()).Returns(call =>
+        {
+            question = call.ArgAt<string>(0);
+            sizingReleased.TrySetResult();
+            return folderQueued.Task.Wait(TimeSpan.FromSeconds(10));
+        });
+        // The unfixed run asked the shared instance rather than the one it was given; both answer the same way, so
+        // the test fails on what was shredded, not on a question nobody answered.
+        var previous = DialogService.Instance;
+        DialogService.Instance = dialog;
+        using var activity = new ActivityLogScope();
+        try
+        {
+            var vm = new FileShredderViewModel(new FileShredderService(), dialog, folderSize: _ =>
+            {
+                sizingReleased.Task.Wait(TimeSpan.FromSeconds(10));
+                return content.Length;
+            });
+            vm.Items.Add(new ShredItem { Path = file, Name = Path.GetFileName(file), SizeBytes = 1, IsFolder = false });
+            vm.Items.CollectionChanged += (_, _) =>
+            {
+                if (vm.Items.Any(i => i.IsFolder)) folderQueued.TrySetResult();
+            };
+
+            // The question blocks its thread while it waits for the folder, so it is asked off this one: the add's
+            // continuation may need this thread to put the folder in the queue.
+            vm.AddFolderCommand.Execute(null);
+            await Task.Run(() => vm.ShredAllCommand.ExecuteAsync(null)).WaitAsync(TimeSpan.FromSeconds(30));
+            await vm.AddFolderCommand.ExecutionTask!.WaitAsync(TimeSpan.FromSeconds(10));
+
+            Assert.True(folderQueued.Task.IsCompleted, "the folder never joined the queue, so this proves nothing");
+            Assert.Contains("shred 1 item(s)", question, StringComparison.Ordinal);
+            Assert.False(File.Exists(file), "the item the question counted was not shredded");
+            Assert.Equal(content, await File.ReadAllBytesAsync(kept));
+            var waiting = vm.Items.Where(i => i.IsFolder).ToArray();
+            Assert.Single(waiting);
+            Assert.Equal("Pending", waiting[0].Status);
+        }
+        finally
+        {
+            DialogService.Instance = previous;
+            if (File.Exists(file)) File.Delete(file);
+            if (Directory.Exists(folder)) Directory.Delete(folder, recursive: true);
+        }
     }
 
     /// <summary>

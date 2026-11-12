@@ -659,4 +659,49 @@ public class SafeFileWalkTests
         }
         finally { Directory.Delete(dir, recursive: true); }
     }
+
+    /// <summary>
+    /// A folder made into a link after the walk listed it, while it waited to be opened, is not walked into. The walk
+    /// checked a folder for a link only while it listed the folder above it, then opened it later by its path. Here the
+    /// root holds two folders; once the walk has yielded a file from the first one it opens, the other, still waiting,
+    /// is swapped for a junction to a folder outside the tree.
+    /// </summary>
+    [Fact]
+    public void Files_AFolderMadeIntoALinkWhileItWaited_IsNotWalkedInto()
+    {
+        var root = Directory.CreateTempSubdirectory("smtest_walk_swap_").FullName;
+        var outside = Directory.CreateTempSubdirectory("smtest_walk_swap_outside_").FullName;
+        var a = Path.Combine(root, "a");
+        var b = Path.Combine(root, "b");
+        Directory.CreateDirectory(a);
+        Directory.CreateDirectory(b);
+        File.WriteAllText(Path.Combine(a, "one.dat"), "inside");
+        File.WriteAllText(Path.Combine(b, "two.dat"), "inside");
+        File.WriteAllText(Path.Combine(outside, "victim.dat"), "outside the tree");
+        string? swapped = null;
+        try
+        {
+            List<string> skipped = [];
+            using var walk = SafeFileWalk.Files(root, CancellationToken.None,
+                new SafeWalkOptions { SkippedLinks = skipped }).GetEnumerator();
+            Assert.True(walk.MoveNext());
+            var first = walk.Current;
+
+            swapped = first.StartsWith(a + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase) ? b : a;
+            Directory.Move(swapped, swapped + "_moved");
+            Symlinks.RequireJunction(swapped, outside);
+
+            List<string> rest = [];
+            while (walk.MoveNext()) rest.Add(walk.Current);
+
+            Assert.DoesNotContain(rest, f => f.EndsWith("victim.dat", StringComparison.OrdinalIgnoreCase));
+            Assert.Contains(swapped, skipped);
+        }
+        finally
+        {
+            if (swapped is not null && Directory.Exists(swapped)) Directory.Delete(swapped, recursive: false);
+            Directory.Delete(root, recursive: true);
+            Directory.Delete(outside, recursive: true);
+        }
+    }
 }

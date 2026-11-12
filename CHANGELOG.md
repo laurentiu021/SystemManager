@@ -10,6 +10,19 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.136.175] - 2026-11-12
+
+**The folder walk behind Deep Cleanup, Quick Cleanup, Browser Cleaner, Shortcut Cleaner, File Lock Detector, File
+Shredder and the Uninstaller's leftover search now checks each folder for a link again when it opens it, not only when
+it first lists it.**
+
+### Fixed
+- The folder walk those tabs share checked a folder for a link while it listed the folder above it, then opened it
+  later by its name, so a folder turned into a link in between was walked into: its files were measured, listed and
+  offered as part of the scan, and the leftover search could miss a link inside a folder it then offered to remove. Each folder is now checked again when it is opened, against where the scan started,
+  and one that leads elsewhere is left alone like any link. Since 1.136.174 the cleanups already refuse to delete
+  through such a folder; this keeps the sizes and lists they show from counting it too.
+
 ## [1.136.174] - 2026-11-12
 
 **Deep Cleanup, Clean TEMP, Browser Cleaner, Shortcut Cleaner and Rebuild icon cache now delete a file only when it is

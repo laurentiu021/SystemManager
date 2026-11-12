@@ -97,6 +97,16 @@ public class ProcessCriticalityTests
     [InlineData(Environment.SpecialFolder.ProgramFiles, @"Windows Defender\MsMpEng.exe")]
     [InlineData(Environment.SpecialFolder.CommonApplicationData,
         @"Microsoft\Windows Defender\Platform\4.18.26100.4-0\MsMpEng.exe")]
+    // Each folder inside Windows a database program runs from, so none can be dropped from the list unnoticed.
+    [InlineData(Environment.SpecialFolder.Windows, @"explorer.exe")]
+    [InlineData(Environment.SpecialFolder.Windows, @"System32\wbem\WmiPrvSE.exe")]
+    [InlineData(Environment.SpecialFolder.Windows, @"System32\WindowsPowerShell\v1.0\powershell.exe")]
+    [InlineData(Environment.SpecialFolder.Windows, @"servicing\TrustedInstaller.exe")]
+    [InlineData(Environment.SpecialFolder.Windows, @"ImmersiveControlPanel\SystemSettings.exe")]
+    [InlineData(Environment.SpecialFolder.Windows, @"SystemApps\Microsoft.LockApp_cw5n1h2txyewy\LockApp.exe")]
+    [InlineData(Environment.SpecialFolder.SystemX86, @"cmd.exe")]
+    // WSL as the Store installs it.
+    [InlineData(Environment.SpecialFolder.ProgramFiles, @"WSL\wsl.exe")]
     public void IsWhereWindowsKeepsItsPrograms_WindowsOwnFolders_AreTrue(
         Environment.SpecialFolder root, string relative)
         => Assert.True(ProcessCriticality.IsWhereWindowsKeepsItsPrograms(Under(root, relative)));
@@ -121,6 +131,16 @@ public class ProcessCriticalityTests
         @"Microsoft\WindowsApps\Microsoft.WindowsNotepad_11.2607.14.0_x64__8wekyb3d8bbwe\Notepad.exe")]
     // Defender's data, outside its platform folder.
     [InlineData(Environment.SpecialFolder.CommonApplicationData, @"Microsoft\Windows Defender\Scans\MsMpEng.exe")]
+    // Folders inside Windows that any program can write to, which is not where Windows keeps its programs.
+    [InlineData(Environment.SpecialFolder.Windows, @"Temp\svchost.exe")]
+    [InlineData(Environment.SpecialFolder.Windows, @"Tasks\svchost.exe")]
+    [InlineData(Environment.SpecialFolder.Windows, @"tracing\svchost.exe")]
+    [InlineData(Environment.SpecialFolder.Windows, @"System32\Tasks\svchost.exe")]
+    [InlineData(Environment.SpecialFolder.Windows, @"System32\spool\drivers\color\svchost.exe")]
+    [InlineData(Environment.SpecialFolder.Windows, @"Registration\CRMLog\svchost.exe")]
+    // WSL's name, in folders that are not the one the Store installs it to.
+    [InlineData(Environment.SpecialFolder.LocalApplicationData, @"WSL\wsl.exe")]
+    [InlineData(Environment.SpecialFolder.ProgramFiles, @"WSLX\wsl.exe")]
     public void IsWhereWindowsKeepsItsPrograms_AnywhereElse_IsFalse(Environment.SpecialFolder root, string relative)
         => Assert.False(ProcessCriticality.IsWhereWindowsKeepsItsPrograms(Under(root, relative)));
 
@@ -137,6 +157,27 @@ public class ProcessCriticalityTests
         // The names it keeps run from the System folder, so a copy anywhere else is not one, however protected.
         => Assert.False(ProcessCriticality.IsBootCritical("svchost", Under(Environment.SpecialFolder.ProgramFiles,
             @"WindowsApps\Microsoft.WindowsTerminal_1.25.2733.0_x64__8wekyb3d8bbwe\svchost.exe")));
+
+    /// <summary>
+    /// A boot-critical name running from a folder inside Windows that any program can write to is not the real one,
+    /// so it does not borrow the refusal: only the System folder itself is where those run from.
+    /// </summary>
+    [Theory]
+    [InlineData("svchost", @"Temp")]
+    [InlineData("csrss", @"Tasks")]
+    [InlineData("lsass", @"tracing")]
+    [InlineData("dwm", @"System32\Tasks")]
+    [InlineData("svchost", @"System32\spool\drivers\color")]
+    public void IsBootCritical_ACopyInAFolderInsideWindowsAnyUserCanWriteTo_IsFalse(string bareName, string folder)
+        => Assert.False(ProcessCriticality.IsBootCritical(bareName,
+            Under(Environment.SpecialFolder.Windows, Path.Combine(folder, bareName + ".exe"))));
+
+    /// <summary>Defender updates its engine into its platform folder, so the engine there is the real one.</summary>
+    [Fact]
+    public void IsHighConsequence_DefendersEngineInItsPlatformFolder_IsTrue()
+        => Assert.True(ProcessCriticality.IsHighConsequence("MsMpEng",
+            Under(Environment.SpecialFolder.CommonApplicationData,
+                @"Microsoft\Windows Defender\Platform\4.18.26100.4-0\MsMpEng.exe")));
 
     [Fact]
     public void BootCriticalAndHighConsequence_DoNotOverlap()

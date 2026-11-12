@@ -178,6 +178,23 @@ public class ProcessDescriptionServiceTests
         Assert.Contains(profile, entry.Description, StringComparison.Ordinal);
     }
 
+    /// <summary>
+    /// A copy in a folder inside Windows that any program can write to is not called part of Windows, and the
+    /// description names that folder.
+    /// </summary>
+    [Fact]
+    public void LookupWithPath_ACopyInAFolderInsideWindowsAnyUserCanWriteTo_IsDowngraded()
+    {
+        var temp = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.Windows), "Temp");
+
+        var entry = Sut.Lookup("svchost", Path.Combine(temp, "svchost.exe"));
+
+        Assert.NotNull(entry);
+        Assert.Equal(ProcessSafety.Unknown, entry!.Safety);
+        Assert.Contains("Not recognised", entry.Description, StringComparison.Ordinal);
+        Assert.Contains(temp, entry.Description, StringComparison.Ordinal);
+    }
+
     [Theory]
     [InlineData("WindowsTerminal", Environment.SpecialFolder.ProgramFiles,
         @"WindowsApps\Microsoft.WindowsTerminal_1.25.2733.0_x64__8wekyb3d8bbwe\WindowsTerminal.exe")]
@@ -188,6 +205,7 @@ public class ProcessDescriptionServiceTests
     [InlineData("wmplayer", Environment.SpecialFolder.ProgramFilesX86, @"Windows Media Player\wmplayer.exe")]
     [InlineData("MsMpEng", Environment.SpecialFolder.CommonApplicationData,
         @"Microsoft\Windows Defender\Platform\4.18.26100.4-0\MsMpEng.exe")]
+    [InlineData("wsl", Environment.SpecialFolder.ProgramFiles, @"WSL\wsl.exe")]
     public void LookupWithPath_AWindowsProgramWhereWindowsInstallsIt_KeepsTheSystemEntry(
         string name, Environment.SpecialFolder root, string relative)
     {

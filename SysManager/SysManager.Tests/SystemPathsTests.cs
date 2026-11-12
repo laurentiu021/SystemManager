@@ -96,11 +96,23 @@ public class SystemPathsTests
         Assert.Equal(name, SystemPaths.ResolveSystemTool(name));
     }
 
-    [Fact]
-    public void ResolveSystemTool_UnknownBareName_ReturnedUnchanged()
+    /// <summary>
+    /// A bare name found in neither the System folder nor the Windows folder stays in the System folder, so starting it
+    /// fails with "file not found" and Windows never searches for the name, which would start a file of that name from
+    /// SysManager's own folder or the working folder first.
+    /// </summary>
+    [Theory]
+    [InlineData("definitely-not-a-real-tool-xyz.exe")]
+    [InlineData("cmd")]
+    [InlineData("notepad.exe")]
+    public void ResolveSystemTool_ABareNameInNoTrustedFolder_StaysInTheSystemFolder(string name)
     {
-        const string name = "definitely-not-a-real-tool-xyz.exe";
-        Assert.Equal(name, SystemPaths.ResolveSystemTool(name));
+        const string trustedSystemDirectory = @"C:\TrustedWindows\System32";
+
+        var resolved = SystemPaths.ResolveSystemTool(name, trustedSystemDirectory, static _ => false, () => true);
+
+        Assert.Equal(Path.Combine(trustedSystemDirectory, name), resolved, ignoreCase: true);
+        Assert.True(Path.IsPathRooted(resolved));
     }
 
     [Fact]

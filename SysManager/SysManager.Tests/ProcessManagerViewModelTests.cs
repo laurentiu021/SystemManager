@@ -298,6 +298,27 @@ public class ProcessManagerViewModelTests
         Assert.Contains("cannot be ended", status);
     }
 
+    /// <summary>
+    /// A boot-critical name running from a folder inside Windows that any program can write to is not the real one:
+    /// only the System folder itself is where that set runs from, so a copy there is asked about, not refused with a
+    /// blue-screen warning.
+    /// </summary>
+    [Theory]
+    [InlineData("svchost.exe", @"Temp")]
+    [InlineData("csrss.exe", @"Tasks")]
+    [InlineData("winlogon.exe", @"System32\Tasks")]
+    public void KillProcess_BootCriticalNameFromAFolderInsideWindowsAnyUserCanWriteTo_IsNotRefused(string name,
+        string folder)
+    {
+        var entry = Named(name, nameof(ProcessSafety.Unknown));
+        entry.FilePath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.Windows), folder, name);
+
+        var refused = WasRefused(entry, out var status);
+
+        Assert.False(refused);
+        Assert.DoesNotContain("cannot be ended", status);
+    }
+
     [Theory]
     [InlineData("winlogon.exe")]
     [InlineData("csrss.exe")]

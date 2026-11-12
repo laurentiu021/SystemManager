@@ -74,9 +74,13 @@ What the app can and cannot do by design:
 - Launch Windows' own tools — `sc.exe`, `powercfg`, `netsh`, `ipconfig`, `DISM`, `sfc`,
   `chkdsk`, `schtasks`, `reg`, `cleanmgr`, `mdsched` (System Health's memory test), `eventvwr`
   (System Logs), `powershell.exe`, and the classic panels Legacy Panels and System Fixes open
-  through `control.exe`, `mmc.exe`, `netplwiz.exe` and `SystemPropertiesAdvanced.exe` — always by
-  their full path in System32, and `explorer.exe` from the Windows folder, where it lives, so a
-  program of the same name somewhere else is never the one started. Plus `winget` (as
+  through `control.exe`, `mmc.exe`, `netplwiz.exe` and `SystemPropertiesAdvanced.exe`, and
+  `notepad.exe` for About's open-source notices — always by their full path in System32, and
+  `explorer.exe` from the Windows folder, where it lives, so a program of the same name somewhere
+  else is never the one started. A tool missing from both is not started at all rather than
+  searched for; the one exception is Notepad, which Windows 11 can install from the Store
+  instead, started from your account's own Store copy when SysManager runs without administrator
+  rights. Plus `winget` (as
   administrator only from the App Installer's own folder, which only an administrator can
   change, and otherwise from your account's own winget shortcut), the Ookla `speedtest` CLI,
   OneDrive's own setup, a program's own uninstaller, Windows Settings pages, and your browser,

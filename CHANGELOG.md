@@ -10,6 +10,36 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.136.177] - 2026-11-12
+
+**Process Manager, its safety chip and Why is it slow? now call a program part of Windows only when it runs from a
+folder Windows keeps its own programs in, not from any folder inside Windows.**
+
+### Fixed
+- A program named like a part of Windows was trusted when it ran from any folder inside the Windows folder, including
+  ones such as `Windows\Temp` that any program can write to. Process Manager then refused to end it with a blue-screen
+  warning, and its chip, tooltip and description called it part of Windows. Only the System folder now counts for the
+  processes Process Manager refuses to end, and only the folders Windows keeps its programs in count for the Windows
+  label; a copy anywhere else is "Not recognised", as one in your profile already was. The whole Windows folder had
+  counted since the path check came in 1.131.11.
+- WSL as the Microsoft Store installs it, in `Program Files\WSL`, is called part of Windows instead of "Not
+  recognised".
+- Why is it slow? could miss a copy of a part of Windows that was busier than Windows' own processes of that name. Its
+  second look at the processor did not read again where each program it had already seen runs from, so it counted
+  the copy with the real ones and found nothing unusual. Since a copy is counted on its own (1.136.117), each program
+  keeps its folder from the first look.
+- SysManager starts the Windows tools it uses only from the System folder or the Windows folder. One found in
+  neither used to be started by its bare name, which Windows looks for in other folders first, SysManager's own
+  among them; now it is not started at all, and the tab says it could not be. Notepad, which Windows 11 can install
+  from the Microsoft Store instead, is started from your own Store copy when SysManager runs without administrator
+  rights.
+
+### Changed
+- A 32-bit copy of svchost, ctfmon or userinit, in `SysWOW64`, now gets the part-of-Windows question when you end it,
+  instead of a refusal.
+- Microsoft Defender's engine in its platform folder under ProgramData now gets the security warning when you end it,
+  instead of the general one.
+
 ## [1.136.176] - 2026-11-12
 
 **Undo Changes offers to turn back on only the services SysManager turned off, from a record other programs cannot

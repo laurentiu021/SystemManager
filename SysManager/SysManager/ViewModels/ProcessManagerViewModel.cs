@@ -429,7 +429,7 @@ public sealed partial class ProcessManagerViewModel : ElevatedViewModelBase
     /// ("would cause a system crash") is factually true.
     /// </summary>
     /// <remarks>
-    /// Deliberately keyed on name plus <see cref="ProcessCriticality.IsUnderSystemRoot"/>, never on
+    /// Deliberately keyed on name plus <see cref="ProcessCriticality.IsInSystemFolder"/>, never on
     /// <see cref="ProcessEntry.SafetyLevel"/>: that value is PROVENANCE from the description database
     /// ("known Windows component" — see <see cref="ProcessSafety"/>), not criticality. 59 of the 108
     /// database entries carry it, including notepad, calc, mspaint, Taskmgr, regedit and explorer — so

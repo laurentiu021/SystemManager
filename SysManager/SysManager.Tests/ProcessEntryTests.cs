@@ -63,6 +63,19 @@ public class ProcessEntryTests
     }
 
     [Fact]
+    public void SafetyTooltip_BootCriticalNameFromAFolderInsideWindowsAnyUserCanWriteTo_DoesNotGetTheRefusalWarning()
+    {
+        var entry = new ProcessEntry
+        {
+            Name = "csrss.exe",
+            FilePath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.Windows), "Temp", "csrss.exe"),
+            SafetyLevel = nameof(ProcessSafety.Unknown),
+        };
+
+        Assert.DoesNotContain("system crash", entry.SafetyTooltip, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
     public void SafetyTooltip_BootCriticalNameFromAProfileFolder_DoesNotGetTheRefusalWarning()
     {
         // A program merely named csrss.exe running from a profile folder is not the real one — it must

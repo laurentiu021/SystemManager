@@ -33,12 +33,13 @@ internal static class SystemPaths
     private static readonly string System32 = Environment.SystemDirectory;
 
     /// <summary>
-    /// Returns the full trusted path for a bare Windows tool name that exists under System32
-    /// (or the boxed Windows PowerShell 5.1 folder). Names that are already rooted / contain a
-    /// path separator, or that are not found in a trusted location, are returned unchanged so
-    /// callers of non-system executables and explicit paths are never altered. Windows PowerShell
-    /// is always mapped to its rooted canonical path, even when missing, so execution fails closed
-    /// instead of falling back to the Win32 executable search order.
+    /// Returns the full trusted path for a bare Windows tool name: its copy in System32 (or the boxed Windows
+    /// PowerShell
+    /// 5.1 folder), then in the Windows folder. Names that are already rooted or contain a path separator are returned
+    /// unchanged, so explicit paths are never altered. A bare name found in neither folder resolves to a rooted path in
+    /// System32 anyway, so starting it fails with "file not found" instead of Windows searching for the name, which
+    /// starts a file of that name from the app's own folder or the working folder first. Notepad, which Windows 11 can
+    /// install from the Store instead, is the one exception, resolved as winget is (<see cref="ResolveWinget(bool)"/>).
     /// </summary>
     public static string ResolveSystemTool(string fileName)
         => ResolveSystemTool(fileName, System32, File.Exists);
@@ -54,7 +55,8 @@ internal static class SystemPaths
         string fileName,
         string systemDirectory,
         Func<string, bool> fileExists,
-        Func<bool>? isElevated = null)
+        Func<bool>? isElevated = null,
+        string? localAppData = null)
     {
         if (string.IsNullOrEmpty(fileName)) return fileName;
         if (Path.IsPathRooted(fileName) || fileName.Contains('\\') || fileName.Contains('/'))
@@ -106,7 +108,21 @@ internal static class SystemPaths
             }
         }
 
-        return fileName;
+        // Notepad is a feature Windows 11 lets you remove, and the Store's Notepad then answers to the name through an
+        // alias in the user's own WindowsApps folder. winget's rule: that alias for a launch without administrator
+        // rights, which gives the launch nothing the user could not already do, and never for one with them.
+        if ((fileName.Equals("notepad", StringComparison.OrdinalIgnoreCase)
+             || fileName.Equals("notepad.exe", StringComparison.OrdinalIgnoreCase))
+            && !(isElevated ?? AdminHelper.IsElevated)()
+            && (localAppData ?? Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData))
+                is { Length: > 0 } local
+            && Path.IsPathFullyQualified(local))
+        {
+            return Path.Combine(local, "Microsoft", "WindowsApps", "notepad.exe");
+        }
+
+        // Found in neither: rooted anyway, so the start fails rather than Windows searching for the name.
+        return Path.Combine(systemDirectory, fileName);
     }
 
     // The fixed publisher-hash suffix of Microsoft's App Installer (winget) MSIX package. Part of
@@ -349,6 +365,30 @@ internal static class SystemPaths
         return full.Equals(root, StringComparison.OrdinalIgnoreCase)
             || full.StartsWith(prefix, StringComparison.OrdinalIgnoreCase);
     }
+
+    /// <summary>
+    /// True when <paramref name="candidate"/> sits directly in <paramref name="folder"/>: its own folder is that
+    /// folder,
+    /// so neither the folder itself nor anything in a folder below it. Compared as <see cref="IsInsideSubtree"/>
+    /// compares, and null or unusable input matches nothing.
+    /// </summary>
+    /// <remarks>
+    /// For a folder whose subfolders are not all its own: Windows keeps its programs in the System folder, but some
+    /// folders below it, such as <c>System32\Tasks</c>, are ones any program can write to. A device path such as
+    /// <c>\\?\C:\…</c> is left as it is, so it matches no drive path; a caller that accepts one strips its prefix
+    /// first.
+    /// </remarks>
+    internal static bool IsDirectlyInside(string candidate, string? folder)
+    {
+        if (Normalise(folder) is not { Length: > 0 } dir) return false;
+        if (Normalise(candidate) is not { Length: > 0 } full) return false;
+        return Path.GetDirectoryName(full) is { Length: > 0 } parent
+               && string.Equals(Path.TrimEndingDirectorySeparator(parent), dir, StringComparison.OrdinalIgnoreCase);
+    }
+
+    /// <summary>True when <paramref name="candidate"/> sits directly in ANY of <paramref name="folders"/>.</summary>
+    internal static bool IsDirectlyInsideAny(string candidate, params string?[] folders) =>
+        folders.Any(folder => IsDirectlyInside(candidate, folder));
 
     /// <summary>True when <paramref name="full"/> is the root of a drive, with or without its separator.</summary>
     /// <remarks>

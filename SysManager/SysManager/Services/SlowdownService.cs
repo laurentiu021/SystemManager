@@ -313,6 +313,10 @@ public sealed class SlowdownService : ISlowdownService
     /// <para>A copy of a part of Windows that runs from a folder Windows does not keep its programs in is a program of
     /// its own (<see cref="Program"/>). Grouped by the name alone, it was added to Windows' own processes of that name,
     /// and the check said it was part of Windows (#3010).</para>
+    /// <para>The second sample does not read again what the first read about each process, so a process it already
+    /// knows comes back with no path; it takes the path the first sample read. Without it, a copy busier than the real
+    /// processes of its name was counted with them in the second sample, and the check found nothing unusual
+    /// (#3437).</para>
     /// </remarks>
     internal static ProbeOutcome Processor(IReadOnlyList<ProcessEntry> first, IReadOnlyList<ProcessEntry> second,
                                            int ownProcessId, Func<string, string?, ProcessDescriptionEntry?> describe)
@@ -320,8 +324,15 @@ public sealed class SlowdownService : ISlowdownService
         // An empty list is the snapshot's own answer when Windows would not list the processes at all.
         if (first.Count == 0 || second.Count == 0) return ProbeOutcome.Unread(SlowdownProbe.Processor);
 
-        var before = ByProgram(first, ownProcessId, describe);
-        var after = ByProgram(second, ownProcessId, describe);
+        var read = new Dictionary<ProcessManagerService.ProcessIdentity, string>();
+        foreach (var p in first) read.TryAdd(ProcessManagerService.ProcessIdentity.Of(p), p.FilePath);
+        string PathOf(ProcessEntry p) =>
+            p.FilePath.Length > 0
+                ? p.FilePath
+                : read.GetValueOrDefault(ProcessManagerService.ProcessIdentity.Of(p), "");
+
+        var before = ByProgram(first, ownProcessId, PathOf, describe);
+        var after = ByProgram(second, ownProcessId, PathOf, describe);
         var busiest = before.Keys
             .Where(after.ContainsKey)
             .Select(program => (Program: program, Percent: Math.Min(before[program], after[program])))
@@ -340,7 +351,8 @@ public sealed class SlowdownService : ISlowdownService
         // Capped, because two readings of a whole processor's worth, each rounded, can add up to a hair over all of it.
         var percent = string.Create(CultureInfo.InvariantCulture, $"{Math.Min(busiest.Percent, 100):F0}%");
         var processes = second.Count(p => Counts(p, ownProcessId)
-                                          && SameProgram.Instance.Equals(ProgramOf(p, describe), busiest.Program));
+                                          && SameProgram.Instance.Equals(ProgramOf(p.Name, PathOf(p), describe),
+                                              busiest.Program));
         // Every process of a program with no folder runs where Windows keeps it, or could not be read.
         var partOfWindows = folder is null && describe(program, null)?.Safety == ProcessSafety.System;
         var detail = (processes > 1 ? $"Across its {processes} processes, right now. " : "Right now, and not just for a moment. ")
@@ -381,27 +393,30 @@ public sealed class SlowdownService : ISlowdownService
     }
 
     private static Dictionary<Program, double> ByProgram(IReadOnlyList<ProcessEntry> processes, int ownProcessId,
+                                                         Func<ProcessEntry, string> pathOf,
                                                          Func<string, string?, ProcessDescriptionEntry?> describe)
     {
         var byProgram = new Dictionary<Program, double>(SameProgram.Instance);
         foreach (var p in processes.Where(p => Counts(p, ownProcessId)))
         {
-            var program = ProgramOf(p, describe);
+            var program = ProgramOf(p.Name, pathOf(p), describe);
             byProgram[program] = byProgram.GetValueOrDefault(program) + p.CpuPercent;
         }
         return byProgram;
     }
 
-    /// <summary>The program <paramref name="p"/> counts toward.</summary>
+    /// <summary>The program a process named <paramref name="name"/>, running from <paramref name="path"/>, counts
+    /// toward.</summary>
     /// <remarks>
     /// A copy is what SysManager's record calls a part of Windows by its name and not by where this process runs from
     /// (<see cref="ProcessDescriptionService.Lookup(string, string?)"/>). An unreadable folder is read as the real one.
     /// </remarks>
-    private static Program ProgramOf(ProcessEntry p, Func<string, string?, ProcessDescriptionEntry?> describe) =>
-        describe(p.Name, null)?.Safety == ProcessSafety.System
-        && describe(p.Name, p.FilePath)?.Safety != ProcessSafety.System
-            ? new Program(p.Name, Path.GetDirectoryName(p.FilePath) is { Length: > 0 } folder ? folder : p.FilePath)
-            : new Program(p.Name, null);
+    private static Program ProgramOf(string name, string path,
+                                     Func<string, string?, ProcessDescriptionEntry?> describe) =>
+        describe(name, null)?.Safety == ProcessSafety.System
+        && describe(name, path)?.Safety != ProcessSafety.System
+            ? new Program(name, Path.GetDirectoryName(path) is { Length: > 0 } folder ? folder : path)
+            : new Program(name, null);
 
     /// <summary>
     /// Whether a process counts: not the idle process, which is the processor doing nothing, and not SysManager, which is

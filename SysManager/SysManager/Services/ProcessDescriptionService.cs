@@ -96,12 +96,14 @@ public sealed class ProcessDescriptionService
     /// <remarks>
     /// Only "System" entries are re-verified: "Trusted" third-party entries have no fixed install
     /// folder to check against, and <see cref="ProcessSafety.Unknown"/> already carries no reputation
-    /// to misattribute. <paramref name="imagePath"/> null/blank/unreadable passes through unchanged,
-    /// the same fail-open rule <see cref="Helpers.ProcessCriticality.IsUnderSystemRoot"/> applies, since
-    /// most real system processes cannot be read without elevation.
-    /// <para>Where Windows keeps its programs is the System folder and the few places outside it that
-    /// <see cref="Helpers.ProcessCriticality.IsWhereWindowsKeepsItsPrograms"/> names. The System folder
-    /// alone called Windows 11's packaged Notepad, Paint, Terminal and Widgets "Not recognised" (#3166).</para>
+    /// to misattribute. <paramref name="imagePath"/> null or blank passes through unchanged, since most
+    /// real system processes cannot be read without elevation; a path that is not a full one is never
+    /// vouched for, because resolving it would judge it against the folder SysManager runs in.
+    /// <para>Where Windows keeps its programs is the folders
+    /// <see cref="Helpers.ProcessCriticality.IsWhereWindowsKeepsItsPrograms"/> names: each folder inside Windows
+    /// its programs run from, exactly, and a few trees only Windows or an administrator can write to. The System
+    /// folder alone called Windows 11's packaged Notepad, Paint, Terminal and Widgets "Not recognised" (#3166), and
+    /// the whole Windows folder trusted copies in folders inside it any program can write to (#3437).</para>
     /// </remarks>
     public ProcessDescriptionEntry? Lookup(string processName, string? imagePath)
     {

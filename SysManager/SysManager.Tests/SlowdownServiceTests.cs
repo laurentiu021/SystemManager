@@ -38,7 +38,8 @@ public sealed class SlowdownServiceTests
         (known, _) =>
         {
             _asked.Add(known);
-            return Task.FromResult(_asked.Count == 1 ? _first : _second);
+            var sample = _asked.Count == 1 ? _first : _second;
+            return Task.FromResult(known is null ? sample : AlreadyRead(sample, known));
         },
         () => _drives(),
         () => _systemDrive(),
@@ -51,6 +52,28 @@ public sealed class SlowdownServiceTests
         _clock);
 
     private Task<SlowdownReport> CheckAsync() => NewService().CheckAsync();
+
+    /// <summary>
+    /// <paramref name="sample"/> as the real snapshot gives it back when it is told which processes are already known:
+    /// for those it does not read the file again, so their path, description and file-location flag are left out.
+    /// Every other value is copied, so a check that reads the second sample is not tested against zeros.
+    /// </summary>
+    private static IReadOnlyList<ProcessEntry> AlreadyRead(IReadOnlyList<ProcessEntry> sample,
+        IReadOnlySet<ProcessManagerService.ProcessIdentity> known)
+    {
+        string[] notReadAgain =
+            [nameof(ProcessEntry.FilePath), nameof(ProcessEntry.Description), nameof(ProcessEntry.CanOpenFileLocation)];
+        var copied = typeof(ProcessEntry).GetProperties()
+            .Where(p => p.CanRead && p.CanWrite && p.GetIndexParameters().Length == 0 && !notReadAgain.Contains(p.Name))
+            .ToList();
+        return [.. sample.Select(p =>
+        {
+            if (!known.Contains(ProcessManagerService.ProcessIdentity.Of(p))) return p;
+            var again = new ProcessEntry();
+            foreach (var property in copied) property.SetValue(again, property.GetValue(p));
+            return again;
+        })];
+    }
 
     private static FixedDriveService.FixedDrive Drive(string letter, double sizeGB, double freeGB) =>
         new(letter, "Local Disk", "NTFS", sizeGB, freeGB, "", "");
@@ -359,6 +382,31 @@ public sealed class SlowdownServiceTests
         Assert.Equal("Windows service host is using 60% of the processor", busy.Title);
         Assert.Equal("Across its 2 processes, right now. It is part of Windows, and that usually means it is busy "
                      + "with a job of its own, such as a scan or an update, that finishes by itself.", busy.Detail);
+    }
+
+    /// <summary>
+    /// A copy busier than Windows' own processes of that name, in the same two samples, is named with its folder. The
+    /// second sample has no paths for processes the first already read, so the copy used to be added to the real ones
+    /// there, and the check found nothing unusual.
+    /// </summary>
+    [Fact]
+    public async Task ACopyBusierThanTheRealOnes_IsNamedWithItsFolder()
+    {
+        var real = Under(Environment.SpecialFolder.Windows, @"System32\svchost.exe");
+        var copy = Under(Environment.SpecialFolder.ApplicationData, @"Updater\svchost.exe");
+        IReadOnlyList<ProcessEntry> Sample() =>
+        [
+            Proc(20, "svchost", 5, path: real),
+            Proc(21, "svchost", 5, path: real),
+            Proc(22, "svchost", 70, path: copy),
+        ];
+        _first = Sample();
+        _second = Sample();
+
+        var busy = Assert.Single((await CheckAsync()).Findings);
+
+        Assert.Equal("svchost is using 70% of the processor", busy.Title);
+        Assert.Contains($"it runs from {Path.GetDirectoryName(copy)}", busy.Detail, StringComparison.Ordinal);
     }
 
     [Fact]

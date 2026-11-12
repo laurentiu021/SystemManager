@@ -543,15 +543,28 @@ public sealed partial class SystemFixesViewModel : ElevatedViewModelBase
                 ExplorerShell.Start();
             }
 
-            if (sweep.Deleted == 0 && sweep.Failed == 0)
-                return "No cache files were there to clear — Windows had already rebuilt them.";
-
-            var freed = FormatHelper.FormatSize(sweep.BytesFreed);
-            return sweep.Failed == 0
-                ? $"Cleared {sweep.Deleted} cache file(s), {freed}. Icons rebuild as you browse."
-                : $"Cleared {sweep.Deleted} cache file(s), {freed}. {sweep.Failed} were still in use and "
-                  + "were left alone — running this again usually gets them.";
+            return IconCacheSweepMessage(sweep);
         });
+    }
+
+    /// <summary>What Rebuild icon cache says about one sweep of Explorer's cache folder.</summary>
+    internal static string IconCacheSweepMessage(ExplorerShell.CacheSweep sweep)
+    {
+        // A link refusal is neither "nothing there" nor "still in use": running again does not change it.
+        var leftAlone = sweep.LeftAlone == 0
+            ? ""
+            : $" {sweep.LeftAlone} were left alone because Explorer's cache folder, or the file, is reached through "
+              + "a link.";
+        if (sweep.Deleted == 0 && sweep.Failed == 0)
+            return sweep.LeftAlone == 0
+                ? "No cache files were there to clear — Windows had already rebuilt them."
+                : "No cache files were cleared." + leftAlone;
+
+        var freed = FormatHelper.FormatSize(sweep.BytesFreed);
+        return sweep.Failed == 0
+            ? $"Cleared {sweep.Deleted} cache file(s), {freed}. Icons rebuild as you browse." + leftAlone
+            : $"Cleared {sweep.Deleted} cache file(s), {freed}. {sweep.Failed} were still in use and "
+              + "were left alone — running this again usually gets them." + leftAlone;
     }
 
     /// <summary>

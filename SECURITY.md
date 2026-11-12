@@ -121,7 +121,9 @@ What the app can and cannot do by design:
   overwritten too, before the delete that would otherwise remove them untouched.
 - Delete files in the cleanup categories you tick (Deep Cleanup, Quick Cleanup, Quick
   Tune-Up). Each category is a fixed list of folders; junctions and symlinks are never
-  followed, the folders single-file .NET apps unpack into under TEMP are left alone, and
+  followed, a file is deleted only through a handle checked to be open on the very file the
+  scan listed, so a folder turned into a link in between cannot redirect the delete, the
+  folders single-file .NET apps unpack into under TEMP are left alone, and
   files are deleted outright, not sent to the Recycle Bin. The Delivery Optimization cache
   is emptied through Windows' own `Delete-DeliveryOptimizationCache` instead, and Windows.old
   is removed by Windows' own Disk Cleanup (`cleanmgr /sagerun`): SysManager selects that one

@@ -556,15 +556,12 @@ public sealed class DeepCleanupService
                                 if (CleanupAge.IsRecent(fi, cutoff.Value)) continue;
                             }
                             var len = SafeLength(file);
-                            // Clear ONLY ReadOnly, which is the single attribute that blocks a delete.
-                            // FileAttributes.Normal is not a mask — it replaces the set, so it also dropped
-                            // Hidden, System and Archive. When the delete then failed, and in these buckets
-                            // it routinely does (Explorer holds thumbcache_*.db open), the file stayed on
-                            // disk having silently lost its attributes (#2376).
-                            var attrs = File.GetAttributes(file);
-                            if ((attrs & FileAttributes.ReadOnly) != 0)
-                                File.SetAttributes(file, attrs & ~FileAttributes.ReadOnly);
-                            File.Delete(file);
+                            // Through the handle checked to be open on this name, so a folder made into a link
+                            // since the walk listed it cannot take the delete elsewhere. A read-only file is
+                            // removed without touching its attributes: they were cleared by name, which followed
+                            // such a link as well, and a delete that then failed left Hidden, System and Archive
+                            // gone (#2376).
+                            if (!SafeFileWalk.DeleteFile(file, evenReadOnly: true)) continue;
                             freed += len;
                             filesDeleted++;
                         }
@@ -583,7 +580,7 @@ public sealed class DeepCleanupService
                         // A bucket with an age keeps a recent folder as it keeps a recent file: an empty folder made a
                         // moment ago in TEMP is one an installer is about to fill.
                         if (cutoff.HasValue && CleanupAge.IsRecent(new DirectoryInfo(dir), cutoff.Value)) continue;
-                        try { Directory.Delete(dir, recursive: false); }
+                        try { SafeFileWalk.DeleteEmptyDirectory(dir); }
                         catch (IOException ex) { Log.Debug(ex, "Deep cleanup: failed to delete directory {Dir}", dir); }
                         catch (UnauthorizedAccessException ex) { Log.Debug(ex, "Deep cleanup: access denied deleting directory {Dir}", dir); }
                     }

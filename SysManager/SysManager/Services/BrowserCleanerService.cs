@@ -299,7 +299,9 @@ public sealed class BrowserCleanerService
 
     private static bool TryDeleteFile(string file)
     {
-        try { File.Delete(file); return true; }
+        // Through the handle checked to be open on this name: a folder made into a link since the walk listed it
+        // cannot take the delete elsewhere. False when the file is already gone.
+        try { return SafeFileWalk.DeleteFile(file); }
         catch (IOException) { return false; }                 // file locked (browser open)
         catch (UnauthorizedAccessException) { return false; }
     }

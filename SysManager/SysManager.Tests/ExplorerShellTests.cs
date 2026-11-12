@@ -284,6 +284,7 @@ public class ExplorerShellTests : IDisposable
             var sweep = ExplorerShell.DeleteCacheFiles(link);
 
             Assert.Equal(0, sweep.Deleted);
+            Assert.Equal(1, sweep.LeftAlone);
             Assert.True(File.Exists(target), "a cache file behind the link was deleted");
         }
         finally

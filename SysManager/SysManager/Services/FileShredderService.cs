@@ -1055,16 +1055,18 @@ public sealed partial class FileShredderService
     /// the path as it was. A file whose path had 260 characters or more was overwritten and never removed, and its
     /// named streams were skipped. This applies .NET's own rule (260 or more characters, or a trailing dot or
     /// space), so a shorter path reaches every call exactly as before. A UNC or device path is returned as it is.
+    /// <para>The trailing dot or space is read on the path as given: <see cref="Path.GetFullPath(string)"/> drops it,
+    /// so the full form would name a different file. Such a name only exists when something made it in the extended
+    /// form, and it is reached the same way.</para>
     /// </remarks>
     internal static string ExtendedPathIfNeeded(string path)
     {
         if (path.StartsWith(@"\\", StringComparison.Ordinal)) return path;
+        if ((path.EndsWith('.') || path.EndsWith(' ')) && Path.IsPathFullyQualified(path)) return ExtendedPrefix + path;
         string full;
         try { full = Path.GetFullPath(path); }
         catch (ArgumentException) { return path; }
-        return full.Length >= MaxShortPath || full.EndsWith('.') || full.EndsWith(' ')
-            ? ExtendedPrefix + full
-            : path;
+        return full.Length >= MaxShortPath ? ExtendedPrefix + full : path;
     }
 
     private static partial class NativeMethods

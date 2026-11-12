@@ -29,13 +29,6 @@ public enum ShredMethod
 }
 
 /// <summary>
-/// Thrown when a write or flush fails partway through an overwrite that had already begun — a full disk
-/// or a removed drive, not cancellation. The data already written is unrecoverable at that point exactly
-/// as it is after a cancellation past the first byte, so the file is still truncated and removed; this
-/// carries how many passes actually completed rather than letting a bare <see cref="IOException"/> read as
-/// "nothing happened" when the file was, in fact, already destroyed (#2824).
-/// </summary>
-/// <summary>
 /// A file whose contents were overwritten and truncated, and whose name Windows would not remove.
 /// </summary>
 /// <remarks>
@@ -45,6 +38,13 @@ public enum ShredMethod
 /// </remarks>
 internal sealed class OverwrittenNotRemovedException(string message) : IOException(message);
 
+/// <summary>
+/// Thrown when a write or flush fails partway through an overwrite that had already begun — a full disk
+/// or a removed drive, not cancellation. The data already written is unrecoverable at that point exactly
+/// as it is after a cancellation past the first byte, so the file is still truncated and removed; this
+/// carries how many passes actually completed rather than letting a bare <see cref="IOException"/> read as
+/// "nothing happened" when the file was, in fact, already destroyed (#2824).
+/// </summary>
 internal sealed class PartialShredException(int passesRun, string message, Exception inner)
     : IOException(message, inner)
 {

@@ -10,6 +10,27 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.136.178] - 2026-11-12
+
+**Startup Manager names the script or file an entry runs through PowerShell, Command Prompt or another Windows
+helper, and no longer calls such an entry part of Windows.**
+
+### Fixed
+- An entry that runs a script or a file through a Windows program made for running other things (PowerShell, Command
+  Prompt, Windows Script Host, mshta, rundll32, regsvr32, the console host) was labelled part of Windows, with
+  Microsoft as its publisher and a verified signature, because all three described the helper and not what it runs.
+  The row now says what it runs and with which helper, carries no Windows label, and its publisher and signature are
+  those of the file it runs, or none when it runs a command rather than a file. The label came from the helper since
+  entries were first labelled (1.63.0), the signature since 1.85.0.
+- A startup entry whose command is a bare program name was judged against the folder SysManager was started from. A
+  Windows program named that way is now found where Windows keeps it, with its publisher and signature, and any other
+  bare name is neither called part of Windows nor "Not recognised" (#3307).
+- A scheduled task's command is its description, and the description's first word could pick a Windows program, its
+  label and its signature. A task row gets neither from it.
+- A startup shortcut shows the arguments it passes, not only the program it opens.
+- Why is it slow? no longer says a busy PowerShell, Command Prompt or other such helper is part of Windows busy with a
+  job that finishes by itself: what it is doing depends on what started it.
+
 ## [1.136.177] - 2026-11-12
 
 **Process Manager, its safety chip and Why is it slow? now call a program part of Windows only when it runs from a

@@ -214,13 +214,17 @@ public sealed partial class FileShredderViewModel : ViewModelBase
     [RelayCommand(CanExecute = nameof(CanShredAll))]
     private async Task ShredAllAsync()
     {
-        if (Items.Count == 0) return;
+        // The items the question counts, and the only ones the run touches. WPF keeps running queued work while the
+        // box is open, so a folder whose sizing finished then joined the queue, and the run read the queue again
+        // after Yes and shredded it unasked. Every other multi-item destructive tab passes on its own list too.
+        ShredItem[] batch = [.. Items];
+        if (batch.Length == 0) return;
 
         // Read once: the confirmation names it, and every item and the activity entry use it. The box was read again
         // for each item, so switching it part-way changed the overwrite for the rest of the run (#2757).
         var method = SelectedMethod;
-        var confirmed = DialogService.Instance.Confirm(
-            $"You are about to permanently shred {Items.Count} item(s) using the {method} method.\n\n" +
+        var confirmed = _dialog.Confirm(
+            $"You are about to permanently shred {batch.Length} item(s) using the {method} method.\n\n" +
             "This action is IRREVERSIBLE. The data cannot be recovered.\n\nContinue?",
             "Confirm Secure Shred");
 
@@ -266,14 +270,13 @@ public sealed partial class FileShredderViewModel : ViewModelBase
 
         try
         {
-            // Shred a SNAPSHOT of the queue, not the live collection: indexing Items across the
-            // per-file awaits would race a concurrent Add/Remove. (Those commands are also
-            // disabled while shredding via CanEditQueue; the snapshot is the belt-and-suspenders.)
-            // The taskbar button follows the whole queue rather than one file filling it again and again (#2596).
-            var count = Items.Count;
+            // The batch taken before the question, not the live collection: indexing Items across the per-file
+            // awaits would race a concurrent Add/Remove, and the queue may have grown while the question was open.
+            // The taskbar button follows the whole batch rather than one file filling it again and again (#2596).
+            var count = batch.Length;
             var next = 0;
             ShowOnTaskbar(0);
-            foreach (var item in Items.ToArray())
+            foreach (var item in batch)
             {
                 var place = next++;
                 if (ct.IsCancellationRequested) { cancelled = true; break; }

@@ -924,6 +924,37 @@ public class ServicesViewModelTests
             Arg.Any<CancellationToken>(), Arg.Any<System.Text.Encoding?>());
     }
 
+    /// <summary>
+    /// Enable of a service only an earlier version recorded says where the startup type came from. That record is in
+    /// a file any program running as the user can write, so the prompt does not state it as how the service was set
+    /// before SysManager disabled it.
+    /// </summary>
+    [Fact]
+    public async Task Enable_OfAServiceOnlyAnEarlierVersionRecorded_SaysWhereTheTypeCameFrom()
+    {
+        using var elevated = AdminHelper.ForceElevation(true);
+        using var temp = new TempLedgerDir();
+        File.WriteAllText(temp.LedgerFile, ServiceStartupLedgerService.Serialize(
+            new Dictionary<string, ServiceStartupRecord>
+            {
+                [FakeServiceName] = new(FakeServiceName, "Automatic", DateTimeOffset.UnixEpoch),
+            }));
+        var scanned = OneRunningAutomaticService();
+        AsDisabledByWindows(scanned[0]);
+        var runner = RunnerReturning(0);
+        using var vm = await CreateWithLedgerAsync(scanned, temp.NewLedger(), runner);
+        using var dialog = new DialogAnswer(confirm: true);
+
+        await vm.EnableServiceCommand.ExecuteAsync(scanned[0]);
+
+        var asked = Assert.Single(dialog.Messages);
+        Assert.Contains("An earlier version of SysManager recorded", asked, StringComparison.Ordinal);
+        Assert.DoesNotContain("which is what it was before", asked, StringComparison.Ordinal);
+        await runner.Received(1).RunProcessAsync(
+            "sc.exe", $"config \"{FakeServiceName}\" start= auto",
+            Arg.Any<CancellationToken>(), Arg.Any<System.Text.Encoding?>());
+    }
+
     // ── A ledger that could not be read (#2521) ─────────────────────────────────────────────────
     //
     // It holds how every service SysManager disabled was set, and it used to load as empty when it could not be

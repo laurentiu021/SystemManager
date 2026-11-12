@@ -10,6 +10,30 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.136.176] - 2026-11-12
+
+**Undo Changes offers to turn back on only the services SysManager turned off, from a record other programs cannot
+change.**
+
+### Security
+- Undo Changes listed every disabled service named in a file in your own profile, and turned the ones you chose back on
+  with administrator rights. Any program running as you can write that file, so a name in it did not show that
+  SysManager had turned the service off. SysManager now keeps its record of the services it turns off in a registry key
+  only administrators and Windows can change, and checks the key's permissions, and those of the key above it, every
+  time it reads it, as it has kept the system environment variables' safety copy since 1.56.3. Undo Changes lists only
+  what that key names. The file was trusted this way since Undo Changes came in 1.123.0.
+
+### Changed
+- Services turned off by an earlier version are no longer listed in Undo Changes, and their records are not moved into
+  the new key, because a moved record would carry whatever the file said. Undo Changes says so, and Enable on the
+  Services tab still turns them back on, saying that an earlier version recorded the startup type it uses.
+- The record is now one for the whole PC rather than one per Windows account, as services are.
+- When SysManager cannot keep its record where other programs cannot change it, Disable on the Services tab refuses and
+  says so, instead of asking you to try again in a moment.
+- A look without administrator rights cannot take a record out of the new key. A service turned back on outside
+  SysManager is still left off the list: a note in your profile hides it until a look with administrator rights takes
+  its record out.
+
 ## [1.136.175] - 2026-11-12
 
 **The folder walk behind Deep Cleanup, Quick Cleanup, Browser Cleaner, Shortcut Cleaner, File Lock Detector, File

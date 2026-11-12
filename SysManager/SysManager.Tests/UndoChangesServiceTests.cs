@@ -844,6 +844,26 @@ public sealed class UndoChangesServiceTests
         Assert.Empty(scan.Changes);
     }
 
+    /// <summary>
+    /// A service named as turned off only in the file in the user's own profile is not offered, and nothing turns it
+    /// on. Any program running as the user can write that file, so a record there does not show that SysManager
+    /// turned the service off, and putting it back would run as administrator.
+    /// </summary>
+    [Fact]
+    public async Task ADisabledServiceNamedOnlyInTheProfilesFile_IsNotListed_AndIsNeverTurnedOn()
+    {
+        using var rig = new Rig { Elevated = true };
+        File.WriteAllText(Path.Combine(rig.Dir, "service-startup-ledger.json"),
+            """[{"ServiceName":"Fax","PreviousStartType":"Manual","DisabledAtUtc":"2026-10-05T19:40:00+00:00"}]""");
+        rig.ServicesOnPc["Fax"] = new ServiceEntry { Name = "Fax", DisplayName = "Fax", StartType = "Disabled" };
+
+        var scan = await rig.Service.ScanAsync();
+
+        Assert.DoesNotContain(scan.Changes, c => c.Kind == UndoChangeKind.Services);
+        await rig.Runner.DidNotReceive().RunProcessAsync(
+            "sc.exe", Arg.Any<string>(), Arg.Any<CancellationToken>(), Arg.Any<System.Text.Encoding?>());
+    }
+
     [Fact]
     public async Task AServicesRecordThatCannotBeRead_IsNamedAsUnreadable()
     {

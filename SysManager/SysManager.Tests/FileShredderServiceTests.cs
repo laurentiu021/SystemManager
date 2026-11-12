@@ -1305,4 +1305,152 @@ public class FileShredderServiceTests
         Assert.Equal(3, passesRun);
         Assert.False(File.Exists(path));
     }
+
+    // ---------- what no shred may be, or hold ----------
+
+    [Theory]
+    [InlineData(@"C:\Users\me\file.dat", false)]
+    [InlineData(@"C:\Users\me\folder.", true)]
+    [InlineData(@"C:\Users\me\folder ", true)]
+    [InlineData(@"\\server\share\file.dat", false)]
+    [InlineData(@"\\?\C:\Users\me\file.dat", false)]
+    public void ExtendedPathIfNeeded_ExtendsOnlyWhatAWin32CallCannotTakeAsItIs(string path, bool extended)
+    {
+        var result = FileShredderService.ExtendedPathIfNeeded(path);
+
+        if (extended) Assert.StartsWith(@"\\?\", result, StringComparison.Ordinal);
+        else Assert.Same(path, result);
+    }
+
+    [Fact]
+    public void ExtendedPathIfNeeded_ExtendsAPathOf260CharactersOrMore_AndLeavesTheOneBelowAlone()
+    {
+        var below = @"C:\" + new string('a', 253) + ".da";
+        var at = below + "t";
+        Assert.Equal(259, below.Length);
+
+        Assert.Same(below, FileShredderService.ExtendedPathIfNeeded(below));
+        Assert.Equal(@"\\?\" + at, FileShredderService.ExtendedPathIfNeeded(at));
+    }
+
+    /// <summary>
+    /// A file whose path has 260 characters or more is overwritten and removed. The overwrite went through FileStream,
+    /// which .NET extends itself, and the removal's own Win32 call took the raw path, so the file stayed behind. Where
+    /// the PC has long paths turned on the raw call works as well; <c>ArchitectureTests</c> holds the rule either way.
+    /// </summary>
+    [Fact]
+    public async Task ShredFileAsync_AFileWithALongPath_IsOverwrittenAndRemoved()
+    {
+        var dir = Path.Combine(Path.GetTempPath(), "smtest_longpath_" + Guid.NewGuid().ToString("N"));
+        var deep = dir;
+        while (deep.Length < 280) deep = Path.Combine(deep, new string('d', 60));
+        Directory.CreateDirectory(deep);
+        var file = Path.Combine(deep, "long.dat");
+        Assert.True(file.Length >= 260, "the path is not long enough to need the extended form");
+        await File.WriteAllTextAsync(file, "a file far from the drive's root");
+        try
+        {
+            await NewService().ShredFileAsync(file, ShredMethod.Quick, null, CancellationToken.None);
+
+            Assert.False(File.Exists(file), "the file was overwritten but left behind");
+        }
+        finally { Directory.Delete(dir, recursive: true); }
+    }
+
+    [Fact]
+    public void ValidatePath_RefusesTheRootOfADrive()
+    {
+        var root = Path.GetPathRoot(Path.GetTempPath())!;
+        // No protected roots, so the rule that refuses is the drive-root one: C:\ also holds Windows.
+        var svc = new FileShredderService(openExclusiveWrite: null, protectedRoots: []);
+
+        var ex = Assert.Throws<SecurityException>(() => svc.ValidatePath(root));
+        Assert.StartsWith("Shredding the whole of a drive is not allowed", ex.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void ValidatePath_RefusesAFolderThatHoldsAProtectedRoot_AndStillAllowsItsSiblings()
+    {
+        var parent = Directory.CreateTempSubdirectory("smtest_holds_protected_").FullName;
+        var protectedInside = Path.Combine(parent, "windows");
+        var sibling = Path.Combine(parent, "mine");
+        Directory.CreateDirectory(protectedInside);
+        Directory.CreateDirectory(sibling);
+        try
+        {
+            var svc = new FileShredderService(openExclusiveWrite: null, protectedRoots: [protectedInside]);
+
+            var ex = Assert.Throws<SecurityException>(() => svc.ValidatePath(parent));
+            Assert.StartsWith("Shredding a folder that holds Windows' own folders is not allowed",
+                ex.Message, StringComparison.Ordinal);
+            svc.ValidatePath(sibling);
+        }
+        finally { Directory.Delete(parent, recursive: true); }
+    }
+
+    /// <summary>
+    /// The profile and the person's own folders cannot be shredded whole, and neither can a folder that holds one, but
+    /// what is inside them can. Only "equal or under" Windows' folders was refused, so a shred of the profile, or of a
+    /// drive folder holding a moved Downloads, destroyed all of it after a question that counted one item.
+    /// </summary>
+    [Fact]
+    public void ValidatePath_RefusesAHeldFolder_AndAFolderThatHoldsOne_ButNotWhatIsInside()
+    {
+        var parent = Directory.CreateTempSubdirectory("smtest_holds_held_").FullName;
+        var downloads = Path.Combine(parent, "Downloads");
+        var inside = Path.Combine(downloads, "old photos");
+        Directory.CreateDirectory(inside);
+        try
+        {
+            var svc = new FileShredderService(openExclusiveWrite: null, protectedRoots: [], heldRoots: [downloads]);
+
+            foreach (var refusedPath in new[] { downloads, parent })
+            {
+                var ex = Assert.Throws<SecurityException>(() => svc.ValidatePath(refusedPath));
+                Assert.StartsWith("Shredding your profile, one of its main folders, or a folder that holds them",
+                    ex.Message, StringComparison.Ordinal);
+            }
+
+            svc.ValidatePath(inside);
+        }
+        finally { Directory.Delete(parent, recursive: true); }
+    }
+
+    /// <summary>
+    /// A file refused partway through a folder shred is reported with the count already destroyed. The refusal is
+    /// raised before a byte is written, and it used to escape the folder's loop, so the files already destroyed went
+    /// unreported. Here the handle the overwrite opens for one file is on a file inside a protected folder, so the
+    /// check of that handle refuses it, as it would refuse a name swapped for a link there.
+    /// </summary>
+    [Fact]
+    public async Task ShredFolderAsync_AFileRefusedPartway_IsLeftInPlace_AndTheOthersAreCountedAsDestroyed()
+    {
+        var (root, victim, bytes) = TempProtectedRoot();
+        var dir = Directory.CreateTempSubdirectory("smtest_refused_partway_").FullName;
+        var first = Path.Combine(dir, "a.dat");
+        var refused = Path.Combine(dir, "b.dat");
+        await File.WriteAllTextAsync(first, "destroyed");
+        await File.WriteAllTextAsync(refused, "left in place");
+        var svc = new FileShredderService(
+            p => p.Equals(refused, StringComparison.OrdinalIgnoreCase)
+                ? new FileStream(victim, FileMode.Open, FileAccess.Write, FileShare.None)
+                : new FileStream(p, FileMode.Open, FileAccess.Write, FileShare.None),
+            protectedRoots: [root]);
+        try
+        {
+            var ex = await Assert.ThrowsAsync<IOException>(
+                () => svc.ShredFolderAsync(dir, ShredMethod.Quick, null, CancellationToken.None));
+
+            Assert.Contains("1 of 2 file(s) could not be securely shredded", ex.Message, StringComparison.Ordinal);
+            Assert.EndsWith("The other file was destroyed.", ex.Message, StringComparison.Ordinal);
+            Assert.False(File.Exists(first));
+            Assert.Equal("left in place", await File.ReadAllTextAsync(refused));
+            Assert.Equal(bytes, await File.ReadAllBytesAsync(victim));
+        }
+        finally
+        {
+            Directory.Delete(dir, recursive: true);
+            Directory.Delete(root, recursive: true);
+        }
+    }
 }

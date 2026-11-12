@@ -350,6 +350,14 @@ internal static class SystemPaths
             || full.StartsWith(prefix, StringComparison.OrdinalIgnoreCase);
     }
 
+    /// <summary>True when <paramref name="full"/> is the root of a drive, with or without its separator.</summary>
+    /// <remarks>
+    /// Shared by the leftover search and the File Shredder, which both refuse a drive root, so the rule exists once.
+    /// </remarks>
+    internal static bool IsDriveRoot(string full) =>
+        Path.GetPathRoot(full) is { } root
+        && string.Equals(root.TrimEnd('\\', '/'), full.TrimEnd('\\', '/'), StringComparison.OrdinalIgnoreCase);
+
     /// <summary>Absolute path with any trailing separator removed, or null when it cannot be formed.</summary>
     private static string? Normalise(string? path)
     {

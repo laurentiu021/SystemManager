@@ -1438,6 +1438,13 @@ Key services:
   is the path — only the outcome, the method, and for a failure the exception type and HResult (#2796).
   ReadOnly is cleared so the write handle can open, and `ClearedReadOnly` sets it again on a file the shred leaves
   as it found it, refused after the open or cancelled before its first byte (#2757).
+  `ThrowIfProtected` refuses a path in Windows' folders or one that holds them, the root of a drive
+  (`SystemPaths.IsDriveRoot`, shared with `LeftoverFinder`), and the profile, AppData, ProgramData and the person's
+  own folders as a whole or held (`HeldRoots`, the folders the leftover search never offers). A folder whose
+  canonical path cannot be read is refused before its walk, and a file refused partway through a folder is left in
+  place and counted, the files already destroyed with it. Every path the service's own Win32 calls take goes
+  through `ExtendedPathIfNeeded`, so a path of 260 characters or more reaches them
+  (`ArchitectureTests.EveryPathTheShredderGivesWin32_IsExtendedWhenItNeedsToBe`).
 - `PrivacyService` (`IPrivacyService`) — reads and writes Windows privacy and telemetry
   registry toggles (activity history, advertising ID, diagnostics, etc.). Each toggle carries a
   stable `Key` that a privacy profile names it by; the list is pinned by a test, because renaming a

@@ -15422,6 +15422,48 @@ public partial class ArchitectureTests
     private static partial Regex StreamWriteCall();
 
     /// <summary>
+    /// Every path the File Shredder hands to a Win32 call of its own goes through
+    /// <c>FileShredderService.ExtendedPathIfNeeded</c> first.
+    /// </summary>
+    /// <remarks>
+    /// The overwrite goes through <c>FileStream</c>, which .NET extends for long paths itself, so a file whose path had
+    /// 260 characters or more was overwritten, and then the removal's <c>CreateFileW</c> failed on the raw path: the
+    /// file stayed, holding the overwrite, and its named streams were never searched. On a PC with long paths turned on
+    /// the raw call works, so a test that shreds a long path can pass with the fix missing; this is the check
+    /// that fails either way. Comments are stripped, the call count has a floor, and a control proves the
+    /// predicate catches a raw path.
+    /// </remarks>
+    [Fact]
+    public void EveryPathTheShredderGivesWin32_IsExtendedWhenItNeedsToBe()
+    {
+        static bool Extended(string argument) =>
+            argument.StartsWith("ExtendedPathIfNeeded(", StringComparison.Ordinal) || argument == "asked";
+
+        var control = ShredderWin32PathCall().Match("NativeMethods.CreateFile(filePath, 0,").Groups["arg"].Value;
+        Assert.False(Extended(control),
+            "the control is no longer caught, so the predicate checks nothing");
+
+        var source = WithoutComments(File.ReadAllText(
+            Path.Combine(TestPaths.AppProject(), "Services", "FileShredderService.cs")));
+        var calls = ShredderWin32PathCall().Matches(source).Cast<Match>().ToList();
+
+        // Measured: the removal's CreateFile, the stream search, ResolveFinalPath's CreateFile and the two
+        // GetLongPathName calls of ExpandShortPath.
+        Assert.True(calls.Count >= 5,
+            $"found {calls.Count} path-taking Win32 calls in FileShredderService, expected at least 5: the pattern no "
+            + "longer matches the calls it is meant to police.");
+
+        var raw = calls.Where(m => !Extended(m.Groups["arg"].Value)).Select(m => Collapse(m.Value)).ToList();
+        Assert.True(raw.Count == 0,
+            "these Win32 calls take a path as it is, so a path of 260 characters or more fails on a PC without long "
+            + "paths turned on and the shred leaves the file behind. Pass ExtendedPathIfNeeded(path):\n  - "
+            + string.Join("\n  - ", raw));
+    }
+
+    [GeneratedRegex(@"NativeMethods\.(?:CreateFile|FindFirstStream|GetLongPathName)\(\s*(?<arg>[^,]+?)\s*,")]
+    private static partial Regex ShredderWin32PathCall();
+
+    /// <summary>
     /// No Serilog call in <c>FileShredderService</c> or <c>FileShredderViewModel</c> names a path, or
     /// attaches the raw exception object that was caught.
     /// </summary>

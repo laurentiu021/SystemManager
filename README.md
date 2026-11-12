@@ -1598,7 +1598,11 @@ Answers "what is actually using my space?" by listing the biggest files in one p
 - Skips junction points and symbolic links (prevents symlink attacks) — whether the link is the item
   you selected directly or one found inside a folder you shred
 - **Refuses Windows' own folders** — Windows, System32 and Program Files — even through a link or a
-  short name, a file with more than one hard link, a selected folder that is itself a link, and a
+  short name, and any folder that holds them, the whole of a drive among them
+- **Refuses your profile, AppData, ProgramData and your own folders as a whole** (Documents, Downloads,
+  Desktop and the rest, wherever you moved them), and any folder that holds one of them; the files and
+  folders inside them can be shredded
+- Also refuses a file with more than one hard link, a selected folder that is itself a link, and a
   compressed, sparse or encrypted file: NTFS writes those to new disk clusters rather than overwriting
   in place, so the original bytes would stay readable in the space the old clusters occupied. A file
   it cannot overwrite is left where it is and named, never deleted the ordinary way, and keeps its
@@ -1608,7 +1612,8 @@ Answers "what is actually using my space?" by listing the biggest files in one p
   a file there is shredded on that computer
 - **Removes only the file it overwrote.** The file goes through a handle checked to be open on the file
   the overwrite wrote; when its name leads to another file by then, nothing is removed and the tab says
-  the contents were overwritten and the name stayed
+  the contents were overwritten and the name stayed. A file deep in a folder tree, with a path of 260
+  characters or more, is removed and has its named streams overwritten like any other
 - A write error partway through an overwrite (a full disk, a removed drive) still finishes the job —
   the file is truncated and removed rather than left half-overwritten under its original name — and
   says so plainly instead of reporting it as left untouched

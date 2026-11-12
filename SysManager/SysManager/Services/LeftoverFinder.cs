@@ -490,9 +490,7 @@ public static partial class LeftoverFinder
         path is not null && (path.TrimStart().StartsWith(@"\\", StringComparison.Ordinal)
                              || path.TrimStart().StartsWith("//", StringComparison.Ordinal));
 
-    private static bool IsDriveRoot(string full) =>
-        Path.GetPathRoot(full) is { } root
-        && string.Equals(root.TrimEnd('\\', '/'), full.TrimEnd('\\', '/'), StringComparison.OrdinalIgnoreCase);
+    private static bool IsDriveRoot(string full) => SystemPaths.IsDriveRoot(full);
 
     private static void AddName(List<string> names, string? candidate)
     {

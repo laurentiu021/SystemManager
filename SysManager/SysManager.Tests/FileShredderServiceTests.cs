@@ -1137,7 +1137,7 @@ public class FileShredderServiceTests
     /// A write handle that, once closed, moves the file it held away and puts another file at its name, so by the time
     /// the shred removes the file, its path leads to a different one.
     /// </summary>
-    private sealed class ReplacedOnCloseStream(string path, string movedTo, string replacement)
+    internal sealed class ReplacedOnCloseStream(string path, string movedTo, string replacement)
         : FileStream(path, FileMode.Open, FileAccess.Write, FileShare.None, 64 * 1024,
                      FileOptions.WriteThrough | FileOptions.SequentialScan)
     {
@@ -1451,6 +1451,94 @@ public class FileShredderServiceTests
         {
             Directory.Delete(dir, recursive: true);
             Directory.Delete(root, recursive: true);
+        }
+    }
+
+    // ---------- a folder shred reports only what happened ----------
+
+    /// <summary>
+    /// A folder picked through a link above it is shredded. The file walk refused a root reached through a link, so it
+    /// found nothing, and the folder was reported shredded with every file in it still there.
+    /// </summary>
+    [Fact]
+    public async Task ShredFolderAsync_AFolderReachedThroughALinkAboveIt_IsShredded()
+    {
+        var real = Directory.CreateTempSubdirectory("smtest_shred_parentlink_").FullName;
+        var inner = Path.Combine(real, "inner");
+        Directory.CreateDirectory(inner);
+        var file = Path.Combine(inner, "secret.dat");
+        await File.WriteAllTextAsync(file, "reached through the link above it");
+        var link = Path.Combine(Path.GetTempPath(), "smtest_shred_parentlink_j_" + Guid.NewGuid().ToString("N"));
+        try
+        {
+            Symlinks.RequireJunction(link, real);
+
+            var report = await NewService().ShredFolderAsync(
+                Path.Combine(link, "inner"), ShredMethod.Quick, null, CancellationToken.None);
+
+            Assert.Equal(1, report.FilesShredded);
+            Assert.False(File.Exists(file), "the folder was reported shredded with its file still there");
+            Assert.False(Directory.Exists(inner));
+        }
+        finally { Symlinks.RemoveLinkThenTree(link, real); }
+    }
+
+    /// <summary>
+    /// An emptied read-only folder is removed with the rest. Windows will not remove a read-only folder, and
+    /// Properties &gt; Customize makes one, so it stayed while the folder was reported shredded.
+    /// </summary>
+    [Fact]
+    public async Task ShredFolderAsync_AnEmptiedReadOnlySubfolder_IsRemovedWithTheRest()
+    {
+        var dir = Directory.CreateTempSubdirectory("smtest_shred_readonlydir_").FullName;
+        var sub = Path.Combine(dir, "customised");
+        Directory.CreateDirectory(sub);
+        await File.WriteAllTextAsync(Path.Combine(sub, "photo.dat"), "inside a customised folder");
+        File.SetAttributes(sub, File.GetAttributes(sub) | FileAttributes.ReadOnly);
+        try
+        {
+            await NewService().ShredFolderAsync(dir, ShredMethod.Quick, null, CancellationToken.None);
+
+            Assert.False(Directory.Exists(dir), "an emptied read-only folder kept the folder on disk");
+        }
+        finally
+        {
+            if (Directory.Exists(sub)) File.SetAttributes(sub, FileAttributes.Directory);
+            if (Directory.Exists(dir)) Directory.Delete(dir, recursive: true);
+        }
+    }
+
+    /// <summary>
+    /// A file whose contents were overwritten and whose name stayed counts as destroyed. As a plain IOException it was
+    /// listed among the files "left in place (not deleted)", which reads as untouched.
+    /// </summary>
+    [Fact]
+    public async Task ShredFolderAsync_AFileWhoseNameStays_IsCountedAsDestroyed_AndTheNoticeSaysSo()
+    {
+        var dir = Directory.CreateTempSubdirectory("smtest_shred_namestays_").FullName;
+        var plain = Path.Combine(dir, "a.dat");
+        var stays = Path.Combine(dir, "b.dat");
+        var movedTo = Path.Combine(Path.GetTempPath(), "smtest_shred_namestays_moved_" + Guid.NewGuid().ToString("N"));
+        await File.WriteAllTextAsync(plain, "destroyed and removed");
+        await File.WriteAllBytesAsync(stays, new byte[4096]);
+        var svc = new FileShredderService(candidate =>
+            candidate.Equals(stays, StringComparison.OrdinalIgnoreCase)
+                ? new ReplacedOnCloseStream(candidate, movedTo, "another file has this name now")
+                : new FileStream(candidate, FileMode.Open, FileAccess.Write, FileShare.None));
+        try
+        {
+            var report = await svc.ShredFolderAsync(dir, ShredMethod.Quick, null, CancellationToken.None);
+
+            Assert.Equal(2, report.FilesShredded);
+            Assert.False(File.Exists(plain));
+            Assert.Equal(0, new FileInfo(movedTo).Length);   // what was overwritten, where it was moved to
+            Assert.NotNull(report.Notice);
+            Assert.Contains("its name is still in the folder", report.Notice, StringComparison.Ordinal);
+        }
+        finally
+        {
+            if (File.Exists(movedTo)) File.Delete(movedTo);
+            Directory.Delete(dir, recursive: true);
         }
     }
 }

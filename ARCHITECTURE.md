@@ -1431,7 +1431,7 @@ Key services:
   per-item progress and error reporting. Its installed list and its search read their own
   runs' output, so a search during the list, or during an install, reads only its own table (#2771).
 - `FileShredderService` — secure multi-pass file overwrite (DoD 5220.22-M
-  style) and deletion. Every `Log.*` call here and in `FileShredderViewModel` is checked by
+  style) and deletion. Every `Log.*` call here, in `FileShredderViewModel` and in the `SafeFileWalk` they share is checked by
   `ArchitectureTests.ShredderLogging_NeverNamesAPathOrAttachesTheCaughtException`: none may hold a
   `{Path}`/`{Dir}`/`{Stream}` template token, a path-shaped argument, or the caught exception object
   itself — the sink's real output template renders a logged exception's full message, which commonly

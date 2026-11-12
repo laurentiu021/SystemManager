@@ -10,6 +10,19 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.136.172] - 2026-11-12
+
+**SysManager's log no longer names a folder its file walk could not read, so a File Shredder run leaves no trace of the
+folder you shredded there.**
+
+### Fixed
+- When the folder walk that File Shredder and the cleanup tabs share could not list a folder, it wrote the folder's
+  full path to SysManager's log, once in the message and again in the attached error, at the detail level the log
+  keeps for 14 days and bundles into a bug report from About. For a shred that was the folder you asked to destroy, or
+  one inside it, and a folder only queued in File Shredder was logged the same way while its size was measured. The
+  line now holds only the kind of error and its code, as File Shredder's own lines already did. It has been that way
+  since the shared walk came in 1.112.5.
+
 ## [1.136.171] - 2026-11-12
 
 **Shredding a large folder no longer freezes SysManager's window before the first pass, and Cancel works from the

@@ -295,7 +295,8 @@ internal static class SafeFileWalk
     /// iteration and costs the widest directory, not the tree.</para>
     /// <para>The caller stays lazy: <see cref="Files"/> yields as it goes and holds one directory's entries
     /// at a time, so a walk over %TEMP% never builds a list of every file in it.</para>
-    /// <para>A failed listing adds <paramref name="dir"/> to <paramref name="unreadable"/>, if one is given.</para>
+    /// <para>A failed listing adds <paramref name="dir"/> to <paramref name="unreadable"/>, if one is given, and is
+    /// logged by its exception type and HResult only.</para>
     /// </remarks>
     internal static List<T> EnumerateGuarded<T>(Func<IEnumerable<T>> enumerate, string dir,
                                                 ICollection<string>? unreadable = null)
@@ -305,14 +306,19 @@ internal static class SafeFileWalk
         {
             foreach (var entry in enumerate()) entries.Add(entry);
         }
+        // No {Dir} and no attached exception: the sink renders a logged exception's message in full, and an I/O
+        // exception's message is usually the path. A File Shredder walk is over the folder the person asked to
+        // destroy, so its name would outlive it in a log kept for weeks and bundled into a bug report (#2796).
         catch (IOException ex)
         {
-            Log.Debug(ex, "SafeFileWalk: stopped listing {Dir}", dir);
+            Log.Debug("SafeFileWalk: stopped listing a folder. {ExceptionType} (HResult {HResult})",
+                ex.GetType().Name, ex.HResult);
             unreadable?.Add(dir);
         }
         catch (UnauthorizedAccessException ex)
         {
-            Log.Debug(ex, "SafeFileWalk: denied listing {Dir}", dir);
+            Log.Debug("SafeFileWalk: denied listing a folder. {ExceptionType} (HResult {HResult})",
+                ex.GetType().Name, ex.HResult);
             unreadable?.Add(dir);
         }
         return entries;

@@ -10,6 +10,19 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.136.171] - 2026-11-12
+
+**Shredding a large folder no longer freezes SysManager's window before the first pass, and Cancel works from the
+moment you press Shred All.**
+
+### Fixed
+- Before its first overwrite, a folder shred ran its checks and listed every file in the folder on the window's own
+  thread, so a folder with tens of thousands of files, or one on a slow USB stick, froze the window for seconds or
+  longer, often with Windows' "Not Responding", and Cancel could not be pressed. It has been that way since the File
+  Shredder came in 1.4.0. The folder is now listed in the background (#3285).
+- A Cancel pressed while the folder was still being listed left the shred with part of the list, or none of it, and a
+  shred that found nothing to do was reported as finished. It is now reported as stopped, with nothing destroyed.
+
 ## [1.136.170] - 2026-11-12
 
 **A File Shredder folder shred now says when the folder is still on your computer, and keeps it in the queue, instead

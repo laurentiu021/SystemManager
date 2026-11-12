@@ -84,7 +84,9 @@ public sealed partial class EnvironmentVariableService
     /// <param name="backupDir">The folder the legacy safety copy is kept in; the profile's own when null.</param>
     /// <param name="userRoot">The hive standing in for HKCU.</param>
     /// <param name="machineRoot">The hive standing in for HKLM.</param>
-    /// <param name="enforceMachineBackupProtection">Whether the Machine copy must be access-controlled.</param>
+    /// <param name="enforceMachineBackupProtection">
+    /// Whether the Machine copy must be access-controlled. Always on over the real HKLM, whatever is passed.
+    /// </param>
     /// <param name="openBackupKey">
     /// Opens the key a registry safety copy is read from, under the root it is given; a plain read-only open unless a
     /// test passes its own. The two registry copies and the legacy file are read through these two parameters so a
@@ -102,7 +104,7 @@ public sealed partial class EnvironmentVariableService
         _backupDir = backupDir ?? Path.Combine(AppDataFolders.Backups, "Environment");
         _userRoot = userRoot;
         _machineRoot = machineRoot;
-        _enforceMachineBackupProtection = enforceMachineBackupProtection;
+        _enforceMachineBackupProtection = ProtectedMachineKey.MustEnforce(machineRoot, enforceMachineBackupProtection);
         _openBackupKey = openBackupKey ?? ((root, path) => root.OpenSubKey(path));
         _openBackupFile = openBackupFile ?? (path => new FileStream(
             path,

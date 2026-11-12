@@ -269,7 +269,8 @@ public sealed class UndoChangesService : IUndoChangesService
                 return new UndoOutcome(UndoOutcomeKind.Failed, found.GameModeNotKnown ? GameModeNotKnown : GameModeFirst);
             return found.Problem?.Why switch
             {
-                null => new UndoOutcome(UndoOutcomeKind.NothingLeft, $"Nothing is left to put back for {name}."),
+                null or UndoProblemKind.EarlierVersion =>
+                    new UndoOutcome(UndoOutcomeKind.NothingLeft, $"Nothing is left to put back for {name}."),
                 UndoProblemKind.Damaged => new UndoOutcome(UndoOutcomeKind.Failed,
                     $"What SysManager kept for {name} is damaged, so nothing was changed."),
                 UndoProblemKind.CannotCompare => new UndoOutcome(UndoOutcomeKind.Failed,
@@ -625,11 +626,15 @@ public sealed class UndoChangesService : IUndoChangesService
 
     private (Found Found, IReadOnlyList<TurnedOff> Off) FindServices(bool forgetTurnedBackOn = false)
     {
-        var (ledger, unparsable) = _ledger.Read();
+        // Only what SysManager recorded where a standard user cannot write. Earlier versions kept the records in a file
+        // in the user's profile, which any program running as the user can write, and turning a service on from here
+        // runs as administrator.
+        var (ledger, unusable) = _ledger.ReadProtected();
         if (ledger is null) return (Problem(UndoChangeKind.Services, UndoProblemKind.Unreadable), []);
-        // It loads as no records at all, while the services SysManager turned off are still off.
-        if (unparsable) return (Problem(UndoChangeKind.Services, UndoProblemKind.Damaged), []);
+        // It reads as no records at all, while the services SysManager turned off are still off.
+        if (unusable) return (Problem(UndoChangeKind.Services, UndoProblemKind.Damaged), []);
 
+        var isStale = _ledger.StaleMarks();
         List<TurnedOff> off = [];
         List<string> turnedBackOn = [];
         foreach (var record in ledger.Values)
@@ -647,15 +652,30 @@ public sealed class UndoChangesService : IUndoChangesService
                 continue;
             }
 
+            // Seen on again by a look that could not take its record out (#3041): off now for some other reason.
+            if (isStale(record)) continue;
+
             off.Add(new TurnedOff(record, entry.DisplayName.Length > 0 ? entry.DisplayName : record.ServiceName));
+        }
+
+        // What only an earlier version's file names is never offered, and a service of it that is still off is said
+        // instead of being left out without a word. One that is on again goes from the file as well, so the Services
+        // tab's Enable does not take a type from a change undone elsewhere.
+        var earlierOff = false;
+        foreach (var name in _ledger.EarlierVersionOnly())
+        {
+            if (!ServiceManagerService.IsSafeForScExe(name) || _readService(name) is not { } entry) continue;
+            if (ServiceManagerService.IsDisabled(entry)) earlierOff = true;
+            else turnedBackOn.Add(name);
         }
 
         if (forgetTurnedBackOn && turnedBackOn.Count > 0) ForgetTurnedBackOn(turnedBackOn);
 
-        if (off.Count == 0) return (new Found(UndoChangeKind.Services, null), off);
+        var earlier = earlierOff ? new UndoProblem(UndoChangeKind.Services, UndoProblemKind.EarlierVersion) : null;
+        if (off.Count == 0) return (new Found(UndoChangeKind.Services, null, earlier), off);
 
         off.Sort((a, b) => string.Compare(a.Name, b.Name, StringComparison.OrdinalIgnoreCase));
-        return (new Found(UndoChangeKind.Services, ServicesChange(off)), off);
+        return (new Found(UndoChangeKind.Services, ServicesChange(off), earlier), off);
     }
 
     /// <summary>
@@ -667,7 +687,9 @@ public sealed class UndoChangesService : IUndoChangesService
     /// tab offered to turn it back on as if SysManager had (#2747). Done under the lock every system change takes, and
     /// with each service read again after taking it: Disable writes its record before it turns the service off, so a
     /// service seen on just before may be one being turned off now, and its fresh record is the one Enable needs. When
-    /// another change holds the lock, nothing is dropped this time; the next look tries again.
+    /// another change holds the lock, nothing is dropped this time; the next look tries again. A look without
+    /// administrator rights cannot take a record out of the protected key: the ledger marks it in the user's profile
+    /// instead, which keeps it off this list until a look with those rights takes it out.
     /// </remarks>
     private void ForgetTurnedBackOn(IReadOnlyCollection<string> serviceNames)
     {
@@ -678,8 +700,11 @@ public sealed class UndoChangesService : IUndoChangesService
             .Where(name => _readService(name) is { } entry && !ServiceManagerService.IsDisabled(entry))
             .ToList();
         if (stillOn.Count == 0) return;
-        _ledger.ForgetAll(stillOn);
-        Log.Information("Undo Changes forgot {Count} service record(s) for services that are on again", stillOn.Count);
+        var forgotten = _ledger.ForgetAll(stillOn);
+        Log.Information(
+            "Undo Changes, services on again: {FromKey} record(s) taken out, {Kept} kept until a look with "
+            + "administrator rights, {FromFile} taken out of an earlier version's file",
+            forgotten.FromKey, forgotten.KeptInKey, forgotten.FromFile);
     }
 
     private UndoChange ServicesChange(IReadOnlyList<TurnedOff> off)

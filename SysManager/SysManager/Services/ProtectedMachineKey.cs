@@ -38,6 +38,11 @@ internal static class ProtectedMachineKey
     /// <exception cref="UnauthorizedAccessException">The key could not be created or opened for writing.</exception>
     internal static RegistryKey OpenOrCreate(RegistryKey machineRoot, string path, bool enforce, string label)
     {
+        // Only the key's own access list and SOFTWARE's are checked, so a key further down would sit under keys
+        // nobody checks.
+        if (!IsDirectlyUnderSoftware(path))
+            throw new ArgumentException("A protected key must sit directly under SOFTWARE.", nameof(path));
+
         if (!enforce)
         {
             return machineRoot.CreateSubKey(path, writable: true)
@@ -61,6 +66,39 @@ internal static class ProtectedMachineKey
         return machineRoot.OpenSubKey(path, writable: true)
             ?? throw new UnauthorizedAccessException($"The protected {label} key could not be reopened.");
     }
+
+    /// <summary>
+    /// Whether a store over <paramref name="machineRoot"/> must check its key: always over the real HKLM, whatever the
+    /// caller <paramref name="asked"/>, so an instance built over HKLM cannot skip the checks by leaving a flag out.
+    /// </summary>
+    /// <remarks>Reads only the key's name, which touches nothing in the registry.</remarks>
+    internal static bool MustEnforce(RegistryKey machineRoot, bool asked) =>
+        asked || machineRoot.Name.StartsWith("HKEY_LOCAL_MACHINE", StringComparison.OrdinalIgnoreCase);
+
+    /// <summary>True when <paramref name="path"/> names one key directly under SOFTWARE.</summary>
+    internal static bool IsDirectlyUnderSoftware(string path) =>
+        path.Split('\\') is [var first, var name]
+        && first.Equals("SOFTWARE", StringComparison.OrdinalIgnoreCase)
+        && name.Length > 0 && name.Trim().Length == name.Length;
+
+    /// <summary>
+    /// True when <paramref name="key"/>, read under <paramref name="machineRoot"/>, and SOFTWARE above it can be
+    /// changed only by trusted principals: the two checks a store makes before it trusts what the key holds.
+    /// </summary>
+    internal static bool IsTrusted(RegistryKey machineRoot, RegistryKey key)
+    {
+        using var parent = machineRoot.OpenSubKey(
+            "SOFTWARE",
+            RegistryRights.ReadKey | RegistryRights.ReadPermissions);
+        return IsTrusted(parent is null ? null : SecurityOf(parent), SecurityOf(key));
+    }
+
+    /// <summary>
+    /// <see cref="IsTrusted(RegistryKey, RegistryKey)"/> over the two access lists, so a test can build each: the
+    /// parent's (null when it is not there) and the key's own. Both must be protected.
+    /// </summary>
+    internal static bool IsTrusted(RegistrySecurity? parent, RegistrySecurity key) =>
+        parent is not null && IsProtected(parent) && IsProtected(key);
 
     /// <summary>True when only trusted principals can change SOFTWARE under <paramref name="machineRoot"/>.</summary>
     internal static bool IsParentProtected(RegistryKey machineRoot)

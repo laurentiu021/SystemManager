@@ -77,6 +77,12 @@ public enum UndoProblemKind
     /// Watchdog's saved settings and game mode's record of a session are the two read that way.
     /// </summary>
     Unusable,
+
+    /// <summary>
+    /// Only the record an earlier version kept names it, in a file any program running as the user can write, so it is
+    /// not offered here. The Services tab's Enable still puts it back. Said only for a service that is still off.
+    /// </summary>
+    EarlierVersion,
 }
 
 /// <summary>A kept copy Undo Changes could not use when it last looked.</summary>

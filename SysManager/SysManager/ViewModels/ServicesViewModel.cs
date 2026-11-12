@@ -392,10 +392,9 @@ public sealed partial class ServicesViewModel : ElevatedViewModelBase, IFilterab
         // next scan, which rebuilds every ServiceEntry, so a service disabled without a record came back as Manual
         // after a refresh or restart. A ledger that could not be read is not written over either: it holds how every
         // other service SysManager disabled was set (#2521).
-        if (!_ledger.Remember(entry.Name, previous, DateTimeOffset.UtcNow))
+        if (DisableRefusal(entry, _ledger.Remember(entry.Name, previous, DateTimeOffset.UtcNow)) is { } refused)
         {
-            StatusMessage = $"⚠ {entry.DisplayName} was not changed: SysManager could not update its record of how the "
-                + "services it disables were set, which it needs to set them back. Try again in a moment.";
+            StatusMessage = refused;
             return;
         }
 
@@ -416,6 +415,25 @@ public sealed partial class ServicesViewModel : ElevatedViewModelBase, IFilterab
             StatusMessage = $"Disable service failed: {ex.Message}";
         }
     }
+
+    /// <summary>
+    /// What Disable says when the record of how the service was set could not be kept, or null when it was. Pure, so
+    /// the wording can be pinned.
+    /// </summary>
+    /// <remarks>
+    /// A record kept where other programs could change it would be no record at all, and that does not pass by trying
+    /// again, so it is not worded as something that might.
+    /// </remarks>
+    internal static string? DisableRefusal(ServiceEntry entry, ServiceRecordSave saved) => saved switch
+    {
+        ServiceRecordSave.Saved => null,
+        ServiceRecordSave.NotProtected =>
+            $"⚠ {entry.DisplayName} was not changed: SysManager keeps its record of how the services it disables "
+            + "were set where only administrators and Windows can change it, and that place is not protected on "
+            + "this PC. The log has the reason.",
+        _ => $"⚠ {entry.DisplayName} was not changed: SysManager could not update its record of how the services it "
+             + "disables were set, which it needs to set them back. Try again in a moment.",
+    };
 
     /// <summary>
     /// The note <see cref="SafetyDatabase"/> holds for a Caution service, as the closing paragraph of its Stop and
@@ -467,14 +485,16 @@ public sealed partial class ServicesViewModel : ElevatedViewModelBase, IFilterab
         //
         // A ledger that could not be read is not "no record": the prompt below would promise Manual for a
         // service whose original type is recorded, just not readable right now (#2521).
-        if (_ledger.Load() is not { } ledger)
+        if (_ledger.Lookup(entry.Name) is not { } found)
         {
             StatusMessage = $"⚠ {entry.DisplayName} was not changed: SysManager could not read its record of how "
                 + "this service was set before. Try again in a moment.";
             return;
         }
-        var previous = (ledger.TryGetValue(entry.Name, out var record) ? record.PreviousStartType : null)
-            ?? entry.PreviousStartType;
+        var previous = found.Record?.PreviousStartType ?? entry.PreviousStartType;
+        // An earlier version kept its records in a file any program running as the user can write, so a type found
+        // only there is said as what that version recorded, not as a fact.
+        var fromEarlier = found.Record is not null && found.FromEarlierVersion;
 
         // Confirm, like Start / Stop / Disable already do. This is a persistent, machine-scope change
         // to a Windows service, and it was the ONE mutating command on this tab with no prompt —
@@ -491,9 +511,13 @@ public sealed partial class ServicesViewModel : ElevatedViewModelBase, IFilterab
               "SysManager has no record of how this service was set before, so it will be set to " +
               "Manual — Windows starts it when something needs it, rather than at every boot. If it " +
               "used to start automatically, you can change that yourself afterwards."
-            : $"Enable service \"{entry.DisplayName}\"?\n\n" +
-              $"Its startup type will be set back to {previous}, which is what it was before " +
-              "SysManager disabled it.";
+            : fromEarlier
+                ? $"Enable service \"{entry.DisplayName}\"?\n\n" +
+                  $"Its startup type will be set to {previous}. An earlier version of SysManager recorded that as " +
+                  "how it was set before SysManager disabled it."
+                : $"Enable service \"{entry.DisplayName}\"?\n\n" +
+                  $"Its startup type will be set back to {previous}, which is what it was before " +
+                  "SysManager disabled it.";
 
         if (!DialogService.Instance.Confirm(message, "Enable Service — Confirm")) return;
 

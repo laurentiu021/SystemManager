@@ -35,6 +35,11 @@ namespace SysManager.IntegrationTests;
 /// <c>new(...)</c>, an object the container builds, a view model that quietly falls back) now lands
 /// in this run's own temp folder instead of the real profile.
 /// </para>
+/// <para>
+/// <see cref="MachineRegistry.Root"/> is set to null for the same reason: a store built over it with no root
+/// of its own keeps nothing and reads nothing as kept, so no test reads or writes the records SysManager keeps
+/// under HKLM.
+/// </para>
 /// </summary>
 internal static class TestAssemblyInit
 {
@@ -51,5 +56,6 @@ internal static class TestAssemblyInit
         AppDataFolders.Local = Path.Combine(dir, "Local");
         AppDataFolders.Roaming = Path.Combine(dir, "Roaming");
         ActivityLogService.Instance = new ActivityLogService(dir);
+        MachineRegistry.Root = null;
     }
 }

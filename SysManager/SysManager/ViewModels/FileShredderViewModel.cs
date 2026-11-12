@@ -194,7 +194,8 @@ public sealed partial class FileShredderViewModel : ViewModelBase
     {
         // The folder itself has to be readable: the walk below passes over any folder it cannot read, this one too.
         _ = Directory.EnumerateFileSystemEntries(folderPath).Any();
-        return SafeFileWalk.Files(folderPath, CancellationToken.None, new SafeWalkOptions()).Sum(LengthOf);
+        // The shred's own walk: a folder reached through a link above it was sized at 0 bytes by the default one.
+        return SafeFileWalk.Files(folderPath, CancellationToken.None, FileShredderService.FolderWalk).Sum(LengthOf);
     }
 
     private static long LengthOf(string path)
@@ -317,6 +318,15 @@ public sealed partial class FileShredderViewModel : ViewModelBase
                             item.Status = report.FilesShredded == 0 ? "Cancelled" : "Partly shredded";
                             cancelled = true;
                             break;
+                        }
+
+                        // A folder still on disk is not done either, whatever the shred got through: it stays in
+                        // the queue under what is true of it, and the notice above says why it is still there.
+                        if (!report.IsDone)
+                        {
+                            item.Status = report.FilesShredded == 0 ? "Failed" : "Partly shredded";
+                            failed++;
+                            continue;
                         }
                     }
                     else

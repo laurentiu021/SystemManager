@@ -10,6 +10,24 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.136.170] - 2026-11-12
+
+**A File Shredder folder shred now says when the folder is still on your computer, and keeps it in the queue, instead
+of calling it done.**
+
+### Fixed
+- A folder picked through a link above it, such as a folder under a junction or on a drive letter made with SUBST,
+  was walked as empty: its files were not touched, the folder was reported shredded, and the queue showed it as
+  0 bytes. The shred and the queue's size now walk such a folder as they walk any other. It has been that way since
+  the folder walk started refusing links above the folder in 1.131.4.
+- An emptied folder Windows would not remove, such as one made read-only by Properties > Customize, stayed on disk
+  while the folder was reported shredded and taken off the queue. Such a folder is now removed once it is empty, and
+  a folder still on disk after its shred stays in the queue as "Partly shredded" or "Failed", with the reason. A
+  Cancel during the last file's overwrite also stopped the removal of the emptied folders, with nothing said.
+- A file whose contents were overwritten, but whose name Windows would not remove, was listed among the files "left
+  in place (not deleted)", which reads as untouched. It is now counted as destroyed, and the message says its name
+  is still in the folder. Folders inside it that could not be opened are named as still on the computer too.
+
 ## [1.136.169] - 2026-11-12
 
 **File Shredder refuses to shred a whole drive, your profile or one of your own folders such as Downloads, and a file

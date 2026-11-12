@@ -29,6 +29,16 @@ public enum ShredMethod
 }
 
 /// <summary>
+/// A file whose contents were overwritten and truncated, and whose name Windows would not remove.
+/// </summary>
+/// <remarks>
+/// Its own type so a folder shred counts the file as destroyed: what it held is gone, only its name is left. As a
+/// plain <see cref="IOException"/> it was listed among the files "left in place (not deleted)", which reads as
+/// untouched.
+/// </remarks>
+internal sealed class OverwrittenNotRemovedException(string message) : IOException(message);
+
+/// <summary>
 /// Thrown when a write or flush fails partway through an overwrite that had already begun — a full disk
 /// or a removed drive, not cancellation. The data already written is unrecoverable at that point exactly
 /// as it is after a cancellation past the first byte, so the file is still truncated and removed; this
@@ -112,6 +122,18 @@ public sealed partial class FileShredderService
         return [.. roots.Concat(KnownFolders.UserFolders().Select(f => f.Path)).OfType<string>()
             .Where(r => r.Length > 0)];
     }
+
+    /// <summary>
+    /// How a folder shred walks the folder picked, and how the queue sizes it: through a link above it, since the
+    /// folder was picked by that name, and into none inside it.
+    /// </summary>
+    /// <remarks>
+    /// The protected-roots check on the canonical path, not a refusal, is what keeps that safe (#2814). The file walk
+    /// used the default, which refuses a root reached through a link: a folder under a junction or on a SUBST drive
+    /// was walked as empty and reported shredded, and the queue sized it at 0 bytes. No sink here: each shred adds
+    /// its own with <c>with</c>, so no two share a list.
+    /// </remarks>
+    internal static SafeWalkOptions FolderWalk { get; } = new() { RefuseRootReachedThroughLink = false };
 
     private static FileStream DefaultOpenExclusiveWrite(string path) => new(
         path,
@@ -396,7 +418,7 @@ public sealed partial class FileShredderService
         if (handle.IsInvalid) throw NotRemoved(Marshal.GetLastPInvokeError());
 
         if (shredded is null || FileIdentity.OfAnyFileSystem(handle) != shredded)
-            throw new IOException(
+            throw new OverwrittenNotRemovedException(
                 "File contents were securely overwritten, but the file could not be removed: its name no longer "
                 + "leads to the file that was overwritten, so nothing was removed.");
 
@@ -407,12 +429,12 @@ public sealed partial class FileShredderService
     }
 
     /// <summary>The failure a removal refused with Windows error <paramref name="error"/> is reported as.</summary>
-    private static IOException NotRemoved(int error)
+    private static OverwrittenNotRemovedException NotRemoved(int error)
     {
         var why = new System.ComponentModel.Win32Exception(error).Message;
-        return error == NativeMethods.ERROR_ACCESS_DENIED
-            ? new IOException($"File contents were securely overwritten, but removal was denied: {why}")
-            : new IOException($"File contents were securely overwritten, but the file could not be removed: {why}");
+        return new OverwrittenNotRemovedException(error == NativeMethods.ERROR_ACCESS_DENIED
+            ? $"File contents were securely overwritten, but removal was denied: {why}"
+            : $"File contents were securely overwritten, but the file could not be removed: {why}");
     }
 
     /// <summary>
@@ -530,8 +552,10 @@ public sealed partial class FileShredderService
 
         // Links the walk refuses to follow. Collected rather than silently dropped: see ShredFolderReport.
         List<string> skippedLinks = [];
+        // Folders inside it the walk could not open: what they hold was never reached, so it is still there.
+        HashSet<string> unreadable = new(StringComparer.OrdinalIgnoreCase);
         var files = SafeFileWalk
-            .Files(folderPath, ct, new SafeWalkOptions { SkippedLinks = skippedLinks })
+            .Files(folderPath, ct, FolderWalk with { SkippedLinks = skippedLinks, Unreadable = unreadable })
             .ToList();
         var totalFiles = files.Count;
 
@@ -552,6 +576,10 @@ public sealed partial class FileShredderService
         // method. A separate tally so the report can say so rather than implying every file got the
         // overwrite depth the user picked (#2824).
         var partiallyOverwritten = 0;
+
+        // Files overwritten whose names Windows would not remove: destroyed, counted in shredded too, and still listed
+        // in the folder, so it cannot be gone.
+        var notRemoved = 0;
 
         // A file refused as a place no shred may touch. The folders above it are then left as they are, emptied
         // ones included: something below them led where it should not have.
@@ -587,6 +615,15 @@ public sealed partial class FileShredderService
                     ex.GetType().Name, ex.HResult);
                 shredded++;
                 partiallyOverwritten++;
+            }
+            catch (OverwrittenNotRemovedException ex)
+            {
+                // Ahead of the IOException arm below, for the reason PartialShredException is: the contents are gone.
+                Log.Warning(
+                    "Overwritten, but the name could not be removed. {ExceptionType} (HResult {HResult})",
+                    ex.GetType().Name, ex.HResult);
+                shredded++;
+                notRemoved++;
             }
             catch (SecurityException ex)
             {
@@ -634,6 +671,9 @@ public sealed partial class FileShredderService
                 SkippedLinks = skippedLinks,
                 FilesLeftInPlace = failedFiles.Count,
                 FilesPartiallyOverwritten = partiallyOverwritten,
+                FilesNotRemoved = notRemoved,
+                FoldersNotRead = unreadable.Count,
+                FolderLeftInPlace = true,
                 WasCancelled = true,
             };
         }
@@ -656,14 +696,10 @@ public sealed partial class FileShredderService
         // double-count at the same time.
         if (!refused)
         {
-            foreach (var dir in SafeFileWalk.DirectoriesDeepestFirst(folderPath, ct, new SafeWalkOptions
-            {
-                // The ONE caller that must still walk a root reached through a link: the user picked
-                // this folder by name and asked for it to be destroyed. What keeps that safe is
-                // ValidatePath's protected-roots check on the CANONICAL path, not a refusal — a
-                // refusal here would report a completed shred that destroyed nothing (#2814).
-                RefuseRootReachedThroughLink = false,
-            }))
+            // Every file has been dealt with, so nothing is left for a Cancel to spare: the cleanup runs to its end.
+            // With the caller's token, a Cancel during the last file's overwrite ended it before it began, and
+            // every emptied folder stayed with nothing said about it.
+            foreach (var dir in SafeFileWalk.DirectoriesDeepestFirst(folderPath, CancellationToken.None, FolderWalk))
             {
                 TryRemoveIfEmpty(dir);
             }
@@ -697,10 +733,16 @@ public sealed partial class FileShredderService
             FilesShredded = shredded,
             SkippedLinks = skippedLinks,
             FilesPartiallyOverwritten = partiallyOverwritten,
+            FilesNotRemoved = notRemoved,
+            FoldersNotRead = unreadable.Count,
+            // Asked of the disk: the cleanup passes over every reason a folder stayed.
+            FolderLeftInPlace = FolderStillThere(folderPath),
         };
 
         // No {Path} here either, same reason (#2796).
-        if (skippedLinks.Count > 0)
+        if (!report.IsDone)
+            Log.Warning("Folder shred ended with the folder still there ({Method}).", method);
+        else if (skippedLinks.Count > 0)
             Log.Information("Folder shredded, {Skipped} link(s) left alone ({Method}).",
                 skippedLinks.Count, method);
         else
@@ -719,7 +761,14 @@ public sealed partial class FileShredderService
         try
         {
             if (!Directory.EnumerateFileSystemEntries(dir).Any())
+            {
+                // Windows will not remove a read-only folder, and Properties > Customize makes one: Explorer clears
+                // the flag first. Never on a link, which the walk does not hand here but a folder can become since.
+                var attributes = File.GetAttributes(dir);
+                if ((attributes & (FileAttributes.ReadOnly | FileAttributes.ReparsePoint)) == FileAttributes.ReadOnly)
+                    File.SetAttributes(dir, attributes & ~FileAttributes.ReadOnly);
                 Directory.Delete(dir, recursive: false);
+            }
         }
         // No {Dir} and no attached exception — a directory left over from a shred names the folder the
         // user asked to destroy (#2796).
@@ -731,6 +780,14 @@ public sealed partial class FileShredderService
         {
             Log.Debug("Shredder: access denied removing directory. {ExceptionType} (HResult {HResult})", ex.GetType().Name, ex.HResult);
         }
+    }
+
+    /// <summary>Whether <paramref name="folderPath"/> is still on disk; true when that cannot be told.</summary>
+    private static bool FolderStillThere(string folderPath)
+    {
+        try { return Directory.Exists(folderPath) || File.Exists(folderPath); }
+        catch (IOException) { return true; }
+        catch (UnauthorizedAccessException) { return true; }
     }
 
     /// <summary>

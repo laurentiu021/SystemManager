@@ -1022,4 +1022,62 @@ public class FileShredderViewModelTests
             }
         }
     }
+
+    /// <summary>
+    /// The queue sizes a folder picked through a link above it by the files the shred will overwrite. It used the
+    /// default walk, which refuses such a root, and showed 0 bytes.
+    /// </summary>
+    [Fact]
+    public async Task FolderSize_OfAFolderReachedThroughALinkAboveIt_CountsItsFiles()
+    {
+        var real = Directory.CreateTempSubdirectory("smtest_size_parentlink_").FullName;
+        var inner = Path.Combine(real, "inner");
+        Directory.CreateDirectory(inner);
+        await File.WriteAllBytesAsync(Path.Combine(inner, "a.dat"), new byte[1234]);
+        var link = Path.Combine(Path.GetTempPath(), "smtest_size_parentlink_j_" + Guid.NewGuid().ToString("N"));
+        try
+        {
+            Symlinks.RequireJunction(link, real);
+
+            Assert.Equal(1234, FileShredderViewModel.FolderSize(Path.Combine(link, "inner")));
+        }
+        finally { Symlinks.RemoveLinkThenTree(link, real); }
+    }
+
+    /// <summary>
+    /// A folder still on disk after its shred stays in the queue as partly shredded. It was called Done and taken off
+    /// the queue, or, when a file's name stayed, called Failed as if nothing in it had been destroyed.
+    /// </summary>
+    [Fact]
+    public async Task ShredAll_AFolderStillOnDiskAfterItsShred_StaysQueued_AsPartlyShredded()
+    {
+        var dir = Directory.CreateTempSubdirectory("smtest_shred_stays_queued_").FullName;
+        var stays = Path.Combine(dir, "b.dat");
+        var movedTo = Path.Combine(Path.GetTempPath(), "smtest_shred_stays_moved_" + Guid.NewGuid().ToString("N"));
+        await File.WriteAllBytesAsync(stays, new byte[4096]);
+        var service = new FileShredderService(candidate =>
+            candidate.Equals(stays, StringComparison.OrdinalIgnoreCase)
+                ? new FileShredderServiceTests.ReplacedOnCloseStream(
+                    candidate, movedTo, "another file has this name now")
+                : new FileStream(candidate, FileMode.Open, FileAccess.Write, FileShare.None));
+        using var dialog = new DialogAnswer(confirm: true);
+        using var activity = new ActivityLogScope();
+        try
+        {
+            var vm = new FileShredderViewModel(service);
+            vm.Items.Add(new ShredItem { Path = dir, Name = Path.GetFileName(dir), SizeBytes = 4096, IsFolder = true });
+
+            await vm.ShredAllCommand.ExecuteAsync(null);
+
+            var row = vm.Items.Where(i => i.IsFolder).ToArray();
+            Assert.Single(row);
+            Assert.Equal("Partly shredded", row[0].Status);
+            Assert.StartsWith("Complete — 0 shredded, 1 failed.", vm.StatusMessage, StringComparison.Ordinal);
+        }
+        finally
+        {
+            if (File.Exists(movedTo)) File.Delete(movedTo);
+            Directory.Delete(dir, recursive: true);
+        }
+    }
 }

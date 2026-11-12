@@ -1585,4 +1585,70 @@ public class FileShredderServiceTests
         Assert.Equal("2 folders in it could not be opened, so what is in them was not shredded and is still on the "
             + "computer.", notice);
     }
+
+    // ---------- the folder shred runs off the caller's thread (#3285) ----------
+
+    /// <summary>
+    /// The checks and the walk run on the thread pool, not on the thread that asked. Shred All asks from the window's
+    /// thread, and a large folder froze the window before the first pass. The first file's open stands in for the
+    /// walk: the unfixed shred reached it on the caller's thread, before it returned anything to wait on.
+    /// </summary>
+    [Fact]
+    public async Task ShredFolderAsync_WalksTheFolderOffTheCallersThread()
+    {
+        var dir = Directory.CreateTempSubdirectory("smtest_shred_offthread_").FullName;
+        await File.WriteAllTextAsync(Path.Combine(dir, "a.dat"), "walked off the caller's thread");
+        using var opened = new ManualResetEventSlim();
+        var openedOn = 0;
+        var svc = new FileShredderService(candidate =>
+        {
+            Volatile.Write(ref openedOn, Environment.CurrentManagedThreadId);
+            opened.Set();
+            return new FileStream(candidate, FileMode.Open, FileAccess.Write, FileShare.None);
+        });
+        Task<ShredFolderReport>? shred = null;
+        try
+        {
+            var caller = Environment.CurrentManagedThreadId;
+            shred = svc.ShredFolderAsync(dir, ShredMethod.Quick, null, CancellationToken.None);
+            // This thread is held until the open has happened, so the shred cannot borrow it once it returns.
+            Assert.True(opened.Wait(TimeSpan.FromSeconds(10)), "the shred never opened its file");
+
+            Assert.NotEqual(caller, Volatile.Read(ref openedOn));
+            await shred.WaitAsync(TimeSpan.FromSeconds(10));
+            Assert.False(Directory.Exists(dir));
+        }
+        finally
+        {
+            // A failed assertion above leaves the shred running with the file open; it ends first, so the clean-up
+            // below cannot hide that failure behind "the file is in use".
+            if (shred is not null)
+                await shred.ContinueWith(_ => { }, TaskScheduler.Default).WaitAsync(TimeSpan.FromSeconds(10));
+            if (Directory.Exists(dir)) Directory.Delete(dir, recursive: true);
+        }
+    }
+
+    /// <summary>
+    /// A shred cancelled before its walk ends reports itself cancelled with nothing destroyed. Off the window's thread
+    /// Cancel can be pressed during the walk, which stops at the cancellation, and an empty list then read as a folder
+    /// with nothing left in it: the untouched folder was reported as shredded.
+    /// </summary>
+    [Fact]
+    public async Task ShredFolderAsync_CancelledBeforeItsWalkEnds_IsReportedCancelled_WithTheFolderUntouched()
+    {
+        var dir = Directory.CreateTempSubdirectory("smtest_shred_cancelwalk_").FullName;
+        var file = Path.Combine(dir, "a.dat");
+        await File.WriteAllTextAsync(file, "never reached");
+        using var cancelled = new CancellationTokenSource();
+        await cancelled.CancelAsync();
+        try
+        {
+            var report = await NewService().ShredFolderAsync(dir, ShredMethod.Quick, null, cancelled.Token);
+
+            Assert.True(report.WasCancelled, "a walk the Cancel cut short was reported as a finished shred");
+            Assert.Equal(0, report.FilesShredded);
+            Assert.Equal("never reached", await File.ReadAllTextAsync(file));
+        }
+        finally { Directory.Delete(dir, recursive: true); }
+    }
 }

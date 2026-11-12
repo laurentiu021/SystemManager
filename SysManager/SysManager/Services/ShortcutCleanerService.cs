@@ -306,15 +306,23 @@ public sealed partial class ShortcutCleanerService
 
                 if (toRecycleBin)
                 {
+                    // The shell recycles by name, and the list can be long out of date: a folder above the
+                    // shortcut made into a link since the scan would move a file nobody checked.
+                    if (SafeFileWalk.IsReachedThroughLink(s.ShortcutPath))
+                    {
+                        Log.Warning("Shortcut left alone: its folder is reached through a link now: {Path}",
+                            s.ShortcutPath);
+                        continue;
+                    }
+
                     // Only count it if the shell actually recycled the file.
                     if (recycle(s.ShortcutPath))
                         deleted++;
                     else
                         Log.Warning("Recycle failed (shell reported error): {Path}", s.ShortcutPath);
                 }
-                else
+                else if (SafeFileWalk.DeleteFile(s.ShortcutPath))
                 {
-                    File.Delete(s.ShortcutPath);
                     deleted++;
                 }
             }

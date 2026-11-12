@@ -924,4 +924,13 @@ public class DismResultParsingTests
         using var third = OperationLockService.Instance.TryAcquire(OperationCategory.SystemModification, "DISM RestoreHealth");
         Assert.NotNull(third);
     }
+
+    [Theory]
+    [InlineData(0, 0, 0, "No cache files were there to clear — Windows had already rebuilt them.")]
+    [InlineData(0, 0, 2, "No cache files were cleared. 2 were left alone because Explorer's cache folder, or the file, "
+                         + "is reached through a link.")]
+    public void TheIconCacheMessage_TellsALinkRefusalFromNothingThere(int deleted, int failed, int leftAlone,
+        string expected)
+        => Assert.Equal(expected,
+            SystemFixesViewModel.IconCacheSweepMessage(new ExplorerShell.CacheSweep(deleted, failed, 0, leftAlone)));
 }

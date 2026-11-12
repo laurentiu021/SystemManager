@@ -149,7 +149,11 @@ public static class ExplorerShell
     }
 
     /// <summary>What one sweep of the cache folder managed to remove.</summary>
-    public readonly record struct CacheSweep(int Deleted, int Failed, long BytesFreed);
+    /// <param name="LeftAlone">
+    /// Cache files left as they are because the folder, or the file, is reached through a link: neither deleted nor
+    /// still in use, and running the sweep again does not change that.
+    /// </param>
+    public readonly record struct CacheSweep(int Deleted, int Failed, long BytesFreed, int LeftAlone = 0);
 
     /// <summary>
     /// Deletes the icon and thumbnail cache databases in <paramref name="directory"/>.
@@ -165,8 +169,9 @@ public static class ExplorerShell
     /// <see cref="CacheSweep.Failed"/> and reported, because the caller has to relaunch the shell either
     /// way — leaving the user without a desktop to report an <see cref="IOException"/> would be a far
     /// worse outcome than a partial sweep.</para>
-    /// <para>Read-only and hidden attributes are cleared first: Windows marks some cache databases
-    /// hidden, and <see cref="File.Delete(string)"/> refuses a read-only file.</para>
+    /// <para>Each file is removed through a handle checked to be open on that name, so a folder made into a link
+    /// cannot take the delete elsewhere; a link is left alone and counted in <see cref="CacheSweep.LeftAlone"/>. A
+    /// read-only one is removed without touching its attributes, which belong to every name the file has.</para>
     /// <para>A missing folder is handled TWICE on purpose, and both are worth keeping: the
     /// <see cref="Directory.Exists"/> check below returns early with a clear log line, and the
     /// <see cref="IOException"/> catch around <see cref="Directory.GetFiles(string, string)"/> would
@@ -186,6 +191,7 @@ public static class ExplorerShell
 
         var deleted = 0;
         var failed = 0;
+        var leftAlone = 0;
         long bytes = 0;
 
         foreach (var pattern in CacheFilePatterns)
@@ -211,16 +217,15 @@ public static class ExplorerShell
                 try
                 {
                     var size = new FileInfo(file).Length;
-                    // ReadOnly is the one attribute that blocks a delete, so it is the only one cleared. Normal is not
-                    // a mask: it replaced the whole set, Hidden, System and Archive with it, and a cache database
-                    // Explorer still held stayed on disk without them, as Deep Cleanup's did before #2376.
-                    var attributes = File.GetAttributes(file);
-                    if ((attributes & FileAttributes.ReadOnly) != 0)
-                        File.SetAttributes(file, attributes & ~FileAttributes.ReadOnly);
-                    File.Delete(file);
-                    // Counted only after the delete returns, so a locked file is never reported as freed.
+                    // Counted only after the delete returns, so a locked file is never reported as freed. Nothing
+                    // else is touched: a delete Explorer refuses leaves the file with all its attributes.
+                    if (!SafeFileWalk.DeleteFile(file, evenReadOnly: true)) continue;
                     deleted++;
                     bytes += size;
+                }
+                catch (LeftInPlaceException)
+                {
+                    leftAlone++;
                 }
                 catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
                 {
@@ -230,8 +235,9 @@ public static class ExplorerShell
             }
         }
 
-        Log.Information("Explorer cache sweep: {Deleted} deleted, {Failed} still locked, {Bytes} bytes",
-            deleted, failed, bytes);
-        return new CacheSweep(deleted, failed, bytes);
+        Log.Information(
+            "Explorer cache sweep: {Deleted} deleted, {Failed} still locked, {LeftAlone} left alone, {Bytes} bytes",
+            deleted, failed, leftAlone, bytes);
+        return new CacheSweep(deleted, failed, bytes, leftAlone);
     }
 }

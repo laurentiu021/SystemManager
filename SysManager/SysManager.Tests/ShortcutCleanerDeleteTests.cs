@@ -144,4 +144,36 @@ public sealed class ShortcutCleanerDeleteTests : IDisposable
         Assert.Empty(result.WorkAgain);
         Assert.True(File.Exists(unreadable.ShortcutPath));
     }
+
+    /// <summary>
+    /// A shortcut whose folder is reached through a link by the time it is recycled is left alone. The shell recycles
+    /// by name, and the list can be long out of date, so a folder above it made into a link since the scan moved a
+    /// file nobody checked.
+    /// </summary>
+    [Fact]
+    public void ToTheRecycleBin_AShortcutReachedThroughALinkNow_IsLeftAlone()
+    {
+        var real = Shortcut("Behind a link");
+        var link = Path.Combine(Path.GetTempPath(), "ShortcutDelete_link_" + Guid.NewGuid().ToString("N"));
+        try
+        {
+            Symlinks.RequireJunction(link, _dir);
+            var throughLink = new BrokenShortcut
+            {
+                Name = real.Name,
+                ShortcutPath = Path.Combine(link, Path.GetFileName(real.ShortcutPath)),
+                IsSelected = true,
+            };
+
+            var deleted = ShortcutCleanerService.DeleteShortcuts([throughLink], toRecycleBin: true, NeverCalled,
+                StillBroken).Deleted;
+
+            Assert.Equal(0, deleted);
+            Assert.True(File.Exists(real.ShortcutPath));
+        }
+        finally
+        {
+            if (Directory.Exists(link)) Directory.Delete(link, recursive: false);
+        }
+    }
 }

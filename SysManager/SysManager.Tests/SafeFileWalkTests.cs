@@ -572,4 +572,91 @@ public class SafeFileWalkTests
     public void IsReachedThroughLink_RefusesWhatItCannotResolve() =>
         Assert.True(SafeFileWalk.IsReachedThroughLink(
             Path.Combine(NewTempRoot(), "does-not-exist", "either")));
+
+    // ---------- the checked delete: only what is still where the walk found it ----------
+
+    [Fact]
+    public void DeleteFile_RemovesTheFile_AndSaysWhenNothingWasThere()
+    {
+        var dir = Directory.CreateTempSubdirectory("smtest_walkdelete_").FullName;
+        var file = Path.Combine(dir, "a.tmp");
+        File.WriteAllText(file, "x");
+        try
+        {
+            Assert.True(SafeFileWalk.DeleteFile(file));
+            Assert.False(File.Exists(file));
+            Assert.False(SafeFileWalk.DeleteFile(file));
+        }
+        finally { Directory.Delete(dir, recursive: true); }
+    }
+
+    /// <summary>
+    /// A file whose folder is reached through a link is left in place: the name leads somewhere else than the path
+    /// the walk returned, which is what a folder swapped for a link after it was listed looks like.
+    /// </summary>
+    [Fact]
+    public void DeleteFile_AFileReachedThroughALinkAboveIt_IsLeftInPlace()
+    {
+        var real = Directory.CreateTempSubdirectory("smtest_walkdelete_real_").FullName;
+        var file = Path.Combine(real, "victim.dat");
+        File.WriteAllText(file, "outside the folder being cleaned");
+        var link = Path.Combine(Path.GetTempPath(), "smtest_walkdelete_link_" + Guid.NewGuid().ToString("N"));
+        try
+        {
+            Symlinks.RequireJunction(link, real);
+
+            Assert.Throws<LeftInPlaceException>(() => SafeFileWalk.DeleteFile(Path.Combine(link, "victim.dat")));
+            Assert.True(File.Exists(file));
+        }
+        finally { Symlinks.RemoveLinkThenTree(link, real); }
+    }
+
+    /// <summary>
+    /// A read-only file is removed only when the caller asks, and then without changing its attributes, which belong to
+    /// the file: another name it has keeps ReadOnly.
+    /// </summary>
+    [Fact]
+    public void DeleteFile_AReadOnlyFile_IsRemovedOnlyWhenAsked_AndItsOtherNameKeepsItsAttributes()
+    {
+        var dir = Directory.CreateTempSubdirectory("smtest_walkdelete_ro_").FullName;
+        var file = Path.Combine(dir, "a.tmp");
+        var other = Path.Combine(dir, "b.tmp");
+        File.WriteAllText(file, "x");
+        try
+        {
+            Symlinks.RequireHardLink(other, file);
+            File.SetAttributes(file, FileAttributes.ReadOnly);
+
+            Assert.ThrowsAny<IOException>(() => SafeFileWalk.DeleteFile(file));
+            Assert.True(File.Exists(file));
+
+            Assert.True(SafeFileWalk.DeleteFile(file, evenReadOnly: true));
+            Assert.False(File.Exists(file));
+            Assert.True(File.GetAttributes(other).HasFlag(FileAttributes.ReadOnly));
+        }
+        finally
+        {
+            foreach (var f in Directory.EnumerateFiles(dir)) File.SetAttributes(f, FileAttributes.Normal);
+            Directory.Delete(dir, recursive: true);
+        }
+    }
+
+    [Fact]
+    public void DeleteEmptyDirectory_RemovesAnEmptyFolder_AndRefusesOneThatIsNot()
+    {
+        var dir = Directory.CreateTempSubdirectory("smtest_walkdelete_dir_").FullName;
+        var empty = Path.Combine(dir, "empty");
+        var full = Path.Combine(dir, "full");
+        Directory.CreateDirectory(empty);
+        Directory.CreateDirectory(full);
+        File.WriteAllText(Path.Combine(full, "kept.txt"), "x");
+        try
+        {
+            Assert.True(SafeFileWalk.DeleteEmptyDirectory(empty));
+            Assert.False(Directory.Exists(empty));
+            Assert.ThrowsAny<IOException>(() => SafeFileWalk.DeleteEmptyDirectory(full));
+            Assert.True(File.Exists(Path.Combine(full, "kept.txt")));
+        }
+        finally { Directory.Delete(dir, recursive: true); }
+    }
 }

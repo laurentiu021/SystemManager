@@ -2,6 +2,7 @@
 // Author: laurentiu021 · https://github.com/laurentiu021/SystemManager
 // License: MIT
 
+using System.IO;
 using System.Runtime.InteropServices;
 using Microsoft.Win32.SafeHandles;
 
@@ -49,6 +50,12 @@ internal readonly partial record struct FileIdentity(ulong VolumeSerialNumber, U
     /// </summary>
     internal static uint? LinksOf(SafeFileHandle handle) =>
         NativeMethods.GetFileInformationByHandle(handle, out var info) ? info.NumberOfLinks : null;
+
+    /// <summary>
+    /// The attributes of the file or folder <paramref name="handle"/> is open on, or null when Windows does not say.
+    /// </summary>
+    internal static FileAttributes? AttributesOf(SafeFileHandle handle) =>
+        NativeMethods.GetFileInformationByHandle(handle, out var info) ? (FileAttributes)info.FileAttributes : null;
 
     private static partial class NativeMethods
     {

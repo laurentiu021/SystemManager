@@ -278,9 +278,10 @@ public sealed class TuneUpService : ITuneUpService
                     if (ct.IsCancellationRequested) break;
                     try
                     {
-                        var info = new FileInfo(file);
-                        long size = info.Length;
-                        info.Delete();
+                        long size = new FileInfo(file).Length;
+                        // Through the handle checked to be open on this name: a folder made into a link since the
+                        // walk listed it cannot take the delete elsewhere.
+                        if (!SafeFileWalk.DeleteFile(file)) continue;
                         freed += size;
                         deleted++;
                     }
@@ -298,7 +299,7 @@ public sealed class TuneUpService : ITuneUpService
                         // An empty folder made a moment ago is one an installer is about to fill.
                         if (CleanupAge.IsRecent(new DirectoryInfo(sub), cutoff)) continue;
                         if (!Directory.EnumerateFileSystemEntries(sub).Any())
-                            Directory.Delete(sub);
+                            SafeFileWalk.DeleteEmptyDirectory(sub);
                     }
                     catch (IOException) { /* Directory in use or locked — skip */ }
                     catch (UnauthorizedAccessException) { /* No permission to delete — skip */ }

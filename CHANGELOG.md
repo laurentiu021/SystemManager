@@ -10,6 +10,28 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.136.174] - 2026-11-12
+
+**Deep Cleanup, Clean TEMP, Browser Cleaner, Shortcut Cleaner and Rebuild icon cache now delete a file only when it is
+still where the scan found it, never through a folder that was turned into a link in between.**
+
+### Fixed
+- The cleanups list a folder's contents, check each subfolder for a link as they list it, and delete afterwards. They
+  deleted by name, so a folder turned into a link between the listing and the delete took the delete wherever the
+  link led, with administrator rights when SysManager runs elevated. Each file and emptied folder is now opened once
+  and removed through that handle only when Windows says it is the very one the scan listed. Rebuild icon cache also
+  checked nothing for a link at all. Shortcut Cleaner leaves a shortcut alone when its folder is reached through a link
+  by the time it is sent to the Recycle Bin.
+- A read-only file Deep Cleanup or Rebuild icon cache removes is now removed without changing its attributes. They were
+  cleared by name first, which also followed such a link, and they belong to the file, so another name of the same
+  file lost its read-only flag too.
+
+### Changed
+- Rebuild icon cache says when a cache file was left alone because Explorer's cache folder, or the file, is reached
+  through a link, instead of "No cache files were there to clear" or "still in use".
+- Browser Cleaner and Shortcut Cleaner no longer count a file that was already gone when they came to delete it, and
+  Deep Cleanup no longer lists one as an error.
+
 ## [1.136.173] - 2026-11-12
 
 **Run as administrator, SysManager now loads every Windows library it calls from Windows' own System32 folder, never a

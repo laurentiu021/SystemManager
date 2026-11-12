@@ -422,10 +422,55 @@ public sealed partial class FileShredderService
                 "File contents were securely overwritten, but the file could not be removed: its name no longer "
                 + "leads to the file that was overwritten, so nothing was removed.");
 
-        var disposition = new NativeMethods.FileDispositionInfo { DeleteFile = 1 };
-        if (!NativeMethods.SetFileInformationByHandle(handle, NativeMethods.FileDispositionInfoClass, ref disposition,
-                (uint)Marshal.SizeOf<NativeMethods.FileDispositionInfo>()))
-            throw NotRemoved(Marshal.GetLastPInvokeError());
+        if (!MarkForDeletion(handle)) throw NotRemoved(Marshal.GetLastPInvokeError());
+    }
+
+    /// <summary>
+    /// Opens <paramref name="path"/> to remove it: a link at it as the link, a folder with the flag Windows needs to
+    /// open one, and a long path in the form that reaches it. Invalid when it cannot be opened; Windows' error is the
+    /// last one set.
+    /// </summary>
+    internal static SafeFileHandle OpenForRemoval(string path, bool directory) =>
+        NativeMethods.CreateFile(
+            ExtendedPathIfNeeded(path),
+            NativeMethods.DELETE | NativeMethods.FILE_READ_ATTRIBUTES,
+            FileShare.ReadWrite | FileShare.Delete,
+            IntPtr.Zero,
+            FileMode.Open,
+            NativeMethods.FILE_FLAG_OPEN_REPARSE_POINT | (directory ? NativeMethods.FILE_FLAG_BACKUP_SEMANTICS : 0),
+            IntPtr.Zero);
+
+    /// <summary>
+    /// Marks the file or folder <paramref name="handle"/> is open on for removal; false when Windows refuses, with its
+    /// error the last one set.
+    /// </summary>
+    /// <remarks>
+    /// POSIX semantics first, as <see cref="File.Delete(string)"/> uses on current Windows: the name goes at once even
+    /// while another program still has the file open, instead of staying until the last handle closes, so the folder
+    /// above it can be removed in the same run. A file system that has no POSIX delete (FAT32, exFAT) gets the plain
+    /// one. <paramref name="evenReadOnly"/> removes a read-only file without changing its attributes, which belong to
+    /// the file and so to every other name it has.
+    /// </remarks>
+    internal static bool MarkForDeletion(SafeFileHandle handle, bool evenReadOnly = false)
+    {
+        var readOnly = evenReadOnly ? NativeMethods.FILE_DISPOSITION_FLAG_IGNORE_READONLY_ATTRIBUTE : 0u;
+        foreach (var flags in (uint[])[NativeMethods.FILE_DISPOSITION_FLAG_POSIX_SEMANTICS, 0u])
+        {
+            var info = new NativeMethods.FileDispositionInfoEx
+            {
+                Flags = NativeMethods.FILE_DISPOSITION_FLAG_DELETE | flags | readOnly,
+            };
+            if (NativeMethods.SetFileInformationByHandle(handle, NativeMethods.FileDispositionInfoExClass, ref info,
+                    (uint)Marshal.SizeOf<NativeMethods.FileDispositionInfoEx>()))
+                return true;
+            if (Marshal.GetLastPInvokeError() is not (NativeMethods.ERROR_INVALID_PARAMETER
+                or NativeMethods.ERROR_NOT_SUPPORTED or NativeMethods.ERROR_INVALID_FUNCTION))
+                return false;
+        }
+
+        var classic = new NativeMethods.FileDispositionInfo { DeleteFile = 1 };
+        return NativeMethods.SetFileInformationByHandle(handle, NativeMethods.FileDispositionInfoClass, ref classic,
+            (uint)Marshal.SizeOf<NativeMethods.FileDispositionInfo>());
     }
 
     /// <summary>The failure a removal refused with Windows error <paramref name="error"/> is reported as.</summary>
@@ -983,7 +1028,7 @@ public sealed partial class FileShredderService
     /// exact handle we hold for the overwrite — closing the validate-by-path / act-by-path
     /// TOCTOU window, since the check is on the same object we then write.
     /// </summary>
-    private static string? GetFinalPathFromHandle(SafeFileHandle handle)
+    internal static string? GetFinalPathFromHandle(SafeFileHandle handle)
     {
         // First call with a zero-length buffer returns the required length (incl. NUL).
         uint needed = NativeMethods.GetFinalPathNameByHandle(handle, [], 0, 0);
@@ -1155,6 +1200,31 @@ public sealed partial class FileShredderService
 
         /// <summary><c>FileDispositionInfo</c> in <c>FILE_INFO_BY_HANDLE_CLASS</c>.</summary>
         internal const int FileDispositionInfoClass = 4;
+
+        /// <summary><c>FileDispositionInfoEx</c> in <c>FILE_INFO_BY_HANDLE_CLASS</c>.</summary>
+        internal const int FileDispositionInfoExClass = 21;
+
+        internal const uint FILE_DISPOSITION_FLAG_DELETE = 0x1;
+        internal const uint FILE_DISPOSITION_FLAG_POSIX_SEMANTICS = 0x2;
+        internal const uint FILE_DISPOSITION_FLAG_IGNORE_READONLY_ATTRIBUTE = 0x10;
+        internal const int ERROR_INVALID_FUNCTION = 1;
+        internal const int ERROR_NOT_SUPPORTED = 50;
+        internal const int ERROR_INVALID_PARAMETER = 87;
+
+        /// <summary><c>FILE_DISPOSITION_INFO_EX</c>: the flags of a removal.</summary>
+        [StructLayout(LayoutKind.Sequential)]
+        internal struct FileDispositionInfoEx
+        {
+            public uint Flags;
+        }
+
+        [LibraryImport("kernel32.dll", SetLastError = true)]
+        [return: MarshalAs(UnmanagedType.Bool)]
+        internal static partial bool SetFileInformationByHandle(
+            SafeFileHandle hFile,
+            int fileInformationClass,
+            ref FileDispositionInfoEx lpFileInformation,
+            uint dwBufferSize);
 
         /// <summary><c>FILE_DISPOSITION_INFO</c>: <c>DeleteFile</c> set deletes the file on its last close.</summary>
         [StructLayout(LayoutKind.Sequential)]

@@ -15296,6 +15296,56 @@ public partial class ArchitectureTests
     private static partial Regex DeletingCall();
 
     /// <summary>
+    /// The sweeps that delete what a walk returned remove it only through <c>SafeFileWalk.DeleteFile</c> or
+    /// <c>DeleteEmptyDirectory</c>, never by name.
+    /// </summary>
+    /// <remarks>
+    /// The walk checks a folder for a link when it lists the folder above it; Deep Cleanup, the temp sweep, Browser
+    /// Cleaner, Shortcut Cleaner and the icon cache rebuild then deleted by name, and cleared ReadOnly by name, so a
+    /// folder made into a link in between, run as administrator, took the delete wherever the link led. No test can
+    /// time that swap inside a sweep, because the walk and the delete happen in one call with nothing between them to
+    /// hold, so the wiring is held by its source. Comments are stripped, and the pattern is proven on each shape first.
+    /// </remarks>
+    [Fact]
+    public void EveryCleanupSweep_RemovesOnlyThroughTheCheckedDelete()
+    {
+        Assert.Matches(ByNameDelete(), "File.Delete(file);");
+        Assert.Matches(ByNameDelete(), "info.Delete();");
+        Assert.Matches(ByNameDelete(), "Directory.Delete(sub, recursive: false);");
+        Assert.Matches(ByNameDelete(), "File.SetAttributes(file, attributes & ~FileAttributes.ReadOnly);");
+        Assert.DoesNotMatch(ByNameDelete(), "SafeFileWalk.DeleteFile(file, evenReadOnly: true);");
+
+        (string Folder, string File)[] sweeps =
+        [
+            ("Services", "DeepCleanupService.cs"), ("Services", "TuneUpService.cs"),
+            ("Services", "BrowserCleanerService.cs"), ("Services", "ShortcutCleanerService.cs"),
+            ("Helpers", "ExplorerShell.cs"),
+        ];
+        List<string> offenders = [];
+        List<string> notChecked = [];
+        foreach (var (folder, file) in sweeps)
+        {
+            var source = WithoutComments(File.ReadAllText(TestPaths.AppFile(folder, file)));
+            offenders.AddRange(ByNameDelete().Matches(source).Select(m => $"{file}: {m.Value}"));
+            if (!source.Contains("SafeFileWalk.DeleteFile(", StringComparison.Ordinal)
+                && !source.Contains("SafeFileWalk.DeleteEmptyDirectory(", StringComparison.Ordinal))
+                notChecked.Add(file);
+        }
+
+        Assert.True(offenders.Count == 0,
+            "these sweeps delete, or change attributes, by name, which follows a folder made into a link after the walk "
+            + "listed it. Remove through SafeFileWalk.DeleteFile or DeleteEmptyDirectory:\n  "
+            + string.Join("\n  ", offenders));
+        // And each still removes through it, so the guard is not passing over a file that moved its removal elsewhere.
+        Assert.True(notChecked.Count == 0,
+            "these sweeps no longer remove through SafeFileWalk's checked delete, so this guard checks nothing there: "
+            + string.Join(", ", notChecked));
+    }
+
+    [GeneratedRegex(@"\b(?:File|Directory)\.Delete\s*\(|\.Delete\s*\(\s*\)|\bFile\.SetAttributes\s*\(")]
+    private static partial Regex ByNameDelete();
+
+    /// <summary>
     /// Both scanners that hand the user a list of individual FILES must refuse the ones Windows manages
     /// itself, and refuse them by the same rule.
     /// </summary>

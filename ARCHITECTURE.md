@@ -959,6 +959,12 @@ Key services:
   record rather than optional parameters so no caller can bind an exclusion path to the search
   pattern by position. `ExcludeRootChildren` skips a name directly in whatever root is walked, which is how the
   temp sweeps leave the `.net` extraction folder of `%WinDir%\Temp` alone as well as the user's.
+  `DeleteFile` and `DeleteEmptyDirectory` are the only way the sweeps (Deep Cleanup, the temp sweep, Browser Cleaner,
+  Shortcut Cleaner, the icon cache rebuild) remove what a walk returned: the name is opened once, a link at it as the
+  link, and removed through that handle (`FileShredderService.MarkForDeletion`, POSIX semantics first) only when its
+  canonical path is the path the walk returned, so a folder made into a link between the listing and the delete
+  cannot take the delete elsewhere. A refusal throws `LeftInPlaceException`, which names no path
+  (`ArchitectureTests.EveryCleanupSweep_RemovesOnlyThroughTheCheckedDelete`).
   The traversal root is guarded by `IsReachedThroughLink`, not the plain `IsReparsePoint` the rest of
   the walk uses: `File.GetAttributes` resolves every link in a path's PARENT folders before it reports
   anything, so a junction standing in for an ancestor of the root (e.g. a browser's own vendor folder)

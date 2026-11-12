@@ -2,7 +2,9 @@
 // Author: laurentiu021 · https://github.com/laurentiu021/SystemManager
 // License: MIT
 
+using System.ComponentModel;
 using System.IO;
+using System.Runtime.InteropServices;
 using Serilog;
 using SysManager.Services;
 
@@ -222,6 +224,62 @@ internal static class SafeFileWalk
         && !SystemPaths.IsInsideAnySubtree(root, [.. options.ExcludeSubtrees]);
 
     /// <summary>
+    /// Removes the file <paramref name="path"/>, which a walk returned, only when its name still leads to that file;
+    /// false when there is nothing there.
+    /// </summary>
+    /// <remarks>
+    /// The walk checks a folder for a link when it lists the folder above it, and the cleanups then deleted by name, so
+    /// a folder made into a link in between, run as administrator, took the delete wherever the link led. Here the
+    /// name is opened once, a link at it as the link, and removed through that handle only when Windows says the
+    /// handle is open on <paramref name="path"/> itself: the rule <see cref="IsReachedThroughLink"/> applies, applied
+    /// to the handle that removes. Equality, not "inside the root", so a redirect into a folder the walk leaves alone
+    /// (the .NET unpacking folders, the exe's own folder) is refused as well. A refusal throws an
+    /// <see cref="IOException"/> that names no path, so a caller's log line stays free of one unless it adds it.
+    /// </remarks>
+    /// <param name="evenReadOnly">Remove a read-only file too, without changing its attributes.</param>
+    internal static bool DeleteFile(string path, bool evenReadOnly = false) =>
+        DeleteWhereWalked(path, directory: false, evenReadOnly);
+
+    /// <summary>
+    /// Removes the empty folder <paramref name="path"/>, which a walk returned, only when its name still leads to that
+    /// folder; false when there is nothing there. A folder that is not empty is refused by Windows, as
+    /// <see cref="Directory.Delete(string, bool)"/> refuses it.
+    /// </summary>
+    internal static bool DeleteEmptyDirectory(string path) =>
+        DeleteWhereWalked(path, directory: true, evenReadOnly: false);
+
+    private static bool DeleteWhereWalked(string path, bool directory, bool evenReadOnly)
+    {
+        using var handle = FileShredderService.OpenForRemoval(path, directory);
+        if (handle.IsInvalid)
+        {
+            var error = Marshal.GetLastPInvokeError();
+            if (error is ErrorFileNotFound or ErrorPathNotFound) return false;
+            throw NotDeleted(error);
+        }
+
+        if (NormalizeForCompare(path) is not { } asked
+            || NormalizeForCompare(FileShredderService.GetFinalPathFromHandle(handle)) is not { } held
+            || !string.Equals(held, asked, StringComparison.OrdinalIgnoreCase))
+            throw new LeftInPlaceException("Left in place: a folder on its way became a link after it was listed.");
+
+        if (FileIdentity.AttributesOf(handle) is not { } attributes)
+            throw NotDeleted(Marshal.GetLastPInvokeError());
+        if (attributes.HasFlag(FileAttributes.ReparsePoint)
+            || attributes.HasFlag(FileAttributes.Directory) != directory)
+            throw new LeftInPlaceException("Left in place: it is no longer what the walk found there.");
+
+        if (!FileShredderService.MarkForDeletion(handle, evenReadOnly)) throw NotDeleted(Marshal.GetLastPInvokeError());
+        return true;
+    }
+
+    /// <summary>The refusal Windows gave a removal, worded by Windows and naming no path.</summary>
+    private static IOException NotDeleted(int error) => new(new Win32Exception(error).Message);
+
+    private const int ErrorFileNotFound = 2;
+    private const int ErrorPathNotFound = 3;
+
+    /// <summary>
     /// True when <paramref name="path"/> is a link, OR is reached through one in ANY part of its path.
     /// </summary>
     /// <remarks>
@@ -337,3 +395,11 @@ internal static class SafeFileWalk
         catch (UnauthorizedAccessException) { return true; }
     }
 }
+
+/// <summary>
+/// A removal <see cref="SafeFileWalk.DeleteFile"/> or <see cref="SafeFileWalk.DeleteEmptyDirectory"/> refused because
+/// the name no longer leads to what the walk found: a folder on its way became a link, or the entry changed kind.
+/// </summary>
+/// <remarks>Its own type so a caller can say "left alone" rather than "still in use"; running again will not help.
+/// </remarks>
+internal sealed class LeftInPlaceException(string message) : IOException(message);

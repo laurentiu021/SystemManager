@@ -3,8 +3,6 @@
 // License: MIT
 
 using System.Globalization;
-using System.Reflection;
-using System.Runtime.InteropServices;
 using SysManager.Models;
 using SysManager.Services;
 
@@ -89,22 +87,6 @@ public class FeatureParentsServiceTests
             "F0", name => [($"F{int.Parse(name[1..], CultureInfo.InvariantCulture) + 1}", Staged)]);
 
         Assert.Equal(FeatureParentsService.MaxParents, walked!.Count);
-    }
-
-    [Fact]
-    public void EveryDismCall_LoadsDismapiFromSystem32Only()
-    {
-        // dismapi.dll is not a DLL Windows always loads from System32, and SysManager runs elevated: without the
-        // attribute, a dismapi.dll beside the exe would be loaded first.
-        var calls = typeof(FeatureParentsService)
-            .GetNestedType("NativeMethods", BindingFlags.NonPublic)!
-            .GetMethods(BindingFlags.Static | BindingFlags.NonPublic)
-            .Where(m => m.Name.StartsWith("Dism", StringComparison.Ordinal))
-            .ToList();
-
-        Assert.Equal(6, calls.Count);
-        Assert.All(calls, m => Assert.Equal(DllImportSearchPath.System32,
-            m.GetCustomAttribute<DefaultDllImportSearchPathsAttribute>()?.Paths));
     }
 
     [Fact]

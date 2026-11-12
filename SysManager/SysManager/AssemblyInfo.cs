@@ -4,6 +4,7 @@
 
 using System.Reflection;
 using System.Runtime.CompilerServices;
+using System.Runtime.InteropServices;
 using System.Windows;
 
 // Attributes the SDK doesn't generate from the csproj metadata.
@@ -12,6 +13,11 @@ using System.Windows;
 [assembly: InternalsVisibleTo("SysManager.Tests")]
 [assembly: InternalsVisibleTo("SysManager.IntegrationTests")]
 [assembly: InternalsVisibleTo("SysManager.UITests")]
+
+// Every library this assembly imports is a Windows DLL in System32. SysManager runs elevated from a folder the user's
+// account can write to, so a copy beside the exe must never be loaded in its place. Helpers.SystemLibraries resolves
+// each one by its full path as well, ahead of the folders the single-file host names.
+[assembly: DefaultDllImportSearchPaths(DllImportSearchPath.System32)]
 
 [assembly: ThemeInfo(
     ResourceDictionaryLocation.None,            //where theme specific resource dictionaries are located

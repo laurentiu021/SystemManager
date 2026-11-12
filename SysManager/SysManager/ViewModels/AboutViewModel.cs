@@ -739,9 +739,10 @@ public sealed partial class AboutViewModel : ViewModelBase
 
     /// <summary>
     /// Opens the licenses and notices of the open-source components the exe carries (#2856): the copy embedded in it,
-    /// written to SysManager's own folder and opened in Notepad by its path under System32, so they open without a
-    /// network. Where that copy cannot be written or Notepad will not start, Notepad being an optional feature on
-    /// Windows 11, the same file opens on GitHub at this version's tag, and the status line says so.
+    /// written to SysManager's own folder and opened in Notepad by its path under System32 (or, without administrator
+    /// rights, the user's own Store Notepad when Windows' copy is not there), so they open without a network. Where
+    /// that copy cannot be written or Notepad will not start, Notepad being an optional feature on Windows 11, the same
+    /// file opens on GitHub at this version's tag, and the status line says so.
     /// </summary>
     [RelayCommand]
     private async Task OpenThirdPartyNoticesAsync()

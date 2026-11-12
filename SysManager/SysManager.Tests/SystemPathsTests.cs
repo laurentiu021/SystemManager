@@ -115,6 +115,35 @@ public class SystemPathsTests
         Assert.True(Path.IsPathRooted(resolved));
     }
 
+    /// <summary>
+    /// Notepad, which Windows 11 can install from the Store instead, is started from the user's own alias for it when
+    /// SysManager runs without administrator rights, and never with them: winget's rule.
+    /// </summary>
+    [Theory]
+    [InlineData("notepad.exe", false, @"C:\Users\someone\AppData\Local\Microsoft\WindowsApps\notepad.exe")]
+    [InlineData("notepad", false, @"C:\Users\someone\AppData\Local\Microsoft\WindowsApps\notepad.exe")]
+    [InlineData("notepad.exe", true, @"C:\TrustedWindows\System32\notepad.exe")]
+    public void ResolveSystemTool_NotepadMissing_TakesTheUsersOwnStoreCopyOnlyWithoutAdministratorRights(
+        string name, bool elevated, string expected)
+    {
+        var resolved = SystemPaths.ResolveSystemTool(name, @"C:\TrustedWindows\System32", static _ => false,
+            () => elevated, localAppData: @"C:\Users\someone\AppData\Local");
+
+        Assert.Equal(expected, resolved, ignoreCase: true);
+    }
+
+    [Fact]
+    public void ResolveSystemTool_NotepadWhereWindowsKeepsIt_IsThatOne_WhateverTheRights()
+    {
+        const string system = @"C:\TrustedWindows\System32";
+        var there = Path.Combine(system, "notepad.exe");
+
+        var resolved = SystemPaths.ResolveSystemTool("notepad.exe", system, path => path == there, () => false,
+            localAppData: @"C:\Users\someone\AppData\Local");
+
+        Assert.Equal(there, resolved);
+    }
+
     [Fact]
     public void ResolveSystemTool_EmptyOrNull_ReturnedUnchanged()
     {
@@ -293,6 +322,42 @@ public class SystemPathsTests
     public void IsInsideSubtree_ComparesOnADirectoryBoundary(string candidate, string subtree, bool expected)
     {
         Assert.Equal(expected, SystemPaths.IsInsideSubtree(candidate, subtree));
+    }
+
+    [Theory]
+    [InlineData(@"C:\Windows\System32\svchost.exe", @"C:\Windows\System32", true)]
+    [InlineData(@"c:\windows\system32\SVCHOST.EXE", @"C:\Windows\System32", true)]   // case-insensitive
+    [InlineData(@"C:\Windows\System32\svchost.exe", @"C:\Windows\System32\", true)]
+    // A folder below it, and the folder itself, are not directly in it.
+    [InlineData(@"C:\Windows\System32\Tasks\svchost.exe", @"C:\Windows\System32", false)]
+    [InlineData(@"C:\Windows\System32", @"C:\Windows\System32", false)]
+    // A sibling whose name only begins like it.
+    [InlineData(@"C:\Windows\System32X\svchost.exe", @"C:\Windows\System32", false)]
+    [InlineData(@"D:\x.exe", @"D:\", true)]
+    // Dot segments are resolved before comparing.
+    [InlineData(@"C:\Windows\System32\..\Temp\svchost.exe", @"C:\Windows\System32", false)]
+    [InlineData(@"C:\Windows\Temp\..\System32\svchost.exe", @"C:\Windows\System32", true)]
+    // A device path is left as it is, so it matches no drive path.
+    [InlineData(@"\\?\C:\Windows\System32\svchost.exe", @"C:\Windows\System32", false)]
+    public void IsDirectlyInside_IsTheFolderItself_NotAFolderBelowIt(string candidate, string folder, bool expected)
+        => Assert.Equal(expected, SystemPaths.IsDirectlyInside(candidate, folder));
+
+    [Fact]
+    public void IsDirectlyInside_WithNoFolder_MatchesNothing()
+    {
+        Assert.False(SystemPaths.IsDirectlyInside(@"C:\Windows\x.exe", null));
+        Assert.False(SystemPaths.IsDirectlyInside(@"C:\Windows\x.exe", ""));
+        Assert.False(SystemPaths.IsDirectlyInside(@"C:\Windows\x.exe", "   "));
+    }
+
+    [Fact]
+    public void IsDirectlyInsideAny_MatchesAnyPosition_AndIgnoresBlanks()
+    {
+        const string file = @"C:\Windows\System32\wbem\WmiPrvSE.exe";
+
+        Assert.True(SystemPaths.IsDirectlyInsideAny(file, @"C:\Windows", @"C:\Windows\System32\wbem"));
+        Assert.True(SystemPaths.IsDirectlyInsideAny(file, null, @"C:\Windows\System32\wbem"));
+        Assert.False(SystemPaths.IsDirectlyInsideAny(file, @"C:\Windows", @"C:\Windows\System32", null, ""));
     }
 
     [Fact]

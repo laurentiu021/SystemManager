@@ -304,8 +304,10 @@ to scroll.
   tiers, because one message cannot be true for all of them: `Helpers/ProcessCriticality.BootCriticalProcesses`
   (13 names) is refused outright, `.HighConsequenceProcesses` (Defender's engine, Windows Installer and the
   servicing processes) is confirmed with a prompt naming the real damage, and any other Windows component gets
-  the "a feature may look broken until you sign out" warning. Both sets are matched by process NAME AND the
-  image's actual path under `%SystemRoot%` — not by the description database's `safety` field alone, which is
+  the "a feature may look broken until you sign out" warning. Both sets are matched by process NAME AND where
+  the image actually runs from: directly in the System folder for the refused set (`IsInSystemFolder`, which keeps
+  refusing for a path it cannot place), and where Windows keeps its programs for the confirmed one, as the Windows
+  label is (#3437) — not by the description database's `safety` field alone, which is
   provenance and which (keyed on name alone) is what made the app refuse to end Notepad while claiming a BSOD,
   and which (matched by name with no path check) would let a process merely CALLED `svchost.exe` from a profile
   folder inherit the refusal or warning meant for the real one. `ProcessCriticality` is the one copy of both
@@ -769,7 +771,8 @@ Key services:
   once: the system drive, judged by `HealthScoreService.ComputeFreeSpaceScore`; the program using the most of the
   processor, from two `ProcessManagerService` snapshots a second apart, by program rather than by process, never
   SysManager itself or the idle process, with a copy of a part of Windows that runs from a folder Windows does not
-  keep its programs in counted as a program of its own (#3010); what starts with Windows (`StartupService`, a
+  keep its programs in counted as a program of its own (#3010), the second snapshot taking each process's path from
+  the first, since it does not read again what the first read (#3437); what starts with Windows (`StartupService`, a
   scheduled task only when its
   `StartsWithWindows` is set) and what Windows blamed at its
   last timed start, if that was within 30 days (`BootAnalyzerService`); memory in use, from 90%; and the time since
@@ -1413,12 +1416,15 @@ Key services:
 - `ProcessDescriptionService` — the built-in process database (`ProcessDescriptions.json`, an embedded
   resource) behind the static `Instance`: `Lookup` gives a process's plain-language description, category and
   `ProcessSafety`, for Process Manager, Startup Manager and Why is it slow?. The `Lookup(name, imagePath)`
-  overload re-verifies a "System" hit against `ProcessCriticality.IsWhereWindowsKeepsItsPrograms` (the System
-  folder, Microsoft's own packages under `%ProgramFiles%\WindowsApps`, Windows' folders under Program Files and
-  Defender's under ProgramData) and downgrades it to an unrecognised entry naming the real folder when the image
-  runs from anywhere else — a database match by name alone cannot tell the real `svchost.exe` from one merely
-  called that in a profile folder (#2792), and the System folder alone called Windows 11's packaged apps
-  unrecognised (#3166).
+  overload re-verifies a "System" hit against `ProcessCriticality.IsWhereWindowsKeepsItsPrograms` (each folder
+  inside Windows its programs run from, exactly, so not `Windows\Temp` or `System32\Tasks`; `Windows\SystemApps`;
+  Microsoft's own packages under `%ProgramFiles%\WindowsApps`; Windows' folders under Program Files, WSL's
+  included; and Defender's under ProgramData) and downgrades it to an unrecognised entry naming the real folder
+  when the image runs from anywhere else — a database match by name alone cannot tell the real `svchost.exe` from
+  one merely called that in a profile folder (#2792), the System folder alone called Windows 11's packaged apps
+  unrecognised (#3166), and the whole Windows folder trusted copies in folders inside it any program can write to
+  (#3437). A path that is not a full one is never vouched for. A table-driven test holds every Windows entry of
+  the database to a folder the label accepts.
 - `SpeedTestHistoryService` — persists speed test results to JSON for
   historical charting and trend analysis. One instance, shared by the Speed Test tab and the
   Dashboard's quick test; its `Saved` event is how a result recorded from the Dashboard reaches a
@@ -2504,9 +2510,13 @@ Key utility classes that don't fit neatly into Services or ViewModels (not an ex
   `TheAppAssembly_ResolvesItsNativeLibrariesItself`. Libraries a Windows DLL loads for itself, and the host's and
   WPF's own native files, are outside it (#2746).
 - `SystemPaths` — the one place the tools SysManager launches are resolved. A bare tool
-  name becomes a full path under System32 (or the Windows PowerShell 5.1 folder), and winget
-  resolves to its admin-only-writable install for an elevated launch and to the user's own
-  execution alias otherwise (#2699), so nothing launches by name off the PATH. It also owns
+  name becomes a full path under System32 (or the Windows PowerShell 5.1 folder), then the
+  Windows folder, and one found in neither stays a rooted System32 path, so its start fails
+  instead of Windows searching for the name (#3437). winget resolves to its admin-only-writable
+  install for an elevated launch and to the user's own execution alias otherwise (#2699), and
+  Notepad, when Windows' own copy is not there, to the user's own Store alias only without
+  administrator rights, so nothing launches by name off the PATH. `IsDirectlyInside` is
+  `IsInsideSubtree` for a folder whose subfolders are not all its own. It also owns
   the two temp exclusions every wholesale %TEMP% sweep must honour:
   `BundleExtractionRoot`, the shared folder single-file apps unpack into, whose deletion
   breaks a running program's later lazy loads, which no in-use check can

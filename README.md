@@ -1245,9 +1245,10 @@ Answers "what is actually using my space?" by listing the biggest files in one p
 - **Signature column** — whether Windows can confirm who made the running program, read
   from the file's own certificate. This is a different question from Safety, and the
   difference is the point: Safety recognises a process by **name**, and a part of Windows
-  also by **where it runs**. A copy of `svchost.exe` sitting in a downloads folder is **Not
+  also by **where it runs**. A copy of `svchost.exe` sitting in a downloads folder, or in a
+  folder inside Windows that any program can write to such as `Windows\Temp`, is **Not
   recognised**, while Windows 11's own Notepad, Paint or Terminal, which Windows installs
-  from Microsoft's packages, is still **Windows**. The certificate belongs to the file.
+  from Microsoft's packages, and WSL in its own folder, are still **Windows**. The certificate belongs to the file.
   Shows **Verified** ("Windows can confirm this really
   comes from Google LLC" on hover), **Unsigned**, or **Check failed**
   - **Unsigned is grey, not a warning** — most ordinary programs are unsigned, and so is

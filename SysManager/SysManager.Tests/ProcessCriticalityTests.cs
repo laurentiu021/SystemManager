@@ -64,16 +64,134 @@ public class ProcessCriticalityTests
         => Assert.True(ProcessCriticality.IsHighConsequence("MsMpEng", null));
 
     [Fact]
-    public void IsUnderSystemRoot_BlankPath_IsTrue()
+    public void IsInSystemFolder_BlankPath_IsTrue()
     {
-        Assert.True(ProcessCriticality.IsUnderSystemRoot(null));
-        Assert.True(ProcessCriticality.IsUnderSystemRoot(""));
-        Assert.True(ProcessCriticality.IsUnderSystemRoot("   "));
+        Assert.True(ProcessCriticality.IsInSystemFolder(null));
+        Assert.True(ProcessCriticality.IsInSystemFolder(""));
+        Assert.True(ProcessCriticality.IsInSystemFolder("   "));
     }
 
     [Fact]
-    public void IsUnderSystemRoot_DefinitePathOutsideWindows_IsFalse()
-        => Assert.False(ProcessCriticality.IsUnderSystemRoot(@"C:\Users\someone\AppData\Local\thing.exe"));
+    public void IsInSystemFolder_DefinitePathOutsideWindows_IsFalse()
+        => Assert.False(ProcessCriticality.IsInSystemFolder(@"C:\Users\someone\AppData\Local\thing.exe"));
+
+    [Fact]
+    public void IsInSystemFolder_AFolderBelowTheSystemFolder_IsFalse()
+        => Assert.False(ProcessCriticality.IsInSystemFolder(
+            Path.Combine(Environment.SystemDirectory, "Tasks", "svchost.exe")));
+
+    /// <summary>
+    /// The refusal fails toward the name for a path it cannot place, and only a definite drive or network path outside
+    /// the System folder lifts it. A drive path written as a device path names the same file and is judged as one.
+    /// </summary>
+    [Theory]
+    [InlineData(@"svchost.exe", true)]
+    [InlineData(@"System32\svchost.exe", true)]
+    [InlineData(@"\\.\pipe\svchost", true)]
+    [InlineData(@"\\?\UNC\server\share\svchost.exe", true)]
+    [InlineData(@"\\?\{SYS}\svchost.exe", true)]
+    [InlineData(@"\??\{SYS}\svchost.exe", true)]
+    [InlineData(@"\\?\{WIN}\Temp\svchost.exe", false)]
+    [InlineData(@"\??\{WIN}\Temp\svchost.exe", false)]
+    [InlineData(@"\\server\share\svchost.exe", false)]
+    [InlineData(@"{SYS}\..\Temp\svchost.exe", false)]
+    [InlineData(@"{WIN}\Temp\..\System32\svchost.exe", true)]
+    public void IsInSystemFolder_KeepsTheRefusalForWhatItCannotPlace(string spelled, bool expected)
+        => Assert.Equal(expected, ProcessCriticality.IsInSystemFolder(Spelled(spelled)));
+
+    /// <summary>
+    /// The label fails the other way for those: never vouching for what it cannot place, while a drive path written as
+    /// a
+    /// device path is still judged as the drive path it is.
+    /// </summary>
+    [Theory]
+    [InlineData(@"svchost.exe", false)]
+    [InlineData(@"\\.\pipe\svchost", false)]
+    [InlineData(@"\??\{SYS}\conhost.exe", true)]
+    [InlineData(@"\\?\{SYS}\conhost.exe", true)]
+    [InlineData(@"\??\{WIN}\Temp\conhost.exe", false)]
+    [InlineData(@"\\server\share\conhost.exe", false)]
+    public void IsWhereWindowsKeepsItsPrograms_NeverVouchesForWhatItCannotPlace(string spelled, bool expected)
+        => Assert.Equal(expected, ProcessCriticality.IsWhereWindowsKeepsItsPrograms(Spelled(spelled)));
+
+    /// <summary><paramref name="spelled"/> with {SYS} and {WIN} replaced by this PC's System and Windows
+    /// folders.</summary>
+    private static string Spelled(string spelled) => spelled
+        .Replace("{SYS}", Environment.SystemDirectory, StringComparison.Ordinal)
+        .Replace("{WIN}", Environment.GetFolderPath(Environment.SpecialFolder.Windows), StringComparison.Ordinal);
+
+    /// <summary>
+    /// Every Windows entry of the description database runs from a folder the label accepts, where Windows 11 keeps it.
+    /// A Windows entry added later for a program in a folder not on the list fails here rather than reading "Not
+    /// recognised" for the real program.
+    /// </summary>
+    [Fact]
+    public void EveryWindowsEntryOfTheDatabase_RunsFromAFolderTheLabelAccepts()
+    {
+        var windows = Environment.GetFolderPath(Environment.SpecialFolder.Windows);
+        var system = Environment.SystemDirectory;
+        var programFiles = Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles);
+        var apps = Path.Combine(programFiles, "WindowsApps");
+        string App(string package, string file) => Path.Combine(apps, package, file);
+        string SystemApp(string package, string file) => Path.Combine(windows, "SystemApps", package, file);
+        // Processes with no file of their own: the kernel's, which Windows lists without a path.
+        string[] noFile = ["Idle", "Registry", "System"];
+        var where = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["explorer"] = Path.Combine(windows, "explorer.exe"),
+            ["regedit"] = Path.Combine(windows, "regedit.exe"),
+            ["notepad"] = Path.Combine(windows, "notepad.exe"),
+            ["WmiPrvSE"] = Path.Combine(system, "wbem", "WmiPrvSE.exe"),
+            ["powershell"] = Path.Combine(system, "WindowsPowerShell", "v1.0", "powershell.exe"),
+            ["TrustedInstaller"] = Path.Combine(windows, "servicing", "TrustedInstaller.exe"),
+            ["SystemSettings"] = Path.Combine(windows, "ImmersiveControlPanel", "SystemSettings.exe"),
+            ["LockApp"] = SystemApp("Microsoft.LockApp_cw5n1h2txyewy", "LockApp.exe"),
+            ["SearchHost"] = SystemApp("MicrosoftWindows.Client.CBS_cw5n1h2txyewy", "SearchHost.exe"),
+            ["TextInputHost"] = SystemApp("MicrosoftWindows.Client.CBS_cw5n1h2txyewy", "TextInputHost.exe"),
+            ["ShellExperienceHost"] = SystemApp("ShellExperienceHost_cw5n1h2txyewy", "ShellExperienceHost.exe"),
+            ["StartMenuExperienceHost"] = SystemApp("Microsoft.Windows.StartMenuExperienceHost_cw5n1h2txyewy",
+                "StartMenuExperienceHost.exe"),
+            ["MsMpEng"] = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData),
+                @"Microsoft\Windows Defender\Platform\4.18.26100.4-0\MsMpEng.exe"),
+            ["NisSrv"] = Path.Combine(programFiles, "Windows Defender", "NisSrv.exe"),
+            ["wmplayer"] = Path.Combine(programFiles, "Windows Media Player", "wmplayer.exe"),
+            ["GameBar"] = App("Microsoft.XboxGamingOverlay_7.325.10141.0_x64__8wekyb3d8bbwe", "GameBar.exe"),
+            ["PhoneExperienceHost"] = App("Microsoft.YourPhone_1.25092.95.0_x64__8wekyb3d8bbwe",
+                "PhoneExperienceHost.exe"),
+            ["SnippingTool"] = App("Microsoft.ScreenSketch_11.2508.29.0_x64__8wekyb3d8bbwe",
+                @"SnippingTool\SnippingTool.exe"),
+            ["WidgetService"] = App("Microsoft.WidgetsPlatformRuntime_1.6.13.0_x64__8wekyb3d8bbwe",
+                @"WidgetService\WidgetService.exe"),
+            ["Widgets"] = App("MicrosoftWindows.Client.WebExperience_526.21100.40.0_x64__cw5n1h2txyewy",
+                @"Dashboard\Widgets.exe"),
+            ["WindowsTerminal"] = App("Microsoft.WindowsTerminal_1.25.2733.0_x64__8wekyb3d8bbwe",
+                "WindowsTerminal.exe"),
+            ["mspaint"] = App("Microsoft.Paint_11.2508.361.0_x64__8wekyb3d8bbwe", @"PaintApp\mspaint.exe"),
+            ["wsl"] = Path.Combine(programFiles, "WSL", "wsl.exe"),
+        };
+
+        // Read from the database file itself, so an entry added to it is checked without being listed here.
+        using var database = System.Text.Json.JsonDocument.Parse(
+            File.ReadAllText(TestPaths.AppFile("Data", "ProcessDescriptions.json")));
+        var windowsEntries = database.RootElement.EnumerateArray()
+            .Where(e => string.Equals(e.GetProperty("safety").GetString(), "System",
+                StringComparison.OrdinalIgnoreCase))
+            .Select(e => e.GetProperty("name").GetString()!)
+            .ToList();
+        Assert.True(windowsEntries.Count >= 59,
+            $"only {windowsEntries.Count} Windows entries were read from the database, and 59 were counted");
+
+        var refused = windowsEntries
+            .Where(name => !noFile.Contains(name, StringComparer.OrdinalIgnoreCase))
+            .Select(name => (Name: name, Path: where.TryGetValue(name, out var at) ? at : Path.Combine(system,
+                name + ".exe")))
+            .Where(entry => !ProcessCriticality.IsWhereWindowsKeepsItsPrograms(entry.Path))
+            .Select(entry => $"{entry.Name}: {entry.Path}")
+            .ToList();
+        Assert.True(refused.Count == 0,
+            "these Windows entries of the database run from a folder the label does not accept:\n  "
+            + string.Join("\n  ", refused));
+    }
 
     // ---------- where Windows keeps its programs, beyond the System folder (#3166) ----------
 

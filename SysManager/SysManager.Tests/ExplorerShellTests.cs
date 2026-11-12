@@ -267,4 +267,28 @@ public class ExplorerShellTests : IDisposable
         Assert.True(own.Killed);
         Assert.All(new[] { refuses, gone, own }, shell => Assert.True(shell.Disposed));
     }
+
+    /// <summary>
+    /// A cache folder reached through a link is left alone: nothing at the link's target is deleted. The sweep did not
+    /// check the folder for a link at all, and cleared attributes and deleted by name.
+    /// </summary>
+    [Fact]
+    public void DeleteCacheFiles_ThroughALinkedFolder_DeletesNothingAtTheTarget()
+    {
+        var target = Write("thumbcache_elsewhere.db", 32);
+        var link = Path.Combine(Path.GetTempPath(), "smtest_explorercache_link_" + Guid.NewGuid().ToString("N"));
+        try
+        {
+            Symlinks.RequireJunction(link, _dir);
+
+            var sweep = ExplorerShell.DeleteCacheFiles(link);
+
+            Assert.Equal(0, sweep.Deleted);
+            Assert.True(File.Exists(target), "a cache file behind the link was deleted");
+        }
+        finally
+        {
+            if (Directory.Exists(link)) Directory.Delete(link, recursive: false);
+        }
+    }
 }

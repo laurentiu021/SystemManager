@@ -1308,6 +1308,31 @@ public class FileShredderServiceTests
 
     // ---------- what no shred may be, or hold ----------
 
+    [Theory]
+    [InlineData(@"C:\Users\me\file.dat", false)]
+    [InlineData(@"C:\Users\me\folder.", true)]
+    [InlineData(@"C:\Users\me\folder ", true)]
+    [InlineData(@"\\server\share\file.dat", false)]
+    [InlineData(@"\\?\C:\Users\me\file.dat", false)]
+    public void ExtendedPathIfNeeded_ExtendsOnlyWhatAWin32CallCannotTakeAsItIs(string path, bool extended)
+    {
+        var result = FileShredderService.ExtendedPathIfNeeded(path);
+
+        if (extended) Assert.StartsWith(@"\\?\", result, StringComparison.Ordinal);
+        else Assert.Same(path, result);
+    }
+
+    [Fact]
+    public void ExtendedPathIfNeeded_ExtendsAPathOf260CharactersOrMore_AndLeavesTheOneBelowAlone()
+    {
+        var below = @"C:\" + new string('a', 253) + ".da";
+        var at = below + "t";
+        Assert.Equal(259, below.Length);
+
+        Assert.Same(below, FileShredderService.ExtendedPathIfNeeded(below));
+        Assert.Equal(@"\\?\" + at, FileShredderService.ExtendedPathIfNeeded(at));
+    }
+
     /// <summary>
     /// A file whose path has 260 characters or more is overwritten and removed. The overwrite went through FileStream,
     /// which .NET extends itself, and the removal's own Win32 call took the raw path, so the file stayed behind. Where
@@ -1359,6 +1384,34 @@ public class FileShredderServiceTests
             Assert.StartsWith("Shredding a folder that holds Windows' own folders is not allowed",
                 ex.Message, StringComparison.Ordinal);
             svc.ValidatePath(sibling);
+        }
+        finally { Directory.Delete(parent, recursive: true); }
+    }
+
+    /// <summary>
+    /// The profile and the person's own folders cannot be shredded whole, and neither can a folder that holds one, but
+    /// what is inside them can. Only "equal or under" Windows' folders was refused, so a shred of the profile, or of a
+    /// drive folder holding a moved Downloads, destroyed all of it after a question that counted one item.
+    /// </summary>
+    [Fact]
+    public void ValidatePath_RefusesAHeldFolder_AndAFolderThatHoldsOne_ButNotWhatIsInside()
+    {
+        var parent = Directory.CreateTempSubdirectory("smtest_holds_held_").FullName;
+        var downloads = Path.Combine(parent, "Downloads");
+        var inside = Path.Combine(downloads, "old photos");
+        Directory.CreateDirectory(inside);
+        try
+        {
+            var svc = new FileShredderService(openExclusiveWrite: null, protectedRoots: [], heldRoots: [downloads]);
+
+            foreach (var refusedPath in new[] { downloads, parent })
+            {
+                var ex = Assert.Throws<SecurityException>(() => svc.ValidatePath(refusedPath));
+                Assert.StartsWith("Shredding your profile, one of its main folders, or a folder that holds them",
+                    ex.Message, StringComparison.Ordinal);
+            }
+
+            svc.ValidatePath(inside);
         }
         finally { Directory.Delete(parent, recursive: true); }
     }

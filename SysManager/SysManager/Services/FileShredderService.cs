@@ -53,6 +53,7 @@ public sealed partial class FileShredderService
 
     private readonly Func<string, FileStream> _openExclusiveWrite;
     private readonly string[] _protectedRoots;
+    private readonly string[] _heldRoots;
 
     public FileShredderService() : this(openExclusiveWrite: null) { }
 
@@ -69,10 +70,47 @@ public sealed partial class FileShredderService
     /// rather than one of the machine's own: aimed at the real hosts file, a regression in both path checks would
     /// have overwritten and deleted it on any elevated run (#2740).
     /// </param>
-    internal FileShredderService(Func<string, FileStream>? openExclusiveWrite, IReadOnlyList<string>? protectedRoots = null)
+    /// <param name="heldRoots">
+    /// Null for the folders no shred may be, or hold (<see cref="HeldRoots"/>). Files inside them can be shredded. A
+    /// test names a temp folder instead.
+    /// </param>
+    internal FileShredderService(
+        Func<string, FileStream>? openExclusiveWrite,
+        IReadOnlyList<string>? protectedRoots = null,
+        IReadOnlyList<string>? heldRoots = null)
     {
         _openExclusiveWrite = openExclusiveWrite ?? DefaultOpenExclusiveWrite;
         _protectedRoots = protectedRoots is null ? ProtectedPrefixes : [.. protectedRoots];
+        _heldRoots = heldRoots is null ? HeldRoots() : [.. heldRoots];
+    }
+
+    /// <summary>
+    /// The folders a shred may never be, or hold: the profile, the folder of all profiles, AppData and its parts,
+    /// ProgramData, and the person's own folders (Documents, Downloads, Desktop and the rest, wherever they were
+    /// moved).
+    /// </summary>
+    /// <remarks>
+    /// The folders inside them are the person's to shred, and so are their files. These themselves are not: a shred of
+    /// the profile, or of a drive folder that holds a moved Downloads, destroyed everything in it after a question
+    /// that counted one item. The leftover search refuses to offer the same folders (LeftoverFinder.ProtectedFolders).
+    /// </remarks>
+    private static string[] HeldRoots()
+    {
+        var profile = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
+        var local = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
+        var appData = string.IsNullOrEmpty(local) ? null : Path.GetDirectoryName(local);
+        string?[] roots =
+        [
+            profile,
+            string.IsNullOrEmpty(profile) ? null : Path.GetDirectoryName(profile),
+            Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
+            local,
+            appData,
+            appData is null ? null : Path.Combine(appData, "LocalLow"),
+            Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData),
+        ];
+        return [.. roots.Concat(KnownFolders.UserFolders().Select(f => f.Path)).OfType<string>()
+            .Where(r => r.Length > 0)];
     }
 
     private static FileStream DefaultOpenExclusiveWrite(string path) => new(
@@ -348,7 +386,7 @@ public sealed partial class FileShredderService
     private static void RemoveShreddedFile(string filePath, FileIdentity? shredded)
     {
         using var handle = NativeMethods.CreateFile(
-            filePath,
+            ExtendedPathIfNeeded(filePath),
             NativeMethods.DELETE | NativeMethods.FILE_READ_ATTRIBUTES,
             FileShare.ReadWrite | FileShare.Delete,
             IntPtr.Zero,
@@ -396,8 +434,17 @@ public sealed partial class FileShredderService
     /// </remarks>
     private async Task OverwriteNamedStreamsAsync(string filePath, byte?[] patterns)
     {
-        using var handle = NativeMethods.FindFirstStream(filePath, 0, out var data, 0);
-        if (handle.IsInvalid) return; // no streams besides the unnamed one, or enumeration unsupported here
+        using var handle = NativeMethods.FindFirstStream(ExtendedPathIfNeeded(filePath), 0, out var data, 0);
+        if (handle.IsInvalid)
+        {
+            // ERROR_HANDLE_EOF is "no stream at all". Anything else is a search that failed, and its named streams go
+            // with the file when it is removed but are not overwritten first; the log says so, without the name.
+            var error = Marshal.GetLastPInvokeError();
+            if (error != NativeMethods.ERROR_HANDLE_EOF)
+                Log.Warning("Could not list a file's named streams, so they were not overwritten. (Error {Error})",
+                    error);
+            return;
+        }
 
         do
         {
@@ -466,7 +513,7 @@ public sealed partial class FileShredderService
     public async Task<ShredFolderReport> ShredFolderAsync(string folderPath, ShredMethod method, IProgress<int>? progress, CancellationToken ct)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(folderPath);
-        ValidatePath(folderPath);
+        ValidatePath(folderPath, requireCanonical: true);
 
         if (!Directory.Exists(folderPath))
             throw new DirectoryNotFoundException($"Folder not found: {folderPath}");
@@ -506,6 +553,10 @@ public sealed partial class FileShredderService
         // overwrite depth the user picked (#2824).
         var partiallyOverwritten = 0;
 
+        // A file refused as a place no shred may touch. The folders above it are then left as they are, emptied
+        // ones included: something below them led where it should not have.
+        var refused = false;
+
         for (var i = 0; i < totalFiles; i++)
         {
             if (ct.IsCancellationRequested) { cancelled = true; break; }
@@ -536,6 +587,16 @@ public sealed partial class FileShredderService
                     ex.GetType().Name, ex.HResult);
                 shredded++;
                 partiallyOverwritten++;
+            }
+            catch (SecurityException ex)
+            {
+                // Thrown only before a byte is written (the path check, a link, the held handle's check), so the file
+                // is as it was. It escaped the loop before, and the count of files already destroyed went with it.
+                Log.Warning(
+                    "A file was refused before its overwrite. {ExceptionType} (HResult {HResult})",
+                    ex.GetType().Name, ex.HResult);
+                failedFiles.Add(files[i]);
+                refused = true;
             }
             catch (UnauthorizedAccessException ex)
             {
@@ -593,28 +654,38 @@ public sealed partial class FileShredderService
         // No SkippedLinks sink here, deliberately: this walk skips a SUBSET of what the file walk skips
         // (directories only, not link files), so reporting from it as well would under-count and
         // double-count at the same time.
-        foreach (var dir in SafeFileWalk.DirectoriesDeepestFirst(folderPath, ct, new SafeWalkOptions
+        if (!refused)
         {
-            // The ONE caller that must still walk a root reached through a link: the user picked
-            // this folder by name and asked for it to be destroyed. What keeps that safe is
-            // ValidatePath's protected-roots check on the CANONICAL path, not a refusal — a
-            // refusal here would report a completed shred that destroyed nothing (#2814).
-            RefuseRootReachedThroughLink = false,
-        }))
-        {
-            TryRemoveIfEmpty(dir);
+            foreach (var dir in SafeFileWalk.DirectoriesDeepestFirst(folderPath, ct, new SafeWalkOptions
+            {
+                // The ONE caller that must still walk a root reached through a link: the user picked
+                // this folder by name and asked for it to be destroyed. What keeps that safe is
+                // ValidatePath's protected-roots check on the CANONICAL path, not a refusal — a
+                // refusal here would report a completed shred that destroyed nothing (#2814).
+                RefuseRootReachedThroughLink = false,
+            }))
+            {
+                TryRemoveIfEmpty(dir);
+            }
+            TryRemoveIfEmpty(folderPath);
         }
-        TryRemoveIfEmpty(folderPath);
 
         if (failedFiles.Count > 0)
         {
             // Honest partial failure: the folder was NOT fully shredded. Report which files were
             // left in place so the caller (and the user) never believe a file that could not be
-            // securely overwritten was destroyed.
+            // securely overwritten was destroyed, and how many were, which are gone either way.
             var sample = string.Join(", ", failedFiles.Take(5).Select(Path.GetFileName));
             var more = failedFiles.Count > 5 ? $", and {failedFiles.Count - 5} more" : string.Empty;
+            var destroyed = shredded switch
+            {
+                0 => "",
+                1 => " The other file was destroyed.",
+                _ => $" The other {shredded} files were destroyed.",
+            };
             throw new IOException(
-                $"{failedFiles.Count} of {totalFiles} file(s) could not be securely shredded and were left in place (not deleted): {sample}{more}.");
+                $"{failedFiles.Count} of {totalFiles} file(s) could not be securely shredded and were left in place "
+                + $"(not deleted): {sample}{more}.{destroyed}");
         }
 
         // A skipped link is NOT a failure — refusing to follow it is the correct behaviour — so it is
@@ -662,7 +733,16 @@ public sealed partial class FileShredderService
         }
     }
 
-    internal void ValidatePath(string path)
+    /// <summary>
+    /// Throws <see cref="SecurityException"/> when <paramref name="path"/>, or where it really leads, is a place no
+    /// shred may touch.
+    /// </summary>
+    /// <param name="requireCanonical">
+    /// True for a folder about to be walked: when where it really leads cannot be read, it is refused rather than
+    /// trusted. A folder's walk opens what is below it, so its check has to see where it leads; a file is checked again
+    /// through the handle its overwrite holds.
+    /// </param>
+    internal void ValidatePath(string path, bool requireCanonical = false)
     {
         var fullPath = Path.GetFullPath(path);
 
@@ -700,10 +780,19 @@ public sealed partial class FileShredderService
         // (a junction a standard user can create without admin), still slips past the
         // leaf check above and would be shredded through to the real System32 file.
         // Ask the OS for the fully-resolved canonical path, which collapses EVERY reparse
-        // point anywhere in the chain, and validate that too. Best-effort: when the path
-        // can't be opened (missing, locked) we keep the already-validated literal form.
+        // point anywhere in the chain, and validate that too. For a file, when the path can't be opened (missing,
+        // locked) the already-validated literal form is kept, and the held handle is checked again before a byte is
+        // written. A folder is refused instead: its walk goes on to open everything below it.
         var canonical = ResolveFinalPath(fullPath);
-        if (canonical is null) return;
+        if (canonical is null)
+        {
+            if (!requireCanonical) return;
+            // A folder that is simply gone says so, as it did before this check was added; the share check above
+            // already ran, so this reaches nothing off this PC.
+            if (!Directory.Exists(fullPath)) throw new DirectoryNotFoundException($"Folder not found: {path}");
+            throw new SecurityException(
+                $"SysManager could not read where this folder really leads, so it is not shredded: {fullPath}");
+        }
         // A link anywhere on the way can lead to a share, with every name of the path itself on this PC.
         ThrowIfOnANetworkShare(canonical);
         if (!canonical.Equals(fullPath, StringComparison.OrdinalIgnoreCase))
@@ -753,10 +842,15 @@ public sealed partial class FileShredderService
     }
 
     /// <summary>
-    /// Throws <see cref="SecurityException"/> if <paramref name="fullPath"/> equals or
-    /// sits under any system-protected root. Matches on a directory boundary so an
-    /// unrelated sibling (e.g. "C:\WindowsApps") is not blocked by "C:\Windows".
+    /// Throws <see cref="SecurityException"/> if <paramref name="fullPath"/> equals or sits under any system-protected
+    /// root, holds one, is the root of a drive, or is or holds one of the folders <see cref="HeldRoots"/> lists.
+    /// Matches on a directory boundary so an unrelated sibling (e.g. "C:\WindowsApps") is not blocked by "C:\Windows".
     /// </summary>
+    /// <remarks>
+    /// Only "equal or under" was checked, so C:\ itself passed (its literal and canonical forms are both C:\), and so
+    /// did a folder that holds Windows or a profile. For a file, and for the held handle's check, the added rules
+    /// never apply: a file holds nothing and is no drive's root.
+    /// </remarks>
     private void ThrowIfProtected(string fullPath)
     {
         foreach (var prefix in _protectedRoots)
@@ -767,6 +861,25 @@ public sealed partial class FileShredderService
                 throw new SecurityException(
                     $"Shredding system-protected paths is not allowed: {fullPath}");
             }
+
+            // A folder that holds one of them would take it along.
+            if (SystemPaths.IsInsideSubtree(prefix, fullPath))
+                throw new SecurityException(
+                    $"Shredding a folder that holds Windows' own folders is not allowed: {fullPath}. "
+                    + "Pick the folders inside it you want shredded.");
+        }
+
+        if (SystemPaths.IsDriveRoot(fullPath))
+            throw new SecurityException(
+                $"Shredding the whole of a drive is not allowed: {fullPath}. "
+                + "Pick the folders on it you want shredded.");
+
+        foreach (var held in _heldRoots)
+        {
+            if (SystemPaths.IsInsideSubtree(held, fullPath))
+                throw new SecurityException(
+                    $"Shredding your profile, one of its main folders, or a folder that holds them is not allowed: "
+                    + $"{fullPath}. Pick the files and folders inside it you want shredded.");
         }
     }
 
@@ -780,7 +893,7 @@ public sealed partial class FileShredderService
     {
         // FILE_FLAG_BACKUP_SEMANTICS lets us open a directory handle too, not just files.
         using SafeFileHandle handle = NativeMethods.CreateFile(
-            path,
+            ExtendedPathIfNeeded(path),
             0, // no access rights needed — we only resolve the name
             FileShare.ReadWrite | FileShare.Delete,
             IntPtr.Zero,
@@ -912,14 +1025,46 @@ public sealed partial class FileShredderService
         if (!path.Contains('~')) return path;
 
         // First call with a zero-length buffer returns the required length (incl. NUL).
-        uint needed = NativeMethods.GetLongPathName(path, [], 0);
+        var asked = ExtendedPathIfNeeded(path);
+        uint needed = NativeMethods.GetLongPathName(asked, [], 0);
         if (needed == 0) return path; // not found / no permission — keep literal
 
         var buffer = new char[needed];
-        uint written = NativeMethods.GetLongPathName(path, buffer, needed);
+        uint written = NativeMethods.GetLongPathName(asked, buffer, needed);
         if (written == 0 || written >= needed) return path; // failed / race — keep literal
 
-        return new string(buffer, 0, (int)written);
+        // A path asked in its extended form comes back in it; the callers compare plain paths.
+        var expanded = new string(buffer, 0, (int)written);
+        return !ReferenceEquals(asked, path) && expanded.StartsWith(ExtendedPrefix, StringComparison.Ordinal)
+            ? expanded[ExtendedPrefix.Length..]
+            : expanded;
+    }
+
+    private const string ExtendedPrefix = @"\\?\";
+
+    // MAX_PATH: from this length on, a path given to a Win32 call as it is fails unless the PC has long paths
+    // turned on.
+    private const int MaxShortPath = 260;
+
+    /// <summary>
+    /// <paramref name="path"/> in the <c>\\?\</c> form when a Win32 call needs it to reach the file, or unchanged.
+    /// </summary>
+    /// <remarks>
+    /// The overwrite goes through <see cref="FileStream"/>, which .NET extends for long paths itself, but the
+    /// shredder's own calls (the removal, the stream search, the final-path check, the short-name expansion) took
+    /// the path as it was. A file whose path had 260 characters or more was overwritten and never removed, and its
+    /// named streams were skipped. This applies .NET's own rule (260 or more characters, or a trailing dot or
+    /// space), so a shorter path reaches every call exactly as before. A UNC or device path is returned as it is.
+    /// </remarks>
+    internal static string ExtendedPathIfNeeded(string path)
+    {
+        if (path.StartsWith(@"\\", StringComparison.Ordinal)) return path;
+        string full;
+        try { full = Path.GetFullPath(path); }
+        catch (ArgumentException) { return path; }
+        return full.Length >= MaxShortPath || full.EndsWith('.') || full.EndsWith(' ')
+            ? ExtendedPrefix + full
+            : path;
     }
 
     private static partial class NativeMethods
@@ -932,6 +1077,9 @@ public sealed partial class FileShredderService
         internal const uint DELETE = 0x0001_0000;
         internal const uint FILE_READ_ATTRIBUTES = 0x0080;
         internal const int ERROR_ACCESS_DENIED = 5;
+
+        /// <summary>What <c>FindFirstStreamW</c> sets when a file has no stream to list.</summary>
+        internal const int ERROR_HANDLE_EOF = 38;
 
         /// <summary><c>FileDispositionInfo</c> in <c>FILE_INFO_BY_HANDLE_CLASS</c>.</summary>
         internal const int FileDispositionInfoClass = 4;

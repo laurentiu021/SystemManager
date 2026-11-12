@@ -1057,7 +1057,8 @@ public class FileShredderViewModelTests
         await File.WriteAllBytesAsync(stays, new byte[4096]);
         var service = new FileShredderService(candidate =>
             candidate.Equals(stays, StringComparison.OrdinalIgnoreCase)
-                ? new FileShredderServiceTests.ReplacedOnCloseStream(candidate, movedTo, "another file has this name now")
+                ? new FileShredderServiceTests.ReplacedOnCloseStream(
+                    candidate, movedTo, "another file has this name now")
                 : new FileStream(candidate, FileMode.Open, FileAccess.Write, FileShare.None));
         using var dialog = new DialogAnswer(confirm: true);
         using var activity = new ActivityLogScope();

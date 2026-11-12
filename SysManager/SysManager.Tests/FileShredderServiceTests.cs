@@ -1170,7 +1170,7 @@ public class FileShredderServiceTests
                                  FileOptions.WriteThrough | FileOptions.SequentialScan));
         try
         {
-            var ex = await Assert.ThrowsAsync<IOException>(
+            var ex = await Assert.ThrowsAsync<OverwrittenNotRemovedException>(
                 () => svc.ShredFileAsync(path, ShredMethod.Quick, null, CancellationToken.None));
 
             Assert.Contains("no longer leads to the file that was overwritten", ex.Message, StringComparison.Ordinal);
@@ -1540,5 +1540,49 @@ public class FileShredderServiceTests
             if (File.Exists(movedTo)) File.Delete(movedTo);
             Directory.Delete(dir, recursive: true);
         }
+    }
+
+    [Fact]
+    public void AFolderStillThere_IsNotDone_UnlessOnlyTheLinksItLeftAloneKeepIt()
+    {
+        Assert.True(new ShredFolderReport().IsDone);
+        Assert.False(new ShredFolderReport { FolderLeftInPlace = true }.IsDone);
+        Assert.True(new ShredFolderReport { FolderLeftInPlace = true, SkippedLinks = ["link"] }.IsDone);
+        Assert.False(new ShredFolderReport
+        {
+            FolderLeftInPlace = true,
+            SkippedLinks = ["link"],
+            FilesNotRemoved = 1,
+        }.IsDone);
+        Assert.False(new ShredFolderReport
+        {
+            FolderLeftInPlace = true,
+            SkippedLinks = ["link"],
+            FoldersNotRead = 1,
+        }.IsDone);
+        Assert.False(new ShredFolderReport { WasCancelled = true }.IsDone);
+    }
+
+    [Theory]
+    [InlineData(0, "nothing in it could be shredded, so the folder and everything in it are still on the computer.")]
+    [InlineData(3, "the folder itself could not be removed, so it is still on the computer.")]
+    public void AFolderStillThere_ForNoReasonGivenAbove_SaysSo(int shredded, string expected)
+        => Assert.Equal(expected, new ShredFolderReport { FilesShredded = shredded, FolderLeftInPlace = true }.Notice);
+
+    [Fact]
+    public void ACancelledFolder_DoesNotAlsoSayItCouldNotBeRemoved()
+    {
+        var notice = new ShredFolderReport { WasCancelled = true, FolderLeftInPlace = true }.Notice;
+
+        Assert.Equal("you stopped it before anything inside was destroyed, so the folder is untouched.", notice);
+    }
+
+    [Fact]
+    public void FoldersThatCouldNotBeOpened_AreNamedAsStillThere()
+    {
+        var notice = new ShredFolderReport { FilesShredded = 2, FoldersNotRead = 2, FolderLeftInPlace = true }.Notice;
+
+        Assert.Equal("2 folders in it could not be opened, so what is in them was not shredded and is still on the "
+            + "computer.", notice);
     }
 }

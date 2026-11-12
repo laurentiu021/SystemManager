@@ -6,7 +6,6 @@ using System.Globalization;
 using System.IO;
 using System.Runtime.InteropServices;
 using System.Security.AccessControl;
-using System.Security.Principal;
 using System.Text;
 using System.Text.Encodings.Web;
 using System.Text.Json;
@@ -46,6 +45,7 @@ public sealed partial class EnvironmentVariableService
     internal const string UserBackupValueName = "Snapshot";
     internal const string MachineBackupPath = @"SOFTWARE\SysManagerEnvironmentBackup";
     internal const string MachineBackupValueName = "Snapshot";
+    private const string MachineBackupLabel = "Machine backup";
     internal const int MaxBackupFileBytes = 1024 * 1024;
     internal const int MaxVariableCount = 4096;
     internal const int MaxVariableNameLength = 16383;
@@ -514,133 +514,11 @@ public sealed partial class EnvironmentVariableService
 
     private void WriteMachineBackup(string json)
     {
-        using var key = OpenOrCreateMachineBackupKey();
+        using var key = ProtectedMachineKey.OpenOrCreate(
+            _machineRoot, MachineBackupPath, _enforceMachineBackupProtection, MachineBackupLabel);
         key.SetValue(MachineBackupValueName, json, RegistryValueKind.String);
         Log.Information("Environment: pristine Machine backup written to protected registry storage");
     }
-
-    private RegistryKey OpenOrCreateMachineBackupKey()
-    {
-        if (!_enforceMachineBackupProtection)
-        {
-            return _machineRoot.CreateSubKey(MachineBackupPath, writable: true)
-                ?? throw new UnauthorizedAccessException(
-                    "The protected Machine backup key could not be created.");
-        }
-
-        EnsureMachineBackupParentIsProtected();
-        using (var key = _machineRoot.CreateSubKey(
-                   MachineBackupPath,
-                   RegistryKeyPermissionCheck.ReadWriteSubTree,
-                   RegistryOptions.None,
-                   CreateProtectedMachineBackupSecurity())
-               ?? throw new UnauthorizedAccessException(
-                   "The protected Machine backup key could not be created."))
-        {
-            if (!IsProtectedMachineBackupSecurity(key.GetAccessControl(
-                    AccessControlSections.Owner | AccessControlSections.Access)))
-            {
-                throw new InvalidDataException(
-                    "The Machine backup key is not protected from standard-user writes.");
-            }
-        }
-
-        return _machineRoot.OpenSubKey(MachineBackupPath, writable: true)
-            ?? throw new UnauthorizedAccessException(
-                "The protected Machine backup key could not be reopened.");
-    }
-
-    private void EnsureMachineBackupParentIsProtected()
-    {
-        if (!IsMachineBackupParentProtected())
-        {
-            throw new InvalidDataException(
-                "The Machine backup parent key is not protected from standard-user writes.");
-        }
-    }
-
-    private bool IsMachineBackupParentProtected()
-    {
-        using var parent = _machineRoot.OpenSubKey(
-            "SOFTWARE",
-            RegistryRights.ReadKey | RegistryRights.ReadPermissions);
-        return parent is not null && IsProtectedMachineBackupSecurity(parent.GetAccessControl(
-            AccessControlSections.Owner | AccessControlSections.Access));
-    }
-
-    internal static RegistrySecurity CreateProtectedMachineBackupSecurity()
-    {
-        var administrators = new SecurityIdentifier(
-            WellKnownSidType.BuiltinAdministratorsSid,
-            domainSid: null);
-        var system = new SecurityIdentifier(WellKnownSidType.LocalSystemSid, domainSid: null);
-        var users = new SecurityIdentifier(WellKnownSidType.BuiltinUsersSid, domainSid: null);
-
-        RegistrySecurity security = new();
-        security.SetAccessRuleProtection(isProtected: true, preserveInheritance: false);
-        security.SetOwner(administrators);
-        security.AddAccessRule(new RegistryAccessRule(
-            administrators,
-            RegistryRights.FullControl,
-            InheritanceFlags.None,
-            PropagationFlags.None,
-            AccessControlType.Allow));
-        security.AddAccessRule(new RegistryAccessRule(
-            system,
-            RegistryRights.FullControl,
-            InheritanceFlags.None,
-            PropagationFlags.None,
-            AccessControlType.Allow));
-        security.AddAccessRule(new RegistryAccessRule(
-            users,
-            RegistryRights.ReadKey,
-            InheritanceFlags.None,
-            PropagationFlags.None,
-            AccessControlType.Allow));
-        return security;
-    }
-
-    internal static bool IsProtectedMachineBackupSecurity(RegistrySecurity security)
-    {
-        if (security.GetOwner(typeof(SecurityIdentifier)) is not SecurityIdentifier owner ||
-            !IsTrustedMachinePrincipal(owner) ||
-            !security.AreAccessRulesCanonical)
-            return false;
-
-        const RegistryRights mutatingRights =
-            RegistryRights.SetValue |
-            RegistryRights.CreateSubKey |
-            RegistryRights.CreateLink |
-            RegistryRights.Delete |
-            RegistryRights.ChangePermissions |
-            RegistryRights.TakeOwnership;
-
-        foreach (RegistryAccessRule rule in security.GetAccessRules(
-                     includeExplicit: true,
-                     includeInherited: true,
-                     typeof(SecurityIdentifier)))
-        {
-            if (rule.AccessControlType != AccessControlType.Allow ||
-                (rule.RegistryRights & mutatingRights) == 0 ||
-                (rule.PropagationFlags & PropagationFlags.InheritOnly) != 0)
-            {
-                continue;
-            }
-
-            var principal = (SecurityIdentifier)rule.IdentityReference;
-            if (!IsTrustedMachinePrincipal(principal) &&
-                !principal.IsWellKnown(WellKnownSidType.CreatorOwnerSid))
-            {
-                return false;
-            }
-        }
-
-        return true;
-    }
-
-    private static bool IsTrustedMachinePrincipal(SecurityIdentifier principal) =>
-        principal.IsWellKnown(WellKnownSidType.LocalSystemSid) ||
-        principal.IsWellKnown(WellKnownSidType.BuiltinAdministratorsSid);
 
     /// <summary>The variables of <paramref name="scope"/> as the safety copy keeps them.</summary>
     /// <remarks>
@@ -914,14 +792,14 @@ public sealed partial class EnvironmentVariableService
             if (key is null)
                 return BackupRead<MachineEnvBackup>.Missing;
 
-            if (_enforceMachineBackupProtection && !IsMachineBackupParentProtected())
+            if (_enforceMachineBackupProtection && !ProtectedMachineKey.IsParentProtected(_machineRoot))
             {
                 Log.Warning("Environment: Machine backup parent key is not access-controlled");
                 return BackupRead<MachineEnvBackup>.Invalid;
             }
 
             if (_enforceMachineBackupProtection &&
-                !IsProtectedMachineBackupSecurity(key.GetAccessControl(
+                !ProtectedMachineKey.IsProtected(key.GetAccessControl(
                     AccessControlSections.Owner | AccessControlSections.Access)))
             {
                 Log.Warning("Environment: Machine backup key is writable by an untrusted principal");

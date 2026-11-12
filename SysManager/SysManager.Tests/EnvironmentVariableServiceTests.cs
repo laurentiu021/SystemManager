@@ -1032,9 +1032,9 @@ public class EnvironmentVariableServiceTests
     [Fact]
     public void ProtectedMachineBackupAcl_AcceptsOnlyTrustedWriters()
     {
-        var security = EnvironmentVariableService.CreateProtectedMachineBackupSecurity();
+        var security = ProtectedMachineKey.CreateSecurity();
 
-        Assert.True(EnvironmentVariableService.IsProtectedMachineBackupSecurity(security));
+        Assert.True(ProtectedMachineKey.IsProtected(security));
 
         var users = new SecurityIdentifier(WellKnownSidType.BuiltinUsersSid, domainSid: null);
         security.AddAccessRule(new RegistryAccessRule(
@@ -1043,18 +1043,18 @@ public class EnvironmentVariableServiceTests
             InheritanceFlags.None,
             PropagationFlags.None,
             AccessControlType.Allow));
-        Assert.False(EnvironmentVariableService.IsProtectedMachineBackupSecurity(security));
+        Assert.False(ProtectedMachineKey.IsProtected(security));
     }
 
     [Fact]
     public void ProtectedMachineBackupAcl_RejectsUntrustedOwner()
     {
-        var security = EnvironmentVariableService.CreateProtectedMachineBackupSecurity();
+        var security = ProtectedMachineKey.CreateSecurity();
         security.SetOwner(new SecurityIdentifier(
             WellKnownSidType.BuiltinUsersSid,
             domainSid: null));
 
-        Assert.False(EnvironmentVariableService.IsProtectedMachineBackupSecurity(security));
+        Assert.False(ProtectedMachineKey.IsProtected(security));
     }
 
     [Fact]

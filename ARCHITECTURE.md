@@ -1627,7 +1627,15 @@ Key services:
   machine-wide refusals, which are the ones that need an administrator. Variables
   the snapshot cannot keep as they are (a value that is not text, too many, too long)
   refuse `EnsureBackup` with `BackupRefusedException`, whose message names the
-  variable, apart from the damaged-copy `InvalidDataException` (#2775).
+  variable, apart from the damaged-copy `InvalidDataException` (#2775). The Machine copy's key is created and
+  checked through `ProtectedMachineKey`.
+- `ProtectedMachineKey`: a key directly under HKLM\SOFTWARE that only Administrators and SYSTEM can change.
+  `OpenOrCreate` creates it with that access list (owned by Administrators, read for Users, nothing inherited) once
+  HKLM\SOFTWARE itself passes the same check, and checks it again once created; `IsParentProtected` and
+  `IsProtected` are the checks a store repeats on every read before it trusts what the key holds. It sits in
+  Services/ rather than Helpers/ because the enforced create path only runs against the real HKLM with administrator
+  rights, which the unit suite never reaches, and Helpers/ is held to a line-coverage floor. Each caller passes a
+  label that names its key in the exceptions.
 - `RestorePointService` — lists (`Get-ComputerRestorePoint`), creates
   (`Checkpoint-Computer`), and restores (`Restore-Computer`) System Restore points
   through the `IPowerShellRunner` seam; the output parser is a pure, unit-tested

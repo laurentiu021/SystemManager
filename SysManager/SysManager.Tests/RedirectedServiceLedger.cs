@@ -87,17 +87,17 @@ internal sealed class RedirectedServiceLedger : IDisposable
     {
         var key = MachineRoot.CreateSubKey(ServiceStartupLedgerService.ProtectedPath, writable: true)
             ?? throw new InvalidOperationException("Could not create the stand-in ledger key.");
-        var original = key.GetAccessControl(AccessControlSections.Owner | AccessControlSections.Access);
-        var denied = key.GetAccessControl(AccessControlSections.Owner | AccessControlSections.Access);
         using var identity = WindowsIdentity.GetCurrent();
-        denied.AddAccessRule(new RegistryAccessRule(
+        var deny = new RegistryAccessRule(
             identity.User!,
-            RegistryRights.SetValue | RegistryRights.CreateSubKey | RegistryRights.Delete,
+            RegistryRights.SetValue | RegistryRights.CreateSubKey,
             InheritanceFlags.None,
             PropagationFlags.None,
-            AccessControlType.Deny));
+            AccessControlType.Deny);
+        var denied = key.GetAccessControl(AccessControlSections.Access);
+        denied.AddAccessRule(deny);
         key.SetAccessControl(denied);
-        return new Restore(key, original);
+        return new Restore(key, deny);
     }
 
     public void Dispose()
@@ -111,11 +111,18 @@ internal sealed class RedirectedServiceLedger : IDisposable
         }
     }
 
-    private sealed class Restore(RegistryKey key, RegistrySecurity original) : IDisposable
+    /// <summary>Takes the deny rule out again.</summary>
+    /// <remarks>
+    /// By removing the rule, not by writing back the list read before it was added: a list that was read and not
+    /// changed marks no section as changed, so writing it back writes nothing and the rule stays.
+    /// </remarks>
+    private sealed class Restore(RegistryKey key, RegistryAccessRule deny) : IDisposable
     {
         public void Dispose()
         {
-            key.SetAccessControl(original);
+            var security = key.GetAccessControl(AccessControlSections.Access);
+            security.RemoveAccessRuleSpecific(deny);
+            key.SetAccessControl(security);
             key.Dispose();
         }
     }

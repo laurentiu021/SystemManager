@@ -1101,18 +1101,17 @@ public class EnvironmentVariableServiceTests
             EnvironmentVariableService.MachineEnvPath,
             writable: true);
         Assert.NotNull(key);
-        var originalSecurity = key!.GetAccessControl(
-            AccessControlSections.Owner | AccessControlSections.Access);
-        var deniedSecurity = key.GetAccessControl(
+        var deniedSecurity = key!.GetAccessControl(
             AccessControlSections.Owner | AccessControlSections.Access);
         using var identity = WindowsIdentity.GetCurrent();
         Assert.NotNull(identity.User);
-        deniedSecurity.AddAccessRule(new RegistryAccessRule(
+        var deny = new RegistryAccessRule(
             identity.User!,
             RegistryRights.SetValue,
             InheritanceFlags.None,
             PropagationFlags.None,
-            AccessControlType.Deny));
+            AccessControlType.Deny);
+        deniedSecurity.AddAccessRule(deny);
         key.SetAccessControl(deniedSecurity);
 
         try
@@ -1128,7 +1127,11 @@ public class EnvironmentVariableServiceTests
         }
         finally
         {
-            key.SetAccessControl(originalSecurity);
+            // The rule is taken out, not the list read before it was written back: a list read and left unchanged
+            // marks nothing as changed, so writing it back wrote nothing and the rule stayed.
+            var security = key.GetAccessControl(AccessControlSections.Access);
+            security.RemoveAccessRuleSpecific(deny);
+            key.SetAccessControl(security);
         }
     }
 

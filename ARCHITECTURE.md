@@ -973,7 +973,13 @@ Key services:
   chain, and refuses when the canonical path differs from the one asked for. `SafeWalkOptions.RefuseRootReachedThroughLink`
   defaults to true; File Shredder alone turns it off, because its root is chosen and named by the user
   and its safety net is `ValidatePath`'s own protected-roots check on the canonical path, not a refusal
-  to act — refusing there would report a completed shred that destroyed nothing. Three read-only scanners (`DiskAnalyzerService`, `DuplicateFileService`,
+  to act — refusing there would report a completed shred that destroyed nothing. The root is resolved once, by
+  `Enter`, into an anchor: the root as the walk spells it and the folder Windows resolves it to. Every folder below is
+  checked again when it is taken off the stack (`StillWhereListed`), because it waited there after its parent was
+  listed: one that no longer resolves to the anchor's folder plus its relative path goes to `SkippedLinks`, one that
+  does not resolve at all to `Unreadable`. Checking against the anchor rather than with `IsReachedThroughLink` keeps
+  File Shredder's root, reached through a link by design, walkable. `DirectoriesDeepestFirst` lists a folder only
+  after that check. Three read-only scanners (`DiskAnalyzerService`, `DuplicateFileService`,
   `LargeFileScanner`) still keep their own loop: they prune the traversal by a path predicate, and
   one needs an access-denied tally, neither of which `SafeWalkOptions` carries. That exemption is a
   named list in `ArchitectureTests`, and it is **partial and asserted**: each exempted scanner must

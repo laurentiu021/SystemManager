@@ -110,7 +110,7 @@ internal static class SafeFileWalk
     /// </summary>
     internal static IEnumerable<string> Files(string root, CancellationToken ct, SafeWalkOptions options)
     {
-        if (!CanEnter(root, options)) yield break;
+        if (Enter(root, options) is not { } anchor) yield break;
 
         var stack = new Stack<string>();
         stack.Push(root);
@@ -119,6 +119,8 @@ internal static class SafeFileWalk
         while (stack.Count > 0 && !ct.IsCancellationRequested)
         {
             var current = stack.Pop();
+            // A folder waits on the stack while the rest of its parent is listed, and was checked only then.
+            if (!atRoot && !StillWhereListed(current, anchor, options)) continue;
             var dir = new DirectoryInfo(current);
 
             // Files first, then subdirectories, so a directory that fails to list its children still
@@ -164,7 +166,7 @@ internal static class SafeFileWalk
         string root, CancellationToken ct, SafeWalkOptions options)
     {
         List<string> found = [];
-        if (!CanEnter(root, options)) return found;
+        if (Enter(root, options) is not { } anchor) return found;
 
         var stack = new Stack<string>();
         stack.Push(root);
@@ -172,7 +174,15 @@ internal static class SafeFileWalk
 
         while (stack.Count > 0 && !ct.IsCancellationRequested)
         {
-            var dir = new DirectoryInfo(stack.Pop());
+            var current = stack.Pop();
+            if (!atRoot)
+            {
+                // Listed only once it is opened and found where it was listed, so a folder made into a link while it
+                // waited on the stack never reaches the list the cleanups remove.
+                if (!StillWhereListed(current, anchor, options)) continue;
+                found.Add(current);
+            }
+            var dir = new DirectoryInfo(current);
             foreach (var sub in EnumerateGuarded(dir.EnumerateDirectories, dir.FullName, options.Unreadable))
             {
                 if ((sub.Attributes & FileAttributes.ReparsePoint) != 0)
@@ -183,7 +193,6 @@ internal static class SafeFileWalk
                 if (atRoot && IsExcludedRootChild(sub.Name, options)) continue;
                 if (SystemPaths.IsInsideAnySubtree(sub.FullName, [.. options.ExcludeSubtrees])) continue;
 
-                found.Add(sub.FullName);
                 stack.Push(sub.FullName);
             }
             atRoot = false;
@@ -214,14 +223,59 @@ internal static class SafeFileWalk
     }
 
     /// <summary>
-    /// True when the walk may start at <paramref name="root"/>. Guards the traversal ROOT, not just its
-    /// children: a cache path replaced by a junction (writable without admin, e.g.
+    /// Where the walk starts at <paramref name="root"/>, or null when it may not. Guards the traversal ROOT, not just
+    /// its children: a cache path replaced by a junction (writable without admin, e.g.
     /// <c>%LOCALAPPDATA%\NVIDIA\GLCache</c>) would otherwise have its LINK TARGET's files enumerated and
     /// then deleted — data loss outside the tree the caller asked for.
     /// </summary>
-    private static bool CanEnter(string root, SafeWalkOptions options) =>
-        (options.RefuseRootReachedThroughLink ? !IsReachedThroughLink(root) : !IsReparsePoint(root))
-        && !SystemPaths.IsInsideAnySubtree(root, [.. options.ExcludeSubtrees]);
+    /// <remarks>
+    /// The one place the root is resolved: <see cref="IsReachedThroughLink"/>'s rule and the anchor every folder below
+    /// is checked against come from the same answer, so a root swapped between two separate checks cannot pass one and
+    /// redirect the other. File Shredder's opt-out keeps its leaf-only test, and its anchor's resolved folder differs
+    /// from the spelling walked by design.
+    /// </remarks>
+    private static Anchor? Enter(string root, SafeWalkOptions options)
+    {
+        if (SystemPaths.IsInsideAnySubtree(root, [.. options.ExcludeSubtrees]) || IsReparsePoint(root)) return null;
+        if (NormalizeForCompare(root) is not { } asked) return null;
+        if (NormalizeForCompare(FileShredderService.ResolveFinalPath(root)) is not { } resolved) return null;
+        if (options.RefuseRootReachedThroughLink && !string.Equals(resolved, asked, StringComparison.OrdinalIgnoreCase))
+            return null;
+        return new Anchor(Path.TrimEndingDirectorySeparator(new DirectoryInfo(root).FullName), resolved);
+    }
+
+    /// <summary>
+    /// True when the folder <paramref name="dir"/>, listed below the anchor's root, still resolves to the same place
+    /// below the anchor's resolved folder. One that now leads elsewhere goes to
+    /// <see cref="SafeWalkOptions.SkippedLinks"/>, one that does not resolve at all (gone, cannot be opened) to
+    /// <see cref="SafeWalkOptions.Unreadable"/>.
+    /// </summary>
+    /// <remarks>
+    /// A folder was checked for a link only while the folder above it was listed; it then waited on the stack and was
+    /// opened by its path, so one made into a link in between was walked into. Compared against the anchor rather than
+    /// with <see cref="IsReachedThroughLink"/>, because under File Shredder's root, reached through a link by design,
+    /// every folder's canonical path differs from the path walked.
+    /// </remarks>
+    private static bool StillWhereListed(string dir, Anchor anchor, SafeWalkOptions options)
+    {
+        var canonical = NormalizeForCompare(FileShredderService.ResolveFinalPath(dir));
+        if (canonical is null)
+        {
+            options.Unreadable?.Add(dir);
+            return false;
+        }
+        if (string.Equals(canonical, anchor.Expected(dir), StringComparison.OrdinalIgnoreCase)) return true;
+        options.SkippedLinks?.Add(dir);
+        return false;
+    }
+
+    /// <summary>Where a walk started: the root as the walk spells it, and the folder Windows resolves it to.</summary>
+    private readonly record struct Anchor(string Walked, string Resolved)
+    {
+        /// <summary>Where <paramref name="dir"/>, spelled as the walk spells it, should resolve to.</summary>
+        internal string? Expected(string dir) =>
+            NormalizeForCompare(Path.Join(Resolved, Path.GetRelativePath(Walked, dir)));
+    }
 
     /// <summary>
     /// Removes the file <paramref name="path"/>, which a walk returned, only when its name still leads to that file;

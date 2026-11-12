@@ -894,8 +894,8 @@ public class FileShredderViewModelTests
         // One reporter per item, built inside the loop. Hoisting it above the foreach would settle it on the
         // first item and leave every later one with no progress at all.
         var loop = Array.FindIndex(lines,
-            line => line.Contains("foreach (var item in Items", StringComparison.Ordinal));
-        Assert.True(loop >= 0, "the queue loop over Items is gone — update this guard.");
+            line => line.Contains("foreach (var item in batch", StringComparison.Ordinal));
+        Assert.True(loop >= 0, "the queue loop over the confirmed batch is gone — update this guard.");
         Assert.True(Array.FindIndex(lines,
                 line => line.Contains("new SettlingProgress<int>(", StringComparison.Ordinal)) > loop,
             "the reporter is built outside the queue loop, so it settles on the first item and every "

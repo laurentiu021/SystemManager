@@ -532,7 +532,18 @@ public sealed partial class FileShredderService
     /// Securely shreds all files in a folder recursively, then removes the folder.
     /// Skips junctions and symlinks to prevent shredding outside the target directory.
     /// </summary>
-    public async Task<ShredFolderReport> ShredFolderAsync(string folderPath, ShredMethod method, IProgress<int>? progress, CancellationToken ct)
+    /// <remarks>
+    /// Runs on the thread pool from its first line. Until its first write it ran on the caller's thread, the
+    /// window's for Shred All, so the checks and the walk over a large folder froze the window before the first pass,
+    /// and Cancel could not be pressed (#3285). No token goes to <see cref="Task.Run(Func{Task})"/>, deliberately: a
+    /// shred cancelled before it starts still returns the report that says nothing was destroyed.
+    /// </remarks>
+    public Task<ShredFolderReport> ShredFolderAsync(
+        string folderPath, ShredMethod method, IProgress<int>? progress, CancellationToken ct)
+        => Task.Run(() => ShredFolderCoreAsync(folderPath, method, progress, ct));
+
+    private async Task<ShredFolderReport> ShredFolderCoreAsync(
+        string folderPath, ShredMethod method, IProgress<int>? progress, CancellationToken ct)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(folderPath);
         ValidatePath(folderPath, requireCanonical: true);
@@ -568,7 +579,9 @@ public sealed partial class FileShredderService
         // Files destroyed before the user cancelled. Reported rather than thrown away: every one of them
         // is gone, so ending with the folder marked "Cancelled" would tell the user nothing happened to
         // data that no longer exists (#2374).
-        var cancelled = false;
+        // A Cancel that stopped the walk left a list that is not the folder, and an empty one read as a folder with
+        // nothing left in it: the untouched folder was reported shredded.
+        var cancelled = ct.IsCancellationRequested;
         var shredded = 0;
 
         // Files a write-time fault stopped partway (fewer passes than the method asked for), not the
@@ -585,7 +598,7 @@ public sealed partial class FileShredderService
         // ones included: something below them led where it should not have.
         var refused = false;
 
-        for (var i = 0; i < totalFiles; i++)
+        for (var i = 0; !cancelled && i < totalFiles; i++)
         {
             if (ct.IsCancellationRequested) { cancelled = true; break; }
 

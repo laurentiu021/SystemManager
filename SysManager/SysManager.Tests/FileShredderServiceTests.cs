@@ -1606,10 +1606,11 @@ public class FileShredderServiceTests
             opened.Set();
             return new FileStream(candidate, FileMode.Open, FileAccess.Write, FileShare.None);
         });
+        Task<ShredFolderReport>? shred = null;
         try
         {
             var caller = Environment.CurrentManagedThreadId;
-            var shred = svc.ShredFolderAsync(dir, ShredMethod.Quick, null, CancellationToken.None);
+            shred = svc.ShredFolderAsync(dir, ShredMethod.Quick, null, CancellationToken.None);
             // This thread is held until the open has happened, so the shred cannot borrow it once it returns.
             Assert.True(opened.Wait(TimeSpan.FromSeconds(10)), "the shred never opened its file");
 
@@ -1619,6 +1620,10 @@ public class FileShredderServiceTests
         }
         finally
         {
+            // A failed assertion above leaves the shred running with the file open; it ends first, so the clean-up
+            // below cannot hide that failure behind "the file is in use".
+            if (shred is not null)
+                await shred.ContinueWith(_ => { }, TaskScheduler.Default).WaitAsync(TimeSpan.FromSeconds(10));
             if (Directory.Exists(dir)) Directory.Delete(dir, recursive: true);
         }
     }

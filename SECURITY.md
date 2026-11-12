@@ -244,7 +244,7 @@ What the app can and cannot do by design:
   exception to that last sentence: it never writes the name or location of a file you
   asked to destroy, anywhere in the path, because a shredded file's own identity is
   itself the evidence the shred is meant to remove — not only the account that owned
-  it. Its log calls record only the outcome, the method and, for a failure, the
+  it. Its log calls, and those of the folder walk it shares with the cleanup tabs, record only the outcome, the method and, for a failure, the
   exception type and HResult, never the caught exception object itself (whose own
   message often names the path the template otherwise avoids).
 - **Auto-update**: new builds are downloaded from the official GitHub

@@ -15464,8 +15464,8 @@ public partial class ArchitectureTests
     private static partial Regex ShredderWin32PathCall();
 
     /// <summary>
-    /// No Serilog call in <c>FileShredderService</c> or <c>FileShredderViewModel</c> names a path, or
-    /// attaches the raw exception object that was caught.
+    /// No Serilog call in <c>FileShredderService</c>, <c>FileShredderViewModel</c> or the walk they share,
+    /// <c>SafeFileWalk</c>, names a path, or attaches the raw exception object that was caught.
     /// </summary>
     /// <remarks>
     /// <c>FileShredderViewModel</c> already writes only counts to the activity log, because a file name
@@ -15488,9 +15488,12 @@ public partial class ArchitectureTests
         {
             ("Services", "FileShredderService.cs"),
             ("ViewModels", "FileShredderViewModel.cs"),
+            // The walk the shred, its clean-up and the queue's size go through: its failed listing named the folder.
+            ("Helpers", "SafeFileWalk.cs"),
         };
         var offenders = new List<string>();
         var callsScanned = 0;
+        var callsPerFile = new Dictionary<string, int>();
 
         foreach (var (folder, file) in files)
         {
@@ -15499,6 +15502,7 @@ public partial class ArchitectureTests
             foreach (Match call in ShredderLogCall().Matches(source))
             {
                 callsScanned++;
+                callsPerFile[file] = callsPerFile.GetValueOrDefault(file) + 1;
                 var line = source[..call.Index].Count(c => c == '\n') + 1;
                 var text = call.Value;
 
@@ -15515,9 +15519,16 @@ public partial class ArchitectureTests
             }
         }
 
-        // Vacuity floor: the two files carry 12 Log calls as fixed, measured here. Fewer means the regex
-        // stopped matching real calls, not that the files got safer.
-        Assert.True(callsScanned >= 10,
+        // Vacuity floors, per file and in total, measured here: a file the regex stopped reading would otherwise
+        // hide behind the others' count. Fewer means the guard looks at the wrong text, not that it got safer.
+        foreach (var (file, floor) in new[]
+                 {
+                     ("FileShredderService.cs", 15), ("FileShredderViewModel.cs", 4), ("SafeFileWalk.cs", 2),
+                 })
+            Assert.True(callsPerFile.GetValueOrDefault(file) >= floor,
+                $"only {callsPerFile.GetValueOrDefault(file)} log calls were found in {file}, expected at least "
+                + $"{floor}: this guard is looking at the wrong text there, not finding a clean file.");
+        Assert.True(callsScanned >= 21,
             $"only {callsScanned} shredder log calls were found — this guard is looking at the wrong text, "
             + "not finding a clean codebase.");
 

@@ -10,6 +10,19 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.136.173] - 2026-11-12
+
+**Run as administrator, SysManager now loads every Windows library it calls from Windows' own System32 folder, never a
+copy placed beside the exe.**
+
+### Fixed
+- Only the Windows library behind Windows Features' parent lookup was pinned to System32. For every other one
+  SysManager calls (among them the ones behind the GPU and resource charts, the signature checks, File Lock Detector,
+  power settings and the window's dark title bar), Windows looked in the exe's own folder first, a folder your
+  account can write to, and the chart library was loaded at every start, elevated starts included. Each of them is
+  now loaded by its full path from System32. The libraries those Windows libraries load for themselves, and the
+  native files .NET and WPF load, still follow Windows' own order (#2746).
+
 ## [1.136.172] - 2026-11-12
 
 **SysManager's log no longer names a folder its file walk could not read, so a File Shredder run leaves no trace of the

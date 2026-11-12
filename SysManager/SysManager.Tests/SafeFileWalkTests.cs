@@ -659,4 +659,122 @@ public class SafeFileWalkTests
         }
         finally { Directory.Delete(dir, recursive: true); }
     }
+
+    /// <summary>
+    /// A folder made into a link after the walk listed it, while it waited to be opened, is not walked into. The walk
+    /// checked a folder for a link only while it listed the folder above it, then opened it later by its path. Here the
+    /// root holds two folders; once the walk has yielded a file from the first one it opens, the other, still waiting,
+    /// is swapped for a junction to a folder outside the tree.
+    /// </summary>
+    [Fact]
+    public void Files_AFolderMadeIntoALinkWhileItWaited_IsNotWalkedInto()
+    {
+        var root = Directory.CreateTempSubdirectory("smtest_walk_swap_").FullName;
+        var outside = Directory.CreateTempSubdirectory("smtest_walk_swap_outside_").FullName;
+        var a = Path.Combine(root, "a");
+        var b = Path.Combine(root, "b");
+        Directory.CreateDirectory(a);
+        Directory.CreateDirectory(b);
+        File.WriteAllText(Path.Combine(a, "one.dat"), "inside");
+        File.WriteAllText(Path.Combine(b, "two.dat"), "inside");
+        File.WriteAllText(Path.Combine(outside, "victim.dat"), "outside the tree");
+        string? swapped = null;
+        try
+        {
+            List<string> skipped = [];
+            using var walk = SafeFileWalk.Files(root, CancellationToken.None,
+                new SafeWalkOptions { SkippedLinks = skipped }).GetEnumerator();
+            Assert.True(walk.MoveNext());
+            var first = walk.Current;
+
+            swapped = first.StartsWith(a + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase) ? b : a;
+            Directory.Move(swapped, swapped + "_moved");
+            Symlinks.RequireJunction(swapped, outside);
+
+            List<string> rest = [];
+            while (walk.MoveNext()) rest.Add(walk.Current);
+
+            Assert.DoesNotContain(rest, f => f.EndsWith("victim.dat", StringComparison.OrdinalIgnoreCase));
+            Assert.Contains(swapped, skipped);
+        }
+        finally
+        {
+            if (swapped is not null && Directory.Exists(swapped)) Directory.Delete(swapped, recursive: false);
+            Directory.Delete(root, recursive: true);
+            Directory.Delete(outside, recursive: true);
+        }
+    }
+
+    /// <summary>
+    /// With File Shredder's opt-out, the folders below a root reached through a link are still walked. Each folder is
+    /// checked against where the root resolves, not against its own spelling, which differs from its canonical path
+    /// for every folder under such a root.
+    /// </summary>
+    [Fact]
+    public void Files_WithTheOptOut_StillWalksTheFoldersBelowARootReachedThroughALink()
+    {
+        var root = NewTempRoot();
+        var real = Path.Combine(root, "real");
+        var deep = Path.Combine(real, "bucket", "one", "two");
+        Directory.CreateDirectory(deep);
+        File.WriteAllText(Path.Combine(real, "bucket", "top.txt"), "x");
+        File.WriteAllText(Path.Combine(deep, "deep.txt"), "x");
+        var linkParent = Path.Combine(root, "linkparent");
+        Symlinks.RequireJunction(linkParent, real, () => Directory.Delete(root, recursive: true));
+        try
+        {
+            List<string> skipped = [];
+            List<string> unreadable = [];
+            var throughLink = Path.Combine(linkParent, "bucket");
+            var opted = new SafeWalkOptions
+            {
+                RefuseRootReachedThroughLink = false,
+                SkippedLinks = skipped,
+                Unreadable = unreadable,
+            };
+
+            var found = SafeFileWalk.Files(throughLink, CancellationToken.None, opted).ToList();
+
+            Assert.Equal(2, found.Count);
+            Assert.Contains(Path.Combine(throughLink, "one", "two", "deep.txt"), found);
+            Assert.Empty(skipped);
+            Assert.Empty(unreadable);
+        }
+        finally
+        {
+            Directory.Delete(linkParent);
+            Directory.Delete(root, recursive: true);
+        }
+    }
+
+    /// <summary>
+    /// A folder that is gone by the time the walk opens it is reported as not read, so a caller that reads "nothing
+    /// inside" from the walk knows that part was never looked at.
+    /// </summary>
+    [Fact]
+    public void Files_AFolderGoneWhileItWaited_IsReportedAsNotRead()
+    {
+        var root = NewTempRoot();
+        var a = Path.Combine(root, "a");
+        var b = Path.Combine(root, "b");
+        Directory.CreateDirectory(a);
+        Directory.CreateDirectory(b);
+        File.WriteAllText(Path.Combine(a, "one.dat"), "x");
+        File.WriteAllText(Path.Combine(b, "two.dat"), "x");
+        try
+        {
+            List<string> unreadable = [];
+            using var walk = SafeFileWalk.Files(root, CancellationToken.None,
+                new SafeWalkOptions { Unreadable = unreadable }).GetEnumerator();
+            Assert.True(walk.MoveNext());
+            var gone = walk.Current.StartsWith(a + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase)
+                ? b : a;
+            Directory.Delete(gone, recursive: true);
+
+            while (walk.MoveNext()) { }
+
+            Assert.Equal([gone], unreadable);
+        }
+        finally { Directory.Delete(root, recursive: true); }
+    }
 }

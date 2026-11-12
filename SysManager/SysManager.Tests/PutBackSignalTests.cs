@@ -34,6 +34,9 @@ public sealed class PutBackSignalTests
         return runner;
     }
 
+    /// <summary>A startup ledger in the test's folder with no protected key: these tests read no records.</summary>
+    private static ServiceStartupLedgerService NoLedger(DirectoryInfo dir) => new(dir.FullName, machineRoot: null);
+
     [Fact]
     public async Task PerformanceMode_ReadsItsRecordAgain_WhenItsChangeIsPutBack()
     {
@@ -350,7 +353,7 @@ public sealed class PutBackSignalTests
         {
             var signal = new PutBackSignal();
             var reads = 0;
-            using var vm = new ServicesViewModel(Runner(), new ServiceStartupLedgerService(dir.FullName), signal,
+            using var vm = new ServicesViewModel(Runner(), NoLedger(dir), signal,
                 (title, _) => notices.Add(title), () => { reads++; return TwoServices(); });
             await vm.InitializationComplete;
             notices.Clear();
@@ -386,7 +389,7 @@ public sealed class PutBackSignalTests
                 [new() { Name = "AlphaSvc", DisplayName = "Alpha", Status = "Stopped", StartType = "Disabled" }];
             var reads = 0;
             var signal = new PutBackSignal();
-            using var vm = new ServicesViewModel(Runner(), new ServiceStartupLedgerService(dir.FullName), signal, (_, _) => { },
+            using var vm = new ServicesViewModel(Runner(), NoLedger(dir), signal, (_, _) => { },
                 () =>
                 {
                     // The second read is the Refresh's, the older one: it waits, and answers with the list from before
@@ -426,7 +429,7 @@ public sealed class PutBackSignalTests
         try
         {
             var signal = new PutBackSignal();
-            using var vm = new ServicesViewModel(Runner(), new ServiceStartupLedgerService(dir.FullName), signal,
+            using var vm = new ServicesViewModel(Runner(), NoLedger(dir), signal,
                 (_, _) => { },
                 () => unreadable ? throw new InvalidOperationException("The service list could not be read.") : TwoServices());
             await vm.InitializationComplete;
@@ -452,7 +455,7 @@ public sealed class PutBackSignalTests
         var notices = new List<string>();
         try
         {
-            using var vm = new ServicesViewModel(Runner(), new ServiceStartupLedgerService(dir.FullName), new PutBackSignal(),
+            using var vm = new ServicesViewModel(Runner(), NoLedger(dir), new PutBackSignal(),
                 (title, _) => notices.Add(title), TwoServices);
             await vm.InitializationComplete;
             notices.Clear();
@@ -511,7 +514,7 @@ public sealed class PutBackSignalTests
             ViewModelBase[] tabs =
             [
                 new PerformanceViewModel(performance, gaming, signal),
-                new ServicesViewModel(runner, new ServiceStartupLedgerService(dir.FullName), signal, (_, _) => { }, TwoServices),
+                new ServicesViewModel(runner, NoLedger(dir), signal, (_, _) => { }, TwoServices),
                 new DnsHostsViewModel(new DnsService(runner), new HostsFileService(Path.Combine(dir.FullName, "hosts")), signal),
                 new EnvironmentVariablesViewModel(env.Service, signal),
                 new GamingProfileViewModel(gaming, cpu, signal),

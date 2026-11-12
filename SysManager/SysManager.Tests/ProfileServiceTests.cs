@@ -422,6 +422,8 @@ public class ProfileServiceTests : IDisposable
     [InlineData("environment-backup.json")]
     [InlineData("settings-baseline.json")]
     [InlineData("service-startup-ledger.json")]
+    // The records a look without administrator rights found no longer standing for a change on THIS PC.
+    [InlineData(ServiceStartupLedgerService.StaleFileName)]
     [InlineData("last-crash.json")]
     [InlineData("activity.json")]
     [InlineData("resource-history-config.json")]

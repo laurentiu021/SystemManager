@@ -41,8 +41,10 @@ public sealed record PrivacyPriorValue(
 /// <para>Turning a switch off used to remove its values whatever had been there. A policy the user had set themselves,
 /// <c>AllowTelemetry = 1</c> through Group Policy or another tool, was gone after turning the diagnostic data switch
 /// on and off again, and Windows fell back to the Settings app's level.</para>
-/// <para>Same shape as <see cref="ServiceStartupLedgerService"/>: an injectable directory, a pure Serialize and Parse,
-/// file IO that never throws, a file that does not parse set aside rather than written over. The first record of a
+/// <para>The shape <see cref="ServiceStartupLedgerService"/> had before its records moved to a protected key: an
+/// injectable directory, a pure Serialize and Parse, file IO that never throws, a file that does not parse set aside
+/// rather than written over. What this one puts back is held to the values a setting takes (PrivacyService.MayPutBack),
+/// which is why its file can stay in the profile. The first record of a
 /// value is the one kept, so writing a switch on twice, or after Windows changed the value back, still puts back what
 /// was there before SysManager's first write.</para>
 /// </remarks>

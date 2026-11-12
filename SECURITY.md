@@ -354,9 +354,9 @@ modified — and a test asserts it, so the opt-out cannot be dropped unnoticed.
 
 All of it stays on your PC, and almost all of it inside your own user profile. None
 of it is encrypted, because none of it is secret: the settings and histories open in a
-text editor, and you can delete any of them without breaking the app. Two copies kept
+text editor, and you can delete any of them without breaking the app. Three copies kept
 to undo a change are the exception to the user profile, because of what they copy —
-see the last two rows.
+see the last three rows.
 
 | What | Where | Why it exists |
 |---|---|---|
@@ -374,7 +374,7 @@ see the last two rows.
 | Startup checks on/off | `%AppData%\SysManager` | The two About-tab checkboxes that control the once-a-day version check and the Dashboard's app-update check |
 | Whether the Welcome screen has been seen | `%LocalAppData%\SysManager` | When you first closed it, so it is shown only once on this PC |
 | Your saved sets and choices | `%LocalAppData%\SysManager` | Gaming profiles, volume presets, what closing the window does, the standby-cleaner choice, whether the Bulk Installer may load icons from the web, whether the Disk Analyzer map is shown |
-| State the app keeps to undo its own changes | `%LocalAppData%\SysManager` | Performance Mode's record of your original settings, the startup type of each service it turned off, game mode's record of a session still on, a counter Gaming Profile uses to put notifications back, a `.reg` export of each right-click menu key before it changes (`Backups\ContextMenu`, newest three per key), and a `.reg` export of each registry key the Uninstaller removes as a leftover (`Backups\Uninstaller`, newest three per key) |
+| State the app keeps to undo its own changes | `%LocalAppData%\SysManager` | Performance Mode's record of your original settings, the startup type of each service a version before 1.136.176 turned off (read by the Services tab's Enable, never written again, and pruned once a service is back on), the services of the last row's record a look without administrator rights found turned back on, so they stay off Undo Changes until a look with those rights takes them out, game mode's record of a session still on, a counter Gaming Profile uses to put notifications back, a `.reg` export of each right-click menu key before it changes (`Backups\ContextMenu`, newest three per key), and a `.reg` export of each registry key the Uninstaller removes as a leftover (`Backups\Uninstaller`, newest three per key) |
 | Uninstaller leftovers waiting for administrator rights | `%LocalAppData%\SysManager` | The paths of folders an uninstalled app left under Program Files or ProgramData, so the Uninstaller can offer them again in a session that runs as administrator. That session offers only paths still under those folders, whatever the file says, and none arrives ticked. Deleted once nothing is left on it; a copy that cannot be read is kept beside it as `.unreadable` rather than written over |
 | Crash marker | `%LocalAppData%\SysManager` | Whether the last session crashed, with the error's type and message, the message scrubbed of your account name as the log is |
 | Disk Analyzer history | `%LocalAppData%\SysManager` | The ten biggest folders, by name and size, of each of the last 20 locations you scanned, so the next scan can show what changed |
@@ -384,8 +384,9 @@ see the last two rows.
 | The app's native libraries | `%TEMP%\.net\SysManager-v<version>`, one folder for each version run | Unpacked there by .NET the first time each version starts, into a folder named after the exe, because a single-file app cannot load them from inside itself. SysManager deletes an older version's folder once nothing in it has been written for a week, when it runs without administrator rights |
 | The original hosts file | `%SystemRoot%\System32\drivers\etc\hosts.bak` | Copied once, the first time SysManager saves the hosts file, and kept beside it so the original can be restored |
 | A copy of your environment variables | Registry: `HKCU\Software\SysManager\Backups\Environment`; machine-wide ones in `HKLM\SOFTWARE\SysManagerEnvironmentBackup` | Taken before SysManager first changes them. The machine-wide copy is locked so a standard user cannot change it |
+| The startup type of each service SysManager turned off | Registry: `HKLM\SOFTWARE\SysManagerServiceStartupLedger` | Written when the Services tab disables a service, so Enable and Undo Changes can put it back. Locked like the machine-wide environment copy, and its permissions are checked on every read, because Undo Changes turns services back on as administrator from it |
 
-Apart from those last two, everything sits inside your own user profile, in two folders only
+Apart from those last three, everything sits inside your own user profile, in two folders only
 because Windows separates roaming settings from machine-local data; nothing is hidden in either.
 If you set up Scheduled Maintenance, Windows also keeps one task for your account in Task Scheduler,
 `SysManager Scheduled Maintenance-` followed by your account's SID. Deleting a copy kept to undo a

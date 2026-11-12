@@ -1477,8 +1477,9 @@ Key services:
   five tabs already keep: Performance Mode's record of the original settings (compared with the settings now,
   through `PerformanceService.TakeSnapshotAsync`, its graphics setting read from the card the record names; held
   back while a Gaming Profile session is on, left on, or not known to be off, whose settings they are until it
-  ends), the Services tab's `ServiceStartupLedgerService` records of
-  services still off, the copy beside a hosts file SysManager has written while the two differ
+  ends), the Services tab's `ServiceStartupLedgerService` records, in its protected key only, of
+  services still off (a service only an earlier version's file names is never listed and, while still off, is
+  said as an `UndoProblemKind.EarlierVersion` instead), the copy beside a hosts file SysManager has written while the two differ
   (`HostsFileService.ReadBackupState`), the environment variables' kept copy while a variable the restore can
   write differs (`EnvironmentVariableService.PreviewRestore`), and a Gaming Profile session that is on or was
   left on; plus, as one row that opens that tab, the Settings Watchdog settings that drifted and that it can
@@ -1635,7 +1636,8 @@ Key services:
   `IsProtected` are the checks a store repeats on every read before it trusts what the key holds. It sits in
   Services/ rather than Helpers/ because the enforced create path only runs against the real HKLM with administrator
   rights, which the unit suite never reaches, and Helpers/ is held to a line-coverage floor. Each caller passes a
-  label that names its key in the exceptions.
+  label that names its key in the exceptions. It creates only a key directly under SOFTWARE, the one level whose
+  parent it checks; `IsTrusted` is the two checks together, and `MustEnforce` makes them always on over the real HKLM.
 - `RestorePointService` — lists (`Get-ComputerRestorePoint`), creates
   (`Checkpoint-Computer`), and restores (`Restore-Computer`) System Restore points
   through the `IPowerShellRunner` seam; the output parser is a pure, unit-tested
@@ -1921,26 +1923,35 @@ Key services:
   what `Save` may do: after a read that failed it writes nothing and returns false, which the VM
   shows as `ViewModelBase.ChangeNotSavedStatus`, and a file that does not parse is set aside first.
 - `ServiceStartupLedgerService` — records what startup type a service had before SysManager
-  disabled it, as JSON under `%LocalAppData%\SysManager\service-startup-ledger.json`, so Enable
-  restores the original instead of guessing. The value used to live in a plain property on
-  `ServiceEntry`, and every scan rebuilds those objects — so Disable → Refresh → Enable brought an
-  Automatic service back as Manual (`StartTypeToScToken` maps an unknown value to `demand`) while
-  reporting success. Same shape as the three above: injectable config directory, pure unit-tested
-  `Serialize`/`Parse`, file IO that never throws. Only the types Enable can restore are stored —
-  `ServiceManagerService.RestorableStartTypes`, the one list the mapping to sc.exe tokens reads too:
-  `Automatic`, `Automatic (Delayed Start)` and `Manual` — and rehydration applies only to services
-  Windows currently reports as `Disabled`, so a stale entry can never override the machine.
-  `Load` returns null for a ledger that could not be read, and `Remember` returns false and writes
-  nothing then, so Disable records before it changes a service and refuses when it cannot. A ledger
-  that does not parse is set aside by `StoreFile` before a fresh one is written. `Load` reads one that
-  does not parse as empty; the internal `Read` also says it did not parse, so Undo Changes reports
-  that ledger as damaged rather than as nothing to put back, since the services it recorded are still
-  off (#1525).
+  disabled it, as JSON in the `Records` value of `HKLM\SOFTWARE\SysManagerServiceStartupLedger`, a key
+  created and checked through `ProtectedMachineKey`, so Enable restores the original instead of
+  guessing. The value used to live in a plain property on `ServiceEntry`, and every scan rebuilds those
+  objects — so Disable → Refresh → Enable brought an Automatic service back as Manual
+  (`StartTypeToScToken` maps an unknown value to `demand`) while reporting success. Only the types
+  Enable can restore are stored — `ServiceManagerService.RestorableStartTypes`, the one list the
+  mapping to sc.exe tokens reads too: `Automatic`, `Automatic (Delayed Start)` and `Manual` — and
+  rehydration applies only to services Windows currently reports as `Disabled`, so a stale entry can
+  never override the machine. Undo Changes turns services back on as administrator from what it names,
+  so `ReadProtected`, the only read Undo Changes makes, checks the key's access list and HKLM\SOFTWARE's
+  on every read, and refuses a value of another kind, one over 64 KB or one that does not parse
+  (`Unusable`, which Undo Changes reports as damaged rather than as nothing, since the services recorded
+  are still off, #1525). The public constructor builds over `MachineRegistry.Root`, which the test runs
+  set to null; over the real HKLM the checks cannot be turned off (`ProtectedMachineKey.MustEnforce`).
+  `Remember` writes only the key and says why it did not (`ServiceRecordSave`): not read, not protected,
+  not written, so Disable records before it changes a service and refuses when it cannot. A value that
+  does not parse is kept aside in the key (`Records.unreadable`, then `-2`) before a fresh one is written.
+  Earlier versions kept the records in `%LocalAppData%\SysManager\service-startup-ledger.json`, which any
+  program running as the user can write. It is read-only input now and nothing is moved from it: `Load`
+  and `Lookup` fall back to it for the Services tab's Enable, which then says the type is what an earlier
+  version recorded, and `ForgetAll` takes a record out of it once its service is on again. A look without
+  the administrator rights the key needs cannot take a record out of it, so `ForgetAll` marks the record in
+  `service-startup-turned-back-on.json` instead, and Undo Changes leaves off a record whose mark carries the
+  same time; a later Disable writes a record of its own time, so an old mark never hides it.
 - `PrivacyLedgerService` — records what each privacy switch's values held before SysManager first wrote
   them, as JSON under `%LocalAppData%\SysManager\privacy-ledger.json`, so turning a switch off puts back
   exactly that and removes a value only when there was none (#2778). Turning one off used to remove its
-  values whatever had been there, so a policy the user set themselves was lost. Same shape as
-  `ServiceStartupLedgerService`. A record holds the value's kind and its data, a string unexpanded and
+  values whatever had been there, so a policy the user set themselves was lost. The shape
+  `ServiceStartupLedgerService` had before its records moved to a protected key. A record holds the value's kind and its data, a string unexpanded and
   binary data in base64, and the first record of a value is the one kept, so a later write, or Windows
   changing the value in between, does not move what is put back. `PrivacyService.ApplyToggle` records
   before it writes and writes nothing when it cannot (`PrivacyWriteOutcome.NotRecorded`), and puts nothing
@@ -2285,6 +2296,10 @@ Key utility classes that don't fit neatly into Services or ViewModels (not an ex
   redirects `ActivityLogService.Instance` (#1772) — as the floor underneath every service's own
   `configDir` seam, not a replacement for it. `Logs`, `Updates`, `Tools`, `IconCache` and `Backups`
   are the sub-folders built from `Local`.
+- `MachineRegistry` — the HKLM root a store that keeps its records under HKLM is built over when nothing else
+  is given: `Registry.LocalMachine`, or null. Settable for the reason `AppDataFolders` is: `TestAssemblyInit` in
+  both test projects sets it to null, so a construction no seam scan can see never reads or writes the PC's real
+  records. `ServiceStartupLedgerService`'s public constructor reads it.
 - `AdminHelper` — elevation check (`IsElevated()`) and UAC relaunch. `IsElevatedAsAnotherUser()` compares
   the running process's SID against the account signed in to the active console session (via
   `WTSQuerySessionInformationW`) — true on a standard account elevated with a DIFFERENT administrator's

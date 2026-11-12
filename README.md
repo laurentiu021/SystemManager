@@ -666,9 +666,13 @@ Edit Windows environment variables without the cramped built-in dialog:
     until game mode is off and the status line says why. The graphics setting takes effect after a
     restart, and the setting of an NVIDIA card that is no longer found is left as it is
   - **Services** — the services SysManager turned off that are still off, in one row: putting it back
-    returns each one to the startup type it had. A service turned back on elsewhere, in Windows' own
-    Services console for example, is dropped from SysManager's record the next time it looks, so it is
-    not offered later if something else turns it off again
+    returns each one to the startup type it had. The list comes from a record only administrators and
+    Windows can change, so another program cannot add a service to it. A service turned back on
+    elsewhere, in Windows' own Services console for example, is not offered later if something else
+    turns it off again: SysManager drops it from its record the next time it looks with administrator
+    rights, and leaves it off the list until then. Services turned off by a version before 1.136.176 are
+    not listed, because that version kept its record where other programs can write; the page says so,
+    and Enable on the Services tab still turns them back on
   - **Hosts file** — once SysManager has written the hosts file, the copy kept beside it, for as long as
     the file still differs from it. Restoring it replaces everything written to the file since, by
     SysManager or by any other program, and the question says so
@@ -2361,6 +2365,9 @@ offers, "rate us" prompts:
   say so, rather than losing how the other services were set
 - **Undo Changes can turn them back on too** — the services SysManager turned off that are still
   off are one row there (administrator rights needed), each going back to the startup type it had.
+  SysManager keeps that record in a registry key only administrators and Windows can change, one for
+  the whole PC. A service only an earlier version recorded is turned back on from here, with Enable,
+  and the question says the startup type is the one that version recorded.
   This tab then reads its list again ("Read again after Undo Changes: 312 services (98 running)."),
   so no row goes on saying Disabled for a service that is back on
 - **Never claims a change it did not make** — Enable acts only on a disabled service and Disable only
@@ -3131,7 +3138,8 @@ To remove it completely:
 
 1. **Put back what you want put back.** Changes you asked SysManager to make to Windows are Windows
    settings rather than part of the app, so they stay as you set them. Open **System › Undo Changes**:
-   it lists what SysManager can still put back — Performance Mode, the services it turned off, the
+   it lists what SysManager can still put back — Performance Mode, the services it turned off (those
+   turned off by a version before 1.136.176 go back with **Enable** on the **Services** tab), the
    hosts file, the environment variables, game mode, and the settings you saved in Settings Watchdog —
    and links the tabs whose switches are their own undo. Two tabs are in neither list: the scan
    exclusions you added on **Defender Tweaks** stay until you press **Remove** beside each, and a
@@ -3156,6 +3164,8 @@ To remove it completely:
    - `HKEY_CURRENT_USER\Software\SysManager`, the copy of your environment variables
    - `HKEY_LOCAL_MACHINE\SOFTWARE\SysManagerEnvironmentBackup`, only if you changed a machine-wide
      variable (needs administrator rights)
+   - `HKEY_LOCAL_MACHINE\SOFTWARE\SysManagerServiceStartupLedger`, only if you turned a service off
+     (needs administrator rights)
    - `%SystemRoot%\System32\drivers\etc\hosts.bak`, only if DNS & Hosts saved the hosts file (needs
      administrator rights)
 

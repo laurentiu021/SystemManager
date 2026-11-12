@@ -362,6 +362,14 @@ public sealed partial class UndoChangesViewModel : ElevatedViewModelBase
         PutBackCommand.NotifyCanExecuteChanged();
     }
 
+    /// <summary>
+    /// What the page says of services an earlier version turned off: its record of them is not one Undo Changes trusts
+    /// to turn a service on as administrator, so they are not listed, and the Services tab still turns them back on.
+    /// </summary>
+    internal const string EarlierVersionServices =
+        "Services turned off by an earlier version of SysManager are not listed here. Turn them back on with Enable on "
+        + "the Services tab.";
+
     /// <summary>What the status line says after a look. Pure, so the wording can be pinned.</summary>
     internal static string Summarize(UndoScan scan)
     {
@@ -401,6 +409,9 @@ public sealed partial class UndoChangesViewModel : ElevatedViewModelBase
         var damaged = Named(UndoProblemKind.Damaged);
         if (damaged.Length > 0)
             said.Add($"What SysManager kept for {damaged} is damaged, so it cannot be put back.");
+
+        if (scan.Problems.Any(p => p.Why == UndoProblemKind.EarlierVersion))
+            said.Add(EarlierVersionServices);
 
         return string.Join(" ", said);
 

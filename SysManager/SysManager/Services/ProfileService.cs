@@ -80,8 +80,8 @@ public sealed class ProfileService
     ///   apply settings this machine was never on; that is the same defect class as #1954.</item>
     /// <item><c>settings-baseline.json</c> — the Settings Watchdog's record of this machine's registry.
     ///   A foreign baseline makes the Watchdog report drift that is only "a different PC".</item>
-    /// <item><c>service-startup-ledger.json</c>, <c>last-crash.json</c> — undo/diagnostic state tied to
-    ///   this installation's history.</item>
+    /// <item><c>service-startup-ledger.json</c>, <c>service-startup-turned-back-on.json</c>, <c>last-crash.json</c> —
+    ///   undo/diagnostic state tied to this installation's history.</item>
     /// <item><c>activity.json</c> — the local activity log. It is a record of what happened here, not a
     ///   setting, and merging two machines' histories would make it a fiction.</item>
     /// <item><c>ProcessDescriptions.json</c> — bundled data.</item>

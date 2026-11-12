@@ -54,7 +54,7 @@ public sealed class UndoChangesServiceTests
     {
         private readonly DirectoryInfo _dir = Directory.CreateTempSubdirectory("UndoChanges_");
 
-        public Rig()
+        public Rig(bool enforceProtection = false)
         {
             Runner.RunProcessAsync(Arg.Any<string>(), Arg.Any<string>(), Arg.Any<CancellationToken>(),
                     Arg.Any<System.Text.Encoding?>())
@@ -63,7 +63,8 @@ public sealed class UndoChangesServiceTests
             Runner.RunAsync(Arg.Any<string>(), Arg.Any<IDictionary<string, object?>?>(), Arg.Any<CancellationToken>())
                 .Returns(new Collection<PSObject>());
             Performance = new PerformanceService(Runner, new RestorePointService(Runner), Dir);
-            Ledger = new ServiceStartupLedgerService(Dir);
+            Store = new RedirectedServiceLedger(Dir, enforceProtection);
+            Ledger = Store.NewService();
             HostsPath = Path.Combine(Dir, "hosts");
             Hosts = new HostsFileService(HostsPath);
             RestorePoints = new RestorePointService(Runner);
@@ -84,6 +85,9 @@ public sealed class UndoChangesServiceTests
         public IPowerShellRunner Runner { get; } = Substitute.For<IPowerShellRunner>();
         public PerformanceService Performance { get; }
         public ServiceStartupLedgerService Ledger { get; }
+
+        /// <summary>The stand-in key the ledger keeps its records in, and the old version's file beside it.</summary>
+        public RedirectedServiceLedger Store { get; }
         public string HostsPath { get; }
         public HostsFileService Hosts { get; }
         public RedirectedEnvironment Environment { get; } = new();
@@ -139,7 +143,7 @@ public sealed class UndoChangesServiceTests
 
         public void TurnedOff(string name, string displayName, string previous, DateTimeOffset when)
         {
-            Assert.True(Ledger.Remember(name, previous, when));
+            Assert.Equal(ServiceRecordSave.Saved, Ledger.Remember(name, previous, when));
             ServicesOnPc[name] = new ServiceEntry { Name = name, DisplayName = displayName, StartType = "Disabled" };
         }
 
@@ -161,6 +165,7 @@ public sealed class UndoChangesServiceTests
         public void Dispose()
         {
             Environment.Dispose();
+            Store.Dispose();
             try { _dir.Delete(recursive: true); }
             catch (IOException) { /* cleanup only */ }
         }
@@ -782,10 +787,10 @@ public sealed class UndoChangesServiceTests
         using var rig = new Rig();
         rig.TurnedOff("Spooler", "Print Spooler", "Automatic", new(2026, 10, 2, 21, 12, 0, TimeSpan.Zero));
         // Recorded, then turned back on outside SysManager: nothing left to put back for it.
-        Assert.True(rig.Ledger.Remember("Fax", "Manual", Recorded));
+        Assert.Equal(ServiceRecordSave.Saved, rig.Ledger.Remember("Fax", "Manual", Recorded));
         rig.ServicesOnPc["Fax"] = new ServiceEntry { Name = "Fax", DisplayName = "Fax", StartType = "Manual" };
         // Recorded, and the service is gone from the PC.
-        Assert.True(rig.Ledger.Remember("RetailDemo", "Manual", Recorded));
+        Assert.Equal(ServiceRecordSave.Saved, rig.Ledger.Remember("RetailDemo", "Manual", Recorded));
 
         var change = await OnlyChangeAsync(rig, UndoChangeKind.Services);
 
@@ -835,7 +840,7 @@ public sealed class UndoChangesServiceTests
     {
         using var rig = new Rig();
         // Written by hand into the ledger: Disable refuses such a name, so it cannot have come from SysManager.
-        File.WriteAllText(Path.Combine(rig.Dir, "service-startup-ledger.json"),
+        rig.Store.WriteProtected(
             """[{"ServiceName":"Bad&Name","PreviousStartType":"Manual","DisabledAtUtc":"2026-10-05T19:40:00+00:00"}]""");
         rig.ServicesOnPc["Bad&Name"] = new ServiceEntry { Name = "Bad&Name", DisplayName = "Bad", StartType = "Disabled" };
 
@@ -869,9 +874,8 @@ public sealed class UndoChangesServiceTests
     {
         using var rig = new Rig();
         rig.TurnedOff("Spooler", "Print Spooler", "Automatic", Recorded);
-        // Held open by another writer: there, and unreadable just now.
-        using var held = File.Open(Path.Combine(rig.Dir, "service-startup-ledger.json"), FileMode.Open, FileAccess.Read,
-            FileShare.None);
+        // There, and unreadable just now.
+        rig.Store.ReadFailure = new IOException("the key could not be read");
 
         var scan = await rig.Service.ScanAsync();
 
@@ -884,7 +888,7 @@ public sealed class UndoChangesServiceTests
     {
         // It loads as no records, while every service SysManager turned off is still off.
         using var rig = new Rig();
-        File.WriteAllText(Path.Combine(rig.Dir, "service-startup-ledger.json"), "{ not json");
+        rig.Store.WriteProtected("{ not json");
 
         var scan = await rig.Service.ScanAsync();
 
@@ -1016,6 +1020,96 @@ public sealed class UndoChangesServiceTests
     }
 
     /// <summary>
+    /// The same, for a look without the administrator rights the protected key needs: it cannot take the record out,
+    /// so it marks it in the user's profile, and the service is still not offered once something else turns it off.
+    /// A look with those rights then takes the record out.
+    /// </summary>
+    [Fact]
+    public async Task ALookWithoutRightsOnTheKey_StillDoesNotOfferAServiceTurnedBackOnOutsideSysManager()
+    {
+        using var rig = new Rig();
+        rig.TurnedOff("Fax", "Fax", "Manual", Recorded);
+        rig.TurnedOff("RetailDemo", "Retail Demo Service", "Manual", Recorded);
+        rig.ServicesOnPc["Fax"] = StartingAs("Fax", "Fax", "Manual");   // turned back on in services.msc
+
+        using (rig.Store.DenyWrites())
+            await rig.Service.ScanAsync();
+
+        Assert.Equal(["Fax", "RetailDemo"], rig.Store.ProtectedNames().Order(StringComparer.Ordinal));
+        rig.ServicesOnPc["Fax"] = StartingAs("Fax", "Fax", "Disabled");
+        var change = await OnlyChangeAsync(rig, UndoChangeKind.Services);
+        Assert.Equal(["Retail Demo Service: Disabled → Manual"], change.Lines);
+
+        rig.ServicesOnPc["Fax"] = StartingAs("Fax", "Fax", "Manual");
+        await rig.Service.ScanAsync();
+        Assert.Equal(["RetailDemo"], rig.Store.ProtectedNames());
+    }
+
+    /// <summary>
+    /// A service only an earlier version's file names, and that is on again, goes from that file at the next look, so
+    /// the Services tab's Enable never takes a type from a change undone elsewhere.
+    /// </summary>
+    [Fact]
+    public async Task ALook_TakesOutTheEarlierVersionsRecordOfAServiceThatIsOnAgain()
+    {
+        using var rig = new Rig();
+        rig.Store.WriteLegacy(new ServiceStartupRecord("Fax", "Manual", Recorded),
+            new ServiceStartupRecord("RetailDemo", "Manual", Recorded));
+        rig.ServicesOnPc["Fax"] = StartingAs("Fax", "Fax", "Manual");
+        rig.ServicesOnPc["RetailDemo"] = StartingAs("RetailDemo", "Retail Demo Service", "Disabled");
+
+        var scan = await rig.Service.ScanAsync();
+
+        Assert.Equal(["RetailDemo"], rig.Store.LegacyNames());
+        Assert.DoesNotContain(scan.Changes, c => c.Kind == UndoChangeKind.Services);
+    }
+
+    /// <summary>
+    /// A service an earlier version turned off, and that is still off, is not offered: the page says why instead of
+    /// saying there is nothing SysManager changed, and the put-back refuses it.
+    /// </summary>
+    [Fact]
+    public async Task AServiceOnlyAnEarlierVersionRecorded_ThatIsStillOff_IsNamed_NotOffered()
+    {
+        using var rig = new Rig { Elevated = true };
+        rig.TurnedOff("RetailDemo", "Retail Demo Service", "Manual", Recorded);
+        var listed = await OnlyChangeAsync(rig, UndoChangeKind.Services);
+        rig.Store.WriteLegacy(new ServiceStartupRecord("Fax", "Manual", Recorded));
+        rig.ServicesOnPc["Fax"] = StartingAs("Fax", "Fax", "Disabled");
+        rig.Ledger.Forget("RetailDemo");
+
+        var scan = await rig.Service.ScanAsync();
+        var outcome = await rig.Service.PutBackAsync(listed);
+
+        Assert.DoesNotContain(scan.Changes, c => c.Kind == UndoChangeKind.Services);
+        Assert.Equal([new UndoProblem(UndoChangeKind.Services, UndoProblemKind.EarlierVersion)], scan.Problems);
+        Assert.Equal(UndoOutcomeKind.NothingLeft, outcome.Kind);
+        await rig.Runner.DidNotReceive().RunProcessAsync("sc.exe", Arg.Any<string>(), Arg.Any<CancellationToken>(),
+            Arg.Any<System.Text.Encoding?>());
+        Assert.Equal(ViewModels.UndoChangesViewModel.EarlierVersionServices,
+            ViewModels.UndoChangesViewModel.Summarize(scan));
+    }
+
+    /// <summary>
+    /// Records in a key other programs could change are not listed, and are named as damaged rather than as nothing.
+    /// The stand-in's SOFTWARE key is the test account's own, so the check fails it whether or not the suite runs
+    /// elevated.
+    /// </summary>
+    [Fact]
+    public async Task ServiceRecordsInAKeyOthersCanChange_AreNamedAsDamaged_AndNotListed()
+    {
+        using var rig = new Rig(enforceProtection: true);
+        rig.Store.WriteProtected(ServiceStartupLedgerService.Serialize(
+            new Dictionary<string, ServiceStartupRecord> { ["Fax"] = new("Fax", "Manual", Recorded) }));
+        rig.ServicesOnPc["Fax"] = StartingAs("Fax", "Fax", "Disabled");
+
+        var scan = await rig.Service.ScanAsync();
+
+        Assert.DoesNotContain(scan.Changes, c => c.Kind == UndoChangeKind.Services);
+        Assert.Equal([new UndoProblem(UndoChangeKind.Services, UndoProblemKind.Damaged)], scan.Problems);
+    }
+
+    /// <summary>
     /// Disable writes its record before it turns the service off, so a service seen on may be one being turned off
     /// right now. The look takes the lock every system change takes before it drops anything, and leaves the record
     /// when another change holds it.
@@ -1069,7 +1163,7 @@ public sealed class UndoChangesServiceTests
         {
             ["Fax"] = new("Fax", "Boot", Recorded),
         };
-        File.WriteAllText(Path.Combine(rig.Dir, "service-startup-ledger.json"), ServiceStartupLedgerService.Serialize(withForged));
+        rig.Store.WriteProtected(ServiceStartupLedgerService.Serialize(withForged));
         rig.ServicesOnPc["Fax"] = StartingAs("Fax", "Fax", "Disabled");
 
         var change = await OnlyChangeAsync(rig, UndoChangeKind.Services);
@@ -1084,8 +1178,7 @@ public sealed class UndoChangesServiceTests
         rig.Elevated = true;
         rig.TurnedOff("Spooler", "Print Spooler", "Automatic", Recorded);
         var change = await OnlyChangeAsync(rig, UndoChangeKind.Services);
-        using var held = File.Open(Path.Combine(rig.Dir, "service-startup-ledger.json"), FileMode.Open, FileAccess.Read,
-            FileShare.None);
+        rig.Store.ReadFailure = new IOException("the key could not be read");
 
         var outcome = await rig.Service.PutBackAsync(change);
 

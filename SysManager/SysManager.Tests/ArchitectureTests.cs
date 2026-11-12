@@ -284,6 +284,8 @@ public partial class ArchitectureTests
     [InlineData("private SpeedTestHistoryService History { get; } = new(dir)", false)]
     [InlineData("new ResourceHistoryService(sys, temps, gpu: gpu)", true)]   // a named argument in configDir's place (#2742)
     [InlineData("new ResourceHistoryService(sys, temps, dir, gpu: gpu)", false)]
+    [InlineData("new ServiceStartupLedgerService()", true)]   // the app's own: the profile, and HKLM unless redirected
+    [InlineData("new ServiceStartupLedgerService(dir, machineRoot: null)", false)]
     public void TheConfigDirScan_JudgesEachConstructionByTheOverloadItBindsTo(string construction, bool leaks)
     {
         // Proves the guard above from both sides, against the real overloads reflection finds: a construction that
@@ -384,6 +386,15 @@ public partial class ArchitectureTests
         Assert.True(overTheRealProfile.Count == 0,
             "BuildDesignerGraph builds these over the real profile, %LocalAppData%\\SysManager. Give each lookRecords as "
             + "its folder (#2740):\n  " + string.Join("\n  ", overTheRealProfile));
+
+        // And the startup ledger gets no registry root: over the real HKLM, a look in this graph run as administrator
+        // would take out the records of whoever ran it.
+        var ledgerAt = Regex.Match(graph, @"\bnew\s+ServiceStartupLedgerService\s*\(");
+        Assert.True(ledgerAt.Success,
+            "BuildDesignerGraph builds no ServiceStartupLedgerService, so the check below sees nothing.");
+        var ledgerArgs = TopLevelArguments(graph, ledgerAt.Index + ledgerAt.Length - 1);
+        Assert.True(ledgerArgs is [_, var root, ..] && Regex.IsMatch(root, @"^\s*(machineRoot\s*:\s*)?null\s*$"),
+            "BuildDesignerGraph gives its ServiceStartupLedgerService a registry root. Pass machineRoot: null.");
     }
 
     /// <summary>

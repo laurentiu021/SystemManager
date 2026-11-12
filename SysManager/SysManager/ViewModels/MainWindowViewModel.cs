@@ -808,7 +808,9 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable,
         // One of each store Undo Changes reads, shared with the tab that writes it, as under DI: a put-back through one
         // instance and a tab reading another would disagree about what is there. And one signal, so the tab that made a
         // change hears that Undo Changes put it back (#1525).
-        var serviceLedger = new ServiceStartupLedgerService(lookRecords);
+        // No protected key: over the real HKLM, a look in this graph run as administrator would take out the records of
+        // whoever ran it, the class of #1507 and #2740.
+        var serviceLedger = new ServiceStartupLedgerService(lookRecords, machineRoot: null);
         var hosts = new HostsFileService();
         var environment = new EnvironmentVariableService();
         var watchdog = new SettingsWatchdogService(lookRecords);

@@ -47,7 +47,8 @@ public class ServicesViewModelTests
     private static ServicesViewModel NewVm(IPowerShellRunner? ps = null, ServiceStartupLedgerService? ledger = null,
         List<ServiceEntry>? services = null, Func<string, Task>? startService = null,
         Func<string, Task>? stopService = null, Action<ServiceEntry>? refreshStatus = null) =>
-        new(ps ?? Substitute.For<IPowerShellRunner>(), ledger ?? new ServiceStartupLedgerService(UnwrittenLedgerDir()),
+        new(ps ?? Substitute.For<IPowerShellRunner>(),
+            ledger ?? new ServiceStartupLedgerService(UnwrittenLedgerDir(), machineRoot: null),
             readServices: () => [.. services ?? TestServices],
             startService: startService, stopService: stopService, refreshStatus: refreshStatus);
 
@@ -976,14 +977,12 @@ public class ServicesViewModelTests
     {
         using var temp = new TempLedgerDir();
         var ledger = temp.NewLedger();
-        Assert.True(ledger.Remember("Spooler", "Automatic", DateTimeOffset.UnixEpoch));
+        Assert.Equal(ServiceRecordSave.Saved, ledger.Remember("Spooler", "Automatic", DateTimeOffset.UnixEpoch));
         var scanned = new List<ServiceEntry> { new() { Name = "Spooler", StartType = "Disabled" } };
 
-        using (new FileStream(temp.LedgerFile, FileMode.Open, FileAccess.Read, FileShare.Delete))
-        {
-            using var vm = await CreateWithLedgerAsync(scanned, ledger);
-            Assert.Null(scanned[0].PreviousStartType);
-        }
+        temp.Store.ReadFailure = new IOException("the key could not be read");
+        using var vm = await CreateWithLedgerAsync(scanned, ledger);
+        Assert.Null(scanned[0].PreviousStartType);
     }
 
     [Fact]
@@ -992,14 +991,16 @@ public class ServicesViewModelTests
         using var elevated = AdminHelper.ForceElevation(true);
         using var temp = new TempLedgerDir();
         var ledger = temp.NewLedger();
-        Assert.True(ledger.Remember("wuauserv", "Automatic", DateTimeOffset.UnixEpoch));   // a record to protect
+        // A record to protect.
+        Assert.Equal(ServiceRecordSave.Saved, ledger.Remember("wuauserv", "Automatic", DateTimeOffset.UnixEpoch));
         var scanned = OneRunningAutomaticService();
         var runner = RunnerReturning(0);
         using var vm = await CreateWithLedgerAsync(scanned, ledger, runner);
         using var dialog = new DialogAnswer(confirm: true);
 
-        using (new FileStream(temp.LedgerFile, FileMode.Open, FileAccess.Read, FileShare.Delete))
-            await vm.DisableServiceCommand.ExecuteAsync(scanned[0]);
+        temp.Store.ReadFailure = new IOException("the key could not be read");
+        await vm.DisableServiceCommand.ExecuteAsync(scanned[0]);
+        temp.Store.ReadFailure = null;
 
         await runner.DidNotReceive().RunProcessAsync(
             "sc.exe", Arg.Any<string>(), Arg.Any<CancellationToken>(), Arg.Any<System.Text.Encoding?>());
@@ -1031,15 +1032,16 @@ public class ServicesViewModelTests
         using var elevated = AdminHelper.ForceElevation(true);
         using var temp = new TempLedgerDir();
         var ledger = temp.NewLedger();
-        Assert.True(ledger.Remember(FakeServiceName, "Automatic", DateTimeOffset.UnixEpoch));
+        Assert.Equal(ServiceRecordSave.Saved, ledger.Remember(FakeServiceName, "Automatic", DateTimeOffset.UnixEpoch));
         var scanned = OneRunningAutomaticService();
         AsDisabledByWindows(scanned[0]);
         var runner = RunnerReturning(0);
         using var vm = await CreateWithLedgerAsync(scanned, ledger, runner);
         using var dialog = new DialogAnswer(confirm: true);
 
-        using (new FileStream(temp.LedgerFile, FileMode.Open, FileAccess.Read, FileShare.Delete))
-            await vm.EnableServiceCommand.ExecuteAsync(scanned[0]);
+        temp.Store.ReadFailure = new IOException("the key could not be read");
+        await vm.EnableServiceCommand.ExecuteAsync(scanned[0]);
+        temp.Store.ReadFailure = null;
 
         // It did not ask whether to set the service to Manual, and it did not.
         Assert.Equal(0, dialog.Calls);
@@ -1047,6 +1049,61 @@ public class ServicesViewModelTests
             "sc.exe", Arg.Any<string>(), Arg.Any<CancellationToken>(), Arg.Any<System.Text.Encoding?>());
         Assert.Contains("could not read its record", vm.StatusMessage, StringComparison.Ordinal);
         Assert.Equal("Automatic", ledger.PreviousStartTypeFor(FakeServiceName));
+    }
+
+    [Fact]
+    public async Task Enable_WhenTheEarlierVersionsFileCannotBeRead_ChangesNothing_AndDoesNotAsk()
+    {
+        using var elevated = AdminHelper.ForceElevation(true);
+        using var temp = new TempLedgerDir();
+        temp.Store.WriteLegacy(new ServiceStartupRecord(FakeServiceName, "Automatic", DateTimeOffset.UnixEpoch));
+        var scanned = OneRunningAutomaticService();
+        AsDisabledByWindows(scanned[0]);
+        var runner = RunnerReturning(0);
+        using var vm = await CreateWithLedgerAsync(scanned, temp.NewLedger(), runner);
+        using var dialog = new DialogAnswer(confirm: true);
+
+        using (new FileStream(temp.LedgerFile, FileMode.Open, FileAccess.Read, FileShare.Delete))
+            await vm.EnableServiceCommand.ExecuteAsync(scanned[0]);
+
+        Assert.Equal(0, dialog.Calls);
+        await runner.DidNotReceive().RunProcessAsync(
+            "sc.exe", Arg.Any<string>(), Arg.Any<CancellationToken>(), Arg.Any<System.Text.Encoding?>());
+        Assert.Contains("could not read its record", vm.StatusMessage, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// Disable refuses when its record could only be kept where other programs can change it, and says that this does
+    /// not pass by trying again.
+    /// </summary>
+    [Fact]
+    public async Task Disable_WhenItsRecordCannotBeKeptWhereOnlyAdministratorsCanChangeIt_ChangesNothing()
+    {
+        using var elevated = AdminHelper.ForceElevation(true);
+        using var unprotected = new RedirectedServiceLedger(enforceProtection: true);
+        var scanned = OneRunningAutomaticService();
+        var runner = RunnerReturning(0);
+        using var vm = await CreateWithLedgerAsync(scanned, unprotected.NewService(), runner);
+        using var dialog = new DialogAnswer(confirm: true);
+
+        await vm.DisableServiceCommand.ExecuteAsync(scanned[0]);
+
+        await runner.DidNotReceive().RunProcessAsync(
+            "sc.exe", Arg.Any<string>(), Arg.Any<CancellationToken>(), Arg.Any<System.Text.Encoding?>());
+        Assert.Contains("not protected on this PC", vm.StatusMessage, StringComparison.Ordinal);
+        Assert.DoesNotContain("Try again", vm.StatusMessage, StringComparison.Ordinal);
+    }
+
+    [Theory]
+    [InlineData(ServiceRecordSave.NotRead)]
+    [InlineData(ServiceRecordSave.NotWritten)]
+    public void DisableRefusal_ForARecordThatMayBeKeptNextTime_SaysToTryAgain(ServiceRecordSave saved)
+    {
+        var entry = new ServiceEntry { Name = "Spooler", DisplayName = "Print Spooler" };
+
+        Assert.EndsWith("Try again in a moment.", ServicesViewModel.DisableRefusal(entry, saved),
+            StringComparison.Ordinal);
+        Assert.Null(ServicesViewModel.DisableRefusal(entry, ServiceRecordSave.Saved));
     }
 
     // ── Commands that must look at the service before acting (#2430, #2431, #2432) ─────────────────
@@ -1642,26 +1699,19 @@ public class ServicesViewModelTests
         _ => throw new ArgumentOutOfRangeException(nameof(verb), verb, "unknown service verb"),
     };
 
-    /// <summary>A throwaway ledger directory, so the developer's real %LOCALAPPDATA% file is untouched.</summary>
+    /// <summary>
+    /// A throwaway ledger: a stand-in key for the records and a folder of its own for the earlier version's file, so
+    /// neither the PC's real records nor the developer's %LOCALAPPDATA% file are touched.
+    /// </summary>
     private sealed class TempLedgerDir : IDisposable
     {
-        private readonly string _dir;
+        public RedirectedServiceLedger Store { get; } = new();
 
-        public TempLedgerDir()
-        {
-            _dir = Path.Combine(Path.GetTempPath(), "SysManagerServicesVmTests", Guid.NewGuid().ToString("N"));
-            Directory.CreateDirectory(_dir);
-        }
+        public ServiceStartupLedgerService NewLedger() => Store.NewService();
 
-        public ServiceStartupLedgerService NewLedger() => new(_dir);
+        /// <summary>The file earlier versions kept the records in, so a test can write it or hold it open.</summary>
+        public string LedgerFile => Store.LegacyPath;
 
-        /// <summary>Where the ledger keeps its records, so a test can hold it open.</summary>
-        public string LedgerFile => Path.Combine(_dir, "service-startup-ledger.json");
-
-        public void Dispose()
-        {
-            try { if (Directory.Exists(_dir)) Directory.Delete(_dir, recursive: true); }
-            catch (IOException) { /* a leftover temp dir must never fail a test run */ }
-        }
+        public void Dispose() => Store.Dispose();
     }
 }

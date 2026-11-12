@@ -3,7 +3,9 @@
 // License: MIT
 
 using System.IO;
+using Microsoft.Win32;
 using NSubstitute;
+using SysManager.Helpers;
 using SysManager.Services;
 
 namespace SysManager.Tests;
@@ -15,29 +17,36 @@ namespace SysManager.Tests;
 /// every scan rebuilds those objects. So Disable → Refresh (or restart) → Enable restored an
 /// Automatic service as Manual, because <c>StartTypeToScToken</c> maps an unknown value to "demand".
 /// The status line reported success while the machine's configuration had silently changed.</para>
-/// <para>Every test injects a temp directory, so the developer's real ledger in %LOCALAPPDATA% is
-/// never read or written.</para>
+/// <para>Every test runs over a <see cref="RedirectedServiceLedger"/>: a throwaway key under HKCU standing in for
+/// HKLM, and a temp folder for the file earlier versions kept, so the PC's real records are never read or
+/// written.</para>
 /// </summary>
 public class ServiceStartupLedgerServiceTests : IDisposable
 {
     private readonly string _dir;
+    private readonly RedirectedServiceLedger _store;
     private static readonly DateTimeOffset At = new(2026, 8, 4, 12, 0, 0, TimeSpan.Zero);
 
     public ServiceStartupLedgerServiceTests()
     {
         _dir = Path.Combine(Path.GetTempPath(), "SysManagerLedgerTests", Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(_dir);
+        _store = new RedirectedServiceLedger(_dir);
     }
 
     public void Dispose()
     {
+        _store.Dispose();
         try { if (Directory.Exists(_dir)) Directory.Delete(_dir, recursive: true); }
         catch (IOException) { /* a leftover temp dir must never fail a test run */ }
     }
 
-    private ServiceStartupLedgerService NewService() => new(_dir);
+    private ServiceStartupLedgerService NewService() => _store.NewService();
 
-    private string LedgerFile => Path.Combine(_dir, "service-startup-ledger.json");
+    /// <summary>The file earlier versions kept the records in.</summary>
+    private string LedgerFile => _store.LegacyPath;
+
+    private static ServiceStartupRecord Record(string name, string type, DateTimeOffset when) => new(name, type, when);
 
     /// <summary>The ledger a fresh service instance reads, asserted to have been readable.</summary>
     private IReadOnlyDictionary<string, ServiceStartupRecord> Loaded()
@@ -217,13 +226,14 @@ public class ServiceStartupLedgerServiceTests : IDisposable
     }
 
     [Fact]
-    public void Remember_CreatesTheConfigDirectoryIfMissing()
+    public void Remember_CreatesTheProtectedKeyWhenItIsNotThere()
     {
-        var nested = Path.Combine(_dir, "does", "not", "exist", "yet");
+        Assert.Null(_store.ProtectedRaw());
 
-        new ServiceStartupLedgerService(nested).Remember("svc", "Automatic", At);
+        Assert.Equal(ServiceRecordSave.Saved, NewService().Remember("svc", "Automatic", At));
 
-        Assert.Equal("Automatic", new ServiceStartupLedgerService(nested).PreviousStartTypeFor("svc"));
+        Assert.Equal(["svc"], _store.ProtectedNames());
+        Assert.Equal("Automatic", NewService().PreviousStartTypeFor("svc"));
     }
 
     [Fact]
@@ -291,90 +301,273 @@ public class ServiceStartupLedgerServiceTests : IDisposable
         Assert.Equal(At, Loaded()["svc"].DisabledAtUtc);
     }
 
-    // ---------- a ledger that could not be read is not written over (#2521) ----------
+    // ---------- records that could not be read are not written over (#2521) ----------
     //
     // A failed read used to load as an empty ledger. Enable then restored every service it could not see as Manual,
-    // and the next Remember wrote a ledger holding only the service it recorded over all the others. The file is held
-    // open with delete sharing only, for as long as the read must fail. A read then fails, but the replace a write
-    // ends with still succeeds, so a writer that refused can be told from one that simply could not write.
+    // and the next Remember wrote a ledger holding only the service it recorded over all the others. The key's read
+    // is made to fail through the ledger's own seam, for as long as it must fail; the earlier version's file is held
+    // open with delete sharing only.
 
     [Fact]
-    public void Load_WhenTheFileCannotBeRead_IsNull_NotEmpty()
+    public void Load_WhenTheKeyCannotBeRead_IsNull_NotEmpty()
     {
         NewService().Remember("wuauserv", "Automatic", At);
+
+        _store.ReadFailure = new IOException("the key could not be read");
+        Assert.Null(NewService().Load());
+        _store.ReadFailure = null;
+
+        Assert.Single(Loaded());   // readable again once the read works
+    }
+
+    [Fact]
+    public void Load_WhenTheEarlierVersionsFileCannotBeRead_IsNull_NotEmpty()
+    {
+        _store.WriteLegacy(Record("wuauserv", "Automatic", At));
 
         using (new FileStream(LedgerFile, FileMode.Open, FileAccess.Read, FileShare.Delete))
             Assert.Null(NewService().Load());
 
-        Assert.Single(Loaded());   // readable again once the file is released
+        Assert.Single(Loaded());
     }
 
     [Fact]
-    public void Remember_WhenTheLedgerCannotBeRead_WritesNothing_AndSaysSo()
+    public void Remember_WhenTheKeyCannotBeRead_WritesNothing_AndSaysSo()
     {
         var svc = NewService();
         svc.Remember("wuauserv", "Automatic", At);
         svc.Remember("Spooler", "Manual", At);
 
-        using (new FileStream(LedgerFile, FileMode.Open, FileAccess.Read, FileShare.Delete))
-            Assert.False(svc.Remember("WSearch", "Automatic", At));
+        _store.ReadFailure = new IOException("the key could not be read");
+        Assert.Equal(ServiceRecordSave.NotRead, svc.Remember("WSearch", "Automatic", At));
+        _store.ReadFailure = null;
 
         var ledger = Loaded();
         Assert.Equal(["Spooler", "wuauserv"], ledger.Keys.Order(StringComparer.Ordinal).ToArray());
     }
 
     [Fact]
-    public void Forget_WhenTheLedgerCannotBeRead_LeavesItAsItIs()
+    public void Forget_WhenTheKeyCannotBeRead_LeavesItAsItIs()
     {
         var svc = NewService();
         svc.Remember("wuauserv", "Automatic", At);
         svc.Remember("Spooler", "Manual", At);
 
-        using (new FileStream(LedgerFile, FileMode.Open, FileAccess.Read, FileShare.Delete))
-            svc.Forget("Spooler");
+        _store.ReadFailure = new UnauthorizedAccessException("reading the key was refused");
+        svc.Forget("Spooler");
+        _store.ReadFailure = null;
 
         Assert.Equal(2, Loaded().Count);
     }
 
     [Fact]
-    public void Remember_OverAFileThatDoesNotParse_KeepsItAside_AndRecords()
+    public void Remember_OverAProtectedValueThatDoesNotParse_KeepsItAside_AndRecords()
     {
-        File.WriteAllText(LedgerFile, "{ not valid json");
+        _store.WriteProtected("{ not valid json");
 
-        Assert.True(NewService().Remember("wuauserv", "Automatic", At));
+        Assert.Equal(ServiceRecordSave.Saved, NewService().Remember("wuauserv", "Automatic", At));
 
-        Assert.Equal("{ not valid json", File.ReadAllText(LedgerFile + ".unreadable"));
+        Assert.Equal("{ not valid json", _store.ProtectedRaw("Records.unreadable"));
         Assert.Equal("Automatic", Assert.Single(Loaded()).Value.PreviousStartType);
     }
 
     [Fact]
-    public void Remember_OverAFileThatDoesNotParse_AndCannotBeMoved_WritesNothing()
+    public void Remember_OverAnUnusableValue_NeverWritesOverACopyKeptEarlier()
     {
-        File.WriteAllText(LedgerFile, "{ not valid json");
-        // A folder where the set-aside copy would go: the move fails, and a write to the file itself would not.
-        // The sharing hold this used to use failed the write as well, so it passed with the refusal removed.
-        Directory.CreateDirectory(LedgerFile + ".unreadable");
+        // The first value set aside stays as it is; the next goes beside it, as a file set aside does.
+        _store.WriteProtected("the first one", name: "Records.unreadable");
+        _store.WriteProtected("{ the second one");
 
-        Assert.False(NewService().Remember("wuauserv", "Automatic", At));
+        Assert.Equal(ServiceRecordSave.Saved, NewService().Remember("wuauserv", "Automatic", At));
 
-        Assert.Equal("{ not valid json", File.ReadAllText(LedgerFile));
+        Assert.Equal("the first one", _store.ProtectedRaw("Records.unreadable"));
+        Assert.Equal("{ the second one", _store.ProtectedRaw("Records.unreadable-2"));
+        Assert.Equal(["wuauserv"], _store.ProtectedNames());
     }
 
     [Fact]
-    public void Remember_WhenTheWriteFails_SaysSo()
+    public void Remember_WhenWindowsRefusesTheWrite_SaysSo()
     {
-        // A folder where the file goes: the read finds no file, and the write cannot put one there.
-        Directory.CreateDirectory(LedgerFile);
+        using (_store.DenyWrites())
+            Assert.Equal(ServiceRecordSave.NotWritten, NewService().Remember("wuauserv", "Automatic", At));
 
-        Assert.False(NewService().Remember("wuauserv", "Automatic", At));
+        Assert.Empty(_store.ProtectedNames());
     }
 
     [Fact]
     public void Remember_WithNothingToRecord_IsNotAFailure()
     {
         // An unrestorable type is not recorded, and that must not stop the caller from disabling the service.
-        Assert.True(NewService().Remember("svc", "Boot", At));
+        Assert.Equal(ServiceRecordSave.Saved, NewService().Remember("svc", "Boot", At));
         Assert.Empty(Loaded());
+    }
+
+    // ---------- the protected key, and the file earlier versions kept ----------
+
+    [Fact]
+    public void Remember_WritesTheProtectedKey_AndNeverTheProfilesFile()
+    {
+        Assert.Equal(ServiceRecordSave.Saved, NewService().Remember("wuauserv", "Automatic", At));
+
+        Assert.Equal(["wuauserv"], _store.ProtectedNames());
+        Assert.False(File.Exists(LedgerFile));
+        Assert.Equal("Automatic", NewService().ReadProtected().Records!["wuauserv"].PreviousStartType);
+    }
+
+    [Fact]
+    public void Load_PrefersTheProtectedRecord_OverTheProfilesForTheSameService()
+    {
+        _store.WriteLegacy(Record("svc", "Manual", At));
+        NewService().Remember("svc", "Automatic", At);
+
+        Assert.Equal("Automatic", Loaded()["svc"].PreviousStartType);
+        Assert.Equal("Automatic", NewService().PreviousStartTypeFor("svc"));
+        Assert.Equal(new ServiceRecordLookup(Record("svc", "Automatic", At), false), NewService().Lookup("svc"));
+    }
+
+    [Fact]
+    public void Lookup_OfAServiceOnlyTheProfilesFileNames_SaysSo()
+    {
+        _store.WriteLegacy(Record("svc", "Manual", At));
+
+        Assert.Equal(new ServiceRecordLookup(Record("svc", "Manual", At), true), NewService().Lookup("svc"));
+        Assert.Equal(new ServiceRecordLookup(null, false), NewService().Lookup("other"));
+        Assert.Equal(["svc"], NewService().EarlierVersionOnly());
+        Assert.Empty(NewService().ReadProtected().Records!);
+    }
+
+    [Fact]
+    public void Forget_RemovesTheRecordFromTheProtectedKeyAndTheProfilesFile()
+    {
+        _store.WriteLegacy(Record("svc", "Manual", At), Record("kept", "Manual", At));
+        var svc = NewService();
+        svc.Remember("svc", "Automatic", At);
+        svc.Remember("other", "Automatic", At);
+
+        svc.Forget("svc");
+
+        Assert.Equal(["other"], _store.ProtectedNames());
+        Assert.Equal(["kept"], _store.LegacyNames());
+        Assert.False(Loaded().ContainsKey("svc"));
+    }
+
+    [Fact]
+    public void ForgetAll_WithoutRightsOnTheKey_StillTakesTheFilesRecordsOut_AndMarksTheKeysAsStale()
+    {
+        // A look without administrator rights: the key cannot be changed, so its record stays, marked as no longer
+        // standing for a change, and the file's goes.
+        _store.WriteLegacy(Record("Fax", "Manual", At));
+        NewService().Remember("Fax", "Manual", At.AddHours(1));
+
+        ServiceRecordsForgotten forgotten;
+        using (_store.DenyWrites())
+            forgotten = NewService().ForgetAll(["Fax"]);
+
+        Assert.Equal(new ServiceRecordsForgotten(FromKey: 0, KeptInKey: 1, FromFile: 1), forgotten);
+        Assert.Empty(_store.LegacyNames());
+        Assert.Equal(["Fax"], _store.ProtectedNames());
+        Assert.True(NewService().StaleMarks()(Record("Fax", "Manual", At.AddHours(1))));
+    }
+
+    [Fact]
+    public void ForgetAll_WithRightsOnTheKey_TakesTheRecordAndItsMarkOut()
+    {
+        NewService().Remember("Fax", "Manual", At);
+        using (_store.DenyWrites())
+            NewService().ForgetAll(["Fax"]);
+
+        var forgotten = NewService().ForgetAll(["Fax"]);
+
+        Assert.Equal(new ServiceRecordsForgotten(FromKey: 1, KeptInKey: 0, FromFile: 0), forgotten);
+        Assert.Empty(_store.ProtectedNames());
+        Assert.Empty(ServiceStartupLedgerService.Parse(File.ReadAllText(_store.StalePath)));
+    }
+
+    [Fact]
+    public void AStaleMark_DoesNotHideALaterRecordOfTheSameService()
+    {
+        // A Disable after the mark writes a record of its own, at its own time, and that one is SysManager's change.
+        NewService().Remember("Fax", "Manual", At);
+        using (_store.DenyWrites())
+            NewService().ForgetAll(["Fax"]);
+
+        NewService().Remember("Fax", "Automatic", At.AddDays(1));
+
+        Assert.False(NewService().StaleMarks()(NewService().ReadProtected().Records!["Fax"]));
+    }
+
+    [Fact]
+    public void StaleMarks_ThatDoNotParse_AreNotWrittenOver()
+    {
+        File.WriteAllText(_store.StalePath, "{ not valid json");
+        NewService().Remember("Fax", "Manual", At);
+
+        using (_store.DenyWrites())
+            Assert.Equal(0, NewService().ForgetAll(["Fax"]).KeptInKey);
+
+        Assert.Equal("{ not valid json", File.ReadAllText(_store.StalePath));
+    }
+
+    [Theory]
+    [InlineData("kind")]
+    [InlineData("size")]
+    public void ReadProtected_OfAValueOfAnotherKindOrTooLarge_IsUnusable(string what)
+    {
+        var valid = ServiceStartupLedgerService.Serialize(
+            new Dictionary<string, ServiceStartupRecord> { ["svc"] = Record("svc", "Manual", At) });
+        if (what == "kind") _store.WriteProtected(valid, RegistryValueKind.ExpandString);
+        else _store.WriteProtected("[" + new string(' ', ServiceStartupLedgerService.MaxProtectedBytes + 1) + "]");
+
+        var (records, unusable) = NewService().ReadProtected();
+
+        Assert.True(unusable);
+        Assert.Empty(records!);
+    }
+
+    [Fact]
+    public void Remember_IntoAKeyOthersCanChange_RecordsNothing()
+    {
+        // The stand-in's SOFTWARE key is the test account's own, as a key other programs could change would be.
+        using var unprotected = new RedirectedServiceLedger(enforceProtection: true);
+
+        Assert.Equal(ServiceRecordSave.NotProtected, unprotected.NewService().Remember("svc", "Automatic", At));
+        Assert.Null(unprotected.ProtectedRaw());
+    }
+
+    [Fact]
+    public void ReadProtected_OfAKeyOthersCanChange_IsUnusable()
+    {
+        using var unprotected = new RedirectedServiceLedger(enforceProtection: true);
+        unprotected.WriteProtected(ServiceStartupLedgerService.Serialize(
+            new Dictionary<string, ServiceStartupRecord> { ["svc"] = Record("svc", "Manual", At) }));
+
+        var (records, unusable) = unprotected.NewService().ReadProtected();
+
+        Assert.True(unusable);
+        Assert.Empty(records!);
+    }
+
+    [Fact]
+    public void WithNoMachineRoot_NothingIsKept_AndNothingReadsAsKept()
+    {
+        var ledger = new ServiceStartupLedgerService(_dir, machineRoot: null);
+
+        Assert.Equal(ServiceRecordSave.NotProtected, ledger.Remember("svc", "Automatic", At));
+        Assert.Equal((false, 0), (ledger.ReadProtected().Unusable, ledger.ReadProtected().Records!.Count));
+        Assert.False(File.Exists(LedgerFile));
+    }
+
+    [Fact]
+    public void ALedgerBuiltTheWayTheAppBuildsIt_KeepsNothingInATestRun()
+    {
+        // The floor under every construction a seam scan cannot see, such as the Services tab's own fallback: the test
+        // run points MachineRegistry.Root away from HKLM, so the real records are never read or written. Built through
+        // reflection so the configDir scan, which rightly flags the plain form, has nothing to read here.
+        Assert.Null(MachineRegistry.Root);
+        var ledger = Activator.CreateInstance<ServiceStartupLedgerService>();
+
+        Assert.Equal(ServiceRecordSave.NotProtected, ledger.Remember("SysManagerTestFloorSvc", "Automatic", At));
+        Assert.Null(ledger.PreviousStartTypeFor("SysManagerTestFloorSvc"));
     }
 
     // ---------- agreement with the token mapping it feeds ----------
@@ -479,11 +672,12 @@ public class ServiceStartupLedgerServiceTests : IDisposable
         {
             var dir = Path.Combine(_dir, $"race-{attempt}");
             Directory.CreateDirectory(dir);
-            var service = new ServiceStartupLedgerService(dir);
+            using var store = new RedirectedServiceLedger(dir);
+            var service = store.NewService();
 
             await StartLine.RaceAsync(() => first(service), () => second(service));
 
-            var ledger = new ServiceStartupLedgerService(dir).Load();
+            var ledger = store.NewService().Load();
             Assert.NotNull(ledger);
             assert(attempt, ledger);
         }

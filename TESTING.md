@@ -257,6 +257,13 @@ runner, which allows 10 s, then forced it out with exit code 1 although every te
   machine's environment, plus a temp folder for the legacy backup file; all deleted on dispose. Shared
   by the environment tests and Undo Changes' (#1525), which compare and restore the same copies, so
   neither touches the real environment of either scope.
+- `RedirectedServiceLedger` — **`SysManager.Tests` only.** A `ServiceStartupLedgerService` over a throwaway
+  key under `HKCU\Software\SysManagerTests\ServiceLedger` standing in for HKLM, plus a folder for the file
+  earlier versions kept the records in; the key is deleted on dispose. It plants a value or the old file, makes
+  the key's read fail, and denies this account writes to the key the way Windows refuses a standard user. Its
+  SOFTWARE key is the test account's own, so built with `enforceProtection: true` the ledger treats it as a key
+  other programs could change. The test runs also set `MachineRegistry.Root` to null, so a ledger built the way
+  the app builds it keeps nothing.
 - `StaHelper` — **`SysManager.IntegrationTests` only**, since it exists for tests that instantiate
   views. It queues a delegate onto **one** background STA thread shared by the whole suite and waits
   for it, rethrowing whatever the delegate threw. One thread rather than one per call because the

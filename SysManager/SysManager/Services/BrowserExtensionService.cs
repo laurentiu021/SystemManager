@@ -72,13 +72,9 @@ public sealed class BrowserExtensionService : IBrowserExtensionService
             foreach (var (browser, userDataRel) in BrowserProfiles.Chromium)
             {
                 var (executable, page) = ChromiumLaunch[browser];
-                // The browser's whole data folder behind a link: not followed, and said rather than left out.
-                // KindOf alone only sees a link in the LAST segment; an ancestor link (e.g. "Google" itself) still
-                // reports Folder here, so it is upgraded to Link when the full path is reached through one (#2814).
-                var userDataPath = Path.Combine(_localAppData, userDataRel);
-                var userData = ExtensionFiles.KindOf(userDataPath);
-                if (userData is ExtensionFiles.EntryKind.Folder && SafeFileWalk.IsReachedThroughLink(userDataPath))
-                    userData = ExtensionFiles.EntryKind.Link;
+                // The browser's whole data folder behind a link: not followed, and said rather than left out, an
+                // ancestor link (e.g. "Google" itself) included (#2814).
+                var userData = RootKindOf(Path.Combine(_localAppData, userDataRel));
                 if (userData is ExtensionFiles.EntryKind.Link or ExtensionFiles.EntryKind.Unreadable)
                 {
                     found.Add((Unread(browser, browser, page, executable, null, userData), null));
@@ -107,7 +103,8 @@ public sealed class BrowserExtensionService : IBrowserExtensionService
             {
                 ct.ThrowIfCancellationRequested();
                 var profileDir = Path.Combine(_roamingAppData, "Opera Software", folder);
-                var kind = ExtensionFiles.KindOf(profileDir);
+                // Every channel sits under the one "Opera Software" folder, so a link there is checked for too.
+                var kind = RootKindOf(profileDir);
                 if (kind is ExtensionFiles.EntryKind.Folder)
                 {
                     var (extensions, couldNotRead) = ChromiumExtensionReader.Read(profileDir, culture);
@@ -119,13 +116,10 @@ public sealed class BrowserExtensionService : IBrowserExtensionService
                 }
             }
 
-            // Firefox's profiles all sit under one folder: behind a link, none of them is read through it.
-            // Same upgrade as the Chromium branch above: an ancestor link (e.g. "Mozilla" itself) still
-            // reports Folder from KindOf alone (#2814).
+            // Firefox's profiles all sit under one folder: behind a link, none of them is read through it, an
+            // ancestor link (e.g. "Mozilla" itself) included (#2814).
             var firefoxProfiles = Path.Combine(_roamingAppData, BrowserProfiles.FirefoxProfilesRel);
-            var firefoxRoot = ExtensionFiles.KindOf(firefoxProfiles);
-            if (firefoxRoot is ExtensionFiles.EntryKind.Folder && SafeFileWalk.IsReachedThroughLink(firefoxProfiles))
-                firefoxRoot = ExtensionFiles.EntryKind.Link;
+            var firefoxRoot = RootKindOf(firefoxProfiles);
             if (firefoxRoot is ExtensionFiles.EntryKind.Link or ExtensionFiles.EntryKind.Unreadable)
             {
                 found.Add((Unread("Firefox", "Firefox", FirefoxPage, FirefoxExecutable, null, firefoxRoot), null));
@@ -168,6 +162,24 @@ public sealed class BrowserExtensionService : IBrowserExtensionService
                 if (profile.Extensions.Count > 0 || profile.CouldNotRead) found.Add((profile, name));
             }
         }, ct);
+
+    /// <summary>
+    /// What is at a browser's data folder, looked at without following it, with a link anywhere above it counted as
+    /// a link too: <see cref="ExtensionFiles.KindOf"/> alone sees one only in the last part of the path.
+    /// </summary>
+    /// <remarks>
+    /// Used for Chrome's and the other Chromium browsers' data folders, Firefox's profiles folder and each Opera
+    /// channel folder. Opera's was checked with <see cref="ExtensionFiles.KindOf"/> alone, so with "Opera Software"
+    /// moved behind a junction the list read every channel through it, while the cleaner, which checks the whole
+    /// path, left Opera out.
+    /// </remarks>
+    private static ExtensionFiles.EntryKind RootKindOf(string path)
+    {
+        var kind = ExtensionFiles.KindOf(path);
+        return kind is ExtensionFiles.EntryKind.Folder && SafeFileWalk.IsReachedThroughLink(path)
+            ? ExtensionFiles.EntryKind.Link
+            : kind;
+    }
 
     /// <summary>A profile that was not read: it sits behind a link, which is not followed, or could not be looked at.</summary>
     private static ExtensionProfile Unread(string display, string product, string page, string? executable, string? directory,

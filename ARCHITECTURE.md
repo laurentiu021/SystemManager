@@ -1750,7 +1750,8 @@ Key services:
   browser listed more than once names the profile in the status, as does a Firefox profile other than the one
   Firefox starts in. A profile, data folder or Firefox profiles
   folder that is a link is not followed: it is listed as one whose extensions could not be read, and says it
-  sits behind a link.
+  sits behind a link. So is a data folder, a Firefox profiles folder or an Opera channel folder reached through a
+  link anywhere above it (`RootKindOf`).
 - `ChromiumExtensionReader` — one Chromium profile's extensions: each id folder's newest version's
   `manifest.json` (name, with the translation lookup; version; icon; what it asks for) and the profile's
   `Secure Preferences` (on or off, install date, and where it came from, from Chromium's install location).

@@ -1054,7 +1054,8 @@ jobs:
   # Starts the release integrity check once this run is done with the release, whichever way it went. A
   # workflow_run trigger on this workflow never fired: auto-release dispatches it with GITHUB_TOKEN, and GitHub
   # starts no run from an event that token caused, apart from a dispatch (#2805). The check is given this run's
-  # id, because this run is still going as it starts and the check waits out every other release in flight.
+  # id, because this run is still going as it starts and the check waits out every other release in flight, and
+  # the tag this run published, which it checks even if a later release is publishing by then (#3327).
   integrity:
     name: Start the release integrity check
     needs: [guard, build-and-release, winget]
@@ -1069,4 +1070,6 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           RUN: ${{ github.run_id }}
-        run: gh workflow run release-integrity.yml --repo "${GITHUB_REPOSITORY}" --ref main -f after_run="${RUN}"
+          # Empty when this run published no release.
+          TAG: ${{ needs.build-and-release.outputs.published == 'true' && needs.build-and-release.outputs.tag || '' }}
+        run: gh workflow run release-integrity.yml --repo "${GITHUB_REPOSITORY}" --ref main -f after_run="${RUN}" -f tag="${TAG}"

@@ -520,10 +520,10 @@ reviews, and who approves a release for signing.
   `.exe` to confirm it runs. A separate job, run after every release and daily, confirms
   that every version tag has a release (five old tags that never had one are listed as
   known gaps) and that every release carries its `.exe` and `.sha256`, apart from two
-  withdrawn ones and the four that predate the checksum file. For the newest release it
-  also checks that it is the one marked Latest, that its `.exe` matches its `.sha256`,
-  the SHA256 on the release page and the asset's digest, and that it verifies against its
-  build attestation.
+  withdrawn ones and the four that predate the checksum file. It also checks that the
+  newest release is the one marked Latest, and for the newest release and the one whose
+  run started the check, that its `.exe` matches its `.sha256`, the SHA256 on the release
+  page and the asset's digest, and that it verifies against its build attestation.
 - The release workflow builds the binary from source on a clean GitHub
   Actions runner and publishes the `.exe`, its SHA256 sum, and a CycloneDX
   SBOM together.

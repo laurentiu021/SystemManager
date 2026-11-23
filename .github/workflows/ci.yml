@@ -640,7 +640,9 @@ jobs:
           # would replace the error carrying the recovery command with a bare non-zero exit (#2847).
           TAGS=$(git tag --list 'v*.*.*' --sort=-v:refname || true)
           NEWEST=${TAGS%%$'\n'*}
-          echo "::error::csproj is at $VERSION but there is no v$VERSION tag (newest is $NEWEST). Auto-release did not tag this merge — check whether its run was CANCELLED rather than failed (a displaced queued run reports as cancelled). Recover with: git tag -a v$VERSION -m \"SysManager $VERSION\" <merge-sha> && git push origin v$VERSION — release.yml triggers on v*.*.* and publishes normally."
+          # The way back is auto-release's own, never around it: a tag pushed by hand publishes through release.yml's
+          # tag trigger, which never reads the CHANGELOG date auto-release checks before it tags (#2063, #3327).
+          echo "::error::csproj is at $VERSION but there is no v$VERSION tag (newest is $NEWEST). Auto-release did not tag this merge. If its run for this commit failed at \"Verify CHANGELOG has an entry for the computed version\", that error ends with the way back. If it was cancelled (a displaced queued run reports as cancelled) or failed at any other step, re-run it: gh run rerun <run-id>. Tag by hand only if neither can, and only on the UTC day the v$VERSION entry at <merge-sha> is dated: git tag -a v$VERSION -m \"SysManager $VERSION\" <merge-sha> && git push origin v$VERSION. A pushed tag publishes through release.yml, which never checks that date."
           exit 1
 
   ui-tests:

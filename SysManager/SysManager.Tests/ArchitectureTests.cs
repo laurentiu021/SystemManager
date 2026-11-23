@@ -22174,8 +22174,84 @@ public partial class ArchitectureTests
     private static partial Regex ExecutesACommand();
 
     /// <summary>A ResolveSystemTool call, removed so a fixed site is not reported as a bare literal.</summary>
-    [GeneratedRegex(@"(SysManager\.Helpers\.)?SystemPaths\.ResolveSystemTool\(\s*""[^""]*""\s*\)")]
+    [GeneratedRegex(@"(SysManager\.Helpers\.)?SystemPaths\.ResolveSystemTool\(\s*""(?<exe>[^""]*)""\s*\)")]
     private static partial Regex ResolverCall();
+
+    /// <summary>A runner call that names its program, on one line or across two: <c>RunProcessAsync("x"</c>.</summary>
+    [GeneratedRegex(@"\bRunProcess(?:ForOutput|WithShell)?Async\(\s*""(?<exe>[^""]+)""")]
+    private static partial Regex RunnerStartsByName();
+
+    /// <summary>A program as SECURITY.md writes one, in backticks: <c>`sc.exe`</c>.</summary>
+    [GeneratedRegex(@"`(?<name>[^`\s]+)`")]
+    private static partial Regex LaunchListName();
+
+    /// <summary>
+    /// SECURITY.md's list of the Windows tools SysManager starts agrees with the code both ways: every tool the app
+    /// starts by name is in it, and every tool it names is one the app starts.
+    /// </summary>
+    /// <remarks>
+    /// The list is kept by hand, and About's Open-source components started Notepad for a release before the list
+    /// said so (#3227). A tool is named in three places: a <c>SystemPaths.ResolveSystemTool</c> literal, a runner
+    /// call that names its program, and Legacy Panels' catalog, which hands the resolver a property. A tool started
+    /// from a variable, such as an uninstall entry's own program or the downloaded speed-test CLI, is outside this
+    /// check and stays covered by the list's own words. The list ends at its sentence on ping and traceroute, which
+    /// names two programs SysManager does not start.
+    /// </remarks>
+    [Fact]
+    public void SecurityMdsLaunchList_NamesEveryWindowsToolTheAppStarts()
+    {
+        var security = File.ReadAllText(Path.Combine(TestPaths.RepoRoot(), "SECURITY.md"));
+        var bullet = Collapse(ReadmeBullet(security, "### By design — allowed", "- Launch Windows' own tools"));
+        var end = bullet.IndexOf("Ping and traceroute are sent by SysManager itself", StringComparison.Ordinal);
+        Assert.True(end > 0, "SECURITY.md's launch list no longer ends at its sentence on ping and traceroute, so "
+            + "the programs it says are not started would read as listed. Re-derive where the list ends.");
+        var named = LaunchListName().Matches(bullet[..end])
+            .Select(m => Path.GetFileNameWithoutExtension(m.Groups["name"].Value))
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+        var started = new SortedDictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        var resolved = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var byRunner = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var file in SourceFilesUnder(TestPaths.AppProject(), ".cs"))
+        {
+            var source = File.ReadAllText(file);
+            var code = SourceBraces.CodeOnly(source);
+            foreach (var m in ResolverCall().Matches(source).Where(m => code[m.Index] != ' '))
+                Note(resolved, m.Groups["exe"].Value, file);
+            foreach (var m in RunnerStartsByName().Matches(source).Where(m => code[m.Index] != ' '))
+                Note(byRunner, m.Groups["exe"].Value, file);
+        }
+        var panels = LegacyPanelService.Panels.Select(p => p.FileName).ToHashSet(StringComparer.OrdinalIgnoreCase);
+        foreach (var panel in panels)
+            started.TryAdd(Path.GetFileNameWithoutExtension(panel), "LegacyPanelService.cs");
+
+        // Measured when this was written: 6 names resolved by literal, 12 run through the runner, 4 in the catalog.
+        Assert.True(resolved.Count >= 6, $"only {resolved.Count} tools were resolved by literal, out of 6 measured, "
+            + "so the scan stopped matching and a pass would prove nothing.");
+        Assert.True(byRunner.Count >= 10, $"only {byRunner.Count} tools were started through the runner by name, "
+            + "out of 12 measured, so the scan stopped matching.");
+        Assert.True(panels.Count >= 4, $"only {panels.Count} programs were read from the panel catalog, out of 4.");
+
+        var unlisted = started.Where(s => !named.Contains(s.Key)).Select(s => $"{s.Key} ({s.Value})").ToList();
+        Assert.True(unlisted.Count == 0, "SECURITY.md's \"Launch Windows' own tools\" does not name these tools the "
+            + "app starts, so someone deciding whether to trust it elevated cannot find them:\n  "
+            + string.Join("\n  ", unlisted));
+
+        // And the other way. The speed test's CLI runs from the path its pinned download was checked at, never by name.
+        var unfounded = named
+            .Where(n => !started.ContainsKey(n) && !n.Equals("speedtest", StringComparison.OrdinalIgnoreCase))
+            .Order(StringComparer.OrdinalIgnoreCase)
+            .ToList();
+        Assert.True(unfounded.Count == 0, "SECURITY.md says SysManager starts these, and no code starts them by "
+            + "name: " + string.Join(", ", unfounded));
+
+        void Note(HashSet<string> seen, string exe, string file)
+        {
+            var name = Path.GetFileNameWithoutExtension(exe);
+            seen.Add(name);
+            started.TryAdd(name, Path.GetFileName(file));
+        }
+    }
     [Fact]
     public void NoViewModel_ShutsTheAppDownDirectly()
     {

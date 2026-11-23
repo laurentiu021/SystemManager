@@ -13780,7 +13780,7 @@ kept rather than moved, and the fix below shipped in 1.7.16, whose notes do not 
 ## [1.5.0] - 2026-05-21
 
 ### Added
-- **Privacy Toggles** — 12 one-click privacy switches (telemetry, advertising ID, Copilot,
+- **Privacy Toggles** — 12 one-click privacy switches (telemetry, advertising ID, Windows Copilot,
   Cortana, web search, widgets, Start suggestions, lock screen tips) with instant apply
   and registry state detection.
 

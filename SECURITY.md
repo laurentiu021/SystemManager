@@ -115,6 +115,10 @@ What the app can and cannot do by design:
   anything under Windows, System32 or Program Files, checks the real target of a link
   before writing a byte, refuses a file with more than one hard link, and never follows
   a link — whether you pick the link directly or it is found inside a folder you shred.
+  It refuses a file on a network share, this PC's own `C$` among them, and one a link or a
+  mapped drive leads to: the computer that holds the share decides where an overwrite lands and
+  can keep copies. It removes only the file it overwrote, through a handle checked to be open on
+  that file; when the name leads to another file by then, nothing is removed and the tab says so.
   A compressed, sparse or encrypted file is refused rather than overwritten, because
   NTFS writes those to new disk clusters instead of in place. A write error partway
   through an overwrite (a full disk, a removed drive) still truncates and removes the
@@ -135,6 +139,19 @@ What the app can and cannot do by design:
   cleanup for the run with a value of its own under Disk Cleanup's key, and removes the value
   again after the run.
 - Empty the Recycle Bin.
+- End a running program's process, one at a time and after you confirm (Process Manager's
+  **Kill**, File Lock Detector's **End process**): only the process that was listed, checked by
+  its start time, and on Process Manager by its name too, so another process that has taken its
+  ID since is never the one ended, and never the programs it started. Process Manager refuses the
+  processes Windows cannot run without and SysManager itself, and warns more strongly before a
+  Windows security or servicing process; File Lock Detector refuses a process Windows marks as
+  critical. Restarting Explorer (**Restart Explorer** on Right-Click Menu and System Fixes, a
+  right-click menu style that needs it, and System Fixes' **Rebuild icon cache**, which deletes
+  Explorer's `thumbcache_*` and `iconcache_*` files while it is stopped) ends the Explorer of your
+  own session only and starts it again.
+- Delete the broken shortcuts you tick (Shortcut Cleaner), only `.lnk` files whose target the
+  scan found gone, after you confirm. They go to the Recycle Bin unless you untick **Move to
+  Recycle Bin**, and are then deleted for good.
 - Clear per-browser cache, history, cookies, and sessions (Browser Cleaner tab)
   — only for the categories ticked when you press Clean. Cache and history start
   ticked; cookies and sessions are marked sensitive and start unticked so a clean
@@ -381,7 +398,7 @@ see the last three rows.
 | Startup checks on/off | `%AppData%\SysManager` | The two About-tab checkboxes that control the once-a-day version check and the Dashboard's app-update check |
 | Whether the Welcome screen has been seen | `%LocalAppData%\SysManager` | When you first closed it, so it is shown only once on this PC |
 | Your saved sets and choices | `%LocalAppData%\SysManager` | Gaming profiles, volume presets, what closing the window does, the standby-cleaner choice, whether the Bulk Installer may load icons from the web, whether the Disk Analyzer map is shown |
-| State the app keeps to undo its own changes | `%LocalAppData%\SysManager` | Performance Mode's record of your original settings, the startup type of each service a version before 1.136.176 turned off (read by the Services tab's Enable, never written again, and pruned once a service is back on), the services of the last row's record a look without administrator rights found turned back on, so they stay off Undo Changes until a look with those rights takes them out, game mode's record of a session still on, a counter Gaming Profile uses to put notifications back, a `.reg` export of each right-click menu key before it changes (`Backups\ContextMenu`, newest three per key), and a `.reg` export of each registry key the Uninstaller removes as a leftover (`Backups\Uninstaller`, newest three per key) |
+| State the app keeps to undo its own changes | `%LocalAppData%\SysManager` | Performance Mode's record of your original settings, the startup type of each service a version before 1.136.176 turned off (read by the Services tab's Enable, never written again, and pruned once a service is back on), the services of the last row's record a look without administrator rights found turned back on, so they stay off Undo Changes until a look with those rights takes them out, game mode's record of a session still on, a counter Gaming Profile uses to put notifications back, a `.reg` export of each right-click menu key before it changes (`Backups\ContextMenu`, newest three per key), and a `.reg` export of each registry key the Uninstaller removes as a leftover (`Backups\Uninstaller`, newest three per key), and what each Privacy & Telemetry switch's settings held before SysManager first changed them (`privacy-ledger.json`), which turning the switch off puts back. A switch that needs administrator gets back only a value the setting is known to take, because the file is one anything running as you can change |
 | Uninstaller leftovers waiting for administrator rights | `%LocalAppData%\SysManager` | The paths of folders an uninstalled app left under Program Files or ProgramData, so the Uninstaller can offer them again in a session that runs as administrator. That session offers only paths still under those folders, whatever the file says, and none arrives ticked. Deleted once nothing is left on it; a copy that cannot be read is kept beside it as `.unreadable` rather than written over |
 | Crash marker | `%LocalAppData%\SysManager` | Whether the last session crashed, with the error's type and message, the message scrubbed of your account name as the log is |
 | Disk Analyzer history | `%LocalAppData%\SysManager` | The ten biggest folders, by name and size, of each of the last 20 locations you scanned, so the next scan can show what changed |
@@ -389,12 +406,17 @@ see the last three rows.
 | The open-source notices | `%LocalAppData%\SysManager\THIRD-PARTY-NOTICES.txt` | The licenses and notices of the open-source components the exe carries, written from the exe each time About's **Open-source components** opens them in Notepad |
 | Downloaded tools and icons | `%LocalAppData%\SysManager\tools`, `…\IconCache` | The Ookla speed-test CLI, downloaded the first time you run that test; app icons, only if you turned web icons on |
 | The app's native libraries | `%TEMP%\.net\SysManager-v<version>`, one folder for each version run | Unpacked there by .NET the first time each version starts, into a folder named after the exe, because a single-file app cannot load them from inside itself. SysManager deletes an older version's folder once nothing in it has been written for a week, when it runs without administrator rights |
+| What Ookla's speed-test CLI records | Your user profile, where Ookla's CLI keeps it | Written by Ookla's CLI, not by SysManager, the first time the Ookla engine runs: that its licence and privacy notice were accepted, which SysManager does for you when it runs that test |
+| The PSWindowsUpdate module, only if you pressed **Install PSWindowsUpdate** | `WindowsPowerShell\Modules\PSWindowsUpdate` in your Documents folder, and the NuGet provider in `%LocalAppData%\PackageManagement\ProviderAssemblies\nuget` if Windows PowerShell had none yet | Installed for your account only, by PowerShell's own `Install-Module`, for the Windows Update history. `Uninstall-Module PSWindowsUpdate`, in Windows PowerShell without administrator rights, removes it; the provider folder is safe to leave |
 | The original hosts file | `%SystemRoot%\System32\drivers\etc\hosts.bak` | Copied once, the first time SysManager saves the hosts file, and kept beside it so the original can be restored |
 | A copy of your environment variables | Registry: `HKCU\Software\SysManager\Backups\Environment`; machine-wide ones in `HKLM\SOFTWARE\SysManagerEnvironmentBackup` | Taken before SysManager first changes them. The machine-wide copy is locked so a standard user cannot change it |
 | The startup type of each service SysManager turned off | Registry: `HKLM\SOFTWARE\SysManagerServiceStartupLedger` | Written when the Services tab disables a service, so Enable and Undo Changes can put it back. Locked like the machine-wide environment copy, and its permissions are checked on every read, because Undo Changes turns services back on as administrator from it |
 
-Apart from those last three, everything sits inside your own user profile, in two folders only
-because Windows separates roaming settings from machine-local data; nothing is hidden in either.
+Apart from those last three, everything sits inside your own user profile. SysManager's own files
+are in two folders, because Windows separates roaming settings from machine-local data, plus the
+folder .NET unpacks its native libraries into under `%TEMP%`; nothing is hidden in any of them.
+Ookla's CLI record and the PSWindowsUpdate module are written by those programs, and only once you
+use them.
 If you set up Scheduled Maintenance, Windows also keeps one task for your account in Task Scheduler,
 `SysManager Scheduled Maintenance-` followed by your account's SID. Deleting a copy kept to undo a
 change does not break the app, but that change can then no longer be put back: Undo Changes lists

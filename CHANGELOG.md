@@ -10,6 +10,20 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.136.188] - 2026-11-23
+
+**Cancelling the Dashboard's Update All Apps now lets the app being updated finish, so it is not left
+half-installed, and says how many apps it reached.**
+
+### Fixed
+- Cancel and Escape on Update All Apps ended winget, and the installer it had started, in the middle of an app, so
+  that app could be left half-installed or broken. App Updates and Bulk Installer stopped doing this in 1.130.56
+  (#2942), and the 1.132.0 notes said Update All Apps stops between apps, but it did not. It now stops before the
+  next app: the one being updated finishes first, and only closing SysManager ends a running update. While it
+  finishes, the card says so. When it stops, the card says how many apps it reached, Recent activity records them,
+  and the app update alert is checked again, which a cancelled run skipped. That has been so since 1.132.0
+  (#3251).
+
 ## [1.136.187] - 2026-11-23
 
 **Battery Health keeps its temporary report in your profile's own Temp folder, and reads and removes only the file

@@ -30,8 +30,18 @@ public interface IWingetService
     /// Upgrades, one by one, every app <see cref="ListUpgradableAsync"/> lists whose installed version winget can
     /// read, and fails with <see cref="WingetExitCodes.UpdateAllHasFailure"/> when any of them fails.
     /// </summary>
+    /// <param name="ct">
+    /// Stops the run before its next app: the list is read with it, and it is checked before each app.
+    /// </param>
+    /// <param name="running">
+    /// Reaches the winget that is upgrading an app. Ending winget part-way ends the installer it started, so only
+    /// closing SysManager cancels it (#2942).
+    /// </param>
     /// <exception cref="InvalidOperationException">
     /// The upgrade list could not be read, so nothing was upgraded. The message says why, in plain language.
     /// </exception>
-    Task<WingetResult> UpgradeAllAsync(CancellationToken ct = default);
+    /// <exception cref="UpgradeAllStoppedException">
+    /// <paramref name="ct"/> stopped the run between apps; it says how many it had reached.
+    /// </exception>
+    Task<WingetResult> UpgradeAllAsync(CancellationToken ct = default, CancellationToken running = default);
 }

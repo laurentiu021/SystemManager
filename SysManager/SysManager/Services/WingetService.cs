@@ -115,7 +115,7 @@ public sealed partial class WingetService : IWingetService
     /// <exception cref="InvalidOperationException">
     /// The upgrade list could not be read, so nothing was upgraded.
     /// </exception>
-    public async Task<WingetResult> UpgradeAllAsync(CancellationToken ct = default)
+    public async Task<WingetResult> UpgradeAllAsync(CancellationToken ct = default, CancellationToken running = default)
     {
         var failed = false;
         var restart = false;

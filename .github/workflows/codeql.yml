@@ -33,8 +33,14 @@ jobs:
     timeout-minutes: 30
 
     steps:
+      # persist-credentials: false, as in release.yml (#2743). The Build step below restores and compiles the NuGet
+      # packages, whose MSBuild targets, analyzers and source generators run inside it, and the default left this
+      # job's security-events: write token in git's configuration, where any of them could read it. No step needs git
+      # signed in: the CodeQL actions take the token as an input.
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
 
       - name: Setup .NET 10 SDK
         uses: actions/setup-dotnet@0f4a354dd5547a28c70b7853dbd95d5b67886e73 # v6.1.0

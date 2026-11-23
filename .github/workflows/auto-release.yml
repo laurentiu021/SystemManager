@@ -205,8 +205,12 @@ jobs:
           git push origin "$NEXT"
           echo "Pushed tag $NEXT"
 
-      # release.yml does nothing for a version that already has a release, and runs one at a time per tag, so starting
-      # it again for the tag already on this commit is safe.
+      # release.yml's guard skips only a tag push for a version that already has a release and lets every dispatch
+      # through, so a re-run of a run that released this version, or a run by hand on a commit already tagged, started a
+      # second full release of it. A version on the commit is looked up first: only a 404 means it has no release, the
+      # guard's rule (#2805), and any other answer fails here. A 404 while a release run of the tag is still going
+      # starts nothing either, since that run publishes it. A re-run of a run from before this check uses its own
+      # older copy of this file, which has neither.
       - name: Trigger release workflow
         if: steps.bump.outputs.type != 'none'
         shell: bash
@@ -216,6 +220,27 @@ jobs:
           COMPUTED: ${{ steps.next.outputs.version }}
         run: |
           NEXT="${TAGGED:-$COMPUTED}"
+          if [ -n "$TAGGED" ]; then
+            if found=$(gh api "repos/$GITHUB_REPOSITORY/releases/tags/$TAGGED" --jq .id 2>&1); then
+              echo "$TAGGED already has a release, so no second one is started. One that stopped partway is finished by running the Release workflow by hand on $TAGGED, with tag=$TAGGED."
+              exit 0
+            elif [[ "$found" == *"(HTTP 404)"* ]]; then
+              echo "$TAGGED has no release yet."
+            else
+              echo "::error::Could not tell whether $TAGGED already has a release, so none is started: $found"
+              exit 1
+            fi
+            if ! running=$(gh run list --repo "$GITHUB_REPOSITORY" --workflow release.yml --branch "$TAGGED" \
+                --limit 20 --json status --jq '[.[] | select(.status != "completed")] | length' 2>&1) \
+                || [[ ! "$running" =~ ^[0-9]+$ ]]; then
+              echo "::error::Could not count the release runs of $TAGGED still going, so none is started: $running"
+              exit 1
+            fi
+            if [ "$running" -gt 0 ]; then
+              echo "A release run of $TAGGED is still going, so no second one is started."
+              exit 0
+            fi
+          fi
           # On the tag, so the run's own commit is the tag's. The attestation signs with the run's
           # GITHUB_SHA and GITHUB_REF, and a run on main has main's head as of the dispatch, which is
           # the tag's commit only while nothing has landed in between (#2805).

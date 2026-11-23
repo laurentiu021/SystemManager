@@ -7,7 +7,7 @@ on:
   workflow_dispatch:
     inputs:
       tag:
-        description: "Tag to release (e.g. v0.5.3). Run it on that tag: gh workflow run release.yml --ref v0.5.3 -f tag=v0.5.3"
+        description: "Tag to release (e.g. v0.5.3). Run it on that tag: gh workflow run release.yml --ref v0.5.3 -f tag=v0.5.3. A tag older than this workflow's byte check runs its own copy, which can replace published files: compare the hashes by hand first."
         required: true
 
 # Default for every job in this workflow: read-only. The guard job below only reads
@@ -294,6 +294,18 @@ jobs:
           "hash=$hash" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
           Write-Host "SHA256: $hash"
 
+      # The one step that RUNS the artifact being published. The unit tests load assemblies into a test host; they do
+      # not start the single-file, self-contained, compressed exe users download. A native library that does not
+      # extract from the bundle, a startup path that throws before the first frame, or a resource that resolves in a
+      # normal build but not from a packed one passes every test and then fails on launch. That shipped once, which is
+      # why a release is not trusted until its binary has been seen alive. windows-latest has a desktop session (the
+      # ui-tests job in ci.yml relies on it too), so the exe can be started here.
+      #
+      # A smoke check, not a UI test: it starts the exe, holds it, and confirms it is still alive, logged no error or
+      # fatal line, left no crash marker and reports the tag's version. Then it kills it; the comment at the kill says
+      # why it is not closed. It asserts nothing on screen: ci.yml's FlaUI job owns that, and repeating it here would
+      # make the release depend on UI timing.
+      #
       # BEFORE the SBOM and the attestation, deliberately. This step can still reject the build
       # ("Runtime version drift", a startup fault, a crash marker), and it used to run after
       # "Attest build provenance" — so a binary this gate refused already had a provenance statement
@@ -607,35 +619,6 @@ jobs:
           if (-not $components) { throw "SBOM contains no components — refusing to publish an empty inventory." }
           Write-Host "SBOM written with $components components."
 
-      # Binds this exact binary digest to this repository, workflow and commit in the
-      # public Sigstore transparency log. The .sha256 file cannot do this: it ships from
-      # the same release as the exe, so both share one trust root. Anyone can verify with
-      #   gh attestation verify SysManager-v<version>.exe --repo laurentiu021/SystemManager
-      # Deliberately placed BEFORE the release is created, so a failure here aborts the
-      # run instead of leaving a published release without provenance.
-      - name: Attest build provenance
-        uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
-        with:
-          subject-path: publish/SysManager-v${{ steps.version.outputs.version }}.exe
-
-      # Nothing above this point has ever RUN the artifact being published. The unit tests
-      # exercise the code, but they load assemblies into a test host — they do not start the
-      # single-file, self-contained, compressed exe that users actually download. Those are
-      # different failure surfaces: a missing native library extracted from the bundle, a
-      # startup path that throws before the first frame, or a resource that resolves in a
-      # normal build but not from a packed one, all pass every test and then fail on launch.
-      # That shipped once already, which is why the standing rule is that a release is not
-      # trusted until the published binary has been seen alive.
-      #
-      # windows-latest provides a desktop session (the ui-tests job in ci.yml relies on the
-      # same thing), so the exe can be started here — the one place in the pipeline where the
-      # real artifact exists and nothing has been published yet. A failure aborts the run
-      # before the release, the winget submission and the announcement, instead of after.
-      #
-      # Deliberately a smoke check, not a UI test: start it, hold it, confirm the process is
-      # still alive and that it left no crash marker, then close it. No assertions about what
-      # is on screen — ci.yml's FlaUI job owns that, and duplicating it here would make the
-      # release depend on UI timing.
       - name: Extract release notes from CHANGELOG
         id: notes
         shell: pwsh
@@ -802,54 +785,92 @@ jobs:
           }
           Add-Content release-notes.md $notes -Encoding utf8
 
-      # The guard against replacing a binary people already have. This workflow is re-dispatchable
-      # and rebuilds from scratch, and the publish step below is not additive — it overwrites an
-      # asset of the same name, under the same URL. So a re-run whose bytes differ would hand a
-      # DIFFERENT exe to everyone from then on, while the winget manifest already submitted keeps
-      # the first build's InstallerSha256 and anyone who saved the first hash (README's verification
-      # steps invite exactly that) sees a mismatch they cannot explain.
+      # The guard against replacing a binary people already have. This workflow is re-dispatchable and rebuilds from
+      # scratch, so a re-run whose bytes differ would hand a DIFFERENT exe to everyone from then on, while the winget
+      # manifest already submitted keeps the first build's InstallerSha256 and anyone who saved the first hash (README's
+      # verification steps invite exactly that) sees a mismatch they cannot explain.
       #
-      # Pinning the SDK above removes the cause that was actually observed; this refuses the symptom
-      # whatever the cause, which is the half that keeps being true after the next unrelated change.
-      # On the normal path — a tag that has no release yet — there is nothing to compare and the step
-      # says so and moves on.
+      # Pinning the SDK above removes the cause that was actually observed; this refuses the symptom whatever the cause,
+      # which is the half that keeps being true after the next unrelated change. It decides the way the guard job does
+      # (#2805): only a 404 means the tag has no release, the normal path, with nothing to compare. Any other answer is
+      # asked again and then fails the run: read as "new", a failed download skipped the comparison. The assets are
+      # read by the release's id, not through the by-tag view, and both published hashes are held against the rebuild,
+      # the exe's digest and its .sha256's content, because an upload cut short can leave one without the other.
       - name: If this release already exists, the bytes must match what it published
-        shell: pwsh
+        shell: bash
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TAG: ${{ steps.version.outputs.tag }}
           VERSION: ${{ steps.version.outputs.version }}
           REBUILT: ${{ steps.hash.outputs.hash }}
         run: |
-          $asset = "SysManager-v$env:VERSION.exe.sha256"
-          $published = $null
-          try {
-              gh release download $env:TAG --pattern $asset --dir published 2>$null
-              $file = Join-Path 'published' $asset
-              if (Test-Path $file) {
-                  # The file is "<hash> *<name>"; take the hash and compare case-insensitively.
-                  $published = ((Get-Content $file -Raw) -split '\s+')[0].Trim()
-              }
-          }
-          catch {
-              # No release yet, or no such asset on it: the normal path for a new tag.
-          }
-
-          if (-not $published) {
-              Write-Host "No published .sha256 for $env:TAG — this release is new, nothing to compare."
+          set -euo pipefail
+          exe="SysManager-v${VERSION}.exe"
+          rebuilt=$(printf '%s' "$REBUILT" | tr 'A-F' 'a-f')
+          if [[ ! "$rebuilt" =~ ^[0-9a-f]{64}$ ]]; then
+            echo "::error::This run's SHA256 is not a hash, so it cannot be held against what $TAG published."
+            exit 1
+          fi
+          id=""
+          for attempt in 1 2 3 4 5 6; do
+            if found=$(gh api "repos/$GITHUB_REPOSITORY/releases/tags/$TAG" --jq .id 2>&1); then
+              id="$found"
+              break
+            elif [[ "$found" == *"(HTTP 404)"* ]]; then
+              echo "$TAG has no release yet, so nothing is published to compare."
               exit 0
-          }
-
-          Write-Host "published $published"
-          Write-Host "rebuilt   $env:REBUILT"
-          if ($published -ne $env:REBUILT) {
-              throw "This tag already published an exe with SHA256 $published, and this run built " +
-                    "$($env:REBUILT). Publishing would silently replace a binary people may already " +
-                    "have, and leave the winget manifest pointing at the old hash. Find out why the " +
-                    "bytes changed — the SDK pin in global.json exists to stop exactly this — rather " +
-                    "than overwriting it."
-          }
-          Write-Host "The rebuilt exe is byte-identical to the one already published."
+            else
+              echo "read $attempt: could not tell whether $TAG already has a release: $found"
+              if [ "$attempt" -eq 6 ]; then
+                echo "::error::Could not tell whether $TAG already has a release, so nothing is published."
+                exit 1
+              fi
+              sleep 10
+            fi
+          done
+          # gh api prints the body of an error reply on stdout, so only a number is an id.
+          if [[ ! "$id" =~ ^[0-9]+$ ]]; then
+            echo "::error::GitHub's answer for $TAG's release is not an id, so nothing is published."
+            exit 1
+          fi
+          if ! assets=$(gh api "repos/$GITHUB_REPOSITORY/releases/$id/assets?per_page=100" \
+              --jq '.[] | "\(.name) \(.id) \(.digest // "")"'); then
+            echo "::error::Could not read the files $TAG published, so this build cannot be compared with them."
+            exit 1
+          fi
+          why="Replacing it would change a download people may already have, while winget keeps the old hash. Find out why the bytes changed. An upload that never finished is repaired by deleting that file (gh release delete-asset $TAG <name>) and dispatching again."
+          compared=0
+          # awk reads all of its input, so nothing upstream dies of SIGPIPE under pipefail.
+          digest=$(printf '%s\n' "$assets" | awk -v n="$exe" '$1 == n { print ($3 == "" ? "none" : $3) }')
+          if [ -n "$digest" ]; then
+            if [[ ! "$digest" =~ ^sha256:[0-9a-f]{64}$ ]]; then
+              echo "::error::GitHub reports no SHA256 digest for the published $exe, so this build cannot be compared with it. $why"
+              exit 1
+            fi
+            if [ "${digest#sha256:}" != "$rebuilt" ]; then
+              echo "::error::$TAG already published $exe with SHA256 ${digest#sha256:}, and this run built $rebuilt. $why"
+              exit 1
+            fi
+            compared=$((compared + 1))
+          fi
+          sha=$(printf '%s\n' "$assets" | awk -v n="$exe.sha256" '$1 == n { print $2 }')
+          if [ -n "$sha" ]; then
+            if ! file=$(gh api -H "Accept: application/octet-stream" "repos/$GITHUB_REPOSITORY/releases/assets/$sha"); then
+              echo "::error::Could not read the $exe.sha256 $TAG published, so this build cannot be compared with it."
+              exit 1
+            fi
+            published=$(printf '%s' "$file" | tr -d '\r' | cut -d' ' -f1 | tr 'A-F' 'a-f')
+            if [ "$published" != "$rebuilt" ]; then
+              echo "::error::The $exe.sha256 $TAG published says $published, and this run built $rebuilt. $why"
+              exit 1
+            fi
+            compared=$((compared + 1))
+          fi
+          if [ "$compared" -eq 0 ]; then
+            echo "$TAG has a release that lists neither $exe nor its .sha256, so there is nothing to compare; the release step uploads both."
+          else
+            echo "What $TAG published matches this build ($compared hashes compared); the release step adds only the files it lacks."
+          fi
 
       # Latest used to follow creation date: with no make_latest, GitHub makes every newly created release Latest, so a
       # re-dispatch of an older tag, or two tags whose runs overlap, made the older build Latest, and with it the README
@@ -876,6 +897,19 @@ jobs:
           if ($isLatest) { Write-Host "v$mine is the highest published version, so it is Latest." }
           else { Write-Host "v$mine is below v$highest, which stays Latest." }
 
+      # Binds this exact binary digest to this repository, workflow and commit in the
+      # public Sigstore transparency log. The .sha256 file cannot do this: it ships from
+      # the same release as the exe, so both share one trust root. Anyone can verify with
+      #   gh attestation verify SysManager-v<version>.exe --repo laurentiu021/SystemManager
+      # The LAST step before the release is created, deliberately: every step that can still refuse the build runs
+      # first, so nothing refused is vouched for. The release notes, the verification footer, the rebuild comparison and
+      # the Latest decision used to run after it, as the smoke check did until #2848. Still before the release, so a
+      # failure here aborts the run instead of leaving a published release without provenance.
+      - name: Attest build provenance
+        uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
+        with:
+          subject-path: publish/SysManager-v${{ steps.version.outputs.version }}.exe
+
       - name: Create GitHub Release
         id: release
         uses: softprops/action-gh-release@8a0cd651e5b2365bd640854a3fa5dfc70e4875f3 # v3
@@ -886,10 +920,11 @@ jobs:
           draft: false
           prerelease: false
           make_latest: ${{ steps.latest.outputs.make_latest }}
-          # The step above is what makes re-publishing safe: it has already refused a rebuild whose
-          # bytes differ from what this tag published, so reaching here means the assets are the
-          # same ones. Left additive on purpose rather than set to fail on an existing file, because
-          # a re-dispatch must still be able to repair a release whose upload was interrupted.
+          # Never replaces a file the release has; the action skips it, it does not fail. "If this release already
+          # exists, the bytes must match what it published" has refused a build whose exe differs from what this
+          # release published, so a re-dispatch still uploads the files an interrupted upload left out, and a file cut
+          # short is deleted by hand first (gh release delete-asset).
+          overwrite_files: false
           files: |
             publish/SysManager-v${{ steps.version.outputs.version }}.exe
             publish/SysManager-v${{ steps.version.outputs.version }}.exe.sha256

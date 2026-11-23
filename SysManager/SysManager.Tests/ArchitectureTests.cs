@@ -11608,6 +11608,45 @@ public partial class ArchitectureTests
     }
 
     /// <summary>
+    /// The branches of a release lookup that reads only a 404 as "none": the code where the release was found, where
+    /// the answer was a 404, where it was anything else, and the code after the lookup, failing when one is missing.
+    /// </summary>
+    /// <remarks>
+    /// The release guard sliced this itself (#2805). The rebuild's comparison and auto-release's dispatch decide the
+    /// same way, so the slicer is shared, for the reason <see cref="ReleaseStepLine"/> is. An <c>if</c> inside a
+    /// branch is stepped over, so its <c>fi</c> cannot end the lookup early. Takes code without comments, as
+    /// <see cref="ReleaseStepCode"/> returns it.
+    /// </remarks>
+    private static (string Found, string NotFound, string Otherwise, string After) ReleaseLookupBranches(
+        string code, string lookup)
+    {
+        var lines = code.Split('\n').Select(l => l.Trim()).ToList();
+        var ask = lines.FindIndex(l =>
+            l.StartsWith("if found=$(gh api \"repos/", StringComparison.Ordinal)
+            && l.EndsWith($"/{lookup}\" --jq .id 2>&1); then", StringComparison.Ordinal));
+        int notFound = -1, otherwise = -1, end = -1, depth = 0;
+        for (var i = ask < 0 ? lines.Count : ask + 1; i < lines.Count && end < 0; i++)
+        {
+            var line = lines[i];
+            if (line.StartsWith("if ", StringComparison.Ordinal) && !line.EndsWith("; fi", StringComparison.Ordinal))
+                depth++;
+            else if (line == "fi" && depth > 0) depth--;
+            else if (depth > 0) continue;
+            else if (line == "fi") end = i;
+            else if (notFound < 0 && line.StartsWith("elif", StringComparison.Ordinal)
+                     && line.Contains("(HTTP 404)", StringComparison.Ordinal)) notFound = i;
+            else if (notFound >= 0 && otherwise < 0 && line == "else") otherwise = i;
+        }
+        Assert.True(ask >= 0 && notFound > ask && otherwise > notFound && end > otherwise,
+            $"the lookup of {lookup} does not branch found / 404 / anything else (if at {ask}, elif at {notFound}, "
+            + $"else at {otherwise}, fi at {end})");
+        return (string.Join('\n', lines[(ask + 1)..notFound]),
+                string.Join('\n', lines[(notFound + 1)..otherwise]),
+                string.Join('\n', lines[(otherwise + 1)..end]),
+                string.Join('\n', lines[(end + 1)..]));
+    }
+
+    /// <summary>
     /// The job in release.yml that calls winget.yml, as code, failing when there is none.
     /// </summary>
     private static string WingetCallerJob(string[] lines)
@@ -12362,16 +12401,16 @@ public partial class ArchitectureTests
         // The step body has to actually start the process and judge the outcome. Without these it
         // could be reduced to an echo and still satisfy the ordering above.
         //
-        // Sliced to the END OF THIS STEP, not to "Create GitHub Release": two unrelated steps sit in
-        // between ("Extract release notes from CHANGELOG" and "Append verification instructions"), and
-        // between them they contain five `throw`s. Against the wider slice, replacing this step's own
-        // `throw` with a Write-Warning — turning the launch gate into exactly the "decoration" the
-        // paragraph below forbids — still left the assertion green.
+        // Sliced to the END OF THIS STEP, not to "Create GitHub Release": the steps in between (the SBOM, the
+        // release notes, the verification footer, the rebuild comparison, the Latest decision and the
+        // attestation) throw too. Against the wider slice, replacing this step's own `throw` with a
+        // Write-Warning — turning the launch gate into exactly the "decoration" the paragraph below
+        // forbids — still left the assertion green.
         var stepEnd = Array.FindIndex(lines, smoke + 1, l => l.TrimStart().StartsWith("- name:", StringComparison.Ordinal));
         Assert.True(stepEnd > smoke && stepEnd <= release,
             $"the smoke-check step has no following step before \"Create GitHub Release\" (found {stepEnd}). "
           + "The slice must end at this step's own boundary: widening it to the next few steps lets THEIR "
-          + "five throws stand in for this gate's, which is how a neutered launch check stayed green.");
+          + "throws stand in for this gate's, which is how a neutered launch check stayed green.");
         var body = string.Join('\n', lines[smoke..stepEnd]);
         Assert.True(body.Length > 500,
             $"the smoke-check step body is only {body.Length} characters — the slice has collapsed, so "
@@ -12420,6 +12459,13 @@ public partial class ArchitectureTests
         // made this fail against the fixed tree, which is a guard that forbids its own explanation.
         Assert.DoesNotContain(".CloseMainWindow(", body, StringComparison.Ordinal);
         Assert.Contains(".Kill()", body, StringComparison.Ordinal);
+
+        // The step's own explanation sits directly above it. A move left part of it three steps away, above the
+        // release notes, saying nothing had run the exe yet and that the check closes it, both false there (#2999).
+        var above = Enumerable.Reverse(lines[..smoke]).TakeWhile(l => l.TrimStart().StartsWith('#')).ToList();
+        Assert.Contains(above, l => l.Contains("smoke check, not a UI test", StringComparison.OrdinalIgnoreCase));
+        Assert.DoesNotContain(lines,
+            l => l.Contains("Nothing above this point has ever RUN", StringComparison.Ordinal));
     }
 
     /// <summary>
@@ -12566,23 +12612,146 @@ public partial class ArchitectureTests
         var code = ReleaseStepCode(lines, ReleaseStepLine(lines, "Check for an existing release"));
 
         Assert.DoesNotContain("gh release view", code, StringComparison.Ordinal);
-        Assert.Contains("releases/tags/$tag", code, StringComparison.Ordinal);
 
         // Three answers, each with its own branch: found, a 404, and anything else, which fails the job.
-        var codeLines = code.Split('\n').Select(l => l.Trim()).ToList();
-        var notFound = codeLines.FindIndex(
-            l => l.StartsWith("elif", StringComparison.Ordinal) && l.Contains("(HTTP 404)", StringComparison.Ordinal));
-        // From the 404 branch on: the manual-dispatch check above it has an if and a fi of its own.
-        var otherwise = notFound < 0 ? -1 : codeLines.FindIndex(notFound, l => l == "else");
-        var end = otherwise < 0 ? -1 : codeLines.FindIndex(otherwise, l => l == "fi");
-        Assert.True(notFound > 0 && otherwise > notFound && end > otherwise,
-            $"the guard does not branch found / 404 / anything else (elif at {notFound}, else at {otherwise}, "
-            + $"fi at {end})");
-        Assert.Contains(
-            "should_release=true", string.Join('\n', codeLines[notFound..otherwise]), StringComparison.Ordinal);
-        var unknown = string.Join('\n', codeLines[otherwise..end]);
-        Assert.DoesNotContain("should_release=true", unknown, StringComparison.Ordinal);
-        Assert.Contains("exit 1", unknown, StringComparison.Ordinal);
+        var (_, notFound, otherwise, _) = ReleaseLookupBranches(code, "releases/tags/$tag");
+        Assert.Contains("should_release=true", notFound, StringComparison.Ordinal);
+        Assert.DoesNotContain("should_release=true", otherwise, StringComparison.Ordinal);
+        Assert.Contains("exit 1", otherwise, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// A rebuild of a version that already has a release is held against what that release published, and the release
+    /// step replaces no file the release has.
+    /// </summary>
+    /// <remarks>
+    /// The comparison downloaded the published <c>.sha256</c> inside a <c>try</c> whose <c>catch</c> did nothing, and
+    /// PowerShell does not throw when a native command fails, so any failed download read as "this release is new": a
+    /// network error or a rate limit as well as a missing release. A re-dispatch then compared nothing, and the release
+    /// step, which replaced a file of the same name, could publish a different exe under the URL people had downloaded
+    /// from while winget kept the first hash. It decides the way the release guard does (#2805): only a 404 means none
+    /// exists and any other answer fails the run. Both the exe's digest and the published <c>.sha256</c> are compared,
+    /// because an interrupted upload can leave one without the other, and both after the lookup, so the found branch
+    /// reaches them.
+    /// </remarks>
+    [Fact]
+    public void ARebuild_IsComparedWithWhatTheReleasePublished_AndReplacesNothing()
+    {
+        var lines = File.ReadAllLines(Path.Combine(TestPaths.RepoRoot(), ".github", "workflows", "release.yml"));
+        var at = ReleaseStepLine(lines, "If this release already exists, the bytes must match what it published");
+        var code = ReleaseStepCode(lines, at);
+
+        foreach (var byTag in new[] { "gh release download", "gh release view" })
+            Assert.DoesNotContain(byTag, code, StringComparison.Ordinal);
+
+        var (found, notFound, otherwise, after) = ReleaseLookupBranches(code, "releases/tags/$TAG");
+        Assert.DoesNotContain("exit ", found, StringComparison.Ordinal);
+        Assert.Contains("exit 0", notFound, StringComparison.Ordinal);
+        Assert.DoesNotContain("exit 0", otherwise, StringComparison.Ordinal);
+        Assert.Contains("exit 1", otherwise, StringComparison.Ordinal);
+
+        Assert.Contains("[[ ! \"$rebuilt\" =~ ^[0-9a-f]{64}$ ]]", code, StringComparison.Ordinal);
+        foreach (var required in new[]
+                 {
+                     "releases/$id/assets?per_page=100", "\\(.digest // \"\")", "^sha256:[0-9a-f]{64}$",
+                     "releases/assets/$sha", "[ \"${digest#sha256:}\" != \"$rebuilt\" ]",
+                     "[ \"$published\" != \"$rebuilt\" ]",
+                 })
+        {
+            Assert.Contains(required, after, StringComparison.Ordinal);
+        }
+        Assert.True(code.Split('\n').Count(l => l.Trim() == "exit 1") >= 5,
+            "an unreadable answer, a non-id, a missing digest and both mismatches must each fail the job.");
+        Assert.DoesNotContain("continue-on-error", code, StringComparison.Ordinal);
+
+        var hash = ReleaseStepLine(lines, "Compute SHA256");
+        var release = ReleaseStepLine(lines, "Create GitHub Release");
+        Assert.True(hash < at && at < release,
+            $"the comparison (line {at + 1}) has to come after the hash it compares (line {hash + 1}) and before the "
+            + $"release step it makes safe (line {release + 1}).");
+        Assert.Contains("overwrite_files: false", ReleaseStepCode(lines, release), StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// The attestation is the last step before the release is created, so no step that can still refuse the build runs
+    /// after the signed claim about it.
+    /// </summary>
+    /// <remarks>
+    /// The smoke check moved above the attestation for this reason (#2848), but the release notes, the verification
+    /// footer, the rebuild comparison and the Latest decision stayed below it, and each can fail the run, so a build
+    /// one of them refused already had its provenance in the public transparency log. The next step is found by the
+    /// step indent, so an unnamed one between the two counts too. The refusing steps are counted against a measured
+    /// floor, so a detection that stopped finding them fails rather than passes.
+    /// </remarks>
+    [Fact]
+    public void TheReleaseJob_AttestsLast_OnceNothingCanRefuseTheBuild()
+    {
+        var lines = File.ReadAllLines(Path.Combine(TestPaths.RepoRoot(), ".github", "workflows", "release.yml"));
+        var attest = ReleaseStepLine(lines, "Attest build provenance");
+        var release = ReleaseStepLine(lines, "Create GitHub Release");
+
+        var next = Array.FindIndex(lines, attest + 1, l => l.StartsWith("      - ", StringComparison.Ordinal));
+        Assert.True(next > attest, "no step follows the attestation, so no release is published after it.");
+        Assert.Equal("- name: Create GitHub Release", lines[next].Trim());
+        Assert.DoesNotContain("continue-on-error", ReleaseStepCode(lines, attest), StringComparison.Ordinal);
+
+        var keys = WorkflowJobs.Keys(lines);
+        var job = keys.Last(k => k < attest);
+        var end = keys.FirstOrDefault(k => k > attest, lines.Length);
+        var refusing = Enumerable.Range(job, end - job)
+            .Where(i => lines[i].TrimStart().StartsWith("- name:", StringComparison.Ordinal))
+            .Where(i => ReleaseStepCode(lines, i).Split('\n').Any(l =>
+                l.Contains("throw ", StringComparison.Ordinal) || l.Contains("exit 1", StringComparison.Ordinal)))
+            .ToList();
+
+        // Twelve when measured, from the commit check to the Latest decision.
+        Assert.True(refusing.Count >= 12,
+            $"only {refusing.Count} step(s) that can refuse the build were found, out of 12 measured.");
+        var late = refusing.Where(i => i > attest && i < release).Select(i => lines[i].Trim()).ToList();
+        Assert.True(late.Count == 0,
+            "these steps can refuse a build that is already attested:\n  " + string.Join("\n  ", late));
+    }
+
+    /// <summary>
+    /// Auto-release starts no second release of a version that already has one, or whose release is being built.
+    /// </summary>
+    /// <remarks>
+    /// Its comment said the release workflow does nothing for a version that already has a release, but that guard
+    /// skips only a tag push, and auto-release dispatches. So a re-run of a run that released a version, or a run by
+    /// hand on a commit already tagged, rebuilt, attested and re-dated that release and submitted it to winget again.
+    /// It looks the release up the guard's way (#2805), then counts the release runs of the tag still going, where only
+    /// a number counts.
+    /// </remarks>
+    [Fact]
+    public void AutoRelease_StartsNoSecondReleaseOfAVersionThatHasOne()
+    {
+        var auto = File.ReadAllLines(Path.Combine(TestPaths.RepoRoot(), ".github", "workflows", "auto-release.yml"));
+        var trigger = ReleaseStepCode(auto, ReleaseStepLine(auto, "Trigger release workflow"));
+        var (found, notFound, otherwise, after) = ReleaseLookupBranches(trigger, "releases/tags/$TAGGED");
+
+        Assert.Contains("exit 0", found, StringComparison.Ordinal);
+        Assert.DoesNotContain("gh workflow run", found, StringComparison.Ordinal);
+        Assert.DoesNotContain("exit ", notFound, StringComparison.Ordinal);
+        Assert.Contains("exit 1", otherwise, StringComparison.Ordinal);
+
+        // The code from a line to the next fi, the branch it opens.
+        var rest = after.Split('\n').ToList();
+        string Branch(int at) => string.Join('\n', rest[(at + 1)..rest.FindIndex(at, l => l == "fi")]);
+        int At(Func<string, bool> match) => rest.FindIndex(l => match(l));
+        var count = At(l => l.Contains("--workflow release.yml --branch \"$TAGGED\"", StringComparison.Ordinal));
+        var number = At(l => l.EndsWith("[[ ! \"$running\" =~ ^[0-9]+$ ]]; then", StringComparison.Ordinal));
+        var busy = At(l => l == "if [ \"$running\" -gt 0 ]; then");
+        var dispatch = At(l => l.Contains("gh workflow run release.yml --ref \"$NEXT\"", StringComparison.Ordinal));
+        Assert.True(count >= 0 && number >= count && busy > number && dispatch > busy,
+            $"the release runs of the tag still going must be counted (line {count}), as a number (line {number}), "
+            + $"and a running one end the step (line {busy}) before the dispatch (line {dispatch}).");
+        Assert.Contains("exit 1", Branch(number), StringComparison.Ordinal);
+        Assert.Contains("exit 0", Branch(busy), StringComparison.Ordinal);
+
+        var asked = trigger.IndexOf("if [ -n \"$TAGGED\" ]; then", StringComparison.Ordinal);
+        var lookup = trigger.IndexOf("/releases/tags/$TAGGED\"", StringComparison.Ordinal);
+        Assert.True(asked >= 0 && lookup > asked, "only a version already on the commit is looked up.");
+        Assert.Single(trigger.Split('\n'), l => l.Contains("gh workflow run release.yml", StringComparison.Ordinal));
     }
 
     /// <summary>

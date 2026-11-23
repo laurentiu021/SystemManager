@@ -461,6 +461,24 @@ jobs:
       # Skip Codecov on fork PRs: forked pull requests have no access to repository
       # secrets, so CODECOV_TOKEN is empty there and the upload would fail noisily for
       # no benefit. Same-repo pushes/PRs upload normally.
+      # The notices tool ran first in release.yml, after auto-release had pushed the tag, so a break in it (a licence
+      # text renamed or removed under tools/licenses, an edit to the tool, an SDK change to how a file-based app
+      # builds) left a version with a tag and no release, which a re-dispatch of the same commit could not recover
+      # (#3420). The unit tests compare the committed notices with the restore graph without running the tool. It runs
+      # here as the release runs it, after the unit tests, which have read the committed copy: a tool that fails stops
+      # the pull request, and a copy that is behind is a warning, here as there.
+      - name: Write the third-party notices the release will write
+        shell: pwsh
+        run: |
+          dotnet run tools/ThirdPartyNotices.cs
+          if ($LASTEXITCODE -ne 0) { throw "tools/ThirdPartyNotices.cs could not write the notices, so the release would stop at the same step; its output says which package." }
+          git diff --quiet -- THIRD-PARTY-NOTICES.txt
+          if ($LASTEXITCODE -ne 0) {
+              Write-Host "::warning::THIRD-PARTY-NOTICES.txt in the repository is behind this build's packages. Run 'dotnet run tools/ThirdPartyNotices.cs' and commit it."
+              git --no-pager diff --stat -- THIRD-PARTY-NOTICES.txt
+          }
+          exit 0
+
       - name: Upload coverage to Codecov
         if: ${{ github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository }}
         uses: codecov/codecov-action@303a32d7a59b442fa8d48b6a1cc6825c09c847a5 # v7

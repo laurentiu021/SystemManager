@@ -9,7 +9,8 @@ using System.Text.RegularExpressions;
 namespace SysManager.Tests;
 
 /// <summary>
-/// One guard per promise in <c>SECURITY.md</c>'s "By design — forbidden" list.
+/// One guard per promise in <c>SECURITY.md</c>'s "By design — forbidden" list, and for the promises of its
+/// "Dependencies and supply chain" section that the workflows have to keep (guards 8 and 10).
 /// </summary>
 /// <remarks>
 /// Those eight statements are the strongest claims the project makes to someone deciding whether to run a
@@ -472,6 +473,59 @@ public class SecurityPromiseTests
             "SysManager's runtime configuration leaves startup hooks on, so the runtime runs any assembly a "
             + "DOTNET_STARTUP_HOOKS variable names before Main, in an elevated SysManager too. "
             + "SysManager.csproj sets <StartupHookSupport>false</StartupHookSupport> for this.");
+    }
+
+    // ── 10. No package build finds a token that writes in git's configuration ──
+
+    /// <summary>
+    /// Promise: a job that restores or builds the NuGet packages while its token can write checks the source out
+    /// without leaving that token in git's configuration.
+    /// </summary>
+    /// <remarks>
+    /// actions/checkout writes the job's token into the clone's git configuration unless told not to, and a restore or
+    /// a build runs the MSBuild targets, analyzers and source generators of every package in the graph inside that
+    /// job. release.yml turned it off for its contents: write token (#2743). codeql.yml kept the default for its
+    /// security-events: write one, which can dismiss alerts and upload an empty analysis. auto-release's job writes but
+    /// builds nothing, and pushes its tag with git, so it keeps its credentials. A job's token is its own
+    /// <c>permissions</c>, else the workflow's, else the repository's default, which counts as one that writes.
+    /// </remarks>
+    [Fact]
+    public void NoJobThatBuildsPackages_LeavesAWriteTokenInGitsConfiguration()
+    {
+        var dir = Path.Combine(TestPaths.RepoRoot(), ".github", "workflows");
+        var checkouts = 0;
+        var building = 0;
+        var offenders = new List<string>();
+        foreach (var path in Directory.EnumerateFiles(dir, "*.yml").OrderBy(p => p, StringComparer.Ordinal))
+        {
+            var lines = File.ReadAllLines(path);
+            foreach (var key in WorkflowJobs.Keys(lines))
+            {
+                var job = WorkflowJobs.Containing(lines, key).Split('\n');
+                var starts = Enumerable.Range(0, job.Length)
+                    .Where(i => job[i].TrimStart().StartsWith("- ", StringComparison.Ordinal))
+                    .Append(job.Length).ToList();
+                var clones = starts.Zip(starts.Skip(1), (from, to) => job[from..to])
+                    .Where(s => s.Any(l => l.Contains("uses: actions/checkout@", StringComparison.Ordinal)))
+                    .ToList();
+                checkouts += clones.Count;
+                if (!WorkflowJobs.BuildsPackages(lines, key) || !WorkflowJobs.CanWrite(lines, key))
+                    continue;
+                building++;
+                if (clones.Any(s => !s.Any(l => l.Trim() == "persist-credentials: false")))
+                    offenders.Add($"{Path.GetFileName(path)}, job {job[0].Trim()}");
+            }
+        }
+
+        // Nine checkouts when measured, and two jobs that build with a token that can write: the release build and
+        // the CodeQL analysis.
+        Assert.True(checkouts >= 9, $"only {checkouts} checkout step(s) were read, out of 9 measured.");
+        Assert.True(building >= 2,
+            $"only {building} job(s) were found building packages with a token that can write, out of 2 measured.");
+        Assert.True(offenders.Count == 0,
+            "SECURITY.md, \"Dependencies and supply chain\", says a job that builds the packages while its token can "
+            + "write leaves that token out of git's configuration. These jobs build packages while theirs can, and a "
+            + "checkout leaves it there. Set persist-credentials: false on it:\n  " + string.Join("\n  ", offenders));
     }
 
     /// <summary>A workflow's lines, trimmed, with their indexes, leaving out comment lines.</summary>

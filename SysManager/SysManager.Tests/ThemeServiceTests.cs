@@ -508,6 +508,120 @@ public class ThemeServiceTests : IDisposable
         return data;
     }
 
+    // ---------- a custom theme's colours, and the shade, as the file has them ----------
+    // WPF's colour converter reads far more than hex: names, #RGB, scRGB ("sc#…"), and a ContextColor form whose
+    // colour-profile address it opens. theme.json is a file a profile import writes as the profile has it, so a custom
+    // theme's colours are read as #RRGGBB or #AARRGGBB only, and the shade is held to the slider's ends.
+
+    /// <summary>A custom theme file with the given accent and shade, in the service's own shape.</summary>
+    private string CustomFile(string accent, double shade)
+    {
+        var content = JsonSerializer.Serialize(new
+        {
+            PresetId = "custom",
+            Mode = "custom",
+            ShadePosition = shade,
+            Accent = accent,
+            Background = "#FF070A0F",
+            Surface = "#FF0E1218",
+            Text = "#FFF1F3F7",
+        });
+        File.WriteAllText(ThemeFile, content);
+        return content;
+    }
+
+    /// <summary>WPF reads these and a hex reader does not, so the file is no custom theme SysManager can use.</summary>
+    [Theory]
+    [InlineData("Red")]
+    [InlineData("#F00")]
+    [InlineData("sc#1 0 0")]
+    public void ACustomThemeFile_WithAColourWrittenAnyOtherWay_OpensOnTheShippedTheme_AndIsSetAside(string accent)
+    {
+        var content = CustomFile(accent, 0.5);
+        var svc = new ThemeService(_dir, windowsPrefersDark: () => true, paintsTheApp: false);
+
+        svc.Initialize();
+
+        Assert.Equal("dark", svc.CurrentMode);
+        Assert.Equal(ThemeService.DefaultPresetId, svc.CurrentPresetId);
+        svc.SetPreset("deep-ocean");
+        Assert.Equal(content, File.ReadAllText(ThemeFile + ".unreadable"));
+    }
+
+    /// <summary>
+    /// A file refused for its colours leaves nothing of itself behind: the mode, the preset and the shade were taken
+    /// from it before the colours were read, so the panel opened on Custom over the shipped colours.
+    /// </summary>
+    [Theory]
+    [InlineData("sc#1")]
+    [InlineData("ContextColor x 1")]
+    public void ACustomThemeFileThatCannotBeUsed_GivesTheThemeNoModePresetOrShade(string accent)
+    {
+        CustomFile(accent, 0.9);
+        var svc = new ThemeService(_dir, windowsPrefersDark: () => true, paintsTheApp: false);
+
+        svc.Initialize();
+
+        Assert.Equal("dark", svc.CurrentMode);
+        Assert.Equal(ThemeService.DefaultPresetId, svc.CurrentPresetId);
+        Assert.Equal(ThemeService.DefaultShade, svc.ShadePosition);
+    }
+
+    /// <summary>
+    /// The slider stops at its ends, and a file did not: a shade past them darkened or lightened every colour to one
+    /// end, text included, so the app opened unreadable. Held to the end, the theme stays a theme and is kept.
+    /// </summary>
+    [Theory]
+    [InlineData("deep-ocean", 9.0, 1.0)]
+    [InlineData("clean-indigo", -9.0, 0.0)]
+    public void AShadePastTheSlider_IsHeldToItsEnd_AndTheTextStaysReadable(string presetId, double stored, double end)
+    {
+        File.WriteAllText(ThemeFile, JsonSerializer.Serialize(new
+        {
+            PresetId = presetId,
+            Mode = ThemePreset.Defaults[presetId].IsDark ? "dark" : "light",
+            ShadePosition = stored,
+            Accent = "",
+            Background = "",
+            Surface = "",
+            Text = "",
+        }));
+        var svc = new ThemeService(_dir, windowsPrefersDark: () => true, paintsTheApp: false);
+
+        svc.Initialize();
+
+        Assert.Equal(end, svc.ShadePosition);
+        Assert.True(ContrastRatio(svc.CurrentTheme.TextPrimary, svc.CurrentTheme.Surface) >= 4.5,
+            "the text does not read on the surfaces it sits on.");
+        svc.SetPreset(presetId);
+        Assert.False(File.Exists(ThemeFile + ".unreadable"), "a theme with a shade held to its end was set aside.");
+        using var saved = JsonDocument.Parse(File.ReadAllText(ThemeFile));
+        Assert.Equal(end, saved.RootElement.GetProperty("ShadePosition").GetDouble());
+    }
+
+    /// <summary>
+    /// A shade that is not a number is the default one, not a value the next save cannot write: JSON has no NaN, so
+    /// every later save threw.
+    /// </summary>
+    [Theory]
+    [InlineData(double.NaN)]
+    [InlineData(double.PositiveInfinity)]
+    [InlineData(double.NegativeInfinity)]
+    public void SetShade_WithAValueThatIsNotANumber_PutsTheDefaultShade_AndTheThemeStillSaves(double position)
+    {
+        var svc = new ThemeService(_dir, windowsPrefersDark: () => true, paintsTheApp: false);
+        svc.SetPreset("deep-ocean");
+        svc.SetShade(0.8);
+
+        svc.SetShade(position);
+        svc.SetPreset("deep-ocean");
+
+        Assert.Equal(ThemeService.DefaultShade, svc.ShadePosition);
+        var reloaded = new ThemeService(_dir, windowsPrefersDark: () => true, paintsTheApp: false);
+        reloaded.Initialize();
+        Assert.Equal(ThemeService.DefaultShade, reloaded.ShadePosition);
+    }
+
     private static Color Hex(string value) => (Color)ColorConverter.ConvertFromString(value);
 
     /// <summary>

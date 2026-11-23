@@ -3198,6 +3198,72 @@ public partial class ArchitectureTests
         };
 
     /// <summary>
+    /// Colour text the app does not write itself is read through <c>HexColor</c>, which reads #RRGGBB and #AARRGGBB
+    /// and nothing else.
+    /// </summary>
+    /// <remarks>
+    /// WPF's colour converter reads names, #RGB, scRGB and a ContextColor form whose colour-profile address it opens,
+    /// and it read the Custom-mode boxes and a custom theme in theme.json, a file a profile import writes as the
+    /// profile has it. Every use of that parser, the colour-profile API it reaches, a converter fetched by type or a
+    /// XAML reader is counted per file, comments removed, and the counts must be these: ThemeService keeps its two
+    /// palette helpers, which read only literals, and ThemeBrush its one, behind a check that the text is a hex
+    /// value. Both helpers are asserted by their exact text, so a parse put back into Load cannot stand in for one.
+    /// The list, its key shape and its drift check follow EveryCatch_SaysWhy_AndTheBroadOnesAreTheReviewedOnes.
+    /// </remarks>
+    [Fact]
+    public void EveryColourReadFromText_GoesThroughHexColor()
+    {
+        var app = TestPaths.AppProject();
+        var allowed = new Dictionary<string, int>(StringComparer.Ordinal)
+        {
+            ["Services/ThemeService.cs"] = 2,
+            ["Helpers/ThemeBrush.cs"] = 1,
+        };
+        var seen = new Dictionary<string, int>(StringComparer.Ordinal);
+        var files = 0;
+        foreach (var path in SourceFilesUnder(app, ".cs").OrderBy(p => p, StringComparer.Ordinal))
+        {
+            files++;
+            var file = Path.GetRelativePath(app, path).Replace(Path.DirectorySeparatorChar, '/');
+            var uses = WpfColourParsing().Count(WithoutComments(File.ReadAllText(path)));
+            if (uses > 0) seen[file] = uses;
+        }
+
+        // 490 files when this was written.
+        Assert.True(files >= 400, $"only {files} app source files were read, so this checked almost none of them.");
+        var drift = allowed.Keys.Union(seen.Keys)
+            .Where(f => seen.GetValueOrDefault(f) != allowed.GetValueOrDefault(f))
+            .Select(f => $"{f}: {seen.GetValueOrDefault(f)} use(s) of WPF's colour parser, "
+                         + $"{allowed.GetValueOrDefault(f)} allowed")
+            .ToList();
+        Assert.True(drift.Count == 0,
+            "colour text is read with WPF's parser, which also reads names, scRGB and colour-profile addresses. "
+            + "Read it with HexColor.TryParse:\n  " + string.Join("\n  ", drift));
+
+        var theme = WithoutComments(File.ReadAllText(Path.Combine(app, "Services", "ThemeService.cs")));
+        const string palette = "private static Color C(string hex) => (Color)ColorConverter.ConvertFromString(hex);";
+        Assert.Equal(2, theme.Split(palette).Length - 1);
+        Assert.Contains("HexColor.TryParse(", theme, StringComparison.Ordinal);
+
+        var popup = WithoutComments(File.ReadAllText(Path.Combine(app, "Views", "ThemePopup.xaml.cs")));
+        Assert.Contains("HexColor.TryParse(box.Text, out var color)", popup, StringComparison.Ordinal);
+
+        var brush = WithoutComments(File.ReadAllText(Path.Combine(app, "Helpers", "ThemeBrush.cs")));
+        Assert.Contains("else if (color.StartsWith('#')) d.SetValue(target, FixedBrush(color));", brush,
+            StringComparison.Ordinal);
+        Assert.Equal(2, brush.Split("FixedBrush(").Length - 1);
+    }
+
+    /// <summary>
+    /// A use of WPF's colour-text parser, of the colour-profile API its ContextColor form opens, of a converter fetched
+    /// for a colour or brush type, or of a XAML reader.
+    /// </summary>
+    [GeneratedRegex(@"\b(?:ColorConverter|BrushConverter|ColorContext|XamlReader)\b|\bColor\s*\.\s*FromA?Values\s*\("
+        + @"|\bTypeDescriptor\s*\.\s*GetConverter\s*\(\s*typeof\s*\(\s*(?:Color|\w*Brush)\b",
+        RegexOptions.CultureInvariant)]
+    private static partial Regex WpfColourParsing();
+
+    /// <summary>
     /// A colour a binding picks goes through <c>helpers:ThemeBrush</c>, never straight onto a brush property.
     /// </summary>
     /// <remarks>

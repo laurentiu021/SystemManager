@@ -69,6 +69,35 @@ public sealed class ThemePopupUiTests : IDisposable
             card.RaiseEvent(new KeyEventArgs(Keyboard.PrimaryDevice, source, 0, key) { RoutedEvent = routed });
     }
 
+    /// <summary>
+    /// A colour box left with text that is not a hex value is marked, and the colour it had stays, whatever WPF would
+    /// have made of the text: a name, a short #RGB, scRGB, or a ContextColor form, which threw out of the event.
+    /// </summary>
+    [Theory]
+    [InlineData("sc#1")]
+    [InlineData("ContextColor x 1")]
+    [InlineData("Red")]
+    [InlineData("#FFF")]
+    public void AHexBox_LeftWithAColourThatIsNotHex_IsFlagged_AndKeepsItsLastColour(string text)
+    {
+        var theme = DarkTheme("midnight-indigo");
+
+        StaHelper.Run(() =>
+        {
+            AppResources.Ensure();
+            var popup = Opened(theme);
+            var before = ((SolidColorBrush)popup.CustomAccentPreview.Background).Color;
+
+            popup.CustomAccentHex.Text = text;
+            popup.CustomAccentHex.RaiseEvent(new RoutedEventArgs(UIElement.LostFocusEvent));
+
+            Assert.Same(Brushes.IndianRed, popup.CustomAccentHex.Foreground);
+            Assert.NotNull(popup.CustomAccentHex.ToolTip);
+            Assert.Equal(before, theme.CurrentTheme.Accent);
+            Assert.Equal("custom", theme.CurrentMode);
+        });
+    }
+
     [Fact]
     public void EachPresetCard_IsARadioButtonNamedForItsPreset_WithOnlyTheThemeInUseSelected()
     {

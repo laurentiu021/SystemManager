@@ -10,6 +10,25 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.136.180] - 2026-11-23
+
+**Right-Click Menu counts a handler as part of Windows only when its file is where Windows keeps its own, so add-ons
+installed with a device driver are no longer hidden among them.**
+
+### Fixed
+- A right-click add-on whose file was anywhere inside the Windows folder was treated as part of Windows: hidden
+  unless "Show system entries" was on, and left out of presets. That folder also holds files other companies install,
+  such as graphics drivers' add-ons in the driver store, and folders any program can write to. Only the folders
+  Windows keeps its own files in count now.
+- A handler or menu text registered with a bare file name was judged against the folder SysManager was started from.
+  It is now judged by the file Windows loads, its copy in the System folder or the Windows folder, and a name neither
+  has is not part of Windows.
+- An add-on that runs as its own program was registered with a command line, which was read as one file name, so
+  its program could not be told from its arguments. The program is what is judged now.
+
+### Changed
+- Right-click add-ons installed with a device driver, such as a graphics card's, now show in the list by default.
+
 ## [1.136.179] - 2026-11-23
 
 **A scheduled task in Startup Manager shows the program it runs, and "Hide system" hides only what SysManager

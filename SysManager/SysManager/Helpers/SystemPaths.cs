@@ -390,6 +390,41 @@ internal static class SystemPaths
     internal static bool IsDirectlyInsideAny(string candidate, params string?[] folders) =>
         folders.Any(folder => IsDirectlyInside(candidate, folder));
 
+    /// <summary>
+    /// A bare file name's copy in the System folder, then in the Windows folder, with ".exe" added when it has no
+    /// extension; empty when it is not a bare name or neither folder has it.
+    /// </summary>
+    /// <remarks>
+    /// For judging a file a registration names by its bare name, as Windows loads one: Startup Manager's programs and
+    /// Right-Click Menu's handlers. Never <see cref="ResolveSystemTool(string)"/>, whose winget branch reads elevation,
+    /// and never Windows' own search, which tries the working folder first. Not SysWOW64: 64-bit Explorer and the
+    /// 64-bit sign-in never load a bare name from there.
+    /// </remarks>
+    internal static string InWindowsFolders(string name)
+    {
+        var bare = name.Trim().Trim('"').Trim();
+        if (bare.Length == 0 || bare.IndexOfAny(['\\', '/', ':']) >= 0) return "";
+        string[] names = Path.HasExtension(bare) ? [bare] : [bare, bare + ".exe"];
+        foreach (var folder in (string[])[System32, Environment.GetFolderPath(Environment.SpecialFolder.Windows)])
+        {
+            if (folder.Length == 0) continue;
+            foreach (var candidate in names)
+            {
+                var path = Path.Combine(folder, candidate);
+                if (File.Exists(path)) return path;
+            }
+        }
+        return "";
+    }
+
+    /// <summary>
+    /// True for a full drive path to a file that is there. A network or device path is never probed: a scan must not
+    /// reach out to another machine, and a relative one would be looked for in the folder SysManager runs in.
+    /// </summary>
+    internal static bool IsLocalFile(string path) =>
+        path.Length >= 3 && char.IsAsciiLetter(path[0]) && path[1] == ':' && path[2] == '\\'
+        && Path.IsPathFullyQualified(path) && File.Exists(path);
+
     /// <summary>True when <paramref name="full"/> is the root of a drive, with or without its separator.</summary>
     /// <remarks>
     /// Shared by the leftover search and the File Shredder, which both refuse a drive root, so the rule exists once.

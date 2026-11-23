@@ -33,8 +33,9 @@ public sealed class ShortcutCleanerSharedFolderScanTests : IDisposable
         var lnk = Path.Combine(_folder, "Discord.lnk");
         var target = Path.Combine(Path.GetPathRoot(Environment.SystemDirectory)!, "SysManagerNoSuchFolder", "Update.exe");
         var (_, _, error) = await WindowsPowerShellScript.RunAsync(
-            "$s = (New-Object -ComObject WScript.Shell).CreateShortcut('" + lnk.Replace("'", "''") + "'); " +
-            "$s.TargetPath = '" + target.Replace("'", "''") + "'; $s.Save()");
+            "$s = (New-Object -ComObject WScript.Shell).CreateShortcut(" + WindowsPowerShellScript.SingleQuoted(lnk)
+            + "); " +
+            "$s.TargetPath = " + WindowsPowerShellScript.SingleQuoted(target) + "; $s.Save()");
         Assert.True(File.Exists(lnk), $"the shortcut was not written: {error}");
         return lnk;
     }

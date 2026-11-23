@@ -35,8 +35,8 @@ public sealed class ShortcutCleanerRecheckTests : IDisposable
         var program = Path.Combine(_folder, "Acme", "Acme.exe");
         var lnk = Path.Combine(_folder, "Acme.lnk");
         var (_, _, error) = await WindowsPowerShellScript.RunAsync(
-            "$s = (New-Object -ComObject WScript.Shell).CreateShortcut('" + lnk.Replace("'", "''") + "'); " +
-            "$s.TargetPath = '" + program.Replace("'", "''") + "'; $s.Save()");
+            "$s = (New-Object -ComObject WScript.Shell).CreateShortcut(" + WindowsPowerShellScript.SingleQuoted(lnk)
+            + "); $s.TargetPath = " + WindowsPowerShellScript.SingleQuoted(program) + "; $s.Save()");
         Assert.True(File.Exists(lnk), $"the shortcut was not written: {error}");
 
         var scan = ShortcutCleanerService.Scan([("Desktop", _folder)], [], null, CancellationToken.None);

@@ -10,6 +10,26 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.136.184] - 2026-11-23
+
+**On a PC whose PowerShell module folders hold a curly quote in their path, the tabs that run PowerShell start
+again.**
+
+### Fixed
+- SysManager writes the trusted PowerShell module path into the first statement of every PowerShell session it
+  starts, inside single quotes, doubling each `'`. PowerShell also ends a single-quoted string at the typographic
+  quotes ‘ ’ ‚ ‛, so a module path holding one did not parse, and no tab that runs PowerShell through a session could
+  start it, DNS & Hosts, Restore Points and Preinstalled Apps among them; as administrator Drivers and Windows Update
+  failed too. That has been so since 1.56.2 as administrator and since 1.114.4 without. The path is now escaped with
+  PowerShell's own rule for a single-quoted string, which covers all five quotes.
+- 1.136.167 said SysManager's other scripts already take their values as parameters. Most do; a few write a value
+  into their text that cannot hold a quote: a number, a Windows Feature name the tab has already checked, a DNS
+  address it has already parsed, the module path above.
+- 1.136.167 also said `ArchitectureTests.NoScriptTakesAValue_ByDoublingItsQuotes` fails a build that doubles quotes to
+  put a value into a script. It missed the module path, which passed one more argument. It now finds the doubled
+  quotes however they are written, in the tests' code too, and allows PowerShell's own escape in only the two places
+  that have to write a value into script text.
+
 ## [1.136.183] - 2026-11-23
 
 **A theme file or an imported profile can no longer make SysManager open a colour profile from another place, and a

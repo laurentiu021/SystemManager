@@ -5,6 +5,7 @@
 using System.Diagnostics;
 using System.IO;
 using System.Management.Automation;
+using System.Management.Automation.Language;
 using System.Management.Automation.Runspaces;
 using System.Reflection;
 using SysManager.Services;
@@ -117,6 +118,31 @@ public class PowerShellRunnerTests
         Assert.Equal(
             "$env:PSModulePath='C:\\Program Files\\Owner''s Modules';",
             assignment);
+    }
+
+    /// <summary>
+    /// The path comes back from PowerShell's own parser exactly as it went in, whatever quotes it holds.
+    /// </summary>
+    /// <remarks>
+    /// PowerShell ends a single-quoted string at the typographic quotes as well as at ', and only ' was doubled, so a
+    /// path holding one of the others did not parse and no session could start; a pair of them parsed back one quote
+    /// short. Parsed with ScriptBlock.Create, the call that turns it into each session's first statement, and never
+    /// run, so nothing in this process changes. The look-alikes are not quotes and must come back as they are.
+    /// </remarks>
+    [Theory]
+    [InlineData("C:\\Program Files\\Owner's Modules")]
+    [InlineData("C:\\Program Files\\Owner\u2019s Modules")]
+    [InlineData("C:\\Program Files\\\u2018Quoted\u2019 Modules")]
+    [InlineData("C:\\Program Files\\\u201ALow\u201B Modules")]
+    [InlineData("C:\\Program Files\\It's \u2019\u2019 doubled")]
+    [InlineData("C:\\Program Files\\Look\u02BCalike\uFF07 Modules")]
+    public void BuildPowerShellModulePathAssignment_ParsesBackToThePath_WhateverQuotesItHolds(string path)
+    {
+        var block = ScriptBlock.Create(PowerShellRunner.BuildPowerShellModulePathAssignment(path));
+
+        var constant = Assert.Single(block.Ast.FindAll(
+            a => a is StringConstantExpressionAst { StringConstantType: StringConstantType.SingleQuoted }, true));
+        Assert.Equal(path, ((StringConstantExpressionAst)constant).Value);
     }
 
     // The host-failure tests below run for both kinds of session. Since #2476 a standard user's runspace is the

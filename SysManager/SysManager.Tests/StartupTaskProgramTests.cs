@@ -53,9 +53,12 @@ public sealed class StartupTaskProgramTests
         var program = StartupService.TaskProgram(Task(
             "<Exec><Command>%ProgramFiles%\\Vendor\\app.exe</Command></Exec>", Principal("S-1-5-18")));
 
-        Assert.Equal(Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles), "Vendor",
-            "app.exe"), program, ignoreCase: true);
+        Assert.Equal(AsCommand(Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles), "Vendor",
+            "app.exe")), program, ignoreCase: true);
     }
+
+    /// <summary>A program as a command line writes it: quoted when the path holds a space.</summary>
+    private static string AsCommand(string program) => program.Contains(' ') ? $"\"{program}\"" : program;
 
     /// <summary>
     /// A variable that differs between accounts would name this account's folder for a task another account runs, so
@@ -74,8 +77,8 @@ public sealed class StartupTaskProgramTests
         var program = StartupService.TaskProgram(Task(
             "<Exec><Command>%LOCALAPPDATA%\\Vendor\\app.exe</Command></Exec>", Principal(me.User!.Value)));
 
-        Assert.Equal(Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Vendor",
-            "app.exe"), program, ignoreCase: true);
+        Assert.Equal(AsCommand(Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+            "Vendor", "app.exe")), program, ignoreCase: true);
     }
 
     [Theory]

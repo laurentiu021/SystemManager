@@ -7943,6 +7943,40 @@ public partial class ArchitectureTests
     }
 
     /// <summary>
+    /// "Merged version is tagged" sends a missing tag back through auto-release, and offers a tag pushed by hand only
+    /// as a last resort, on the UTC day its CHANGELOG entry is dated (#3327).
+    /// </summary>
+    /// <remarks>
+    /// Its error said to push the tag by hand and that the release then "publishes normally". That predates the date
+    /// check auto-release makes before it tags (#2063) and the way back each of its refusals gives (#2744). A tag
+    /// pushed by hand publishes through release.yml's tag trigger, which never reads the date, so CHANGELOG.md kept a
+    /// date that disagrees with its release. The refusing step's name is read from auto-release.yml, so the advice
+    /// cannot name a step that is gone.
+    /// </remarks>
+    [Fact]
+    public void TheUntaggedMergeError_RecoversThroughAutoRelease_NotAroundIt()
+    {
+        var dir = Path.Combine(TestPaths.RepoRoot(), ".github", "workflows");
+        var auto = File.ReadAllLines(Path.Combine(dir, "auto-release.yml"));
+        const string refusing = "Verify CHANGELOG has an entry for the computed version";
+        Assert.Contains("TODAY=$(date -u +%Y-%m-%d)", ReleaseStepCode(auto, ReleaseStepLine(auto, refusing)),
+            StringComparison.Ordinal);
+
+        var ci = File.ReadAllLines(Path.Combine(dir, "ci.yml"));
+        var wait = ReleaseStepCode(ci, ReleaseStepLine(ci, "Wait for the tag that matches csproj"));
+        var error = Assert.Single(wait.Split('\n'),
+            l => l.Contains("::error::csproj is at", StringComparison.Ordinal));
+        foreach (var required in new[]
+                 {
+                     $"\\\"{refusing}\\\"", "gh run rerun", "git push origin v$VERSION", "UTC day",
+                 })
+        {
+            Assert.Contains(required, error, StringComparison.Ordinal);
+        }
+        Assert.DoesNotContain("publishes normally", error, StringComparison.Ordinal);
+    }
+
+    /// <summary>
     /// Every job that runs tests must say WHICH kind of failure a red result was.
     /// </summary>
     /// <remarks>
@@ -12477,7 +12511,9 @@ public partial class ArchitectureTests
     /// stayed without a download, Latest could be an older release after a backfill, the checksum, the release page
     /// and the asset could disagree, and the attestation the README tells users to verify was never verified.
     /// A run that starts between a merge and auto-release pushing its tag would report that version as missing, so
-    /// the wait for a release in flight counts auto-release runs as well. The newest release is read from the Latest
+    /// it waits auto-release runs out, within their own timeout. It skipped for them instead, and auto-release also
+    /// runs for merges that release nothing and start no check, so a release's check could skip with nothing to
+    /// replace it: only a release still publishing skips now (#3327). The newest release is read from the Latest
     /// record, the one the updater reads: the by-tag view has served a release without its assets for hours, and
     /// <c>gh release download</c> and <c>gh release view</c> resolve through it. Comments are removed first, so
     /// prose naming a check cannot stand in for it.
@@ -12491,7 +12527,8 @@ public partial class ArchitectureTests
 
         foreach (var required in new[]
                  {
-                     "cron: '0 7 * * *'", "for wf in auto-release.yml release.yml; do", "actions: read",
+                     "cron: '0 7 * * *'", "auto=$(unfinished auto-release.yml)", "releases=$(unfinished release.yml)",
+                     "actions: read", "timeout-minutes: 15",
                      "--paginate --slurp", "\"SysManager-\\($tag).exe\"",
                      "releases/latest", "sha256sum", "Expected SHA256", ".digest", "gh attestation verify",
                  })
@@ -12508,6 +12545,104 @@ public partial class ArchitectureTests
         {
             Assert.DoesNotContain(byTag, latest, StringComparison.Ordinal);
         }
+
+        var wait = ReleaseStepCode(lines, ReleaseStepLine(lines, "Wait out a release that is still publishing"))
+            .Split('\n').Select(l => l.Trim()).ToList();
+        var bounded = wait.IndexOf("for attempt in $(seq 1 30); do");
+        var auto = wait.IndexOf("auto=$(unfinished auto-release.yml)");
+        var releases = wait.IndexOf("releases=$(unfinished release.yml)");
+        var skip = wait.FindIndex(l => l.Contains("skip=true", StringComparison.Ordinal));
+        Assert.True(bounded >= 0 && auto > bounded && releases > auto && skip > releases,
+            $"the wait must poll auto-release a bounded number of times (line {bounded}, read at {auto}), then read "
+            + $"release.yml's runs (line {releases}), and only those may skip the checks (line {skip}).");
+        Assert.Single(wait, l => l.Contains("skip=true", StringComparison.Ordinal));
+        Assert.Equal("if [ \"${releases}\" -gt 0 ]; then", wait[skip - 1]);
+        Assert.Contains("sleep 10", wait.GetRange(bounded, releases - bounded));
+    }
+
+    /// <summary>
+    /// The integrity check is told which release started it, and checks that release's download and attestation even
+    /// while a later release is publishing or has become the newest (#3327).
+    /// </summary>
+    /// <remarks>
+    /// It checked only the newest version's download, and checked nothing while a release was in flight, so a release
+    /// whose check skipped, or that another release overtook, was never checked by anything. The release is read by
+    /// its id from the release list, never through the by-tag view, and the Latest decision stays the newest's.
+    /// </remarks>
+    [Fact]
+    public void TheReleaseIntegrityCheck_ChecksTheReleaseThatStartedIt()
+    {
+        var dir = Path.Combine(TestPaths.RepoRoot(), ".github", "workflows");
+        var release = File.ReadAllLines(Path.Combine(dir, "release.yml"));
+        var start = Array.FindIndex(release,
+            l => l.TrimStart().StartsWith("run: gh workflow run release-integrity.yml", StringComparison.Ordinal));
+        Assert.True(start >= 0, "release.yml does not start release-integrity.yml, so no release is checked after it.");
+        Assert.EndsWith("-f tag=\"${TAG}\"", release[start].TrimEnd(), StringComparison.Ordinal);
+        Assert.Contains("TAG: ${{ needs.build-and-release.outputs.published == 'true' "
+                        + "&& needs.build-and-release.outputs.tag || '' }}",
+            WorkflowJobs.Containing(release, start), StringComparison.Ordinal);
+
+        var lines = File.ReadAllLines(Path.Combine(dir, "release-integrity.yml"));
+        var wait = ReleaseStepCode(lines, ReleaseStepLine(lines, "Wait out a release that is still publishing"));
+        Assert.Contains("TAG: ${{ inputs.tag }}", wait, StringComparison.Ordinal);
+        Assert.Contains("if [[ -n \"${TAG}\" && ! \"${TAG}\" =~ ^v[0-9]+\\.[0-9]+\\.[0-9]+$ ]]; then", wait,
+            StringComparison.Ordinal);
+
+        var step = ReleaseStepCode(
+            lines, ReleaseStepLine(lines, "The newest version is Latest, and its download checks out"));
+        foreach (var required in new[]
+                 {
+                     "if: steps.busy.outputs.skip != 'true' || inputs.tag != ''", "STARTED: ${{ inputs.tag }}",
+                     "SKIP: ${{ steps.busy.outputs.skip }}", "if [ \"${SKIP}\" != \"true\" ]; then",
+                     "releases?per_page=100\" --jq \".[] | select(.tag_name == \\\"${STARTED}\\\") | .id\")",
+                     "verify \"${TAG}\" /tmp/latest.json", "verify \"${STARTED}\" /tmp/started.json",
+                 })
+        {
+            Assert.Contains(required, step, StringComparison.Ordinal);
+        }
+    }
+
+    /// <summary>
+    /// Every way back the integrity check offers goes through the release workflow, which builds, checks, attests and
+    /// submits a release, never around it (#3374).
+    /// </summary>
+    /// <remarks>
+    /// Two of its errors said to publish a release by hand, with <c>gh release create</c>. A release made that way
+    /// skips every gate in release.yml and has no build attestation, so winget.yml refuses it, and this check's own
+    /// attestation step fails while it is the newest. The newest version's release is read from the list the step
+    /// before it fetched: the by-tag view has served a release without its assets for hours (v1.112.9), so a healthy
+    /// release could fail there (#3420).
+    /// </remarks>
+    [Fact]
+    public void TheIntegrityCheck_SendsEveryRepairThroughTheReleaseWorkflow()
+    {
+        var lines = File.ReadAllLines(
+            Path.Combine(TestPaths.RepoRoot(), ".github", "workflows", "release-integrity.yml"));
+        var errors = lines.Select(l => l.Trim())
+            .Where(l => !l.StartsWith('#') && l.Contains("::error::", StringComparison.Ordinal))
+            .ToList();
+        // Thirteen when measured.
+        Assert.True(errors.Count >= 13, $"only {errors.Count} error line(s) were read, out of 13 measured.");
+        var around = errors.Where(l => l.Contains("gh release create", StringComparison.Ordinal)
+                                       || l.Contains("by hand", StringComparison.OrdinalIgnoreCase)).ToList();
+        Assert.True(around.Count == 0,
+            "these errors repair a release around release.yml, which leaves it without its checks, its attestation "
+            + "and its winget submission:\n  " + string.Join("\n  ", around));
+        foreach (var name in new[]
+                 {
+                     "Compare version tags against published releases", "The newest CHANGELOG version has a release",
+                 })
+        {
+            Assert.Contains("gh workflow run release.yml --ref", ReleaseStepCode(lines, ReleaseStepLine(lines, name)),
+                StringComparison.Ordinal);
+        }
+
+        var newest = ReleaseStepCode(lines, ReleaseStepLine(lines, "The newest CHANGELOG version has a release"));
+        foreach (var byTag in new[] { "releases/tags/", "gh release view", "gh release download" })
+        {
+            Assert.DoesNotContain(byTag, newest, StringComparison.Ordinal);
+        }
+        Assert.Contains("/tmp/releases.json", newest, StringComparison.Ordinal);
     }
 
     /// <summary>

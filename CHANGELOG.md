@@ -10,6 +10,28 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.136.179] - 2026-11-23
+
+**A scheduled task in Startup Manager shows the program it runs, and "Hide system" hides only what SysManager
+recognises as part of Windows, not whatever names Microsoft.**
+
+### Fixed
+- A scheduled task's row showed its description where the command goes, so the task's label, publisher and signature
+  came from its prose and its author text rather than from the program it runs. The row now shows that program, read
+  from the task's own definition, with the description as its second line, and its label, publisher and signature
+  are the program's. A task that runs no program keeps its description and claims nothing.
+- "Hide system" in Startup Manager hid any entry whose publisher text said Microsoft or whose command ran from a
+  Windows or Microsoft folder, both of which any program can write. It now hides an entry SysManager recognises as
+  part of Windows, or one whose file Windows confirms is signed by Microsoft.
+- In Task Scheduler, a task whose author text said Microsoft was treated as a Windows system task wherever it was
+  registered: hidden by "Hide system tasks" and asked about as one that may affect Windows features. Only a task in
+  Windows' own folder of tasks is one now.
+
+### Changed
+- Microsoft programs that are not part of Windows, such as Edge's or OneDrive's update tasks, now show in Task
+  Scheduler with "Hide system tasks" on, and in Startup Manager with "Hide system" on unless Windows confirms their
+  Microsoft signature.
+
 ## [1.136.178] - 2026-11-23
 
 **Startup Manager names the script or file an entry runs through PowerShell, Command Prompt or another Windows

@@ -30,7 +30,20 @@ public sealed class DefenderService
 {
     private readonly IPowerShellRunner _ps;
 
-    public DefenderService(IPowerShellRunner ps) => _ps = ps;
+    public DefenderService(IPowerShellRunner ps) : this(ps, checksTheSignedInAccountsFolders: true) { }
+
+    /// <summary>A service told whether the folders it protects from exclusion are the signed-in person's.</summary>
+    /// <remarks>Internal so a test can be either account, as with MaintenanceSchedulerService.</remarks>
+    internal DefenderService(IPowerShellRunner ps, bool checksTheSignedInAccountsFolders)
+    {
+        _ps = ps;
+        ChecksTheSignedInAccountsFolders = checksTheSignedInAccountsFolders;
+    }
+
+    /// <summary>
+    /// Whether the folders <see cref="ExclusionRefusal(string)"/> protects are the signed-in person's own.
+    /// </summary>
+    internal bool ChecksTheSignedInAccountsFolders { get; }
 
     /// <summary>
     /// The status read. Both reads stop on failure.

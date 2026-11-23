@@ -73,7 +73,7 @@ public class DefenderServiceTests
                 Arg.Any<IDictionary<string, object?>?>(),
                 Arg.Any<CancellationToken>())
             .Returns(new Collection<PSObject>());
-        var service = new DefenderService(runner);
+        var service = new DefenderService(runner, checksTheSignedInAccountsFolders: true);
 
         await service.SetPuaProtectionAsync(1);
         await service.SetControlledFolderAccessAsync(2);
@@ -171,6 +171,22 @@ public class DefenderServiceTests
         var service = new DefenderService(runner);
 
         Assert.Throws<ArgumentOutOfRangeException>(() => { _ = service.SetControlledFolderAccessAsync(mode); });
+        runner.DidNotReceiveWithAnyArgs().RunAsync(default!, default, default);
+    }
+
+    /// <summary>
+    /// Elevated as another account, the folders the exclusion rules protect are that account's, so the service refuses
+    /// an exclusion at its own boundary too, before anything runs.
+    /// </summary>
+    [Fact]
+    public void ElevatedAsAnotherAccount_AddExclusionPathAsync_Throws_AndRunsNothing()
+    {
+        var runner = Substitute.For<IPowerShellRunner>();
+        var service = new DefenderService(runner, checksTheSignedInAccountsFolders: false);
+
+        var refused = Assert.Throws<InvalidOperationException>(
+            () => { _ = service.AddExclusionPathAsync(@"C:\Games"); });
+        Assert.StartsWith("SysManager won't add an exclusion here", refused.Message, StringComparison.Ordinal);
         runner.DidNotReceiveWithAnyArgs().RunAsync(default!, default, default);
     }
 

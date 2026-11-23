@@ -752,7 +752,7 @@ public sealed partial class ContextMenuService : IContextMenuService
     /// <para>The sanitisation that already existed applied only to the backup FILE NAME
     /// (<c>Path.GetInvalidFileNameChars</c>); the value interpolated into the arguments was raw. The
     /// identical guard is already applied to the analogous <c>schtasks</c> call in
-    /// <c>StartupService.SetTaskEnabled</c> — this is a missed instance of a pattern the project had
+    /// <c>StartupService.SetTaskSchedulerEnabledAsync</c> — this is a missed instance of a pattern the project had
     /// already decided on, which is why the check is that same shape rather than a new invention.</para>
     /// <para>NUL is rejected for the reason it is in the sibling guard: it terminates the native command
     /// line, so everything after it silently disappears.</para>

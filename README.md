@@ -2952,7 +2952,7 @@ worth stating alongside the benefit.
 `%LocalAppData%\SysManager` and `%AppData%\SysManager`, the .NET runtime unpacks its native
 libraries into a folder under `%TEMP%\.net` named after the exe, and anything else it writes is a
 change you asked for —
-[Uninstalling](#uninstalling) lists every place. There is no service, no scheduled task you did
+[Uninstalling](#uninstalling) lists every place, with the two things another program writes once you use it. There is no service, no scheduled task you did
 not create and no uninstaller to trust: delete the exe and the program is gone. You can run it from
 a USB stick on a machine you are fixing for someone else, which is a large part of what this
 tool is for.
@@ -3186,6 +3186,12 @@ To remove it completely:
      time each version starts: one folder for each version you have run, named after the exe, so an exe you
      renamed has its own. SysManager deletes an older version's folder itself once nothing in it has been
      written for a week, when it runs without administrator rights
+   - the PSWindowsUpdate module, only if you pressed **Install PSWindowsUpdate** on **Windows Update**:
+     run `Uninstall-Module PSWindowsUpdate` in Windows PowerShell, not as administrator. If Windows
+     PowerShell had no NuGet provider yet, the one it installed for your account is in
+     `%LocalAppData%\PackageManagement\ProviderAssemblies\nuget`, and is safe to leave
+   - the record Ookla's speed-test CLI keeps in your profile that its licence was accepted, only if you
+     ran the speed test's Ookla engine. That file is Ookla's, and the CLI decides where it goes
    - `HKEY_CURRENT_USER\Software\SysManager`, the copy of your environment variables
    - `HKEY_LOCAL_MACHINE\SOFTWARE\SysManagerEnvironmentBackup`, only if you changed a machine-wide
      variable (needs administrator rights)

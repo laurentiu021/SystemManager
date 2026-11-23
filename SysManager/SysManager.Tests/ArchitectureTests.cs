@@ -23923,51 +23923,104 @@ public partial class ArchitectureTests
     }
 
     /// <summary>
-    /// No temp sweep takes its folder from TMP or TEMP. Both are user-writable, and the sweep deletes everything under
-    /// the folder it is given.
+    /// No temp sweep, and no code that writes and removes a file in temp, takes its folder from TMP or TEMP. Both are
+    /// user-writable, and the sweep deletes everything under the folder it is given.
     /// </summary>
     /// <remarks>
     /// With TMP pointed at <c>D:\</c> or Documents, Deep Cleanup reported that tree as "Temporary files" and Clean
     /// emptied it, and Quick Cleanup did the same through TEMP (#2700). The real roots now come from
     /// <c>SystemPaths.UserTempRoot</c>. A behavioural test cannot catch a call to the environment coming back: it would
     /// have to change TMP for the whole test process, under every other test that builds its own folder from
-    /// <c>Path.GetTempPath</c>. So this reads the three files that produce the roots. Each must still name the resolved
-    /// root, which is the floor that stops a rename from leaving this guard checking nothing.
+    /// <c>Path.GetTempPath</c>. So this reads the app's code, comments removed, for every way of asking the
+    /// environment for temp. Two places keep one on purpose, each still required to make it, so a stale exemption
+    /// fails: where .NET unpacks a single-file app, which follows TEMP because the host does, and the designer
+    /// graph, which never runs in the app. The files that produce the roots must still name the resolved root, the
+    /// floor that stops a rename from leaving this guard checking nothing. Battery Health's report was written, read
+    /// and removed in the folder TMP or TEMP named until the scan covered every file rather than three.
     /// </remarks>
     [Fact]
     public void NoTempSweep_TakesItsFolderFromTmpOrTemp()
     {
-        var files = new (string File, string MustUse)[]
+        var anchored = new (string File, string MustUse)[]
         {
             ("ICleanupRoots.cs", "SystemPaths.UserTempRoot"),
             ("TuneUpService.cs", "SystemPaths.UserTempRoot"),
             ("CleanupPreScanService.cs", "TuneUpService.TempRoots()"),
+            ("BatteryReportService.cs", "SystemPaths.UserTempRoot"),
         };
-        string[] banned = ["Path.GetTempPath", "GetEnvironmentVariable(\"TEMP\")", "GetEnvironmentVariable(\"TMP\")"];
+        var exempt = new Dictionary<string, string>(StringComparer.Ordinal)
+        {
+            ["SystemPaths.cs"] = "Path.GetTempPath",
+            ["MainWindowViewModel.cs"] = "Path.GetTempPath",
+        };
+        string[] banned =
+        [
+            "Path.GetTempPath", "Path.GetTempFileName", "GetEnvironmentVariable(\"TEMP\")",
+            "GetEnvironmentVariable(\"TMP\")", "%TEMP%", "%TMP%",
+        ];
 
         var offenders = new List<string>();
         var unanchored = new List<string>();
-        foreach (var (file, mustUse) in files)
+        var stale = new List<string>(exempt.Keys);
+        var scanned = 0;
+        foreach (var path in SourceFilesUnder(TestPaths.AppProject(), ".cs"))
         {
-            var path = Path.Combine(TestPaths.AppProject(), "Services", file);
-            Assert.True(File.Exists(path), $"{file} was not found at {path}");
+            scanned++;
+            var file = Path.GetFileName(path);
             var source = WithoutComments(File.ReadAllText(path));
-
+            var kept = exempt.GetValueOrDefault(file);
+            if (kept is not null)
+            {
+                var uses = source.Split(kept).Length - 1;
+                if (uses > 0) stale.Remove(file);
+                if (uses > 1) offenders.Add($"{file}: {kept}, more than the one use it is exempt for");
+            }
             offenders.AddRange(banned
-                .Where(call => source.Contains(call, StringComparison.Ordinal))
+                .Where(call => call != kept && source.Contains(call, StringComparison.OrdinalIgnoreCase))
                 .Select(call => $"{file}: {call}"));
-            if (!source.Contains(mustUse, StringComparison.Ordinal)) unanchored.Add($"{file}: {mustUse}");
+            foreach (var (_, mustUse) in anchored.Where(a => a.File == file))
+                if (!source.Contains(mustUse, StringComparison.Ordinal)) unanchored.Add($"{file}: {mustUse}");
         }
+        unanchored.AddRange(anchored
+            .Where(a => !SourceFilesUnder(TestPaths.AppProject(), ".cs").Any(p => Path.GetFileName(p) == a.File))
+            .Select(a => $"{a.File}: not found"));
 
+        Assert.True(scanned > 100,
+            $"only {scanned} source files were scanned — the discovery is broken, so this guard would pass "
+            + "having inspected almost nothing.");
         // The defect first: a file that went back to the environment also stops naming the resolved root, and that
         // second symptom must not be the message a reader sees.
         Assert.True(offenders.Count == 0,
-            "A temp sweep takes its folder from the environment again. TMP and TEMP live in HKCU\\Environment, "
-            + "so any program running as the user can point them at a drive root or Documents, and the sweep "
+            "Code takes its temp folder from the environment again. TMP and TEMP live in HKCU\\Environment, "
+            + "so any program running as the user can point them at a drive root or Documents, and a sweep "
             + "deletes everything it finds there. Use SystemPaths.UserTempRoot:\n  " + string.Join("\n  ", offenders));
         Assert.True(unanchored.Count == 0,
             "These files no longer name the resolved temp root. If it moved, move this guard with it; as it stands "
             + "it checks nothing:\n  " + string.Join("\n  ", unanchored));
+        Assert.True(stale.Count == 0,
+            "These files are exempt for a temp call they no longer make. Take the exemption out:\n  "
+            + string.Join("\n  ", stale));
+    }
+
+    /// <summary>
+    /// Battery Health's report is read and removed only through the handle checked to be open on it, never by name.
+    /// </summary>
+    /// <remarks>
+    /// The behavioural tests cannot tell a read through the checked handle from a check followed by a read by name,
+    /// so the service's code, comments removed, must not read, measure or delete the report by its path.
+    /// </remarks>
+    [Fact]
+    public void TheBatteryReport_IsReadAndRemovedOnlyThroughTheCheckedHandle()
+    {
+        var path = Path.Combine(TestPaths.AppProject(), "Services", "BatteryReportService.cs");
+        var source = WithoutComments(File.ReadAllText(path));
+        Assert.Contains("SafeFileWalk.ReadThenDeleteFile(", source, StringComparison.Ordinal);
+
+        string[] byName = ["File.ReadAll", "File.Delete(", "new FileInfo(", "File.Exists(", "File.Open"];
+        var offenders = byName.Where(call => source.Contains(call, StringComparison.Ordinal)).ToList();
+        Assert.True(offenders.Count == 0,
+            "BatteryReportService reads or removes its report by name again, which a folder turned into a link "
+            + "redirects. Use SafeFileWalk.ReadThenDeleteFile:\n  " + string.Join("\n  ", offenders));
     }
 
     /// <summary>

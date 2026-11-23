@@ -88,12 +88,24 @@ public sealed partial class StartupEntry : ObservableObject
     /// </summary>
     /// <remarks>
     /// This carries the signer's name where there is one ("Windows can confirm this really comes from
-    /// Google LLC"), rather than a separate property for it. The comparison that matters — a file declaring
+    /// Google LLC"), for the person reading it. The comparison that matters — a file declaring
     /// "Microsoft Corporation" in <see cref="Publisher"/> while its certificate says something else — is
-    /// already visible with the column beside this one, so a second field holding the same name would be
-    /// state nothing reads.
+    /// visible with the column beside this one; <see cref="Signer"/> holds the same name for "Hide system",
+    /// which must not parse a sentence.
     /// </remarks>
     [ObservableProperty] private string _signatureDetail = "";
+
+    /// <summary>
+    /// Who signed the file, from its certificate, when Windows confirms the signature (<see cref="Signature"/> is
+    /// Verified); empty otherwise, and for a Windows file signed through a catalogue, which names no one itself.
+    /// </summary>
+    public string Signer { get; set; } = "";
+
+    /// <summary>
+    /// For a scheduled task, whether the program it runs was read from its definition, so <see cref="Command"/> is a
+    /// command line. When it was not, the command is the task's description or path, which is judged as nothing.
+    /// </summary>
+    public bool TaskProgramRead { get; init; }
 
     /// <summary>Registry key path (for registry-based entries).</summary>
     public string RegistryKey { get; init; } = "";

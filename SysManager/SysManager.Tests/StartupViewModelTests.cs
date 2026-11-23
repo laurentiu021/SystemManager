@@ -39,6 +39,39 @@ public class StartupViewModelTests
                readDegradations ?? (() => Task.FromResult<IReadOnlyList<BootDegradation>>([])),
                setEnabled ?? ((_, _) => Task.FromResult(false)));
 
+    /// <summary>
+    /// "Hide system" hides what SysManager recognises as part of Windows, not an entry that only names Microsoft as its
+    /// publisher, or runs something through a program in a Windows folder: both are text any program can write.
+    /// </summary>
+    [Fact]
+    public async Task HideSystem_HidesWhatIsRecognisedAsWindows_NotWhatMerelyNamesMicrosoft()
+    {
+        StartupEntry recognised = new()
+        {
+            Name = "Recognised",
+            Command = @"C:\Windows\System32\ctfmon.exe",
+            Safety = "System",
+        };
+        StartupEntry claimsMicrosoft = new()
+        {
+            Name = "Claims Microsoft",
+            Command = @"C:\Vendor\updater.exe",
+            Publisher = "Microsoft Corporation",
+        };
+        StartupEntry throughAWindowsFolder = new()
+        {
+            Name = "Through a Windows folder",
+            Command = @"C:\Windows\System32\rundll32.exe C:\Vendor\x.dll,Run",
+        };
+        var vm = NewVm(scan: () => Task.FromResult(new StartupScan([recognised, claimsMicrosoft, throughAWindowsFolder],
+            ScheduledTasksListed: true)));
+        await vm.InitializationComplete;
+
+        vm.HideWindowsEntries = true;
+
+        Assert.Equal(["Claims Microsoft", "Through a Windows folder"], vm.Entries.Select(e => e.Name).Order());
+    }
+
     [Fact]
     public void Constructor_EntriesCollectionNotNull()
     {

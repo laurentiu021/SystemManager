@@ -895,6 +895,13 @@ Key services:
   knows as part of Windows found in System32 and then the Windows folder, never the working folder
   (#3307). A scheduled task row's command is its description, so it is attributed to nothing. A
   network or device path is never probed. Startup shortcuts carry their arguments (`ShortcutCommand`).
+  A scheduled task's command is its first Exec action (`TaskProgram`: a program with a folder but not a full
+  path is read in the action's working folder, and one using an account's own variable in a task another
+  account runs is not read at all); its description is the second line, and a task that runs no program
+  (`TaskProgramRead` false) is attributed to nothing. `VerifySignatures` keeps the confirmed signer in
+  `Signer`, and `StartupViewModel.IsWindowsEntry`, the "Hide system" rule, hides an entry recognised as
+  Windows or verified as signed by one of the names `SignatureVerdict.IsMicrosoft` accepts, not one that
+  only names Microsoft.
 - `Helpers/SelectionCarry` — keeps the user's ticks when a bound list is rebuilt, defined once for
   the ten tabs that rebuild one from a fresh scan: System Health drives, Deep Cleanup categories,
   Shortcut Cleaner, Browser Cleaner, App Updates, Profile Export / Import, App Blocker, Preinstalled Apps,
@@ -2067,6 +2074,8 @@ Key services:
   `ClassifyTask` safety heuristic (telemetry/system/third-party) is a pure, unit-tested method. It takes the
   task's folder and name apart, as Task Scheduler reports them, and matches the single telemetry tasks on
   `ScheduledTaskInfo.FullPathOf` of the two: compared with the folder alone, Autochk Proxy was System (#2781).
+  System is `\Microsoft\Windows\` only; the author is text whoever registered the task wrote, so it decides
+  nothing (#3442).
   `ListTasksAsync` returns null for a read that failed, so the tab never reports one as no tasks.
 - `WindowsThemeService` — reads/writes the per-user Windows light/dark theme (HKCU
   `AppsUseLightTheme`/`SystemUsesLightTheme`, no admin) and broadcasts

@@ -835,8 +835,9 @@ Across the tab:
 ### Task Scheduler
 - **Browse every Windows scheduled task** with its state, type, and what the task is for in Windows'
   own words, plus its last and next run once you select it — hovering the description shows which
-  publisher created it. The task's folder decides the type first (telemetry folders, then
-  `\Microsoft\Windows\` for System); the publisher decides it only outside those folders
+  publisher created it. The task's folder decides the type: telemetry folders first, then
+  `\Microsoft\Windows\` for System, and everything else is Third-party, whatever author the task
+  names, since that is text whoever registered it wrote
 - **Color-coded by type** — Third-party, well-known **Telemetry** (Compatibility
   Appraiser, CEIP, Feedback, Error Reporting, and the Autochk Proxy task), and **System** — so
   it's obvious what's safe to touch
@@ -1041,6 +1042,9 @@ System → System Fixes, where the tab name matches what they do.
   "Enabled (at start-up)"; one that runs on a schedule, such as an hourly updater, reads "Enabled
   (scheduled)", and the Dashboard's Why is it slow? does not count it as starting with Windows.
   SysManager's own Scheduled Maintenance task is not listed
+- **A scheduled task shows the program it runs**, read from the task's own definition, with the
+  task's description as its second line, and its label, publisher and signature are that program's.
+  A task that runs no program, a COM handler say, keeps its description and claims no program
 - **Windows' own scheduled tasks are deliberately left out**, so the list stays short enough to read
   and nothing here is something you should not touch. [Task Scheduler](#task-scheduler) is the tab that
   shows every task, Windows' included — a third-party task appears on both, and it is the same task in
@@ -1057,7 +1061,8 @@ System → System Fixes, where the tab name matches what they do.
   really stays down. Your own entries switch without administrator rights; the ones set to start
   for everyone on the PC need them, and the banner at the top says so
 - **Enable All** turns every disabled entry back on, after a confirmation, and **Hide system** hides
-  the entries whose publisher is Microsoft or whose command runs from a Windows or Microsoft folder
+  the entries SysManager recognises as part of Windows, and those whose file Windows confirms Microsoft
+  signed. Not an entry that only names Microsoft as its publisher, which any program can write
 - **A Signature column that says whether Windows can confirm the publisher.** The Publisher column next
   to it comes from the file's own version info — a string any program can set to "Microsoft Corporation"
   — so on its own it is a trust badge with nothing behind it. This asks Windows whether the file's

@@ -125,10 +125,15 @@ public class TaskSchedulerServiceTests
     public void ClassifyTask_NonMicrosoft_AreThirdParty(string path, string? author)
         => Assert.Equal(TaskCategory.ThirdParty, TaskSchedulerService.ClassifyTask(path, "AnyTask", author));
 
-    [Fact]
-    public void ClassifyTask_MicrosoftAuthorButRootPath_IsSystem()
-        => Assert.Equal(TaskCategory.System,
-            TaskSchedulerService.ClassifyTask(@"\", "AnyTask", "Microsoft Corporation"));
+    /// <summary>
+    /// A task's author is text whoever registered it wrote, so it does not make a task outside Windows' own folder a
+    /// Windows system task: hidden by "Hide system tasks" and asked about as one that may affect Windows features.
+    /// </summary>
+    [Theory]
+    [InlineData(@"\", "Microsoft Corporation")]
+    [InlineData(@"\Vendor\", "Microsoft")]
+    public void ClassifyTask_MicrosoftAuthorOutsideWindowsOwnFolder_IsThirdParty(string path, string author)
+        => Assert.Equal(TaskCategory.ThirdParty, TaskSchedulerService.ClassifyTask(path, "AnyTask", author));
 
     [Fact]
     public void ClassifyTask_NullPath_IsThirdParty()

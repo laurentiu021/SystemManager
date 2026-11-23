@@ -78,17 +78,26 @@ public sealed class StartupScheduledTaskListTests : IDisposable
         Assert.Empty(results);
     }
 
-    /// <summary>Adds a task to the redirected cache the way Task Scheduler lists one: its path and a trigger blob.</summary>
-    private void CacheTask(string uri)
+    /// <summary>
+    /// Adds a task to the redirected cache the way Task Scheduler lists one: its path and a trigger blob, and the
+    /// description and author the task declares, when a test gives them.
+    /// </summary>
+    private void CacheTask(string uri, string? description = null, string? author = null)
     {
         using var task = _root.CreateSubKey(StartupService.TaskCachePath + @"\{" + Guid.NewGuid() + "}", writable: true)!;
         task.SetValue("Path", uri);
         task.SetValue("URI", uri);
         task.SetValue("Triggers", new byte[] { 0x17, 0, 0, 0, 0, 0, 0, 0 }, RegistryValueKind.Binary);
+        if (description is not null) task.SetValue("Description", description);
+        if (author is not null) task.SetValue("Author", author);
     }
 
-    /// <summary>Writes the task's definition the way Task Scheduler stores one: UTF-16 with a BOM, in the task namespace.</summary>
-    private void DefineTask(string uri, string triggers)
+    /// <summary>
+    /// Writes the task's definition the way Task Scheduler stores one: UTF-16 with a BOM, in the task namespace, with
+    /// <paramref name="actions"/> as what it runs.
+    /// </summary>
+    private void DefineTask(string uri, string triggers,
+        string actions = "<Exec><Command>app.exe</Command></Exec>")
     {
         var path = Path.Combine(_tasksRoot, uri.TrimStart('\\'));
         Directory.CreateDirectory(Path.GetDirectoryName(path)!);
@@ -97,9 +106,52 @@ public sealed class StartupScheduledTaskListTests : IDisposable
             + "<Task version=\"1.2\" xmlns=\"http://schemas.microsoft.com/windows/2004/02/mit/task\">\r\n"
             + $"  <Triggers>{triggers}</Triggers>\r\n"
             + "  <Settings><Hidden>false</Hidden></Settings>\r\n"
-            + "  <Actions><Exec><Command>app.exe</Command></Exec></Actions>\r\n"
+            + $"  <Actions>{actions}</Actions>\r\n"
             + "</Task>\r\n",
             Encoding.Unicode);
+    }
+
+    /// <summary>
+    /// A task row's command is the program the task runs, read from its definition, and the task's own description
+    /// stays as the row's second line. The description used to be the command, so its first word picked a program.
+    /// </summary>
+    [Fact]
+    public void ATaskRow_RunsTheProgramItsDefinitionNames_AndKeepsItsDescription()
+    {
+        var tool = Path.Combine(_tasksRoot, "Vendor Tools", "tool.exe");
+        Directory.CreateDirectory(Path.GetDirectoryName(tool)!);
+        File.WriteAllBytes(tool, [0x4D, 0x5A]);
+        CacheTask(@"\Vendor\Maintenance", description: "System maintenance for Contoso",
+            author: "Microsoft Corporation");
+        DefineTask(@"\Vendor\Maintenance", "<LogonTrigger />",
+            $"<Exec><Command>{tool}</Command><Arguments>--run now</Arguments></Exec>"
+            + "<Exec><Command>C:\\Other\\second.exe</Command></Exec>");
+        List<StartupEntry> results = [];
+
+        Assert.True(StartupService.ReadScheduledTasks(_root, results, _tasksRoot));
+
+        var task = Assert.Single(results);
+        Assert.Equal($"\"{tool}\" --run now", task.Command);
+        Assert.Equal("System maintenance for Contoso", task.Description);
+        // The publisher is the program's, which has none, not the author text the task declares.
+        Assert.DoesNotContain("Microsoft", task.Publisher, StringComparison.OrdinalIgnoreCase);
+    }
+
+    /// <summary>A task whose definition names no program to run keeps its description, and claims no program.</summary>
+    [Fact]
+    public void ATaskThatRunsNoProgram_KeepsItsDescription()
+    {
+        CacheTask(@"\Vendor\Handler", description: "Explorer helper for Contoso");
+        DefineTask(@"\Vendor\Handler", "<LogonTrigger />",
+            "<ComHandler><ClassId>{00000000-0000-0000-0000-000000000001}</ClassId></ComHandler>");
+        List<StartupEntry> results = [];
+
+        Assert.True(StartupService.ReadScheduledTasks(_root, results, _tasksRoot));
+        StartupService.EnrichWithDescriptions(results);
+
+        var task = Assert.Single(results);
+        Assert.Equal("Explorer helper for Contoso", task.Command);
+        Assert.Equal("", task.Safety);
     }
 
     [Fact]

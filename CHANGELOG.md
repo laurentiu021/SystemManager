@@ -10,6 +10,18 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.136.186] - 2026-11-23
+
+**If you moved Opera's folder to another drive with a link, Browser Cleaner's Extensions view now says it could
+not read Opera there, as it already did for Chrome and Firefox, instead of reading through the link.**
+
+### Fixed
+- Browser Cleaner's Extensions view checked each Opera channel folder for a link, but not the folders above it.
+  With "Opera Software" moved elsewhere and a junction left in its place, it read every Opera channel through the
+  link, while the cleaning list, which checks the whole path, showed no Opera rows at all. Each Opera channel is now
+  checked the way Chrome's and Firefox's data folders have been since 1.131.4, and is listed as behind a link. That
+  has been so since the list came in, in 1.122.0. The list only reads; nothing was deleted through the link.
+
 ## [1.136.185] - 2026-11-23
 
 **Reset Windows Update and a new restore point act on the folders and drive Windows runs from, whatever an

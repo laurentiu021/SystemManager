@@ -213,6 +213,30 @@ public sealed class BrowserExtensionServiceTests : IDisposable
         Assert.True(profile.BehindALink);
     }
 
+    /// <summary>
+    /// With the folder every Opera channel shares behind a link, each channel is shown as not read, as Chrome and
+    /// Firefox already are, rather than read through the link.
+    /// </summary>
+    /// <remarks>
+    /// The link sits on "Opera Software", not on a channel folder, the usual result of moving Opera to another
+    /// drive. Only the channel folder itself was looked at, which is not a link, so the list read it through the
+    /// link while the cleaner, which checks the whole path, left Opera out (#2814 fixed this for the other two).
+    /// </remarks>
+    [Fact]
+    public async Task AnAncestorOfTheOperaChannelFolders_ThatIsALink_ShowsEveryChannelAsUnreadable_NotAsNone()
+    {
+        var elsewhere = Path.Combine(_root, "elsewhere");
+        Chromium(Path.Combine(elsewhere, "Opera Stable"), IdA, "Behind the link");
+        Chromium(Path.Combine(elsewhere, "Opera GX Stable"), IdB, "Behind the link too");
+        Symlinks.RequireJunction(Path.Combine(_roaming, "Opera Software"), elsewhere);
+
+        var profiles = await Service().ScanAsync();
+
+        Assert.Equal<(string, bool, bool, int)>(
+            [("Opera", true, true, 0), ("Opera GX", true, true, 0)],
+            profiles.Select(p => (p.Browser, p.CouldNotRead, p.BehindALink, p.Extensions.Count)));
+    }
+
     [Fact]
     public async Task AFirefoxProfileOtherThanTheDefault_IsNotStarted_SinceFirefoxWouldOpenAnother()
     {

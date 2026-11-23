@@ -184,6 +184,16 @@ public sealed partial class DashboardViewModel : ElevatedViewModelBase
     private string? _quickActionNavigateTarget;
     private CancellationTokenSource? _quickActionCts;
 
+    // The token a running Update All Apps upgrade gets. Only closing SysManager cancels it: Cancel, and Escape with it,
+    // stop the run before its next app, because ending winget part-way ends the installer it started (#3251).
+    private readonly CancellationTokenSource _upgradeRunning = new();
+
+    private const string UpdateAllAppsName = "Update All Apps";
+
+    /// <summary>What Update All Apps' card says once Cancel is pressed, while the app being updated finishes.</summary>
+    internal const string UpdateAllStopping =
+        "Stopping after the app being updated. It finishes first, so it is not left half-installed.";
+
     /// <summary>Whether Cancel should be offered: a quick action is running and has not yet finished.</summary>
     /// <remarks>
     /// <see cref="IsQuickActionRunning"/> alone is not enough — unlike Tune-Up, which flips
@@ -1221,7 +1231,7 @@ public sealed partial class DashboardViewModel : ElevatedViewModelBase
                 "Confirm Update All Apps"))
             return;
 
-        await RunQuickActionAsync("Update All Apps", "App Updates", "nav-app-updates", async () =>
+        await RunQuickActionAsync(UpdateAllAppsName, "App Updates", "nav-app-updates", async () =>
         {
             // The install lock App Updates, Bulk Installer and Uninstaller take around their own winget runs. Without it,
             // this ran beside one of them, and an MSI package in either could fail with 1618, because Windows Installer
@@ -1240,9 +1250,28 @@ public sealed partial class DashboardViewModel : ElevatedViewModelBase
             // Updates tab. A hand-rolled command here had drifted — it was missing
             // --no-progress / --disable-interactivity / --include-unknown and reported success
             // even when winget failed.
-            // Upgrades one package at a time internally, checking the token between each, so a cancel lands
-            // between packages rather than only at the very end (#2859).
-            var result = await _winget.UpgradeAllAsync(_quickActionCts!.Token);
+            // One app at a time. Cancel stops it before the next app, and the one being updated finishes on its own
+            // token, which only closing SysManager cancels (#2859, #3251).
+            WingetResult result;
+            try
+            {
+                result = await _winget.UpgradeAllAsync(_quickActionCts!.Token, _upgradeRunning.Token);
+            }
+            catch (UpgradeAllStoppedException stopped)
+            {
+                // The apps it reached are updated, so they are recorded and the update count is checked again, as
+                // after a finished run.
+                QuickActionDetail = stopped.Reached == 0
+                    ? "Stopped before any app was updated"
+                    : $"Stopped after {stopped.Reached} of {stopped.Listed} apps";
+                if (stopped.Reached > 0)
+                {
+                    ActivityLogService.Instance.Log("App Updates",
+                        $"Upgrade all stopped after {stopped.Reached} of {stopped.Listed} apps");
+                    _ = StartAlertScans();
+                }
+                throw;
+            }
             QuickActionProgress = 100;
             ActivityLogService.Instance.Log("App Updates",
                 result.Succeeded
@@ -1434,8 +1463,16 @@ public sealed partial class DashboardViewModel : ElevatedViewModelBase
     }
 
     /// <summary>Stops the quick action in progress. A no-op once it has finished (#2859).</summary>
+    /// <remarks>
+    /// Update All Apps lets the app being updated finish, so its card says what it is waiting for (#3251).
+    /// </remarks>
     [RelayCommand]
-    private void CancelQuickAction() => _quickActionCts?.Cancel();
+    private void CancelQuickAction()
+    {
+        if (_quickActionCts is null) return;
+        _quickActionCts.Cancel();
+        if (QuickActionName == UpdateAllAppsName) QuickActionDetail = UpdateAllStopping;
+    }
 
     private bool CanRunQuickAction() => !IsQuickActionRunning || IsQuickActionDone;
 
@@ -1768,6 +1805,8 @@ public sealed partial class DashboardViewModel : ElevatedViewModelBase
             _tuneUpCts?.Dispose();
             _slowdownCts?.Cancel();
             _slowdownCts?.Dispose();
+            _upgradeRunning.Cancel();
+            _upgradeRunning.Dispose();
         }
         base.Dispose(disposing);
     }

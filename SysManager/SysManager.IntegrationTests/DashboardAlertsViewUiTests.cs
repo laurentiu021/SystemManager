@@ -38,7 +38,8 @@ public sealed class DashboardAlertsViewUiTests
         public Task<WingetResult> UpgradeAsync(string packageId, CancellationToken ct = default) =>
             throw new NotSupportedException("No test here upgrades anything.");
 
-        public Task<WingetResult> UpgradeAllAsync(CancellationToken ct = default) =>
+        public Task<WingetResult> UpgradeAllAsync(
+            CancellationToken ct = default, CancellationToken running = default) =>
             throw new NotSupportedException("No test here upgrades anything.");
     }
 

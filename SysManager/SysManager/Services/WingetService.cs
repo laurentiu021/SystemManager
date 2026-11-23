@@ -111,23 +111,30 @@ public sealed partial class WingetService : IWingetService
     /// <c>upgrade --all</c> leaves it: it was reinstalled on every press, and the Dashboard's count leaves it out too.
     /// A failure is reported with the code <c>upgrade --all</c> ends on when one of its apps fails, and, when none
     /// failed, an app that needs Windows restarted to finish with the code winget ends that upgrade on.
+    /// <para>A stop is checked between apps only. The app being upgraded runs on <paramref name="running"/>, because
+    /// ending winget part-way ends the installer it started; the one token used to reach it, so a cancel left that
+    /// app half-installed (#3251).</para>
     /// </remarks>
     /// <exception cref="InvalidOperationException">
     /// The upgrade list could not be read, so nothing was upgraded.
     /// </exception>
-    public async Task<WingetResult> UpgradeAllAsync(CancellationToken ct = default)
+    public async Task<WingetResult> UpgradeAllAsync(CancellationToken ct = default, CancellationToken running = default)
     {
         var failed = false;
         var restart = false;
-        foreach (var package in (await ListUpgradableAsync(ct).ConfigureAwait(false)).Where(p => !p.HasUnknownVersion))
+        var packages = (await ListUpgradableAsync(ct).ConfigureAwait(false)).Where(p => !p.HasUnknownVersion).ToList();
+        var reached = 0;
+        foreach (var package in packages)
         {
+            if (ct.IsCancellationRequested) throw new UpgradeAllStoppedException(reached, packages.Count, ct);
+            reached++;
             if (!WingetId.IsValid(package.Id))
             {
                 failed = true;
                 continue;
             }
 
-            var result = await UpgradeAsync(package.Id, ct).ConfigureAwait(false);
+            var result = await UpgradeAsync(package.Id, running).ConfigureAwait(false);
             failed |= !result.Succeeded;
             restart |= result.RestartRequired;
         }

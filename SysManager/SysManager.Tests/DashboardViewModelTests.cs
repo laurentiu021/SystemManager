@@ -1033,7 +1033,8 @@ public sealed class DashboardViewModelTests : IDisposable
         // command. Before the fix it spawned a raw PowerShellRunner and never touched the
         // injected service, so this Received(1) assertion failed.
         var winget = Substitute.For<IWingetService>();
-        winget.UpgradeAllAsync(Arg.Any<CancellationToken>()).Returns(WingetResult.From(0));
+        winget.UpgradeAllAsync(Arg.Any<CancellationToken>(), Arg.Any<CancellationToken>())
+            .Returns(WingetResult.From(0));
         var vm = NewVm(winget);
 
         var prevDialog = DialogService.Instance;
@@ -1044,7 +1045,7 @@ public sealed class DashboardViewModelTests : IDisposable
         {
             await vm.QuickUpdateAppsCommand.ExecuteAsync(null);
 
-            await winget.Received(1).UpgradeAllAsync(Arg.Any<CancellationToken>());
+            await winget.Received(1).UpgradeAllAsync(Arg.Any<CancellationToken>(), Arg.Any<CancellationToken>());
         }
         finally
         {
@@ -1052,29 +1053,136 @@ public sealed class DashboardViewModelTests : IDisposable
         }
     }
 
-    [Fact]
-    public async Task QuickUpdateApps_PassesACancellableToken_SoCancelReachesTheInProgressUpgrade()
-    {
-        // Before #2859, RunQuickActionAsync had no CancellationTokenSource at all, so every quick
-        // action — Update All Apps included — ran CancellationToken.None, which UpgradeAllAsync's
-        // own per-package loop had no way to stop early with.
-        var winget = Substitute.For<IWingetService>();
-        winget.UpgradeAllAsync(Arg.Any<CancellationToken>()).Returns(WingetResult.From(0));
-        var vm = NewVm(winget);
+    // ---------- Cancel stops Update All Apps between apps (#3251) ----------
+    // Cancel and Escape cancelled the one token the run had, and it reached the running winget, so winget and the
+    // installer it started were ended in the middle of an app, which App Updates stopped doing in 1.130.56 (#2942).
 
-        var prevDialog = DialogService.Instance;
-        var dialog = Substitute.For<IDialogService>();
-        dialog.Confirm(Arg.Any<string>(), Arg.Any<string>()).Returns(true);
-        DialogService.Instance = dialog;
+    /// <summary>An Update All Apps run held open on its first app, handing the test both tokens it was given.</summary>
+    private static IWingetService WingetUpgradingUntil(
+        Task<WingetResult> finishes, TaskCompletionSource<(CancellationToken Stop, CancellationToken Running)> asked)
+    {
+        var winget = QuietWinget();
+        winget.UpgradeAllAsync(Arg.Any<CancellationToken>(), Arg.Any<CancellationToken>()).Returns(call =>
+        {
+            asked.TrySetResult((call.ArgAt<CancellationToken>(0), call.ArgAt<CancellationToken>(1)));
+            return finishes;
+        });
+        return winget;
+    }
+
+    /// <summary>
+    /// Cancel stops the run before its next app, and the app being updated finishes: the token that reaches its
+    /// winget is not the one Cancel cancels. The card says so while it finishes.
+    /// </summary>
+    [Fact]
+    public async Task QuickUpdateApps_Cancel_StopsBeforeTheNextApp_AndLetsTheRunningOneFinish()
+    {
+        using var activity = new ActivityLogScope();
+        using var confirm = new DialogAnswer(confirm: true);
+        var asked = new TaskCompletionSource<(CancellationToken Stop, CancellationToken Running)>(
+            TaskCreationOptions.RunContinuationsAsynchronously);
+        var finishes = new TaskCompletionSource<WingetResult>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var vm = NewVm(WingetUpgradingUntil(finishes.Task, asked));
+
+        var running = vm.QuickUpdateAppsCommand.ExecuteAsync(null);
         try
         {
-            await vm.QuickUpdateAppsCommand.ExecuteAsync(null);
+            var (stop, upgrading) = await asked.Task.WaitAsync(TimeSpan.FromSeconds(30));
+            vm.CancelQuickActionCommand.Execute(null);
 
-            await winget.Received(1).UpgradeAllAsync(Arg.Is<CancellationToken>(t => t.CanBeCanceled));
+            Assert.True(stop.IsCancellationRequested);
+            Assert.True(upgrading.CanBeCanceled);
+            Assert.False(upgrading.IsCancellationRequested);
+            Assert.Equal(DashboardViewModel.UpdateAllStopping, vm.QuickActionDetail);
+
+            finishes.SetException(new UpgradeAllStoppedException(1, 3, stop));
+            await running.WaitAsync(TimeSpan.FromSeconds(30));
+
+            Assert.Equal("Cancelled", vm.QuickActionStatus);
+            Assert.Equal("Stopped after 1 of 3 apps", vm.QuickActionDetail);
         }
         finally
         {
-            DialogService.Instance = prevDialog;
+            // The run holds the install lock, so a failed assertion must not leave it running into the next test.
+            finishes.TrySetResult(WingetResult.From(0));
+            await running.WaitAsync(TimeSpan.FromSeconds(30));
+        }
+    }
+
+    /// <summary>
+    /// A run stopped between apps records the apps it reached, as a finished one does, and the app update alert
+    /// is checked again, because its count is out of date either way.
+    /// </summary>
+    [Fact]
+    public async Task QuickUpdateApps_StoppedBetweenApps_RecordsWhatItReached_AndChecksForUpdatesAgain()
+    {
+        using var activity = new ActivityLogScope();
+        using var confirm = new DialogAnswer(confirm: true);
+        DashboardViewModel? vm = null;
+        var winget = QuietWinget();
+        winget.UpgradeAllAsync(Arg.Any<CancellationToken>(), Arg.Any<CancellationToken>()).Returns(call =>
+        {
+            vm!.CancelQuickActionCommand.Execute(null);
+            var stopped = new UpgradeAllStoppedException(2, 3, call.ArgAt<CancellationToken>(0));
+            return Task.FromException<WingetResult>(stopped);
+        });
+        vm = NewVm(winget);
+        await vm.InitializationComplete;
+        winget.ClearReceivedCalls();
+
+        await vm.QuickUpdateAppsCommand.ExecuteAsync(null);
+
+        var entry = Assert.Single(ActivityLogService.Instance.GetRecent(10), e => e.Action == "App Updates");
+        Assert.Equal("Upgrade all stopped after 2 of 3 apps", entry.Detail);
+        await winget.Received().ListUpgradableAsync(Arg.Any<CancellationToken>());
+    }
+
+    /// <summary>A run stopped before it reached any app records nothing, because nothing changed.</summary>
+    [Fact]
+    public async Task QuickUpdateApps_StoppedBeforeAnyApp_RecordsNothing()
+    {
+        using var activity = new ActivityLogScope();
+        using var confirm = new DialogAnswer(confirm: true);
+        DashboardViewModel? vm = null;
+        var winget = QuietWinget();
+        winget.UpgradeAllAsync(Arg.Any<CancellationToken>(), Arg.Any<CancellationToken>()).Returns(call =>
+        {
+            vm!.CancelQuickActionCommand.Execute(null);
+            var stopped = new UpgradeAllStoppedException(0, 3, call.ArgAt<CancellationToken>(0));
+            return Task.FromException<WingetResult>(stopped);
+        });
+        vm = NewVm(winget);
+        await vm.InitializationComplete;
+
+        await vm.QuickUpdateAppsCommand.ExecuteAsync(null);
+
+        Assert.Equal("Cancelled", vm.QuickActionStatus);
+        Assert.Equal("Stopped before any app was updated", vm.QuickActionDetail);
+        Assert.DoesNotContain(ActivityLogService.Instance.GetRecent(10), e => e.Action == "App Updates");
+    }
+
+    /// <summary>Closing SysManager is what ends a running upgrade: disposing the Dashboard cancels its token.</summary>
+    [Fact]
+    public async Task ClosingTheDashboard_EndsTheRunningUpgrade()
+    {
+        using var confirm = new DialogAnswer(confirm: true);
+        var asked = new TaskCompletionSource<(CancellationToken Stop, CancellationToken Running)>(
+            TaskCreationOptions.RunContinuationsAsynchronously);
+        var finishes = new TaskCompletionSource<WingetResult>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var vm = NewVm(WingetUpgradingUntil(finishes.Task, asked));
+
+        var running = vm.QuickUpdateAppsCommand.ExecuteAsync(null);
+        try
+        {
+            var (_, upgrading) = await asked.Task.WaitAsync(TimeSpan.FromSeconds(30));
+            vm.Dispose();
+
+            Assert.True(upgrading.IsCancellationRequested);
+        }
+        finally
+        {
+            finishes.TrySetResult(WingetResult.From(0));
+            await running.WaitAsync(TimeSpan.FromSeconds(30));
         }
     }
 
@@ -1084,7 +1192,8 @@ public sealed class DashboardViewModelTests : IDisposable
         // #2437. `winget upgrade --all` exits non-zero whenever one package fails, and the action used to return
         // normally with the failure text as its detail — so the card read "✓ Done" above "Installer failed".
         var winget = Substitute.For<IWingetService>();
-        winget.UpgradeAllAsync(Arg.Any<CancellationToken>()).Returns(WingetResult.From(1));
+        winget.UpgradeAllAsync(Arg.Any<CancellationToken>(), Arg.Any<CancellationToken>())
+            .Returns(WingetResult.From(1));
         var vm = NewVm(winget);
 
         var prevDialog = DialogService.Instance;
@@ -1114,7 +1223,8 @@ public sealed class DashboardViewModelTests : IDisposable
         // either could fail with 1618, because Windows Installer runs one installation at a time.
         using var confirm = new DialogAnswer(confirm: true);
         var winget = QuietWinget();
-        winget.UpgradeAllAsync(Arg.Any<CancellationToken>()).Returns(WingetResult.From(0));
+        winget.UpgradeAllAsync(Arg.Any<CancellationToken>(), Arg.Any<CancellationToken>())
+            .Returns(WingetResult.From(0));
         var vm = NewVm(winget);
 
         using (var held = OperationLockService.Instance.TryAcquire(OperationCategory.Install, "App Updates"))
@@ -1125,7 +1235,7 @@ public sealed class DashboardViewModelTests : IDisposable
 
         Assert.Equal("Failed", vm.QuickActionStatus);
         Assert.Equal("Cannot start — App Updates is already running.", vm.QuickActionDetail);
-        await winget.DidNotReceiveWithAnyArgs().UpgradeAllAsync(default);
+        await winget.DidNotReceiveWithAnyArgs().UpgradeAllAsync(default, default);
     }
 
     [Fact]
@@ -1136,7 +1246,7 @@ public sealed class DashboardViewModelTests : IDisposable
         using var confirm = new DialogAnswer(confirm: true);
         string? heldBy = null;
         var winget = QuietWinget();
-        winget.UpgradeAllAsync(Arg.Any<CancellationToken>()).Returns(_ =>
+        winget.UpgradeAllAsync(Arg.Any<CancellationToken>(), Arg.Any<CancellationToken>()).Returns(_ =>
         {
             heldBy = OperationLockService.Instance.GetActiveOperationName(OperationCategory.Install);
             return Task.FromResult(WingetResult.From(0));
@@ -1157,7 +1267,8 @@ public sealed class DashboardViewModelTests : IDisposable
         // restarted.
         using var confirm = new DialogAnswer(confirm: true);
         var winget = QuietWinget();
-        winget.UpgradeAllAsync(Arg.Any<CancellationToken>()).Returns(WingetResult.From(1));
+        winget.UpgradeAllAsync(Arg.Any<CancellationToken>(), Arg.Any<CancellationToken>())
+            .Returns(WingetResult.From(1));
         var vm = NewVm(winget);
 
         await vm.QuickUpdateAppsCommand.ExecuteAsync(null);
@@ -1827,7 +1938,8 @@ public sealed class DashboardViewModelTests : IDisposable
         var winget = Substitute.For<IWingetService>();
         winget.ListUpgradableAsync(Arg.Any<CancellationToken>()).Returns(_ => Task.FromResult(
             Enumerable.Range(1, upgrades()).Select(i => new AppPackage { Name = $"App {i}" }).ToList()));
-        winget.UpgradeAllAsync(Arg.Any<CancellationToken>()).Returns(WingetResult.From(0));
+        winget.UpgradeAllAsync(Arg.Any<CancellationToken>(), Arg.Any<CancellationToken>())
+            .Returns(WingetResult.From(0));
         return winget;
     }
 
@@ -2347,7 +2459,7 @@ public sealed class DashboardViewModelTests : IDisposable
     public async Task QuickUpdateApps_WhenAnAppNeedsARestartToFinish_IsDone_AndSaysToRestart()
     {
         var winget = Substitute.For<IWingetService>();
-        winget.UpgradeAllAsync(Arg.Any<CancellationToken>())
+        winget.UpgradeAllAsync(Arg.Any<CancellationToken>(), Arg.Any<CancellationToken>())
             .Returns(WingetResult.From(WingetExitCodes.InstallRebootRequiredToFinish));
         var vm = NewVm(winget);
         using var dialog = new DialogAnswer(confirm: true);

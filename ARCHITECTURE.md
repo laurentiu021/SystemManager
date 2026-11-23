@@ -662,6 +662,9 @@ Key services:
 - `WingetService` — shells out to `winget` and parses its table output. The upgrade list leaves out SysManager's
   own package (`UpdateService.WingetPackageId`), which About updates, and `UpgradeAllAsync` upgrades each listed
   app by id rather than `upgrade --all`, which would take that package too and replace the running exe (#2889).
+  It takes two tokens: one stops the run before its next app, with an `UpgradeAllStoppedException` saying how many
+  apps it reached, and only the other reaches the running winget, which the Dashboard cancels only when it closes,
+  as App Updates does (#3251).
 - `WindowsUpdateService` — drives Windows Update through the WUA COM API
   (scan, select, install) with progress reporting, behind `IWindowsUpdateService`; backs
   `WindowsUpdateViewModel`, and the Dashboard's Check Windows Updates action, which only scans. The

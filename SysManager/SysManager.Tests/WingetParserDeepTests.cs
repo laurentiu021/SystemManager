@@ -414,6 +414,45 @@ public class WingetParserDeepTests
         Assert.Equal(["Git.Git"], result.Select(p => p.Id));
     }
 
+    // ---------- a stop between apps lets the running one finish (#3251) ----------
+
+    /// <summary>
+    /// Asked to stop while an app is upgrading, the run lets that winget finish and stops before the next app. The
+    /// winget running gets the run's other token, which only closing SysManager cancels.
+    /// </summary>
+    [Fact]
+    public async Task UpdateAll_AskedToStopDuringAnApp_LetsItFinish_AndStopsBeforeTheNext()
+    {
+        string[] table =
+        [
+            "Name                         Id                             Version   Available   Source",
+            "-----------------------------------------------------------------------------------------",
+            "Git                          Git.Git                        2.47.0    2.48.0      winget",
+            "Node.js                      OpenJS.NodeJS                  20.11.0   22.1.0      winget",
+            "2 upgrades available.",
+        ];
+        using var stop = new CancellationTokenSource();
+        using var closing = new CancellationTokenSource();
+        var upgrades = new List<(string Args, CancellationToken Token)>();
+        var ps = Winget([], _ => 0, table);
+        ps.RunProcessAsync("winget", Arg.Any<string>(), Arg.Any<CancellationToken>(), Arg.Any<System.Text.Encoding?>())
+          .Returns(call =>
+          {
+              upgrades.Add((call.ArgAt<string>(1), call.ArgAt<CancellationToken>(2)));
+              stop.Cancel();
+              return Task.FromResult(0);
+          });
+
+        var stopped = await Assert.ThrowsAsync<UpgradeAllStoppedException>(
+            () => new WingetService(ps).UpgradeAllAsync(stop.Token, closing.Token));
+
+        var (args, token) = Assert.Single(upgrades);
+        Assert.Contains("Git.Git", args, StringComparison.Ordinal);
+        Assert.Equal(closing.Token, token);
+        Assert.False(token.IsCancellationRequested);
+        Assert.Equal((1, 2), (stopped.Reached, stopped.Listed));
+    }
+
     // ---------- an update that needs a restart to finish is not a failure (#2849) ----------
 
     [Fact]

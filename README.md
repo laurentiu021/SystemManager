@@ -2517,9 +2517,10 @@ offers, "rate us" prompts:
 - **Quick Actions** — Run Quick Cleanup, Update All Apps, Check Windows Updates and Run Speed
   Test run in place with a progress bar, and the result says whether it worked: an app update
   that fails ends as "Failed" with winget's reason, not "Done". A Cancel button sits beside the
-  bar for as long as the action is still running and stops it, same as Escape; Update All Apps
-  stops between apps rather than mid-download. An action ends as "Cancelled" only when you
-  cancelled it: a speed test whose server stopped answering ends as "Failed" and says it timed
+  bar for as long as the action is still running and stops it, same as Escape. Update All Apps
+  stops between apps: the app being updated finishes first, so it is not left half-installed, and
+  the card and Recent activity say how many apps it reached. An action ends as "Cancelled" only
+  when you cancelled it: a speed test whose server stopped answering ends as "Failed" and says it timed
   out. A Quick Cleanup cancelled part-way says how much it had freed before it stopped, and
   Recent activity records it. Check Windows Updates asks
   Windows Update what is waiting and says how many updates it found, or that Windows is up to

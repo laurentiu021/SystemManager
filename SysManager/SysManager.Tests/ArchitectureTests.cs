@@ -2812,6 +2812,65 @@ public partial class ArchitectureTests
     [GeneratedRegex(@"(?<![\w""])@?""''""(?!"")")]
     private static partial Regex DoubledQuoteLiteral();
 
+    /// <summary>
+    /// No PowerShell script the app runs reads an environment variable, and no code takes the Windows folder or
+    /// drive from one.
+    /// </summary>
+    /// <remarks>
+    /// Any program running as the user can set the user's environment variables, and a SysManager started as
+    /// administrator inherits them. Reset Windows Update renamed the folders under <c>$env:SystemRoot</c>, and a new
+    /// restore point turned System Protection on for <c>$env:SystemDrive</c>, so either variable decided what an
+    /// elevated script changed. The folders and drive come from Windows itself, in C#, and reach a script as
+    /// parameters its <c>param()</c> block declares. Setting a variable in a script is allowed: the runner's first
+    /// statement sets the module path. The scan reads the app's code without its comments, and first shows that it
+    /// finds each way of reading one.
+    /// </remarks>
+    [Fact]
+    public void NoScriptReadsItsEnvironment_AndNoCodeTakesTheWindowsFolderFromIt()
+    {
+        Assert.Matches(EnvironmentRead(), "$sd = Join-Path $env:SystemRoot 'SoftwareDistribution'");
+        Assert.Matches(EnvironmentRead(), "Enable-ComputerRestore -Drive $Env:SystemDrive ");
+        Assert.Matches(EnvironmentRead(), "Join-Path ${env:windir} 'Temp'");
+        Assert.Matches(EnvironmentRead(), "[Environment]::GetEnvironmentVariable('SystemRoot')");
+        Assert.Matches(EnvironmentRead(), "[System.Environment]::ExpandEnvironmentVariables('%TEMP%')");
+        Assert.Matches(EnvironmentRead(), @"(Get-Item Env:\SystemDrive).Value");
+        Assert.Matches(EnvironmentRead(), "(Get-Item Env:SystemRoot).Value");
+        Assert.Matches(EnvironmentRead(), "Get-Content env:windir");
+        Assert.Matches(EnvironmentRead(), "Environment.GetEnvironmentVariable(\"windir\")");
+        Assert.Matches(EnvironmentRead(), "Environment.ExpandEnvironmentVariables(@\"%SystemRoot%\\System32\")");
+        Assert.DoesNotMatch(EnvironmentRead(), "$env:PSModulePath='C:\\Program Files';");
+        Assert.DoesNotMatch(EnvironmentRead(), "${env:PSModulePath} = 'C:\\Program Files'");
+        Assert.DoesNotMatch(EnvironmentRead(), "Path.GetDirectoryName(Environment.SystemDirectory)");
+        Assert.DoesNotMatch(EnvironmentRead(), "Run(env: values, name: \"x\")");
+
+        var files = SourceFilesUnder(TestPaths.AppProject(), ".cs").ToList();
+        var offenders = files
+            .SelectMany(f => EnvironmentRead().Matches(WithoutComments(File.ReadAllText(f)))
+                .Select(m => $"{Path.GetFileName(f)}: {m.Value}"))
+            .ToList();
+
+        Assert.True(files.Count >= 300, $"only {files.Count} source files were read, so this checks nothing.");
+        Assert.True(offenders.Count == 0,
+            "these take a value from the environment, which any program running as the user can set, also for a "
+            + "SysManager run as administrator. Ask Windows in C# (Environment.SystemDirectory) and pass the value "
+            + "in the script's param() block:\n  "
+            + string.Join("\n  ", offenders));
+    }
+
+    /// <summary>
+    /// A read of an environment variable in script text, or of the Windows folder or drive in C#: <c>$env:Name</c>
+    /// that is not assigned, <c>[Environment]::</c> reads, the <c>Env:</c> drive, and C# reads of SystemRoot, windir
+    /// or SystemDrive by name or as <c>%Name%</c>.
+    /// </summary>
+    [GeneratedRegex(
+        @"\$\{?env:(?>[\w()]+\}?)(?!\s*=)"
+        + @"|\[(?:System\.)?Environment\]::(?:GetEnvironmentVariable|ExpandEnvironmentVariables)\("
+        + @"|(?<![\w${])env:(?=\\|[A-Za-z_])"
+        + @"|GetEnvironmentVariable\(\s*""(?:SystemRoot|windir|SystemDrive)"""
+        + @"|%(?:SystemRoot|windir|SystemDrive)%",
+        RegexOptions.IgnoreCase)]
+    private static partial Regex EnvironmentRead();
+
     /// <summary>PowerShell's automatic variables, from about_Automatic_Variables.</summary>
     private static readonly HashSet<string> PowerShellAutomaticVariables = new(StringComparer.OrdinalIgnoreCase)
     {

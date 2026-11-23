@@ -24,6 +24,10 @@ public class RestorePointScriptTests
 {
     private const string EnableStub = "function Enable-ComputerRestore { [CmdletBinding()] param($Drive) } ; ";
 
+    // Writes the drive it was asked to protect.
+    private const string EnableEchoes =
+        "function Enable-ComputerRestore { [CmdletBinding()] param($Drive) \"ENABLED:$Drive\" } ; ";
+
     // The refusal as Windows PowerShell 5.1 writes it (resource CannotCreateRestorePointWarning).
     private const string CheckpointRefusesForTheDay =
         "function Checkpoint-Computer { [CmdletBinding()] param($Description, $RestorePointType) " +
@@ -50,11 +54,11 @@ public class RestorePointScriptTests
     private static readonly string ListGuard = WindowsPowerShellScript.StubsInEffect("Get-ComputerRestorePoint");
 
     /// <summary>
-    /// <see cref="RestorePointService.CreateScript"/> called with a description, as the runner binds it: a script block
-    /// invoked with the parameter named. The stubs defined before it are in scope inside it.
+    /// <see cref="RestorePointService.CreateScript"/> called with a description and the drive S:, as the runner binds
+    /// them: a script block invoked with the parameters named. The stubs defined before it are in scope inside it.
     /// </summary>
     private static string Create(string description) =>
-        "& { " + RestorePointService.CreateScript + " } -Description " + description;
+        "& { " + RestorePointService.CreateScript + " } -Description " + description + " -SystemDrive 'S:'";
 
     // Printed by the statement after the list, so it shows whether a failed list STOPPED the script. Stopping is what
     // makes the runner throw, and the throw is how ListAsync tells a refusal from an empty answer.
@@ -128,6 +132,24 @@ public class RestorePointScriptTests
         var (_, output, _) = await WindowsPowerShellScript.RunAsync(
             EnableStub + CheckpointSucceeds + CreateGuard + Create("'Probe'"));
 
+        Assert.Contains(RestorePointService.CreateOkSentinel, output, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// System Protection is turned on for the drive the script is given, whatever the SystemDrive variable names.
+    /// </summary>
+    /// <remarks>
+    /// It was turned on for <c>$env:SystemDrive</c>, which any program running as the user can set. The variable is
+    /// set inside the test's own PowerShell only.
+    /// </remarks>
+    [Fact]
+    public async Task CreateScript_TurnsProtectionOnForTheDriveItIsGiven_NotTheOneSystemDriveNames()
+    {
+        var (_, output, _) = await WindowsPowerShellScript.RunAsync(
+            "$env:SystemDrive = 'Q:'; " + EnableEchoes + CheckpointSucceeds + CreateGuard + Create("'Probe'"));
+
+        Assert.Contains("ENABLED:S:", output, StringComparison.Ordinal);
+        Assert.DoesNotContain("ENABLED:Q:", output, StringComparison.Ordinal);
         Assert.Contains(RestorePointService.CreateOkSentinel, output, StringComparison.Ordinal);
     }
 

@@ -66,10 +66,25 @@ public sealed class RestorePointService
     /// <param name="ps">The runner.</param>
     /// <param name="clock">What <see cref="CreatePatience"/> is measured on. A test holds it.</param>
     public RestorePointService(IPowerShellRunner ps, TimeProvider? clock = null)
+        : this(ps, clock, HealthScoreService.SystemDriveLetter()) { }
+
+    /// <summary>A service told which drive Windows runs from.</summary>
+    /// <param name="ps">The runner.</param>
+    /// <param name="clock">What <see cref="CreatePatience"/> is measured on.</param>
+    /// <param name="systemDrive">The drive <see cref="CreateAsync"/> turns System Protection on for, as "C:".</param>
+    /// <remarks>Internal so a test can give it a drive that is not this PC's.</remarks>
+    internal RestorePointService(IPowerShellRunner ps, TimeProvider? clock, string? systemDrive)
     {
         _ps = ps;
         _clock = clock ?? TimeProvider.System;
+        SystemDrive = systemDrive;
     }
+
+    /// <summary>
+    /// The drive Windows runs from, as Windows reports it, and the one <see cref="CreateAsync"/> turns System
+    /// Protection on for.
+    /// </summary>
+    internal string? SystemDrive { get; }
 
     /// <summary>
     /// The script <see cref="ListAsync"/> runs. <c>Get-ComputerRestorePoint</c> surfaces SequenceNumber,

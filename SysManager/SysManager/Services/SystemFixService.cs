@@ -2,6 +2,7 @@
 // Author: laurentiu021 · https://github.com/laurentiu021/SystemManager
 // License: MIT
 
+using System.IO;
 using Serilog;
 using SysManager.Models;
 
@@ -29,7 +30,28 @@ public sealed class SystemFixService : IDisposable
     // finally block and log an error on a clean exit.
     private bool _disposed;
 
-    public SystemFixService(IPowerShellRunner ps) => _ps = ps;
+    /// <summary>The service over the runner, with the Windows folder and System32 as Windows reports them.</summary>
+    /// <remarks>
+    /// Both come from <see cref="Environment.SystemDirectory"/>, which asks Windows, and the Windows folder is its
+    /// parent, as <see cref="Helpers.SystemPaths"/> derives it. Never from an environment variable.
+    /// </remarks>
+    public SystemFixService(IPowerShellRunner ps)
+        : this(ps, Path.GetDirectoryName(Environment.SystemDirectory), Environment.SystemDirectory) { }
+
+    /// <summary>A service told where the Windows folder and System32 are.</summary>
+    /// <remarks>Internal so a test can give it folders that are not this PC's.</remarks>
+    internal SystemFixService(IPowerShellRunner ps, string? windowsDirectory, string? systemDirectory)
+    {
+        _ps = ps;
+        WindowsDirectory = windowsDirectory;
+        SystemDirectory = systemDirectory;
+    }
+
+    /// <summary>The Windows folder, which holds the SoftwareDistribution folder Reset Windows Update renames.</summary>
+    internal string? WindowsDirectory { get; }
+
+    /// <summary>System32, which holds the catroot2 folder the Windows Update reset renames.</summary>
+    internal string? SystemDirectory { get; }
 
     public event Action<PowerShellLine>? LineReceived
     {

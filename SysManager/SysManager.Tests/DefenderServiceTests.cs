@@ -111,6 +111,69 @@ public class DefenderServiceTests
     public void ClampTri_KeepsZeroToTwo(int input, int expected)
         => Assert.Equal(expected, DefenderService.ClampTri(input));
 
+    /// <summary>A status nobody read shows a dash on every card, not "Off" and "Disabled" from its zeros.</summary>
+    [Fact]
+    public void AStatusThatWasNotRead_ShowsNoReadingOnAnyCard()
+    {
+        var unread = DefenderStatus.Unavailable;
+
+        Assert.Equal(("—", "—", "—", "—"),
+            (unread.RealtimeDisplay, unread.MapsDisplay, unread.PuaDisplay, unread.CfaDisplay));
+    }
+
+    [Theory]
+    [InlineData(0, "Disabled")]
+    [InlineData(1, "Enabled")]
+    [InlineData(2, "Audit mode")]
+    [InlineData(3, "Block disk modification only")]
+    [InlineData(4, "Audit disk modification only")]
+    [InlineData(5, "Unknown")]
+    public void ControlledFolderAccess_ShowsEveryModeWindowsDocuments(int mode, string label)
+    {
+        var projection = new PSObject();
+        projection.Properties.Add(new PSNoteProperty("EnableControlledFolderAccess", mode));
+
+        Assert.Equal(label, DefenderService.ParseStatus(projection).CfaDisplay);
+    }
+
+    /// <summary>
+    /// Every mode Windows documents reaches Windows as it is: a disk-only mode put back as 0 would switch the
+    /// protection off.
+    /// </summary>
+    [Theory]
+    [InlineData(0)]
+    [InlineData(1)]
+    [InlineData(2)]
+    [InlineData(3)]
+    [InlineData(4)]
+    public async Task SetControlledFolderAccess_SendsEveryDocumentedModeToWindows(int mode)
+    {
+        var runner = Substitute.For<IPowerShellRunner>();
+        runner.RunAsync(Arg.Any<string>(), Arg.Any<IDictionary<string, object?>?>(), Arg.Any<CancellationToken>())
+            .Returns(new Collection<PSObject>());
+
+        await new DefenderService(runner).SetControlledFolderAccessAsync(mode);
+
+        await runner.Received(1).RunAsync(
+            "param([int]$Value) Set-MpPreference -EnableControlledFolderAccess $Value",
+            Arg.Is<IDictionary<string, object?>?>(values => values != null && Equals(values["Value"], mode)),
+            Arg.Any<CancellationToken>());
+    }
+
+    /// <summary>A mode Windows does not have is refused and runs nothing, rather than becoming 0, off.</summary>
+    [Theory]
+    [InlineData(5)]
+    [InlineData(-1)]
+    public void SetControlledFolderAccess_RefusesAModeWindowsDoesNotHave_AndRunsNothing(int mode)
+    {
+        var runner = Substitute.For<IPowerShellRunner>();
+
+        var service = new DefenderService(runner);
+
+        Assert.Throws<ArgumentOutOfRangeException>(() => { _ = service.SetControlledFolderAccessAsync(mode); });
+        runner.DidNotReceiveWithAnyArgs().RunAsync(default!, default, default);
+    }
+
     // ── Exclusion-path validation at the service boundary (idx 151) ───────────
 
     [Theory]

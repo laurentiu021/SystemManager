@@ -8,6 +8,7 @@ using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Shapes;
+using SysManager.Helpers;
 using SysManager.Services;
 
 namespace SysManager.Views;
@@ -367,21 +368,22 @@ public partial class ThemePopup : UserControl
     /// Parses a hex TextBox; on success clears the invalid flag and returns the colour,
     /// on failure flags the box (red text + tooltip) and returns the swatch's current colour.
     /// </summary>
+    /// <remarks>
+    /// Read as hex digits only (<see cref="HexColor"/>). WPF's converter read names and scRGB as well, and a
+    /// ContextColor value threw out of the event instead of being flagged.
+    /// </remarks>
     private static Color ResolveHex(TextBox box, Border swatch)
     {
-        try
+        if (HexColor.TryParse(box.Text, out var color))
         {
-            var color = (Color)ColorConverter.ConvertFromString(box.Text);
             box.ClearValue(ForegroundProperty);
             box.ClearValue(ToolTipProperty);
             return color;
         }
-        catch (FormatException ex)
-        {
-            Serilog.Log.Debug(ex, "Theme custom hex parse failed for {Field}", box.Tag);
-            box.Foreground = Brushes.IndianRed;
-            box.ToolTip = "Invalid colour — use a hex value like #1E2530.";
-            return (swatch.Background as SolidColorBrush)?.Color ?? Colors.Gray;
-        }
+
+        Serilog.Log.Debug("Theme custom hex parse failed for {Field}", box.Tag);
+        box.Foreground = Brushes.IndianRed;
+        box.ToolTip = "Invalid colour — use a hex value like #1E2530.";
+        return (swatch.Background as SolidColorBrush)?.Color ?? Colors.Gray;
     }
 }

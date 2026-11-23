@@ -3198,20 +3198,6 @@ public partial class ArchitectureTests
         };
 
     /// <summary>
-    /// A colour a binding picks goes through <c>helpers:ThemeBrush</c>, never straight onto a brush property.
-    /// </summary>
-    /// <remarks>
-    /// A binding onto a brush property hands the element a brush, and the converters that turned a status into one
-    /// looked the theme's brush up once. <c>ThemeService.Apply</c> stores a new brush under every name, so the element
-    /// kept the old theme's colour: a console line stayed near-white on the light card after a switch, and the verdicts
-    /// and disk cards kept the dark palette's green and amber (#2818). ThemeBrush takes the colour's name and sets a
-    /// reference to the theme's brush, which follows every switch. A binding that passes a brush along from another
-    /// element, with <c>RelativeSource</c> or <c>ElementName</c>, picks no colour and is not read.
-    /// <para>The target's type comes from WPF by reflection, as in
-    /// <see cref="EveryStringFormat_IsOnAPropertyThatHoldsAString"/>, so a brush property nobody listed is read
-    /// too.</para>
-    /// </remarks>
-    /// <summary>
     /// Colour text the app does not write itself is read through <c>HexColor</c>, which reads #RRGGBB and #AARRGGBB
     /// and nothing else.
     /// </summary>
@@ -3277,6 +3263,20 @@ public partial class ArchitectureTests
         RegexOptions.CultureInvariant)]
     private static partial Regex WpfColourParsing();
 
+    /// <summary>
+    /// A colour a binding picks goes through <c>helpers:ThemeBrush</c>, never straight onto a brush property.
+    /// </summary>
+    /// <remarks>
+    /// A binding onto a brush property hands the element a brush, and the converters that turned a status into one
+    /// looked the theme's brush up once. <c>ThemeService.Apply</c> stores a new brush under every name, so the element
+    /// kept the old theme's colour: a console line stayed near-white on the light card after a switch, and the verdicts
+    /// and disk cards kept the dark palette's green and amber (#2818). ThemeBrush takes the colour's name and sets a
+    /// reference to the theme's brush, which follows every switch. A binding that passes a brush along from another
+    /// element, with <c>RelativeSource</c> or <c>ElementName</c>, picks no colour and is not read.
+    /// <para>The target's type comes from WPF by reflection, as in
+    /// <see cref="EveryStringFormat_IsOnAPropertyThatHoldsAString"/>, so a brush property nobody listed is read
+    /// too.</para>
+    /// </remarks>
     [Fact]
     public void EveryColourABindingPicks_GoesThroughThemeBrush()
     {

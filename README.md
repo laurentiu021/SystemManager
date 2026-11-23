@@ -210,8 +210,11 @@ with:
   Warm Ember, going light gives you
   Warm Sand rather than the default, and staying dark keeps Warm Ember. Picking any preset turns
   Auto off, and the panel then shows Dark or Light selected, whichever the preset is
-- **Custom mode** — free hex input for accent, background, surface, and text colors
-- Background shade slider for fine-tuning lightness/darkness
+- **Custom mode** — hex input for accent, background, surface, and text colors, written
+  #RRGGBB or #AARRGGBB; a box with anything else is marked "Invalid colour" and keeps its last
+  colour
+- Background shade slider for fine-tuning lightness/darkness; a saved shade is held to the
+  slider's ends, so a theme file cannot open the app unreadable
 - **Reset to default theme** — one click back to the shipped dark theme and shade, from any mode
 - Settings persist between sessions. If they cannot be read when SysManager starts, a change
   applies for that session but is not saved over them

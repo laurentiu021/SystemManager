@@ -256,7 +256,7 @@ public sealed class ThemeService
 
     public void SetShade(double position)
     {
-        ShadePosition = Math.Clamp(position, 0, 1);
+        ShadePosition = ValidShade(position);
         ApplyShade();
         DebouncedSave();
     }
@@ -965,17 +965,24 @@ public sealed class ThemeService
                 return;
             }
 
+            // A custom theme's colours are read as hex digits only, and before anything else is taken: they were read
+            // with WPF's converter, which also opens the colour-profile address a ContextColor value names, and the
+            // mode, shade and preset were taken first, so a file refused for its colours left them behind.
+            var custom = data.PresetId == "custom" ? CustomColours(data) : null;
+            if (data.PresetId == "custom" && custom is null)
+            {
+                Log.Debug("Theme load failed: a custom colour is not written #RRGGBB or #AARRGGBB");
+                _unparsableAtLoad = true;
+                return;
+            }
+
             CurrentMode = data.Mode;
-            ShadePosition = data.ShadePosition;
+            ShadePosition = ValidShade(data.ShadePosition);
             CurrentPresetId = data.PresetId;
 
-            if (data.PresetId == "custom")
+            if (custom is { } colours)
             {
-                var accent = (Color)ColorConverter.ConvertFromString(data.Accent);
-                var bg = (Color)ColorConverter.ConvertFromString(data.Background);
-                var surface = (Color)ColorConverter.ConvertFromString(data.Surface);
-                var text = (Color)ColorConverter.ConvertFromString(data.Text);
-                SetCustom(accent, bg, surface, text);
+                SetCustom(colours.Accent, colours.Background, colours.Surface, colours.Text);
             }
             else if (ThemePreset.Defaults.TryGetValue(data.PresetId, out var preset))
             {
@@ -985,9 +992,8 @@ public sealed class ThemeService
             }
         }
         // Broad, as it was: this runs at startup on a file the user can edit, and whatever fails in here (JSON that
-        // does not parse, a colour that does not convert, a value that is missing) means the same thing. The file
-        // is not a theme SysManager can use, so the shipped theme stays on screen and the file is set aside rather
-        // than written over.
+        // does not parse, a value that is missing) means the same thing. The file is not a theme SysManager can use,
+        // so the shipped theme stays on screen and the file is set aside rather than written over.
         catch (Exception ex)
         {
             Log.Debug("Theme load failed: {Error}", ex.Message);
@@ -997,6 +1003,24 @@ public sealed class ThemeService
 
     /// <summary>The modes the service writes: a preset's own dark or light, following Windows, or a custom theme.</summary>
     private static bool IsKnownMode(string? mode) => mode is "dark" or "light" or AutoMode or "custom";
+
+    /// <summary>
+    /// A shade the slider can show: held to its ends, and the default for a value that is not a number.
+    /// </summary>
+    /// <remarks>
+    /// One rule for a drag and a saved file. A file's shade was taken as it was, and one past the ends darkened or
+    /// lightened every colour, text included, to the same end. A value that is not a number would make every later
+    /// save fail, since JSON has none.
+    /// </remarks>
+    private static double ValidShade(double position) =>
+        double.IsFinite(position) ? Math.Clamp(position, 0, 1) : DefaultShade;
+
+    /// <summary>A custom theme's four colours, or null when one is not written #RRGGBB or #AARRGGBB.</summary>
+    private static (Color Accent, Color Background, Color Surface, Color Text)? CustomColours(ThemeSettings data) =>
+        HexColor.TryParse(data.Accent, out var accent) && HexColor.TryParse(data.Background, out var background)
+        && HexColor.TryParse(data.Surface, out var surface) && HexColor.TryParse(data.Text, out var text)
+            ? (accent, background, surface, text)
+            : null;
 
     private sealed record ThemeSettings(
         string PresetId, string Mode, double ShadePosition,

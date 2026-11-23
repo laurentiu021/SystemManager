@@ -230,6 +230,12 @@ public sealed partial class DefenderViewModel : ElevatedViewModelBase
     {
         if (!RequireElevation("Adding an exclusion")) return;
         if (!RequireStatus("Adding an exclusion")) return;
+        // Before the picker: the folders the rules below protect would be another account's.
+        if (!_service.ChecksTheSignedInAccountsFolders)
+        {
+            StatusMessage = DefenderService.AnotherAccountRefusal;
+            return;
+        }
         var folder = _dialog.PickFolder("Select a folder to exclude from scanning");
         if (folder is null) return;
 

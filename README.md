@@ -2040,7 +2040,9 @@ Manage Microsoft Defender without digging through Windows Security:
   refused, and the tab says why; a folder inside them, such as one game's folder
   in Program Files, is still allowed. Windows shows the list only to an administrator, so
   without elevation the card says the exclusions are hidden rather than showing
-  an empty list
+  an empty list. When SysManager runs as a different administrator than the person signed
+  in to Windows, it cannot check that person's own folders, so adding an exclusion is
+  refused and the tab says why; removing one still works
 - **Honest about Tamper Protection** — if it's on, Windows can silently ignore
   changes, so the tab detects it, warns you, and only reports a change as done
   after reading it back and confirming Windows actually applied it

@@ -270,6 +270,7 @@ public class AdminHelperTests
     [InlineData("Services", "NotificationBlockerService.cs", "AdminHelper.PerUserRegistryRoot()")]
     [InlineData("Services", "MaintenanceSchedulerService.cs", "AdminHelper.IsElevatedAsAnotherUser()")]
     [InlineData("Services", "PerformanceService.cs", "AdminHelper.PerUserRegistryRoot()")]
+    [InlineData("Services", "DefenderService.cs", "AdminHelper.OwnSessionSid()")]
     public void EachPerUserService_ActuallyConsultsTheSignedInAccount(string folder, string file, string mustContain)
     {
         // Asserted against the source, not behaviourally: the real redirect needs a second real signed-in

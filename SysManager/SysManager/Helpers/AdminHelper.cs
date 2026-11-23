@@ -80,6 +80,29 @@ public static partial class AdminHelper
     public static string? InteractiveSessionSid() => InteractiveSessionSidProbe();
 
     /// <summary>
+    /// How the account of SysManager's own Windows session is found, a seam for the same reason as
+    /// <see cref="InteractiveSessionSidProbe"/>.
+    /// </summary>
+    internal static Func<string?> OwnSessionSidProbe { get; set; } = QueryOwnSessionSid;
+
+    /// <summary>
+    /// The SID of the account signed in to the Windows session SysManager runs in, or null when it cannot be read.
+    /// </summary>
+    /// <remarks>
+    /// The session's account, not the process's: elevated with another account's password, SysManager runs as that
+    /// account inside the signed-in person's session. Unlike <see cref="InteractiveSessionSid"/>, which reads the
+    /// console's session, it is right over Remote Desktop too, and it cannot change for the life of the process.
+    /// </remarks>
+    public static string? OwnSessionSid() => OwnSessionSidProbe();
+
+    /// <summary>The SID of the account SysManager runs as, or null when Windows gives none.</summary>
+    public static string? TokenSid()
+    {
+        using var identity = WindowsIdentity.GetCurrent();
+        return identity.User?.Value;
+    }
+
+    /// <summary>
     /// True when SysManager is running elevated as an account DIFFERENT from the one signed in to the
     /// active console session.
     /// </summary>
@@ -151,7 +174,14 @@ public static partial class AdminHelper
     {
         var sessionId = NativeMethods.WTSGetActiveConsoleSessionId();
         if (sessionId == 0xFFFFFFFF) return null; // no active console session
+        return SessionSid(sessionId);
+    }
 
+    private static string? QueryOwnSessionSid() => SessionSid(NativeMethods.WtsCurrentSession);
+
+    /// <summary>The SID of a session's user, or null when it has none or the name cannot be translated.</summary>
+    private static string? SessionSid(uint sessionId)
+    {
         var userName = QuerySessionString(sessionId, NativeMethods.WtsUserName);
         if (string.IsNullOrEmpty(userName)) return null;
         var domainName = QuerySessionString(sessionId, NativeMethods.WtsDomainName);
@@ -180,6 +210,9 @@ public static partial class AdminHelper
     {
         internal const int WtsUserName = 5;
         internal const int WtsDomainName = 7;
+
+        // WTS_CURRENT_SESSION: the session of the calling process.
+        internal const uint WtsCurrentSession = 0xFFFFFFFF;
 
         [LibraryImport("kernel32.dll")]
         internal static partial uint WTSGetActiveConsoleSessionId();

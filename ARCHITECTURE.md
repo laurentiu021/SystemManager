@@ -2072,7 +2072,10 @@ Key services:
   modes; `SetControlledFolderAccessAsync` sends 0 to 4 as they are and refuses anything else.
   Windows shows the exclusion lists only to an administrator, so for a standard user
   they are emptied and marked unreadable, and the tab says they are hidden. The parse
-  helpers are pure, unit-tested.
+  helpers are pure, unit-tested. The exclusion rules read the running account's folders, so
+  an exclusion is allowed only unelevated or when `AdminHelper.OwnSessionSid` is the token's
+  own SID (`ChecksTheRightFolders`, read once by the public constructor; tests use the internal
+  one); it fails closed when either SID is missing, and the tab refuses before its folder picker.
 - `TaskSchedulerService` — the `ScheduledTasks` PowerShell module (`Get-ScheduledTask`
   / `Get-ScheduledTaskInfo` / `Enable`/`Disable-ScheduledTask`) through `IPowerShellRunner`.
   Disabling is reversible and never unregisters; toggles are verified by read-back. The
@@ -2329,7 +2332,8 @@ Key utility classes that don't fit neatly into Services or ViewModels (not an ex
 - `AdminHelper` — elevation check (`IsElevated()`) and UAC relaunch. `IsElevatedAsAnotherUser()` compares
   the running process's SID against the account signed in to the active console session (via
   `WTSQuerySessionInformationW`) — true on a standard account elevated with a DIFFERENT administrator's
-  password, the family-PC case. `PerUserRegistryRoot()` is the per-user registry root every per-user
+  password, the family-PC case. `OwnSessionSid()` reads the account of SysManager's own session instead of
+  the console's, which is right over Remote Desktop too, and `TokenSid()` the account it runs as. `PerUserRegistryRoot()` is the per-user registry root every per-user
   service should use instead of `Registry.CurrentUser` directly: the signed-in account's own hive under
   `HKEY_USERS\<their SID>` when the two differ, falling back (logged) to the running account's own hive
   when that SID or hive cannot be resolved. `PrivacyService`, `PrivacyMonitorService`,

@@ -36,6 +36,7 @@ jobs:
         shell: bash
         env:
           TITLE: ${{ github.event.pull_request.title }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
         run: |
           set -o pipefail
 
@@ -49,6 +50,12 @@ jobs:
           fi
 
           CSPROJ=$(grep -oPm1 '(?<=<Version>)[^<]+' SysManager/SysManager/SysManager.csproj)
+          # A title that releases nothing keeps csproj where main has it. That is the newest tag's version, except
+          # after auto-release refused a merge: main stays a bump ahead of the tag until the run by hand tags it, and
+          # the CHANGELOG-only pull request its way back asks for carries main's version, as every other pull request
+          # that releases nothing does until then (#3375).
+          BASE_CSPROJ=$(git show "${BASE_SHA}:SysManager/SysManager/SysManager.csproj" \
+            | grep -oPm1 '(?<=<Version>)[^<]+' || true)
           IFS='.' read -r MAJOR MINOR PATCH <<< "${TAG#v}"
           PATCH_NEXT="${MAJOR}.${MINOR}.$((PATCH + 1))"
           MINOR_NEXT="${MAJOR}.$((MINOR + 1)).0"
@@ -61,13 +68,21 @@ jobs:
           elif [[ "$TITLE" =~ ^fix(\(.+\))?: ]]; then
             REQUIRED="$PATCH_NEXT"; KIND="a fix: bump"
           else
-            REQUIRED="${TAG#v}"; KIND="no release (its prefix is not feat:/fix:/feat!:/fix!:)"
+            REQUIRED="${BASE_CSPROJ:-${TAG#v}}"; KIND="none"
           fi
 
           if [ "$CSPROJ" = "$REQUIRED" ]; then
-            echo "Title \"$TITLE\" requires $KIND ($REQUIRED), and csproj Version is $CSPROJ. Match."
+            if [ "$KIND" = "none" ]; then
+              echo "Title \"$TITLE\" releases nothing, and csproj Version is $CSPROJ, as on main. Match."
+            else
+              echo "Title \"$TITLE\" requires $KIND ($REQUIRED), and csproj Version is $CSPROJ. Match."
+            fi
             exit 0
           fi
 
-          echo "::error::The PR title (\"$TITLE\") requires $KIND, which is version $REQUIRED from the newest tag $TAG, but csproj Version is $CSPROJ. Either set csproj Version AND the newest CHANGELOG header to $REQUIRED, or change the PR title's prefix to match what this PR actually does."
+          if [ "$KIND" = "none" ]; then
+            echo "::error::The PR title (\"$TITLE\") releases nothing (its prefix is not feat:/fix:/feat!:/fix!:), so csproj keeps the version main has, $REQUIRED, but it is $CSPROJ. Set csproj Version back to $REQUIRED, or give the title the prefix of the release this PR makes."
+          else
+            echo "::error::The PR title (\"$TITLE\") requires $KIND, which is version $REQUIRED from the newest tag $TAG, but csproj Version is $CSPROJ. Either set csproj Version AND the newest CHANGELOG header to $REQUIRED, or change the PR title's prefix to match what this PR actually does."
+          fi
           exit 1

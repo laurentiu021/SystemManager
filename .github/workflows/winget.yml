@@ -116,18 +116,6 @@ jobs:
           echo "tag=${TAG}" >> "$GITHUB_OUTPUT"
           echo "${TAG} is published: ${EXE} (${SIZE} bytes), its .sha256 and SBOM, and ${ATTESTATIONS} attestation(s) for its digest."
 
-      # winget-releaser creates its manifest branch on our winget-pkgs fork, and that
-      # branch must descend from current upstream. When the fork drifts, the branch
-      # creation fails — which is what silently broke the 1.56.6 and 1.56.8 publishes
-      # (the fork had fallen 5452 commits behind and komac reported the failure as a
-      # token problem, sending the diagnosis down the wrong path twice). Upstream
-      # recommends an external fork-sync app; syncing here instead means the fork is
-      # current at the exact moment it is used, with no dependency on a third-party
-      # service's schedule.
-      #
-      # Non-fatal by design: a sync failure must not abort a release whose binary is
-      # already published. If the fork is genuinely broken the winget step below fails
-      # and reports it, which is the correct place for that error to surface.
       # The PAT the three winget steps depend on has a finite lifetime, and nothing announced that in
       # advance: the first sign was a release publishing to GitHub and never reaching winget, with the
       # failure reported as a permissions error. This asks GitHub about the token BEFORE using it.
@@ -268,6 +256,18 @@ jobs:
           echo "visible=false" >> "$GITHUB_OUTPUT"
           echo "::warning title=release not visible by tag::/releases/tags/$TAG did not report its .exe asset on three consecutive reads within 3 minutes, although the release has one. winget-releaser reads that endpoint, so the publish below will probably fail with \"a value is required for '--urls'\". Compare it against /releases/<id>/assets."
 
+      # winget-releaser creates its manifest branch on our winget-pkgs fork, and that
+      # branch must descend from current upstream. When the fork drifts, the branch
+      # creation fails — which is what silently broke the 1.56.6 and 1.56.8 publishes
+      # (the fork had fallen 5452 commits behind and komac reported the failure as a
+      # token problem, sending the diagnosis down the wrong path twice). Upstream
+      # recommends an external fork-sync app; syncing here instead means the fork is
+      # current at the exact moment it is used, with no dependency on a third-party
+      # service's schedule.
+      #
+      # Non-fatal by design: a sync failure must not abort a release whose binary is
+      # already published. If the fork is genuinely broken the winget step below fails
+      # and reports it, which is the correct place for that error to surface.
       - name: Sync the winget-pkgs fork with upstream
         continue-on-error: true
         shell: bash

@@ -185,6 +185,9 @@ What the app can and cannot do by design:
   installation remain available only to scripts started as a separate
   `powershell.exe` while the app runs without elevation (the Windows Update
   history's PSWindowsUpdate module).
+  The script text SysManager writes never reads an environment variable. The folders Reset Windows Update renames
+  and the drive a new restore point turns System Protection on for come from Windows itself and reach the script as
+  parameters, because any program running as you can change your environment variables.
 - **Putting changes back**: Performance Mode, Services, DNS & Hosts (for the hosts file),
   Environment Variables and Gaming Profile each keep a copy from before their first change.
   The Undo Changes tab lists the changes those copies can still put back, plus the Settings

@@ -1684,6 +1684,9 @@ Key services:
   whether or not the stop lands, and it returns false, so no caller holding the
   system-modification lock waits on a System Restore that stopped answering (#2843).
   `ListPatience` is how long a caller waits for the list.
+  The drive the create turns System Protection on for is its `SystemDrive` parameter, from
+  `HealthScoreService.SystemDriveLetter()` (`Environment.SystemDirectory`), never `$env:SystemDrive`; an internal
+  constructor takes it for tests, and without a drive letter no point is made.
 - `SessionRestorePoint` — the single owner of the AUTOMATIC restore point (`ISessionRestorePoint`).
   Each of the seven consumers listed below calls `EnsureAsync` before its first mutation; the first
   call wins and the rest are no-ops, so a session takes at most one point no matter how many of them
@@ -2114,7 +2117,10 @@ Key services:
 - `SystemFixService` — one-click repairs (reset Windows Update, reinstall WinGet) via
   hard-coded PowerShell scripts through the
   `IPowerShellRunner` seam; streams output and returns an honest success/failure
-  `SystemFixResult`. Auto-logon is delegated to the built-in netplwiz dialog, never
+  `SystemFixResult`. The Windows Update reset is given SoftwareDistribution and catroot2 as script parameters,
+  from `Environment.SystemDirectory` and its parent, never `$env:SystemRoot`; an internal constructor takes the
+  folders for tests, and without a full path for both it runs nothing.
+  Auto-logon is delegated to the built-in netplwiz dialog, never
   a plaintext credential write. SFC and DISM run from the tab through the runner, the two
   desktop fixes through `ExplorerShell`, and the network-stack resets are Network Repair's
   (`NetworkRepairService`).

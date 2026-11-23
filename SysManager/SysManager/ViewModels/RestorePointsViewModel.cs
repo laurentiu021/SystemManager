@@ -122,7 +122,7 @@ public sealed partial class RestorePointsViewModel : ElevatedViewModelBase
             : NewDescription.Trim();
 
         // Disclose the side effect BEFORE doing it. Creating a checkpoint runs
-        // `Enable-ComputerRestore -Drive $env:SystemDrive` first (RestorePointService), because
+        // `Enable-ComputerRestore` for the Windows drive first (RestorePointService), because
         // Checkpoint-Computer fails outright when protection is off. That is a real, persistent change to
         // system configuration: someone who deliberately turned System Protection off — a common step on a
         // small SSD, since it then reserves disk space indefinitely — got it switched back on by pressing

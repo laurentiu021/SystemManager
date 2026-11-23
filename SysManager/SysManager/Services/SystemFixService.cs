@@ -14,7 +14,8 @@ namespace SysManager.Services;
 /// orchestration is substitutable in tests) and stream their output via
 /// <see cref="IPowerShellRunner.LineReceived"/> for live display.
 ///
-/// SECURITY: every script is hard-coded — no user input is interpolated. These repairs
+/// SECURITY: every script is hard-coded — no user input is interpolated. The two folders Reset Windows Update
+/// renames are its parameters, from Windows itself, never from an environment variable. These repairs
 /// mutate system state and require administrator rights; each is gated behind an explicit
 /// confirmation in the ViewModel. Account auto-logon is intentionally NOT implemented here
 /// as a credential write (that would store the password in plaintext in the registry);
@@ -83,8 +84,43 @@ public sealed class SystemFixService : IDisposable
     /// catroot2 (so Windows rebuilds them), then restarts the services. Requires admin
     /// and a reboot afterwards for best results.
     /// </summary>
+    /// <remarks>
+    /// The two folders reach the script as its parameters, from <see cref="WindowsDirectory"/> and
+    /// <see cref="SystemDirectory"/>. It renamed the folders under <c>$env:SystemRoot</c>, which any program running
+    /// as the user can set, also for a SysManager started as administrator. Without a full path for both it runs
+    /// nothing and says so.
+    /// </remarks>
     public Task<SystemFixResult> ResetWindowsUpdateAsync(CancellationToken ct = default)
-        => RunFixAsync("Reset Windows Update", ResetWindowsUpdateScript, needsReboot: true, ct);
+        => ResetWindowsUpdateParameters(WindowsDirectory, SystemDirectory) is { } folders
+            ? RunFixAsync(ResetWindowsUpdateName, ResetWindowsUpdateScript, folders, needsReboot: true, ct)
+            : Task.FromResult(WindowsFolderNotFound());
+
+    private const string ResetWindowsUpdateName = "Reset Windows Update";
+
+    /// <summary>
+    /// The parameters <see cref="ResetWindowsUpdateScript"/> runs with: SoftwareDistribution in the Windows folder and
+    /// catroot2 in System32. Null when either folder is not a full path.
+    /// </summary>
+    internal static Dictionary<string, object?>? ResetWindowsUpdateParameters(
+        string? windowsDirectory, string? systemDirectory) =>
+        windowsDirectory is { } windows && Path.IsPathFullyQualified(windows)
+        && systemDirectory is { } system && Path.IsPathFullyQualified(system)
+            ? new Dictionary<string, object?>
+            {
+                ["SoftwareDistribution"] = Path.Join(windows, "SoftwareDistribution"),
+                ["Catroot2"] = Path.Join(system, "catroot2"),
+            }
+            : null;
+
+    /// <summary>What Reset Windows Update says when it does not know where the Windows folder is.</summary>
+    private SystemFixResult WindowsFolderNotFound()
+    {
+        Log.Warning("System fix {Fix} refused: the Windows folder {Windows} or System32 {System} is not a full path",
+            ResetWindowsUpdateName, WindowsDirectory, SystemDirectory);
+        const string Reason = "SysManager could not find the Windows folder, so nothing was changed.";
+        return new SystemFixResult(ResetWindowsUpdateName, Success: false, Reason, NeedsReboot: true,
+            FailureReason: Reason);
+    }
 
     /// <summary>The script <see cref="ResetWindowsUpdateAsync"/> runs.</summary>
     /// <remarks>
@@ -100,16 +136,19 @@ public sealed class SystemFixService : IDisposable
     /// script before the <c>try</c> was ever entered, so the services already stopped stayed stopped despite the
     /// <c>finally</c>'s own promise (#2789). PowerShell gives <c>try</c>/<c>finally</c> no separate variable
     /// scope, so <c>$services</c> set inside the <c>try</c> is still visible to the <c>finally</c> below it.</para>
+    /// <para>The two folders are its parameters (see <see cref="ResetWindowsUpdateParameters"/>), never read from
+    /// <c>$env:SystemRoot</c>.</para>
     /// <para>Internal so the integration suite can run this exact text in Windows PowerShell with the cmdlets
     /// that would change the machine shadowed by functions.</para>
     /// </remarks>
     internal const string ResetWindowsUpdateScript = """
+        param([string]$SoftwareDistribution, [string]$Catroot2)
         $ErrorActionPreference = 'Stop'
         try {
             $services = 'wuauserv','cryptSvc','bits','msiserver'
             foreach ($s in $services) { Stop-Service -Name $s -Force -ErrorAction SilentlyContinue }
-            $sd = Join-Path $env:SystemRoot 'SoftwareDistribution'
-            $cr = Join-Path $env:SystemRoot 'System32\catroot2'
+            $sd = $SoftwareDistribution
+            $cr = $Catroot2
             $stamp = (Get-Date).ToString('yyyyMMddHHmmss')
             if (Test-Path $sd) { Rename-Item $sd "$sd.old.$stamp" }
             if (Test-Path $cr) { Rename-Item $cr "$cr.old.$stamp" }
@@ -128,7 +167,7 @@ public sealed class SystemFixService : IDisposable
     /// again. Requires admin. No reboot needed.
     /// </summary>
     public Task<SystemFixResult> ReinstallWinGetAsync(CancellationToken ct = default)
-        => RunFixAsync("Reinstall WinGet", ReinstallWinGetScript, needsReboot: false, ct);
+        => RunFixAsync("Reinstall WinGet", ReinstallWinGetScript, parameters: null, needsReboot: false, ct);
 
     /// <summary>The script <see cref="ReinstallWinGetAsync"/> runs.</summary>
     /// <remarks>
@@ -158,7 +197,12 @@ public sealed class SystemFixService : IDisposable
         }
         """;
 
-    private async Task<SystemFixResult> RunFixAsync(string name, string script, bool needsReboot, CancellationToken ct)
+    private async Task<SystemFixResult> RunFixAsync(
+        string name,
+        string script,
+        IDictionary<string, object?>? parameters,
+        bool needsReboot,
+        CancellationToken ct)
     {
         await _gate.WaitAsync(ct).ConfigureAwait(false);
         var output = new System.Collections.Concurrent.ConcurrentQueue<string>();
@@ -168,7 +212,7 @@ public sealed class SystemFixService : IDisposable
         {
             // RunAsync throws on a terminating error (ErrorActionPreference=Stop / throw),
             // so a normal return means the script ran to completion.
-            await _ps.RunAsync(script, cancellationToken: ct).ConfigureAwait(false);
+            await _ps.RunAsync(script, parameters, ct).ConfigureAwait(false);
             return new SystemFixResult(name, Success: true, string.Join(Environment.NewLine, output), needsReboot);
         }
         catch (System.Management.Automation.RuntimeException ex)

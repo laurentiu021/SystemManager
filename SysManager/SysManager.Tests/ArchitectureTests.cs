@@ -2744,7 +2744,7 @@ public partial class ArchitectureTests
                 .Select(name => (File: Path.GetFileName(f), Name: name)))
             .ToList();
         Assert.True(declared.Count >= 20,
-            $"only {declared.Count} script parameters were found, and the app's scripts declare 25 — this guard is "
+            $"only {declared.Count} script parameters were found, and the app's scripts declare 28 — this guard is "
             + "reading the wrong text.");
 
         var offenders = declared.Where(p => PowerShellAutomaticVariables.Contains(p.Name))

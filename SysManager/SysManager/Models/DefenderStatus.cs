@@ -16,7 +16,7 @@ public sealed record DefenderStatus(
     bool RealtimeProtection,
     int PuaProtection,            // 0=Disabled, 1=Enabled, 2=AuditMode
     int MapsReporting,            // 0=Disabled, 1=Basic, 2=Advanced
-    int ControlledFolderAccess,  // 0=Disabled, 1=Enabled, 2=AuditMode
+    int ControlledFolderAccess,  // 0=Disabled, 1=Enabled, 2=AuditMode, 3=BlockDiskModification, 4=AuditDiskModification
     IReadOnlyList<string> ExclusionPaths,
     IReadOnlyList<string> ExclusionExtensions,
     IReadOnlyList<string> ExclusionProcesses)
@@ -37,9 +37,27 @@ public sealed record DefenderStatus(
         _ => "Unknown",
     };
 
-    public string PuaDisplay => TriStateLabel(PuaProtection);
-    public string CfaDisplay => TriStateLabel(ControlledFolderAccess);
-    public string MapsDisplay => MapsLabel(MapsReporting);
+    /// <summary>
+    /// Controlled Folder Access's modes, as Windows documents them: besides off, on and audit, two that cover only
+    /// changes to the disk itself, which one blocks and the other audits.
+    /// </summary>
+    public static string CfaLabel(int v) => v switch
+    {
+        3 => "Block disk modification only",
+        4 => "Audit disk modification only",
+        _ => TriStateLabel(v),
+    };
+
+    /// <summary>What a card shows for a value nobody read.</summary>
+    /// <remarks>
+    /// The cards read the status's values whatever it was, so a read that failed showed its zeros as fact: real-time
+    /// "Off", PUA and Controlled Folder Access "Disabled".
+    /// </remarks>
+    public const string NotRead = "—";
+
+    public string PuaDisplay => Available ? TriStateLabel(PuaProtection) : NotRead;
+    public string CfaDisplay => Available ? CfaLabel(ControlledFolderAccess) : NotRead;
+    public string MapsDisplay => Available ? MapsLabel(MapsReporting) : NotRead;
     /// <summary>
     /// Whether real-time scanning runs, as Windows reports it, or null when that was not read.
     /// </summary>
@@ -64,7 +82,7 @@ public sealed record DefenderStatus(
         || RunningMode.Contains("EDR Block", StringComparison.OrdinalIgnoreCase);
 
     /// <summary>Real-time scanning as it runs, or as it is set when that was not read.</summary>
-    public string RealtimeDisplay => (RealtimeInEffect ?? RealtimeProtection) ? "On" : "Off";
+    public string RealtimeDisplay => !Available ? NotRead : (RealtimeInEffect ?? RealtimeProtection) ? "On" : "Off";
 
     /// <summary>Why real-time scanning is off while its setting is on, or empty when the two agree.</summary>
     public string RealtimeNote => RealtimeProtection && RealtimeInEffect == false

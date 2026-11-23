@@ -77,7 +77,10 @@
                     <Border Grid.Column="2" Style="{StaticResource CardInner}" Margin="4,0,0,0">
                         <StackPanel>
                             <TextBlock Text="PUA / CFA" Style="{StaticResource SectionLabel}"/>
-                            <TextBlock Margin="0,4,0,0" Style="{StaticResource Body}" FontWeight="SemiBold" Foreground="{DynamicResource TextPrimary}">
+                            <!-- Wraps: Controlled Folder Access's disk-only modes have long names, and a third of the
+                                 card at the narrowest window cannot hold one beside PUA's. -->
+                            <TextBlock Margin="0,4,0,0" Style="{StaticResource Body}" FontWeight="SemiBold" Foreground="{DynamicResource TextPrimary}"
+                                       TextWrapping="Wrap">
                                 <Run Text="{Binding PuaDisplay, Mode=OneWay}"/><Run Text=" · "/><Run Text="{Binding CfaDisplay, Mode=OneWay}"/>
                             </TextBlock>
                         </StackPanel>

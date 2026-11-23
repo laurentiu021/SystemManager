@@ -641,6 +641,89 @@ public class SafeFileWalkTests
         }
     }
 
+    // ---------- the checked read and delete: what is read is what is removed ----------
+
+    [Fact]
+    public void ReadThenDeleteFile_ReadsTheFile_RemovesIt_AndSaysWhenNothingWasThere()
+    {
+        var dir = Directory.CreateTempSubdirectory("smtest_walkread_").FullName;
+        var file = Path.Combine(dir, "a.xml");
+        File.WriteAllText(file, "<report/>");
+        try
+        {
+            var taken = SafeFileWalk.ReadThenDeleteFile(file, maxBytes: 1024);
+
+            Assert.NotNull(taken);
+            Assert.Equal("<report/>", System.Text.Encoding.UTF8.GetString(taken.Value.Contents!));
+            Assert.Equal(9, taken.Value.Length);
+            Assert.True(taken.Value.Removed);
+            Assert.False(File.Exists(file));
+            Assert.Null(SafeFileWalk.ReadThenDeleteFile(file, maxBytes: 1024));
+        }
+        finally { Directory.Delete(dir, recursive: true); }
+    }
+
+    /// <summary>A file longer than the limit is removed without being read.</summary>
+    [Fact]
+    public void ReadThenDeleteFile_AFileOverTheLimit_IsRemovedUnread()
+    {
+        var dir = Directory.CreateTempSubdirectory("smtest_walkread_big_").FullName;
+        var file = Path.Combine(dir, "a.xml");
+        File.WriteAllText(file, new string('x', 100));
+        try
+        {
+            var taken = SafeFileWalk.ReadThenDeleteFile(file, maxBytes: 99);
+
+            Assert.NotNull(taken);
+            Assert.Null(taken.Value.Contents);
+            Assert.Equal(100, taken.Value.Length);
+            Assert.True(taken.Value.Removed);
+            Assert.False(File.Exists(file));
+        }
+        finally { Directory.Delete(dir, recursive: true); }
+    }
+
+    /// <summary>
+    /// A file whose folder is reached through a link is neither read nor removed: the name leads somewhere else than
+    /// the path asked for.
+    /// </summary>
+    [Fact]
+    public void ReadThenDeleteFile_AFileReachedThroughALinkAboveIt_IsNeitherReadNorRemoved()
+    {
+        var real = Directory.CreateTempSubdirectory("smtest_walkread_real_").FullName;
+        var file = Path.Combine(real, "victim.xml");
+        File.WriteAllText(file, "outside the folder asked for");
+        var link = Path.Combine(Path.GetTempPath(), "smtest_walkread_link_" + Guid.NewGuid().ToString("N"));
+        try
+        {
+            Symlinks.RequireJunction(link, real);
+
+            Assert.Throws<LeftInPlaceException>(
+                () => SafeFileWalk.ReadThenDeleteFile(Path.Combine(link, "victim.xml"), maxBytes: 1024));
+            Assert.Equal("outside the folder asked for", File.ReadAllText(file));
+        }
+        finally { Symlinks.RemoveLinkThenTree(link, real); }
+    }
+
+    /// <summary>A link at the name itself is opened as the link and refused: neither it nor its target goes.</summary>
+    [Fact]
+    public void ReadThenDeleteFile_ALinkAtTheName_IsRefused_AndItsTargetLeftAlone()
+    {
+        var dir = Directory.CreateTempSubdirectory("smtest_walkread_namelink_").FullName;
+        var target = Path.Combine(dir, "target.xml");
+        var link = Path.Combine(dir, "report.xml");
+        File.WriteAllText(target, "the target");
+        try
+        {
+            Symlinks.RequireFileLink(link, target);
+
+            Assert.Throws<LeftInPlaceException>(() => SafeFileWalk.ReadThenDeleteFile(link, maxBytes: 1024));
+            Assert.True(File.Exists(link));
+            Assert.Equal("the target", File.ReadAllText(target));
+        }
+        finally { Directory.Delete(dir, recursive: true); }
+    }
+
     [Fact]
     public void DeleteEmptyDirectory_RemovesAnEmptyFolder_AndRefusesOneThatIsNot()
     {

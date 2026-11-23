@@ -256,12 +256,16 @@ public sealed class BatteryReportServiceTests : IDisposable
                   return Task.FromResult(0);
               });
 
-        var read = await new BatteryReportService(runner, given).ReadHistoryAsync();
+        try
+        {
+            var read = await new BatteryReportService(runner, given).ReadHistoryAsync();
 
-        Assert.Equal(BatteryReportOutcome.Failed, read.Outcome);
-        Assert.Empty(read.History);
-        Assert.NotNull(elsewhere);
-        Assert.Equal(TwoWeeks, File.ReadAllText(elsewhere));
+            Assert.Equal(BatteryReportOutcome.Failed, read.Outcome);
+            Assert.Empty(read.History);
+            Assert.NotNull(elsewhere);
+            Assert.Equal(TwoWeeks, File.ReadAllText(elsewhere));
+        }
+        finally { Symlinks.RemoveLinkThenTree(given, other); }
     }
 
     /// <summary>A folder already reached through a link is refused before powercfg runs: nothing is written.</summary>
@@ -273,12 +277,15 @@ public sealed class BatteryReportServiceTests : IDisposable
         var given = Path.Combine(_dir, "given");
         Symlinks.RequireJunction(given, other);
         var runner = PowercfgWriting(TwoWeeks);
+        try
+        {
+            var read = await new BatteryReportService(runner, given).ReadHistoryAsync();
 
-        var read = await new BatteryReportService(runner, given).ReadHistoryAsync();
-
-        Assert.Equal(BatteryReportOutcome.Failed, read.Outcome);
-        await runner.DidNotReceiveWithAnyArgs().RunProcessAsync(default!, default!, default, default);
-        Assert.Empty(Directory.GetFileSystemEntries(other));
+            Assert.Equal(BatteryReportOutcome.Failed, read.Outcome);
+            await runner.DidNotReceiveWithAnyArgs().RunProcessAsync(default!, default!, default, default);
+            Assert.Empty(Directory.GetFileSystemEntries(other));
+        }
+        finally { Symlinks.RemoveLinkThenTree(given, other); }
     }
 
     /// <summary>

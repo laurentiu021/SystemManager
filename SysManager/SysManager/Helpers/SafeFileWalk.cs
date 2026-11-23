@@ -5,6 +5,7 @@
 using System.ComponentModel;
 using System.IO;
 using System.Runtime.InteropServices;
+using Microsoft.Win32.SafeHandles;
 using Serilog;
 using SysManager.Services;
 
@@ -304,27 +305,78 @@ internal static class SafeFileWalk
 
     private static bool DeleteWhereWalked(string path, bool directory, bool evenReadOnly)
     {
-        using var handle = FileShredderService.OpenForRemoval(path, directory);
-        if (handle.IsInvalid)
-        {
-            var error = Marshal.GetLastPInvokeError();
-            if (error is ErrorFileNotFound or ErrorPathNotFound) return false;
-            throw NotDeleted(error);
-        }
-
-        if (NormalizeForCompare(path) is not { } asked
-            || NormalizeForCompare(FileShredderService.GetFinalPathFromHandle(handle)) is not { } held
-            || !string.Equals(held, asked, StringComparison.OrdinalIgnoreCase))
-            throw new LeftInPlaceException("Left in place: a folder on its way became a link after it was listed.");
-
-        if (FileIdentity.AttributesOf(handle) is not { } attributes)
-            throw NotDeleted(Marshal.GetLastPInvokeError());
-        if (attributes.HasFlag(FileAttributes.ReparsePoint)
-            || attributes.HasFlag(FileAttributes.Directory) != directory)
-            throw new LeftInPlaceException("Left in place: it is no longer what the walk found there.");
-
+        using var handle = OpenWhereWalked(path, directory, toRead: false);
+        if (handle is null) return false;
         if (!FileShredderService.MarkForDeletion(handle, evenReadOnly)) throw NotDeleted(Marshal.GetLastPInvokeError());
         return true;
+    }
+
+    /// <summary>
+    /// Reads the file <paramref name="path"/> and removes it through the one handle that read it, only when its name
+    /// still leads to that file; null when there is nothing there.
+    /// </summary>
+    /// <remarks>
+    /// The same open and check as <see cref="DeleteFile"/>, with the handle allowed to read, so what is read is the
+    /// file that is then removed, never one a folder turned into a link leads to. A file longer than
+    /// <paramref name="maxBytes"/> is removed without being read. Removing it can still be refused after it was
+    /// read; what was read is kept, and <see cref="TakenFile.Removed"/> says so. A refused check throws
+    /// <see cref="LeftInPlaceException"/>, naming no path, and the file stays where it is.
+    /// </remarks>
+    internal static TakenFile? ReadThenDeleteFile(string path, long maxBytes)
+    {
+        using var handle = OpenWhereWalked(path, directory: false, toRead: true);
+        if (handle is null) return null;
+
+        var length = RandomAccess.GetLength(handle);
+        byte[]? contents = null;
+        if (length <= maxBytes)
+        {
+            contents = new byte[length];
+            var read = 0;
+            while (read < contents.Length && RandomAccess.Read(handle, contents.AsSpan(read), read) is var n and > 0)
+                read += n;
+            if (read < contents.Length) Array.Resize(ref contents, read);
+        }
+
+        return new TakenFile(contents, length, FileShredderService.MarkForDeletion(handle));
+    }
+
+    /// <summary>
+    /// The file <paramref name="path"/> names, opened to be removed, a link at it as the link, and checked: null when
+    /// there is nothing there, and a <see cref="LeftInPlaceException"/> when Windows says the handle is not on
+    /// <paramref name="path"/> itself or it is not what was asked for, a file or a folder and not a link.
+    /// </summary>
+    private static SafeFileHandle? OpenWhereWalked(string path, bool directory, bool toRead)
+    {
+        var handle = FileShredderService.OpenForRemoval(path, directory, toRead);
+        var handedOver = false;
+        try
+        {
+            if (handle.IsInvalid)
+            {
+                var error = Marshal.GetLastPInvokeError();
+                if (error is ErrorFileNotFound or ErrorPathNotFound) return null;
+                throw NotDeleted(error);
+            }
+
+            if (NormalizeForCompare(path) is not { } asked
+                || NormalizeForCompare(FileShredderService.GetFinalPathFromHandle(handle)) is not { } held
+                || !string.Equals(held, asked, StringComparison.OrdinalIgnoreCase))
+                throw new LeftInPlaceException("Left in place: a folder on its way became a link after it was listed.");
+
+            if (FileIdentity.AttributesOf(handle) is not { } attributes)
+                throw NotDeleted(Marshal.GetLastPInvokeError());
+            if (attributes.HasFlag(FileAttributes.ReparsePoint)
+                || attributes.HasFlag(FileAttributes.Directory) != directory)
+                throw new LeftInPlaceException("Left in place: it is no longer what the walk found there.");
+
+            handedOver = true;
+            return handle;
+        }
+        finally
+        {
+            if (!handedOver) handle.Dispose();
+        }
     }
 
     /// <summary>The refusal Windows gave a removal, worded by Windows and naming no path.</summary>
@@ -457,3 +509,9 @@ internal static class SafeFileWalk
 /// <remarks>Its own type so a caller can say "left alone" rather than "still in use"; running again will not help.
 /// </remarks>
 internal sealed class LeftInPlaceException(string message) : IOException(message);
+
+/// <summary>
+/// What <see cref="SafeFileWalk.ReadThenDeleteFile"/> took: the file's contents, null when it was too long to read,
+/// its length, and whether Windows removed it.
+/// </summary>
+internal readonly record struct TakenFile(byte[]? Contents, long Length, bool Removed);

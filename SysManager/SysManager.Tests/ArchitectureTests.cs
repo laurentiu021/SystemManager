@@ -2763,35 +2763,54 @@ public partial class ArchitectureTests
     /// PowerShell also ends that string at the typographic quotes ‘ ’ ‚ ‛. A restore point description with a
     /// typographic apostrophe ended its string early, the script could not run, and no point was made. A value
     /// goes to a script as a parameter its <c>param()</c> block declares, passed in the runner's parameters, where it
-    /// is data whatever it holds. The scan reads the app's code without its comments, and first shows that it finds
-    /// the doubling as it was written.
+    /// is data whatever it holds.
+    /// <para>The check looked for one spelling of the doubling and missed the runner's own, which passed a third
+    /// argument. It now looks for the doubled-quote literal itself, two single quotes as a C# string, in every C# file
+    /// of the app and its tests, comments removed, so no call shape or argument order gets past it. The two places
+    /// that have to write a value into script text, the runner's first statement for each session and the
+    /// integration tests' own scripts, escape it with PowerShell's
+    /// <c>CodeGeneration.EscapeSingleQuotedStringContent</c>, and the check holds that escape to those two.</para>
     /// </remarks>
     [Fact]
     public void NoScriptTakesAValue_ByDoublingItsQuotes()
     {
-        Assert.Matches(QuoteDoubling(), "var safe = (description ?? \"\").Replace(\"'\", \"''\");");
-        Assert.Matches(QuoteDoubling(), "name.Replace( '\\'', \"''\")");
+        Assert.Matches(DoubledQuoteLiteral(), "path.Replace(\"'\", \"''\", StringComparison.Ordinal)");
+        Assert.Matches(DoubledQuoteLiteral(), "Regex.Replace(value, \"'\", \"''\")");
+        Assert.Matches(DoubledQuoteLiteral(), "text.Replace(oldValue: \"\\u0027\", newValue: @\"''\")");
+        Assert.DoesNotMatch(DoubledQuoteLiteral(), "var script = \"$a = ''; $b = 'x'\";");
+        Assert.DoesNotMatch(DoubledQuoteLiteral(), "var quote = \"'\";");
 
-        var separator = Path.DirectorySeparatorChar;
-        var files = Directory.GetFiles(TestPaths.AppProject(), "*.cs", SearchOption.AllDirectories)
-            .Where(f => !f.Contains($"{separator}obj{separator}", StringComparison.Ordinal)
-                        && !f.Contains($"{separator}bin{separator}", StringComparison.Ordinal))
+        var solution = TestPaths.SolutionDir();
+        var files = SourceFilesUnder(solution, ".cs")
+            .Where(p => Path.GetFileName(p) != "ArchitectureTests.cs")
             .ToList();
-        var offenders = files
-            .Where(f => QuoteDoubling().IsMatch(WithoutComments(File.ReadAllText(f))))
-            .Select(Path.GetFileName)
-            .ToList();
+        string Relative(string path) => Path.GetRelativePath(solution, path).Replace(Path.DirectorySeparatorChar, '/');
+        var code = files.ToDictionary(Relative, p => WithoutComments(File.ReadAllText(p)), StringComparer.Ordinal);
+        var offenders = code.Where(f => DoubledQuoteLiteral().IsMatch(f.Value)).Select(f => f.Key).ToList();
 
-        Assert.True(files.Count >= 300, $"only {files.Count} source files were read, so this checks nothing.");
+        // 1,058 when this was written, the integration tests among them.
+        Assert.True(files.Count >= 600, $"only {files.Count} source files were read, so this checks nothing.");
+        Assert.Contains(code.Keys, f => f.StartsWith("SysManager.IntegrationTests/", StringComparison.Ordinal));
         Assert.True(offenders.Count == 0,
             "these files double quotes to put a value inside a script's text, which the typographic quotes get past. "
             + "Declare the value in the script's param() block and pass it in the runner's parameters:\n  "
             + string.Join("\n  ", offenders));
+
+        var escapes = code
+            .Where(f => f.Value.Contains("EscapeSingleQuotedStringContent", StringComparison.Ordinal))
+            .ToDictionary(f => f.Key, f => f.Value.Split("EscapeSingleQuotedStringContent").Length - 1);
+        Assert.Equal(
+            new Dictionary<string, int>(StringComparer.Ordinal)
+            {
+                ["SysManager.IntegrationTests/WindowsPowerShellScript.cs"] = 1,
+                ["SysManager/Services/PowerShellRunner.cs"] = 1,
+            },
+            escapes);
     }
 
-    /// <summary>A Replace that turns each ASCII single quote into two, in either spelling of the quote.</summary>
-    [GeneratedRegex(@"\.Replace\(\s*(?:""'""|'\\''|'\\u0027')\s*,\s*""''""\s*\)")]
-    private static partial Regex QuoteDoubling();
+    /// <summary>Two single quotes as a C# string literal, the token every doubling of a quote is written as.</summary>
+    [GeneratedRegex(@"(?<![\w""])@?""''""(?!"")")]
+    private static partial Regex DoubledQuoteLiteral();
 
     /// <summary>PowerShell's automatic variables, from about_Automatic_Variables.</summary>
     private static readonly HashSet<string> PowerShellAutomaticVariables = new(StringComparer.OrdinalIgnoreCase)

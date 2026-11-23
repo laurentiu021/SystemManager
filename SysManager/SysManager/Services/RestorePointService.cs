@@ -18,9 +18,10 @@ namespace SysManager.Services;
 /// and restoring require administrator rights; restoring triggers a reboot and is gated
 /// behind an explicit confirmation in the ViewModel.
 ///
-/// SECURITY: only hard-coded scripts are passed to the runner. The single user-supplied
-/// value (a restore-point description) is single-quote-escaped before being embedded,
-/// matching <see cref="PerformanceService.CreateRestorePointAsync"/>.
+/// SECURITY: every script is fixed text except <see cref="BuildRestoreScript"/>'s, which writes in an int, the
+/// sequence number of the point to go back to. The one value the user types, a restore point's description, reaches
+/// <see cref="CreateScript"/> only as its declared Description parameter, through <see cref="CreateParameters"/>.
+/// <see cref="PerformanceService.CreateRestorePointAsync"/> only calls this service.
 /// </summary>
 public sealed class RestorePointService
 {

@@ -75,7 +75,7 @@ public class MaintenanceSchedulerScriptTests
         var named = string.Join(" ", parameters.Select(p => p.Value switch
         {
             bool flag => $"-{p.Key} ${(flag ? "true" : "false")}",
-            string text => $"-{p.Key} '{text.Replace("'", "''", StringComparison.Ordinal)}'",
+            string text => $"-{p.Key} {WindowsPowerShellScript.SingleQuoted(text)}",
             _ => throw new InvalidOperationException($"{p.Key} has no PowerShell literal form here"),
         }));
         return actionStub + RegisterStubs + RegisterGuard + before +

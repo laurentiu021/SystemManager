@@ -34,8 +34,9 @@ namespace SysManager.Services;
 /// <c>powershell.exe</c> this class starts directly when the session is elevated.</para>
 ///
 /// <para><b>SECURITY CONTRACT:</b> Callers MUST only pass hard-coded script strings to
-/// RunAsync and RunScriptViaPwshAsync. User input MUST NEVER be interpolated into scripts.
-/// Violation of this contract creates a code injection vulnerability. The Bypass policy
+/// RunAsync and RunScriptViaPwshAsync. A value the user chooses reaches a script as a parameter its param() block
+/// declares, never in its text; only typed or validated values, a number, a checked name, a parsed address, are
+/// written in. Violation of this contract creates a code injection vulnerability. The Bypass policy
 /// is safe ONLY because the script content is fully controlled by SysManager's source code.</para>
 /// </summary>
 public sealed partial class PowerShellRunner : IPowerShellRunner, IDisposable
@@ -728,6 +729,17 @@ public sealed partial class PowerShellRunner : IPowerShellRunner, IDisposable
             guardRoot);
     }
 
+    /// <summary>
+    /// The statement that sets the trusted module path: the first statement of every session's initialization script,
+    /// and of every script <see cref="RunScriptViaPwshAsync"/> runs elevated.
+    /// </summary>
+    /// <remarks>
+    /// Written into the script text on purpose, though <see cref="ApplyTrustedPowerShellModulePath"/> also sets the
+    /// child's environment: Windows PowerShell 5.1 rebuilds the path as it starts, and this sets it again after that.
+    /// Escaped with PowerShell's own rule for a single-quoted string, which doubles each of the five characters that
+    /// end one. Doubling only ' left the typographic quotes to end the string, so a path holding one did not parse and
+    /// no session could start.
+    /// </remarks>
     internal static string BuildPowerShellModulePathAssignment(string trustedModulePath)
     {
         if (string.IsNullOrWhiteSpace(trustedModulePath))
@@ -737,7 +749,8 @@ public sealed partial class PowerShellRunner : IPowerShellRunner, IDisposable
                 nameof(trustedModulePath));
         }
 
-        var escapedPath = trustedModulePath.Replace("'", "''", StringComparison.Ordinal);
+        var escapedPath = System.Management.Automation.Language.CodeGeneration
+            .EscapeSingleQuotedStringContent(trustedModulePath);
         return $"$env:PSModulePath='{escapedPath}';";
     }
 

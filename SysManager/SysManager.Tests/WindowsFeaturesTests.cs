@@ -948,6 +948,14 @@ public class WindowsFeaturesTests
 
     [Theory]
     [InlineData("TelnetClient'; Remove-Item C:\\x; '")]
+    // Each quote alone, so the pattern refuses it for that quote and nothing else: the name is written into the
+    // script inside single quotes, which PowerShell ends at the typographic ones too.
+    [InlineData("Telnet'Client")]
+    [InlineData("Telnet\u2019Client")]
+    [InlineData("Telnet\u2018Client")]
+    [InlineData("Telnet\u201AClient")]
+    [InlineData("Telnet\u201BClient")]
+    [InlineData("Telnet\"Client")]
     [InlineData("Telnet Client")]
     [InlineData("TelnetClient\n")]
     [InlineData("")]

@@ -25,6 +25,18 @@ internal static class WindowsPowerShellScript
         "if ((Get-Command $c).CommandType -ne 'Function') { throw \"stub for $c is not in effect\" } } ; ";
 
     /// <summary>
+    /// <paramref name="value"/> as a single-quoted PowerShell string, for a test's own script, which declares no
+    /// parameters.
+    /// </summary>
+    /// <remarks>
+    /// Escaped with PowerShell's own <c>CodeGeneration.EscapeSingleQuotedStringContent</c>, which doubles each of the
+    /// five characters PowerShell ends such a string at. Doubling only ' left a path with a typographic quote, a temp
+    /// folder under an account named with one, unable to run.
+    /// </remarks>
+    internal static string SingleQuoted(string value) =>
+        "'" + System.Management.Automation.Language.CodeGeneration.EscapeSingleQuotedStringContent(value) + "'";
+
+    /// <summary>
     /// Runs <paramref name="script"/> and returns its exit code, standard output and standard error. Bounded: a
     /// PowerShell that never exits is killed and fails the test rather than hanging it.
     /// </summary>

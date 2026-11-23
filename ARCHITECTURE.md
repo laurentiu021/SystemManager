@@ -615,6 +615,9 @@ Key services:
   Management, Appx or Defender cmdlet failed and returned nothing. Scripts started as
   a separate `powershell.exe` (`RunScriptViaPwshAsync`) keep per-user modules when
   unelevated, which is where PSWindowsUpdate lives.
+  Each session's first statement, and an elevated `RunScriptViaPwshAsync` script's, sets the trusted module path
+  again, escaped with PowerShell's `CodeGeneration.EscapeSingleQuotedStringContent`, which covers the typographic
+  quotes that also end a single-quoted string.
   `LineReceived` carries every run on the runner, so a caller that parses what a program
   printed reads `RunProcessForOutputAsync`, which returns that process's own standard-output
   lines with its exit code; collected from the event, Bulk Installer's search read its

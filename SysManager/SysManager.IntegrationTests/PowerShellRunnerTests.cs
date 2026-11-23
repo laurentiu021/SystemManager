@@ -513,6 +513,65 @@ public class PowerShellRunnerTests
         }
     }
 
+    /// <summary>
+    /// A trusted module path holding typographic quotes still starts a session, and the session reads it back exactly.
+    /// </summary>
+    /// <remarks>
+    /// The path is written into each session's first statement inside single quotes, and PowerShell ends such a string
+    /// at the typographic quotes as well as at '. Only ' was doubled, so a path holding one of the others did not
+    /// parse and no session could start. The extra root is a Program Files folder that is never created, so nothing
+    /// loads from it, and the machine's own roots stay first. The path is read back as code points, so the console's
+    /// encoding cannot change it.
+    /// </remarks>
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task RunAsync_ATrustedModulePathWithTypographicQuotes_StartsTheSessionWithThatPath(bool isElevated)
+    {
+        var (trusted, expected) = QuotedTrustedModulePath();
+        var parentModulePath = Environment.GetEnvironmentVariable("PSModulePath");
+        using var runner = new PowerShellRunner(
+            action => Task.Run(action), isElevated: () => isElevated, trustedPowerShellModulePath: trusted);
+
+        var results = await runner.RunAsync(ReadModulePathAsCodePoints);
+
+        Assert.Contains(results, r => string.Equals(r.BaseObject?.ToString(), expected, StringComparison.Ordinal));
+        Assert.Equal(parentModulePath, Environment.GetEnvironmentVariable("PSModulePath"));
+    }
+
+    /// <summary>The same path, written into an elevated powershell.exe script's first statement.</summary>
+    [Fact]
+    public async Task ElevatedPowerShell_ATrustedModulePathWithTypographicQuotes_RunsTheScriptWithThatPath()
+    {
+        var (trusted, expected) = QuotedTrustedModulePath();
+        using var runner = new PowerShellRunner(
+            action => Task.Run(action), isElevated: static () => true, trustedPowerShellModulePath: trusted);
+        var lines = new System.Collections.Concurrent.ConcurrentQueue<string>();
+        runner.LineReceived += line => lines.Enqueue(line.Text);
+
+        var exitCode = await runner.RunScriptViaPwshAsync(ReadModulePathAsCodePoints);
+
+        Assert.Equal(0, exitCode);
+        Assert.Contains(lines, line => line.Contains(expected, StringComparison.Ordinal));
+    }
+
+    private const string ReadModulePathAsCodePoints =
+        "'PSMODULEPATH=' + (([int[]][char[]]$env:PSModulePath) -join ',')";
+
+    /// <summary>
+    /// The machine's own module roots, then a Program Files folder that is never created, named with the four
+    /// typographic single quotes, ', two look-alikes, a dollar sign and a backtick; and the line that reads it back.
+    /// </summary>
+    private static (string Trusted, string Expected) QuotedTrustedModulePath()
+    {
+        var machine = Environment.GetEnvironmentVariable("PSModulePath", EnvironmentVariableTarget.Machine);
+        Assert.False(string.IsNullOrWhiteSpace(machine));
+        var folder = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles),
+            "SysManager probe \u2018\u2019\u201A\u201B' \u02BC\uFF07 $x `n " + Guid.NewGuid().ToString("N"));
+        var trusted = machine.TrimEnd(';') + ";" + folder;
+        return (trusted, "PSMODULEPATH=" + string.Join(",", trusted.Select(c => (int)c)));
+    }
+
     [Fact]
     public async Task ElevatedPowerShell_WhenStartupWouldRestorePersonalModules_ReassertsTrustedPath()
     {

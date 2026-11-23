@@ -29,9 +29,8 @@ public sealed partial class DebloaterService
     public DebloaterService(IPowerShellRunner ps) => _ps = ps;
 
     // PackageFullName shape: letters/digits/dot/dash/underscore/tilde, plus we accept the
-    // version and publisher-hash segments. Validated before being embedded in a script.
-    // \A…\z (absolute anchors): ^…$ would accept a trailing newline before the package
-    // name is embedded into the Remove-AppxPackage script.
+    // version and publisher-hash segments. Checked before the name goes to RemoveScript, which takes it as its
+    // Package parameter, never in its text. \A…\z (absolute anchors): ^…$ would accept a trailing newline.
     [GeneratedRegex(@"\A[A-Za-z0-9][A-Za-z0-9._~-]{0,255}\z")]
     private static partial Regex PackageFullNameRegex();
 

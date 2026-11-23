@@ -409,6 +409,36 @@ public sealed class SlowdownServiceTests
         Assert.Contains($"it runs from {Path.GetDirectoryName(copy)}", busy.Detail, StringComparison.Ordinal);
     }
 
+    /// <summary>
+    /// A busy PowerShell is running a script or a command something else started, so the check does not say it is part
+    /// of Windows busy with a job of its own that finishes by itself.
+    /// </summary>
+    [Fact]
+    public async Task ABusyScriptHost_IsNotSaidToBeBusyWithAJobOfItsOwn()
+    {
+        var powershell = Under(Environment.SpecialFolder.Windows, @"System32\WindowsPowerShell\v1.0\powershell.exe");
+        _first = [Proc(40, "powershell", 70, path: powershell)];
+        _second = [Proc(40, "powershell", 70, path: powershell)];
+
+        var busy = Assert.Single((await CheckAsync()).Findings);
+
+        Assert.DoesNotContain("part of Windows", busy.Detail, StringComparison.Ordinal);
+        Assert.DoesNotContain("finishes by itself", busy.Detail, StringComparison.Ordinal);
+    }
+
+    /// <summary>Explorer is not a script host here: a busy one is still part of Windows.</summary>
+    [Fact]
+    public async Task ABusyExplorer_IsStillPartOfWindows()
+    {
+        var explorer = Under(Environment.SpecialFolder.Windows, "explorer.exe");
+        _first = [Proc(41, "explorer", 70, path: explorer)];
+        _second = [Proc(41, "explorer", 70, path: explorer)];
+
+        var busy = Assert.Single((await CheckAsync()).Findings);
+
+        Assert.Contains("It is part of Windows", busy.Detail, StringComparison.Ordinal);
+    }
+
     [Fact]
     public async Task AWindowsAppRunningFromItsPackage_IsStillPartOfWindows()
     {

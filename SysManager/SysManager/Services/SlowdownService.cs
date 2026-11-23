@@ -355,10 +355,15 @@ public sealed class SlowdownService : ISlowdownService
                                               busiest.Program));
         // Every process of a program with no folder runs where Windows keeps it, or could not be read.
         var partOfWindows = folder is null && describe(program, null)?.Safety == ProcessSafety.System;
+        // A Windows helper that runs scripts and commands is busy with whatever started it, not with a job of its own.
+        var runsOthers = folder is null && ScriptHosts.IsScriptHost(program);
         var detail = (processes > 1 ? $"Across its {processes} processes, right now. " : "Right now, and not just for a moment. ")
             + (folder is not null
                 ? $"It is named like a part of Windows, but it runs from {folder}, where Windows does not keep its "
                   + "programs. Process Manager shows more about it."
+                : runsOthers
+                    ? "It runs scripts and commands for other programs, so what it is doing depends on what started "
+                      + "it. Process Manager shows more about it."
                 : partOfWindows
                     ? "It is part of Windows, and that usually means it is busy with a job of its own, such as a scan "
                       + "or an update, that finishes by itself."

@@ -1080,6 +1080,13 @@ System → System Fixes, where the tab name matches what they do.
   of a raw command line, plus a Safety chip — Windows or Known app — so you can tell what an
   entry is before deciding whether to turn it off. A program the database does not know gets no
   chip rather than a guess
+- **An entry that runs something through a Windows helper says what it runs.** PowerShell, Command
+  Prompt, Windows Script Host, mshta, rundll32, regsvr32 and the console host exist to run scripts and
+  files other programs name, so an entry that starts one of them reads "Runs C:\…\update.ps1 with
+  Windows PowerShell", gets no Windows chip, and its publisher and signature are those of the file it
+  runs, or none when it runs a command rather than a file. A startup shortcut shows its arguments too,
+  and a program written by its bare name is looked for only in Windows' own folders, never in the
+  folder SysManager happens to run from
 - Shows name, publisher, and enabled/disabled status; the full command path is on hover
 - **A Location column** saying where the entry actually lives — which registry Run key and hive, which
   Startup folder, or Task Scheduler. This is the difference between an entry you can switch off yourself,
@@ -2485,7 +2492,8 @@ offers, "rate us" prompts:
   Startup Manager, Boot Analyzer. The buttons only open that tab, so nothing is changed from here.
   A program is named together with the reason it may be fine — "that may be exactly what you want
   if you are watching or playing something" — and a busy part of Windows is said to be doing a job
-  of its own. A copy named like a part of Windows but running from another folder is counted on its
+  of its own, except PowerShell, Command Prompt and the other helpers that run scripts for other
+  programs, which are said to be doing whatever started them. A copy named like a part of Windows but running from another folder is counted on its
   own, by its process name, and the check says where it runs from. "Nothing obvious is slowing it
   down" appears only when all five could be looked at;
   anything that could not be read is named instead. It does not start while a cleanup or a disk

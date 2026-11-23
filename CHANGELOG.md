@@ -10,6 +10,26 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.136.183] - 2026-11-23
+
+**A theme file or an imported profile can no longer make SysManager open a colour profile from another place, and a
+background shade saved past the slider's ends no longer opens the app unreadable.**
+
+### Fixed
+- The four Custom-mode colour boxes, and a custom theme read from theme.json, went through Windows' full colour
+  syntax, which also reads a colour-profile address and opens it. A profile import writes that file as the profile
+  has it. Colours are now read as hex digits only, and a box with anything else is marked "Invalid colour" and keeps
+  its last colour instead of raising an error.
+- A custom theme file whose colours could not be read still set the mode, the preset and the shade before it was
+  refused, so the Appearance panel opened on Custom over the shipped colours. Nothing is taken from such a file now.
+- A background shade saved past the slider's ends darkened or lightened every colour, text included, to the same
+  end, so the app opened unreadable. It is held to the slider's end now, and a shade that is not a number goes back
+  to the default instead of making every later save fail.
+
+### Changed
+- The colour boxes take #RRGGBB or #AARRGGBB. Colour names, the short #RGB and #ARGB forms and scRGB values are no
+  longer accepted, and a custom theme saved with one of them opens on the shipped theme.
+
 ## [1.136.182] - 2026-11-23
 
 **Defender Tweaks no longer adds a scan exclusion when SysManager runs as a different administrator than the person

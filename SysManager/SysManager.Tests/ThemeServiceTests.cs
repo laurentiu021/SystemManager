@@ -518,8 +518,13 @@ public class ThemeServiceTests : IDisposable
     {
         var content = JsonSerializer.Serialize(new
         {
-            PresetId = "custom", Mode = "custom", ShadePosition = shade,
-            Accent = accent, Background = "#FF070A0F", Surface = "#FF0E1218", Text = "#FFF1F3F7",
+            PresetId = "custom",
+            Mode = "custom",
+            ShadePosition = shade,
+            Accent = accent,
+            Background = "#FF070A0F",
+            Surface = "#FF0E1218",
+            Text = "#FFF1F3F7",
         });
         File.WriteAllText(ThemeFile, content);
         return content;
@@ -573,8 +578,13 @@ public class ThemeServiceTests : IDisposable
     {
         File.WriteAllText(ThemeFile, JsonSerializer.Serialize(new
         {
-            PresetId = presetId, Mode = ThemePreset.Defaults[presetId].IsDark ? "dark" : "light",
-            ShadePosition = stored, Accent = "", Background = "", Surface = "", Text = "",
+            PresetId = presetId,
+            Mode = ThemePreset.Defaults[presetId].IsDark ? "dark" : "light",
+            ShadePosition = stored,
+            Accent = "",
+            Background = "",
+            Surface = "",
+            Text = "",
         }));
         var svc = new ThemeService(_dir, windowsPrefersDark: () => true, paintsTheApp: false);
 

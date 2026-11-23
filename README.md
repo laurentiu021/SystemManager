@@ -413,10 +413,11 @@ anything a program registered, so both are undone by turning the switch back on:
 - **Restart Explorer button** — Explorer decides which add-ons to load when it starts, so a blocked
   add-on is still in the menu until it restarts. The button does it after confirming, rather than
   leaving you to conclude the switch did nothing
-- **Windows' own add-ons stay out of the way** — an add-on implemented from inside the Windows
-  folder is treated as a system entry: hidden behind "Show system entries" and never touched by a
-  preset. Presets only ever change plain menu entries, so one click cannot block every add-on on
-  the machine
+- **Windows' own add-ons stay out of the way** — an add-on whose file is in one of the folders
+  Windows keeps its own files in is treated as a system entry: hidden behind "Show system entries"
+  and never touched by a preset. Other companies' add-ons inside the Windows folder, such as a
+  graphics driver's, stay in the list. Presets only ever change plain menu entries, so one click
+  cannot block every add-on on the machine
 - **"Applies to" column** — shows whether the entry affects Files, Folders, Files and folders,
   Desktop, or Directory Background
 - **HKCU fallback** — system-protected entries can be toggled via user-level registry override,

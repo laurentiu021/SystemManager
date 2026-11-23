@@ -23,6 +23,8 @@ installed with a device driver are no longer hidden among them.**
 - A handler or menu text registered with a bare file name was judged against the folder SysManager was started from.
   It is now judged by the file Windows loads, its copy in the System folder or the Windows folder, and a name neither
   has is not part of Windows.
+- An add-on that runs as its own program was registered with a command line, which was read as one file name, so
+  its program could not be told from its arguments. The program is what is judged now.
 
 ### Changed
 - Right-click add-ons installed with a device driver, such as a graphics card's, now show in the list by default.

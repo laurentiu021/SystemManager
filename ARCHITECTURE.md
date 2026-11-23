@@ -1560,7 +1560,10 @@ Key services:
   with an HKCU override fallback, used only when Windows refuses the write and removed
   again once it holds nothing else, and a COM handler through the machine-wide
   `Shell Extensions\Blocked` list, which needs elevation. A handler reads as blocked from that
-  list or the per-user one, and allowing it removes it from both (#2822). Takes injectable
+  list or the per-user one, and allowing it removes it from both (#2822). A handler is Windows' own, a
+  system entry, only when its file is where `ProcessCriticality.IsWhereWindowsKeepsItsPrograms` says
+  Windows keeps its programs, not anywhere under the Windows folder: a bare name is its copy found by
+  `SystemPaths.InWindowsFolders`, and a `LocalServer32` command line is judged by its program (#3443). Takes injectable
   stand-ins for `HKEY_CLASSES_ROOT`, `HKEY_LOCAL_MACHINE` and `HKEY_CURRENT_USER`, so the scan,
   the block/unblock writes, the verb writes and the menu style are testable against a disposable
   hive. The menu style
@@ -2530,7 +2533,9 @@ Key utility classes that don't fit neatly into Services or ViewModels (not an ex
   instead of Windows searching for the name (#3437). winget resolves to its admin-only-writable
   install for an elevated launch and to the user's own execution alias otherwise (#2699), and
   Notepad, when Windows' own copy is not there, to the user's own Store alias only without
-  administrator rights, so nothing launches by name off the PATH. `IsDirectlyInside` is
+  administrator rights, so nothing launches by name off the PATH. `InWindowsFolders` finds a bare
+  name's copy in System32 or the Windows folder, never the working folder, for Startup Manager and
+  Right-Click Menu to judge a registered file by (#3443). `IsDirectlyInside` is
   `IsInsideSubtree` for a folder whose subfolders are not all its own. It also owns
   the two temp exclusions every wholesale %TEMP% sweep must honour:
   `BundleExtractionRoot`, the shared folder single-file apps unpack into, whose deletion

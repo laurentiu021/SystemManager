@@ -38,6 +38,8 @@ public sealed class ContextMenuWindowsHandlerTests : IDisposable
     [InlineData(@"System32\spool\drivers\x64\3\vendorext.dll", false)]
     [InlineData(@"Temp\vendorext.dll", false)]
     [InlineData(@"Tasks\vendorext.dll", false)]
+    // A missing file is judged by its whole path, not cut at the space into one directly in the System folder.
+    [InlineData(@"System32\Vendor Folder\vendorext.dll", false)]
     public void AHandlerInsideTheWindowsFolder_IsWindowsOwnOnlyWhereWindowsKeepsItsFiles(string relative, bool expected)
         => Assert.Equal(expected, ContextMenuService.IsWindowsOwned(Windows(relative)));
 

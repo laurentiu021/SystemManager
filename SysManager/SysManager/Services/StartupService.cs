@@ -260,36 +260,9 @@ public sealed class StartupService : IDisposable
             : "";
     }
 
-    /// <summary>
-    /// A bare program name's copy in the System folder, then in the Windows folder, with ".exe" added when it has no
-    /// extension; empty when it is not a bare name or neither folder has it. Never the launch resolver, whose winget
-    /// branch reads elevation, and never Windows' own search, which tries the working folder first.
-    /// </summary>
-    private static string InWindowsFolders(string program)
-    {
-        var name = program.Trim().Trim('"');
-        if (name.Length == 0 || name.IndexOfAny(['\\', '/', ':']) >= 0) return "";
-        string[] names = Path.HasExtension(name) ? [name] : [name, name + ".exe"];
-        foreach (var folder in (string[])[Environment.SystemDirectory,
-                     Environment.GetFolderPath(Environment.SpecialFolder.Windows)])
-        {
-            if (folder.Length == 0) continue;
-            foreach (var candidate in names)
-            {
-                var path = Path.Combine(folder, candidate);
-                if (File.Exists(path)) return path;
-            }
-        }
-        return "";
-    }
+    private static string InWindowsFolders(string program) => SystemPaths.InWindowsFolders(program);
 
-    /// <summary>
-    /// True for a full drive path to a file that is there. A network or device path is never probed: a scan must not
-    /// reach out to another machine, and a relative one would be looked for in the folder SysManager runs in.
-    /// </summary>
-    private static bool IsLocalFile(string path) =>
-        path.Length >= 3 && char.IsAsciiLetter(path[0]) && path[1] == ':' && path[2] == '\\'
-        && Path.IsPathFullyQualified(path) && File.Exists(path);
+    private static bool IsLocalFile(string path) => SystemPaths.IsLocalFile(path);
 
     /// <summary>
     /// The bare executable name (no path, no ".exe", no arguments) from a startup command line, or an

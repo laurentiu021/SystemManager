@@ -352,35 +352,44 @@ public sealed partial class ContextMenuService : IContextMenuService
     }
 
     /// <summary>
-    /// Whether a handler's implementing file lives inside the Windows directory, i.e. it is part of the
+    /// Whether a handler's implementing file is where Windows keeps its own files, i.e. it is part of the
     /// shell rather than something a program installed.
     /// </summary>
     /// <remarks>
     /// Decided on location rather than a signature check: verifying an Authenticode chain is slow enough
     /// to matter across every handler on the machine, needs the network for revocation to mean anything,
     /// and answers a different question — plenty of third-party DLLs are validly signed by their vendor.
-    /// "Windows installed this" is exactly "it is under %SystemRoot%".
-    /// <para>Compared with a trailing separator so a sibling directory that merely starts with the same
-    /// text — <c>C:\Windows-Apps\…</c> against <c>C:\Windows</c> — is not swept in.</para>
+    /// <para>Where Windows keeps its files is <see cref="ProcessCriticality.IsWhereWindowsKeepsItsPrograms"/>, the
+    /// list Process Manager and Startup Manager judge by, not the whole Windows folder: that also holds other
+    /// companies' files, a graphics driver's add-on in the driver store for one, and folders any program can write
+    /// to (#3443). A bare name is the file Windows loads, its copy in the System folder or the Windows folder
+    /// (<see cref="SystemPaths.InWindowsFolders"/>), never one in the folder SysManager runs in; a
+    /// <c>LocalServer32</c> value is a command line, judged by its program.</para>
     /// </remarks>
     internal static bool IsWindowsOwned(string dllPath)
     {
         if (string.IsNullOrWhiteSpace(dllPath)) return false;
+        var file = RegisteredFile(Environment.ExpandEnvironmentVariables(dllPath.Trim()));
+        return file.Length > 0 && ProcessCriticality.IsWhereWindowsKeepsItsPrograms(file);
+    }
 
-        try
-        {
-            var expanded = Environment.ExpandEnvironmentVariables(dllPath.Trim('"', ' '));
-            var windows = Environment.GetFolderPath(Environment.SpecialFolder.Windows);
-            if (string.IsNullOrEmpty(windows)) return false;
+    /// <summary>
+    /// The file a registration names: a full path as written, the program of a command line, or a bare name's copy in
+    /// Windows' own folders. Empty for a relative path or a bare name Windows' folders do not have.
+    /// </summary>
+    private static string RegisteredFile(string value)
+    {
+        var unquoted = value.Trim().Trim('"').Trim();
+        if (unquoted.Length == 0) return "";
+        if (unquoted.IndexOfAny(['\\', '/', ':']) < 0) return SystemPaths.InWindowsFolders(unquoted);
+        if (SystemPaths.IsLocalFile(unquoted)) return unquoted;
 
-            return Path.GetFullPath(expanded)
-                       .StartsWith(windows.TrimEnd(Path.DirectorySeparatorChar) + Path.DirectorySeparatorChar,
-                                   StringComparison.OrdinalIgnoreCase);
-        }
-        catch (ArgumentException) { return false; }
-        catch (NotSupportedException) { return false; }
-        catch (PathTooLongException) { return false; }
-        catch (SecurityException) { return false; }
+        // A program the command line names, when it is there or quoted; else the whole value is one path, judged by
+        // its spelling, so a missing file with a space in its folder is not cut at the space.
+        var program = CommandLine.Program(value, SystemPaths.IsLocalFile);
+        if (!value.TrimStart().StartsWith('"') && !SystemPaths.IsLocalFile(program)) program = unquoted;
+        if (program.IndexOfAny(['\\', '/', ':']) < 0) return SystemPaths.InWindowsFolders(program);
+        return Path.IsPathFullyQualified(program) ? program : "";
     }
 
     /// <summary>
@@ -405,7 +414,7 @@ public sealed partial class ContextMenuService : IContextMenuService
             {
                 using var serverKey = clsidKey.OpenSubKey(server, writable: false);
                 var path = serverKey?.GetValue("")?.ToString();
-                if (!string.IsNullOrWhiteSpace(path)) { dll = path.Trim('"'); break; }
+                if (!string.IsNullOrWhiteSpace(path)) { dll = Unwrapped(path); break; }
             }
 
             return (friendly.Trim(), dll);
@@ -413,6 +422,18 @@ public sealed partial class ContextMenuService : IContextMenuService
         catch (SecurityException) { return ("", ""); }
         catch (UnauthorizedAccessException) { return ("", ""); }
         catch (IOException) { return ("", ""); }
+    }
+
+    /// <summary>
+    /// A server value without the quotes around it when it is one quoted path. A <c>LocalServer32</c> command line
+    /// keeps its quotes, so <see cref="IsWindowsOwned"/> can tell its program from its arguments.
+    /// </summary>
+    private static string Unwrapped(string value)
+    {
+        var trimmed = value.Trim();
+        return trimmed.Length >= 2 && trimmed[0] == '"' && trimmed.IndexOf('"', 1) == trimmed.Length - 1
+            ? trimmed[1..^1]
+            : trimmed;
     }
 
     /// <summary>Plain-language line for a handler row, since it has no command to describe.</summary>
@@ -1127,7 +1148,8 @@ public sealed partial class ContextMenuService : IContextMenuService
 
     /// <summary>
     /// Whether <paramref name="value"/> is an indirect string, <c>@module,-id</c>, from one of Windows' own
-    /// modules: a bare file name, which Windows loads from its own folder, or a path inside the Windows folder.
+    /// modules, judged as <see cref="IsWindowsOwned"/> judges a handler: a bare file name by its copy in Windows' own
+    /// folders, a path by where it is.
     /// </summary>
     /// <remarks>
     /// A packaged app's resource (<c>@{Package?ms-resource://…}</c>) and a module anywhere else are not Windows'.
@@ -1142,7 +1164,7 @@ public sealed partial class ContextMenuService : IContextMenuService
         var module = value[1..comma].Trim().Trim('"');
         if (module.Length == 0 || module.StartsWith('{')) return false;
 
-        return module.IndexOfAny(['\\', '/', ':', '%']) < 0 || IsWindowsOwned(module);
+        return IsWindowsOwned(module);
     }
 
     /// <summary>

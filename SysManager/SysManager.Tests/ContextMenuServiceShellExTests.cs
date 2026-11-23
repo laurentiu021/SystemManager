@@ -428,6 +428,43 @@ public sealed class ContextMenuServiceShellExTests : IDisposable
         Assert.Equal(@"C:\Program Files\TestArchiver\ext.dll", new ContextMenuService(_runner, _root).ResolveClsid(Archiver).Dll);
     }
 
+    /// <summary>
+    /// A <c>LocalServer32</c> value is a command line. Stripping its first and last quote left
+    /// <c>C:\Vendor Tool\tool.exe" -Embedding</c>, a program no check could tell from its arguments.
+    /// </summary>
+    [Fact]
+    public void ResolveClsid_KeepsALocalServerCommandLineWhole()
+    {
+        GivenComClass(Sync, "Out Of Process", localServer: @"""C:\Vendor Tool\tool.exe"" -Embedding");
+
+        Assert.Equal(@"""C:\Vendor Tool\tool.exe"" -Embedding",
+            new ContextMenuService(_runner, _root).ResolveClsid(Sync).Dll);
+    }
+
+    /// <summary>
+    /// Only where Windows keeps its files counts as Windows' own (#3443): the driver store, under the Windows
+    /// folder, holds a graphics driver's add-on, which must stay in view and within a preset's reach.
+    /// </summary>
+    [Fact]
+    public void ScanEntries_TreatsADriverStoreHandlerAsThirdParty()
+    {
+        GivenHandler("*", "TestDriverHandler", Archiver);
+        GivenComClass(Archiver, "Test Driver Handler",
+            Path.Combine(WindowsDir, @"System32\DriverStore\FileRepository\vendor.inf_amd64_0123\vendorext.dll"));
+
+        Assert.False(Assert.Single(Scan()).IsSystemEntry);
+    }
+
+    [Fact]
+    public void ScanEntries_JudgesAQuotedLocalServerByItsProgram()
+    {
+        GivenHandler("*", "TestSystemServer", Archiver);
+        GivenComClass(Archiver, "Test System Server",
+            localServer: $"\"{Path.Combine(WindowsDir, "System32", "shell32.dll")}\" -Embedding");
+
+        Assert.True(Assert.Single(Scan()).IsSystemEntry);
+    }
+
     // ---- The write side: a handler is hidden through the Blocked list, never through LegacyDisable ----
 
     private ContextMenuEntry AHandlerRow(string? clsid = null) => new()

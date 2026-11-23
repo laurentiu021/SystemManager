@@ -427,13 +427,13 @@ public sealed partial class FileShredderService
 
     /// <summary>
     /// Opens <paramref name="path"/> to remove it: a link at it as the link, a folder with the flag Windows needs to
-    /// open one, and a long path in the form that reaches it. Invalid when it cannot be opened; Windows' error is the
-    /// last one set.
+    /// open one, and a long path in the form that reaches it, allowed to read the file's contents too when
+    /// <paramref name="toRead"/> is set. Invalid when it cannot be opened; Windows' error is the last one set.
     /// </summary>
-    internal static SafeFileHandle OpenForRemoval(string path, bool directory) =>
+    internal static SafeFileHandle OpenForRemoval(string path, bool directory, bool toRead = false) =>
         NativeMethods.CreateFile(
             ExtendedPathIfNeeded(path),
-            NativeMethods.DELETE | NativeMethods.FILE_READ_ATTRIBUTES,
+            NativeMethods.DELETE | NativeMethods.FILE_READ_ATTRIBUTES | (toRead ? NativeMethods.FILE_READ_DATA : 0),
             FileShare.ReadWrite | FileShare.Delete,
             IntPtr.Zero,
             FileMode.Open,
@@ -1193,6 +1193,7 @@ public sealed partial class FileShredderService
 
         internal const uint DELETE = 0x0001_0000;
         internal const uint FILE_READ_ATTRIBUTES = 0x0080;
+        internal const uint FILE_READ_DATA = 0x0001;
         internal const int ERROR_ACCESS_DENIED = 5;
 
         /// <summary>What <c>FindFirstStreamW</c> sets when a file has no stream to list.</summary>

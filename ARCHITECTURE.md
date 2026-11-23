@@ -983,7 +983,9 @@ Key services:
   link, and removed through that handle (`FileShredderService.MarkForDeletion`, POSIX semantics first) only when its
   canonical path is the path the walk returned, so a folder made into a link between the listing and the delete
   cannot take the delete elsewhere. A refusal throws `LeftInPlaceException`, which names no path
-  (`ArchitectureTests.EveryCleanupSweep_RemovesOnlyThroughTheCheckedDelete`).
+  (`ArchitectureTests.EveryCleanupSweep_RemovesOnlyThroughTheCheckedDelete`). `ReadThenDeleteFile` is the same
+  open and check with the handle allowed to read, for a file that is read once and removed: what is read is the file
+  then removed.
   The traversal root is guarded by `IsReachedThroughLink`, not the plain `IsReparsePoint` the rest of
   the walk uses: `File.GetAttributes` resolves every link in a path's PARENT folders before it reports
   anything, so a junction standing in for an ancestor of the root (e.g. a browser's own vendor folder)
@@ -1386,8 +1388,11 @@ Key services:
   The capacity classes answer only an elevated process, and without them health is left
   unmeasured rather than claimed.
 - `BatteryReportService` (`IBatteryReportService`) — runs `powercfg /batteryreport /xml` through
-  `IPowerShellRunner` into a new, randomly named file in the temp folder, reads it and deletes it, with a
-  30-second timeout on an injectable `TimeProvider`. Reports `Read`, `NoHistory` (a desktop's entries all carry
+  `IPowerShellRunner` into a new, randomly named file in the profile's own temp folder (`SystemPaths.UserTempRoot`,
+  never what TMP or TEMP name), and reads and removes it through one handle checked to be open on that file
+  (`SafeFileWalk.ReadThenDeleteFile`). A folder that is missing, holds a quote or is reached through a link is
+  refused before powercfg starts. A run times out after 30 seconds, on an injectable `TimeProvider`.
+  Reports `Read`, `NoHistory` (a desktop's entries all carry
   0 capacity) or `Failed`, and never one as another. Needs no administrator rights.
 - `BatteryReportParser` — pure reader of the report's `History` section: elements matched by local name, no
   DTD, entries without a capacity dropped, and everything before the newest `BatteryChanged` entry dropped so a

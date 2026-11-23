@@ -6,6 +6,7 @@ using System.ComponentModel;
 using System.IO;
 using System.Text;
 using NSubstitute;
+using SysManager.Helpers;
 using SysManager.Services;
 using static SysManager.Tests.BatteryReportFixture;
 
@@ -219,5 +220,109 @@ public sealed class BatteryReportServiceTests : IDisposable
 
         await Assert.ThrowsAnyAsync<OperationCanceledException>(() => read.WaitAsync(TimeSpan.FromSeconds(10)));
         Assert.Empty(Directory.GetFileSystemEntries(_dir));
+    }
+
+    // ---------- the report is read and removed only where it was written ----------
+    // powercfg runs with SysManager's rights, also as administrator, and the report sits in the user's own temp
+    // folder, which any program running as the user can change. It was read and removed by its name, so a folder on
+    // the way turned into a link took the read and the removal wherever the link led.
+
+    /// <summary>
+    /// A report whose folder became a link after powercfg wrote it is neither read through the link nor removed
+    /// there.
+    /// </summary>
+    [Fact]
+    public async Task AReport_WhoseFolderBecameALinkAfterItWasWritten_IsNeitherReadNorRemoved()
+    {
+        var given = Path.Combine(_dir, "given");
+        var other = Path.Combine(_dir, "other");
+        Directory.CreateDirectory(given);
+        Directory.CreateDirectory(other);
+        Symlinks.RequireJunction(Path.Combine(_dir, "probe"), other);
+        Directory.Delete(Path.Combine(_dir, "probe"));
+        string? elsewhere = null;
+        var runner = Substitute.For<IPowerShellRunner>();
+        runner.RunProcessAsync("powercfg.exe", Arg.Any<string>(), Arg.Any<CancellationToken>(), Arg.Any<Encoding?>())
+              .Returns(call =>
+              {
+                  // powercfg writes its report; then the folder is moved aside and a link left in its place, leading
+                  // to a folder holding a valid report under the same name.
+                  var written = OutputPath(call.ArgAt<string>(1));
+                  File.WriteAllText(written, TwoWeeks);
+                  elsewhere = Path.Combine(other, Path.GetFileName(written));
+                  File.WriteAllText(elsewhere, TwoWeeks);
+                  Directory.Move(given, given + "-aside");
+                  Symlinks.RequireJunction(given, other);
+                  return Task.FromResult(0);
+              });
+
+        try
+        {
+            var read = await new BatteryReportService(runner, given).ReadHistoryAsync();
+
+            Assert.Equal(BatteryReportOutcome.Failed, read.Outcome);
+            Assert.Empty(read.History);
+            Assert.NotNull(elsewhere);
+            Assert.Equal(TwoWeeks, File.ReadAllText(elsewhere));
+        }
+        finally { Symlinks.RemoveLinkThenTree(given, other); }
+    }
+
+    /// <summary>A folder already reached through a link is refused before powercfg runs: nothing is written.</summary>
+    [Fact]
+    public async Task AFolderReachedThroughALink_IsRefused_BeforePowercfgIsStarted()
+    {
+        var other = Path.Combine(_dir, "other");
+        Directory.CreateDirectory(other);
+        var given = Path.Combine(_dir, "given");
+        Symlinks.RequireJunction(given, other);
+        var runner = PowercfgWriting(TwoWeeks);
+        try
+        {
+            var read = await new BatteryReportService(runner, given).ReadHistoryAsync();
+
+            Assert.Equal(BatteryReportOutcome.Failed, read.Outcome);
+            await runner.DidNotReceiveWithAnyArgs().RunProcessAsync(default!, default!, default, default);
+            Assert.Empty(Directory.GetFileSystemEntries(other));
+        }
+        finally { Symlinks.RemoveLinkThenTree(given, other); }
+    }
+
+    /// <summary>
+    /// A double quote in the folder would end powercfg's <c>/output</c> argument early and hand the rest of the name
+    /// to it as switches, so it is refused before powercfg is started.
+    /// </summary>
+    [Fact]
+    public async Task AFolderNameHoldingAQuote_IsRefused_BeforePowercfgIsStarted()
+    {
+        var runner = PowercfgWriting(TwoWeeks);
+
+        var read = await new BatteryReportService(runner, Path.Join(_dir, "a\" b")).ReadHistoryAsync();
+
+        Assert.Equal(BatteryReportOutcome.Failed, read.Outcome);
+        await runner.DidNotReceiveWithAnyArgs().RunProcessAsync(default!, default!, default, default);
+    }
+
+    /// <summary>
+    /// With no folder given, the report goes to the profile's own temp folder, never to the one TMP or TEMP name.
+    /// The runner writes nothing, so nothing is left in the real folder.
+    /// </summary>
+    [Fact]
+    public async Task TheReport_GoesToTheProfilesOwnTemp_WhenNoFolderIsGiven()
+    {
+        string? arguments = null;
+        var runner = Substitute.For<IPowerShellRunner>();
+        runner.RunProcessAsync("powercfg.exe", Arg.Any<string>(), Arg.Any<CancellationToken>(), Arg.Any<Encoding?>())
+              .Returns(call =>
+              {
+                  arguments = call.ArgAt<string>(1);
+                  return Task.FromResult(0);
+              });
+
+        var read = await new BatteryReportService(runner).ReadHistoryAsync();
+
+        Assert.Equal(BatteryReportOutcome.Failed, read.Outcome);
+        Assert.NotNull(arguments);
+        Assert.Equal(SystemPaths.UserTempRoot, Path.GetDirectoryName(OutputPath(arguments)), ignoreCase: true);
     }
 }

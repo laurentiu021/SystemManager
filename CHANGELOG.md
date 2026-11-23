@@ -10,6 +10,25 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.136.187] - 2026-11-23
+
+**Battery Health keeps its temporary report in your profile's own Temp folder, and reads and removes only the file
+it wrote.**
+
+### Security
+- Battery Health asks Windows' `powercfg` for a battery report in a temporary file, reads it and removes it. It used
+  the folder the TMP or TEMP variable names, also when SysManager runs as administrator, and read and removed the
+  file by its name, so a folder on the way turned into a link took the read and the removal wherever the link led.
+  It now uses the profile's own `AppData\Local\Temp`, starts nothing when that folder is reached through a link or
+  its name holds a quote, and reads and removes the report only through a handle checked to be open on the file
+  it asked for. A report whose folder has become a link since it was written is left where it is, and the log
+  says so. This has been so since Battery Health's history came in, in 1.118.0. It is hardening of the same kind as
+  1.136.6's temp sweeps: a program running as you can already influence a SysManager you start.
+- `ArchitectureTests.NoTempSweep_TakesItsFolderFromTmpOrTemp` read three files. It now reads all of the app's code
+  for `Path.GetTempPath`, `Path.GetTempFileName`, `%TEMP%` and `%TMP%`, with the two places that keep one on
+  purpose named, and `TheBatteryReport_IsReadAndRemovedOnlyThroughTheCheckedHandle` holds the service to the
+  checked handle.
+
 ## [1.136.186] - 2026-11-23
 
 **If you moved Opera's folder to another drive with a link, Browser Cleaner's Extensions view now says it could

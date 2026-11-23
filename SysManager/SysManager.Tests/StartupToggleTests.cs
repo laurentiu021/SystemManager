@@ -57,13 +57,13 @@ public sealed class StartupToggleTests : IDisposable
                 return Task.FromResult(exitCode);
             });
 
-    /// <summary>A scheduled-task row under a folder no real task uses.</summary>
-    private static StartupEntry ATask(string name = "Updater") => new()
+    /// <summary>A scheduled-task row under a folder no real task uses, or at the given path.</summary>
+    private static StartupEntry ATask(string name = "Updater", string? path = null) => new()
     {
         Name = name,
         Command = "updater.exe",
         Source = StartupSource.TaskScheduler,
-        TaskPath = @"\SysManagerTests\" + name,
+        TaskPath = path ?? @"\SysManagerTests\" + name,
         IsEnabled = true,
         StatusText = "Enabled",
     };
@@ -270,6 +270,66 @@ public sealed class StartupToggleTests : IDisposable
         Assert.True(await one.WaitAsync(TimeSpan.FromSeconds(10)));
         Assert.True(await two.WaitAsync(TimeSpan.FromSeconds(10)));
         Assert.Equal(2, Volatile.Read(ref calls));
+    }
+
+    // ---------- a task path that cannot be passed to schtasks whole ----------
+
+    /// <summary>
+    /// A double quote in the task path would end the quoted /TN argument where it stands, so the path is refused before
+    /// schtasks is asked to run, and the row keeps its state, whichever way it was switched.
+    /// </summary>
+    /// <remarks>
+    /// The path goes into schtasks' command line as it is, so this check is all that stands between a task path and
+    /// that line. schtasks is set to succeed first, so without the check the switch would succeed and the test fail.
+    /// </remarks>
+    [Theory]
+    [InlineData(@"\SysManagerTests\Up""dater", false)]   // a quote inside the name
+    [InlineData(@"\SysManagerTests\Updater""", false)]   // a quote at the end
+    [InlineData("\"", false)]                            // nothing but a quote
+    [InlineData(@"\SysManagerTests\Up""dater", true)]    // the same when turning it on
+    public async Task ATaskPathHoldingAQuote_IsRefused_AndSchtasksNeverRuns(string path, bool enabled)
+    {
+        Schtasks(exitCode: 0);
+        var entry = ATask(path: path);
+        entry.IsEnabled = !enabled;
+
+        Assert.False(await SetEnabledAsync(entry, enabled));
+
+        await _runner.DidNotReceiveWithAnyArgs().RunProcessAsync(default!, default!, default, default);
+        Assert.Equal("Error — invalid task path", entry.StatusText);
+        Assert.Equal(!enabled, entry.IsEnabled);
+    }
+
+    [Fact]
+    public async Task ATaskPathHoldingANul_IsRefused_AndSchtasksNeverRuns()
+    {
+        // NUL ends a native command line, so whatever follows it would silently vanish from schtasks' arguments.
+        // Built here rather than passed as InlineData, where the character would ride into the test's own name.
+        Schtasks(exitCode: 0);
+        var entry = ATask(path: @"\SysManagerTests\Up" + '\0' + "dater");
+
+        Assert.False(await SetEnabledAsync(entry, false));
+
+        await _runner.DidNotReceiveWithAnyArgs().RunProcessAsync(default!, default!, default, default);
+        Assert.Equal("Error — invalid task path", entry.StatusText);
+        Assert.True(entry.IsEnabled);
+    }
+
+    /// <summary>
+    /// The other side of that check: a task name with spaces, brackets or an ampersand is not refused, and reaches
+    /// schtasks inside the quotes as it is, so a tighter check cannot quietly block real vendors' tasks.
+    /// </summary>
+    [Theory]
+    [InlineData(@"\SysManagerTests\Update Task (x64)")]   // spaces and brackets stay inside the quotes
+    [InlineData(@"\SysManagerTests\Vendor & Co Updater")] // & means nothing without a shell
+    public async Task ATaskPathWithSpacesOrBrackets_ReachesSchtasksInsideTheQuotes(string path)
+    {
+        Schtasks(exitCode: 0);
+
+        Assert.True(await SetEnabledAsync(ATask(path: path), false));
+
+        await _runner.Received(1).RunProcessAsync("schtasks.exe", $"/Change /TN \"{path}\" /Disable",
+            Arg.Any<CancellationToken>(), PowerShellRunner.OemEncoding);
     }
 
     // ---------- RunOnce entries can't be toggled via StartupApproved (#1428) ----------

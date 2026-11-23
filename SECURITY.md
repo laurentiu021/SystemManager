@@ -531,6 +531,9 @@ reviews, and who approves a release for signing.
   [Verifying a release](#verifying-a-release)). The privileged token that
   produces it is scoped to the build job alone; the workflow's default
   permission is read-only.
+- A job that restores or builds the NuGet packages while its token can write checks the
+  source out without leaving that token in git's configuration, where the packages'
+  build-time code (their MSBuild targets, analyzers and source generators) could read it.
 - Each release since 1.56.6 ships a CycloneDX SBOM (`SysManager-v<version>.sbom.json`) listing
   every NuGet package resolved for the published `win-x64` build, with version,
   package URL, and hash, so the dependency set can be audited against a

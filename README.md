@@ -2022,11 +2022,16 @@ Manage Microsoft Defender without digging through Windows Security:
   protection, and Controlled Folder Access. Real-time protection shows whether
   Defender is scanning, as Windows reports it, not only how it is set: when another
   antivirus is in charge, Windows stops Defender's scanning and leaves the setting on,
-  so the card reads Off and the status line says why
+  so the card reads Off and the status line says why. If Windows does not return Defender's
+  status, every card shows a dash and nothing can be changed until Refresh reads it, so no
+  reading is ever made up
 - **Toggle PUA protection and Controlled Folder Access** (ransomware protection). Turning
   Controlled Folder Access on first says which folders it protects, that some games and
   programs then cannot save there until you allow them, and where in Windows Security to
-  allow one
+  allow one. All five of Controlled Folder Access's modes are named, its two disk-only modes
+  included. Turning either protection fully on from an audit or disk-only mode remembers that
+  mode: while SysManager stays open, turning it off here puts the mode back, and to switch it
+  off you use Windows Security or restart SysManager
 - **Scan exclusions** — add or remove folders Defender should skip (handy for
   big game libraries); paths are validated and additions never replace your
   existing exclusions. A whole drive, the Windows folder or anything in it, and a

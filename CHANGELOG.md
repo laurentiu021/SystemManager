@@ -10,6 +10,30 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.136.181] - 2026-11-23
+
+**Defender Tweaks no longer shows a reading it never got, and Controlled Folder Access or PUA protection set to one of
+their in-between modes can be put back the way it was.**
+
+### Fixed
+- When Windows did not return Defender's status, the tab showed it anyway: real-time protection "Off", PUA and
+  Controlled Folder Access "Disabled", "No exclusion folders", and toggles that offered to turn protection on from
+  values nobody had read. Now every card shows a dash, the exclusions card says they could not be read, and nothing
+  can be changed until Refresh reads the status. The same holds while the first read is still going.
+- When the status read after a change failed, the tab said the change "was not changed", although it may well have
+  been made. It now says it cannot tell, and asks you to press Refresh.
+- Controlled Folder Access showed two of its five modes, "Block disk modification only" and "Audit disk modification
+  only", as "Unknown". All five are named now.
+- From PUA protection's audit mode, or from any of Controlled Folder Access's audit and disk-only modes, the toggle
+  turned the protection fully on, and the next toggle switched it off: the mode it had could not be put back.
+
+### Changed
+- Turning PUA protection or Controlled Folder Access fully on from one of those modes now remembers the mode. While
+  SysManager stays open, turning it off here puts that mode back instead of switching the protection off; to switch
+  it off, use Windows Security or restart SysManager. The question before the change says so.
+- A Refresh that fails after a good read now clears the cards and turns the changes off, rather than leaving the
+  earlier reading up as if it were current.
+
 ## [1.136.180] - 2026-11-23
 
 **Right-Click Menu counts a handler as part of Windows only when its file is where Windows keeps its own, so add-ons

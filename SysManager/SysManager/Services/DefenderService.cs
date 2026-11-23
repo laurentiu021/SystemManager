@@ -122,9 +122,18 @@ public sealed class DefenderService
     public Task<DefenderStatus> SetPuaProtectionAsync(int value, CancellationToken ct = default)
         => ApplyAndVerifyAsync("param([int]$Value) Set-MpPreference -PUAProtection $Value", new() { ["Value"] = ClampTri(value) }, ct);
 
-    /// <summary>Set Controlled Folder Access (0/1/2) and verify.</summary>
+    /// <summary>Set Controlled Folder Access to one of its five modes (0-4) and verify.</summary>
+    /// <remarks>
+    /// Every mode is sent as it is: the tab puts a disk-only mode back, which a clamp to 0-2 wrote as 0, off. A value
+    /// Windows has no mode for is refused, before anything runs, rather than becoming 0 too.
+    /// </remarks>
     public Task<DefenderStatus> SetControlledFolderAccessAsync(int value, CancellationToken ct = default)
-        => ApplyAndVerifyAsync("param([int]$Value) Set-MpPreference -EnableControlledFolderAccess $Value", new() { ["Value"] = ClampTri(value) }, ct);
+    {
+        if (value is < 0 or > 4)
+            throw new ArgumentOutOfRangeException(nameof(value), value, "Controlled Folder Access has modes 0 to 4.");
+        return ApplyAndVerifyAsync("param([int]$Value) Set-MpPreference -EnableControlledFolderAccess $Value",
+            new() { ["Value"] = value }, ct);
+    }
 
     /// <summary>Add a folder exclusion (additive — never replaces the array). Verifies.</summary>
     public Task<DefenderStatus> AddExclusionPathAsync(string path, CancellationToken ct = default)

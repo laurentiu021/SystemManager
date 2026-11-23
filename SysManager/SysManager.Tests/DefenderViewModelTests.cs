@@ -36,27 +36,50 @@ public sealed class DefenderViewModelTests : IDisposable
     private static ISessionRestorePoint NoRestorePoint()
     {
         var rp = Substitute.For<ISessionRestorePoint>();
-        rp.EnsureAsync(Arg.Any<string>(), Arg.Any<System.Threading.CancellationToken>()).Returns(false);
+        rp.EnsureAsync(Arg.Any<string>(), Arg.Any<CancellationToken>()).Returns(false);
         return rp;
     }
 
     private static ISessionRestorePoint RestorePointTaken()
     {
         var rp = Substitute.For<ISessionRestorePoint>();
-        rp.EnsureAsync(Arg.Any<string>(), Arg.Any<System.Threading.CancellationToken>()).Returns(true);
+        rp.EnsureAsync(Arg.Any<string>(), Arg.Any<CancellationToken>()).Returns(true);
         return rp;
     }
 
+    /// <summary>
+    /// A view model over a status that was read, PUA and Controlled Folder Access off, without touching real
+    /// PowerShell or Defender. A status nobody read refuses every change, so it has tests of its own.
+    /// </summary>
     private static DefenderViewModel NewVm(IDialogService? dialog = null)
     {
-        // Runner returns an empty result set, so GetStatusAsync produces a default
-        // (unavailable) status without touching real PowerShell/Defender.
-        var ps = Substitute.For<IPowerShellRunner>();
-        ps.RunAsync(Arg.Any<string>(), Arg.Any<IDictionary<string, object?>?>(), Arg.Any<System.Threading.CancellationToken>())
-          .Returns(new Collection<PSObject>());
-        var vm = new DefenderViewModel(new DefenderService(ps), NoRestorePoint(), dialog);
+        var vm = new DefenderViewModel(new DefenderService(RunnerReportingPua(0)), NoRestorePoint(), dialog);
         vm.InitializationComplete.GetAwaiter().GetResult();
         return vm;
+    }
+
+    /// <summary>A runner every read of which fails to return Defender's status.</summary>
+    private static IPowerShellRunner RunnerThatReadsNothing()
+    {
+        var ps = Substitute.For<IPowerShellRunner>();
+        ps.RunAsync(Arg.Any<string>(), Arg.Any<IDictionary<string, object?>?>(), Arg.Any<CancellationToken>())
+          .Returns(new Collection<PSObject>());
+        return ps;
+    }
+
+    /// <summary>
+    /// A runner whose first read returns PUA at <paramref name="pua"/>, and which returns nothing after that: the
+    /// change runs, and the read after it fails.
+    /// </summary>
+    private static IPowerShellRunner RunnerReadingOnceThenNothing(int pua)
+    {
+        var projection = new PSObject();
+        projection.Properties.Add(new PSNoteProperty("PUAProtection", pua));
+        var ps = Substitute.For<IPowerShellRunner>();
+        var calls = 0;
+        ps.RunAsync(Arg.Any<string>(), Arg.Any<IDictionary<string, object?>?>(), Arg.Any<CancellationToken>())
+          .Returns(_ => ++calls == 1 ? new Collection<PSObject> { projection } : new Collection<PSObject>());
+        return ps;
     }
 
     [Fact]
@@ -110,38 +133,358 @@ public sealed class DefenderViewModelTests : IDisposable
         Assert.False(vm.RemoveExclusionCommand.CanExecute(null));
     }
 
+    /// <summary>
+    /// When the read after a change fails, the tab says it cannot tell what happened, and claims neither that the
+    /// change worked nor that it did not.
+    /// </summary>
+    /// <remarks>
+    /// A disable targets PUA 0, and the status of a read that failed carries 0 too, so it must never count as
+    /// "updated". It said "was not changed: Windows did not apply it" instead, a claim from a read that failed,
+    /// about a change that may well have been made.
+    /// </remarks>
     [Fact]
-    public async Task TogglePua_Off_WhenStatusUnavailable_ReportsFailureNotSuccess()
+    public async Task AGoodReadThenAnUnreadReadBack_SaysTheOutcomeIsUnknown()
     {
-        // Regression: a disable-toggle targets PuaProtection==0. If the Set silently fails
-        // (needs admin / PS fault) the service returns the all-zeros Unavailable status,
-        // whose PuaProtection is also 0 — which would FALSELY satisfy the read-back check.
-        // The verdict must require status.Available, so this reports "not changed", not
-        // "updated".
+        var vm = new DefenderViewModel(new DefenderService(RunnerReadingOnceThenNothing(pua: 1)), NoRestorePoint());
+        await vm.InitializationComplete;
+        Assert.True(vm.PuaEnabled);   // so the toggle asks for off, the dangerous case
+        using var dialog = new DialogAnswer(confirm: true);
+
+        await vm.TogglePuaCommand.ExecuteAsync(null);
+
+        Assert.Equal("SysManager could not read Defender's settings back, so it cannot tell whether it managed to "
+            + "change PUA protection. Press Refresh to see.", vm.StatusMessage);
+        Assert.Equal("—", vm.PuaDisplay);
+        Assert.False(vm.TogglePuaCommand.CanExecute(null));
+    }
+
+    /// <summary>A read after the change that faults leaves the same unknown, never the cards from before it.</summary>
+    [Fact]
+    public async Task AReadBackThatFaults_AfterTheChange_DropsTheCards_AndTurnsTheChangesOff()
+    {
+        var projection = new PSObject();
+        projection.Properties.Add(new PSNoteProperty("PUAProtection", 1));
         var ps = Substitute.For<IPowerShellRunner>();
-        ps.RunAsync(Arg.Any<string>(), Arg.Any<IDictionary<string, object?>?>(), Arg.Any<System.Threading.CancellationToken>())
-          .Returns(new Collection<PSObject>()); // empty -> DefenderStatus.Unavailable (all zeros)
+        var calls = 0;
+        ps.RunAsync(Arg.Any<string>(), Arg.Any<IDictionary<string, object?>?>(), Arg.Any<CancellationToken>())
+          .Returns(_ => ++calls switch
+          {
+              1 => new Collection<PSObject> { projection },
+              2 => new Collection<PSObject>(),
+              _ => throw new System.InvalidOperationException("runspace is broken"),
+          });
+        var vm = new DefenderViewModel(new DefenderService(ps), NoRestorePoint());
+        await vm.InitializationComplete;
+        Assert.Equal("Enabled", vm.PuaDisplay);
+        using var dialog = new DialogAnswer(confirm: true);
+
+        await vm.TogglePuaCommand.ExecuteAsync(null);
+
+        Assert.Contains("cannot tell whether it managed to change PUA protection", vm.StatusMessage,
+            StringComparison.Ordinal);
+        Assert.Equal("—", vm.PuaDisplay);
+        Assert.False(vm.TogglePuaCommand.CanExecute(null));
+    }
+
+    // ---------- a status nobody read ----------
+    // A failed read used to show as fact: real-time "Off", PUA and Controlled Folder Access "Disabled", "No exclusion
+    // folders", and toggles that asked "Enable …?" from the zeros of a status nobody read.
+
+    [Fact]
+    public async Task AFailedRead_TheExclusionsCardSaysTheyCouldNotBeRead_AndTheStatusLineSaysWhy()
+    {
+        var vm = new DefenderViewModel(new DefenderService(RunnerThatReadsNothing()), NoRestorePoint());
+        await vm.InitializationComplete;
+
+        Assert.False(vm.IsAvailable);
+        Assert.Equal("Exclusions could not be read", vm.ExclusionsEmptyTitle);
+        Assert.DoesNotContain("Add a folder", vm.ExclusionsEmptyMessage, StringComparison.Ordinal);
+        Assert.StartsWith("SysManager could not read Microsoft Defender's status", vm.StatusMessage,
+            StringComparison.Ordinal);
+        Assert.Equal(("—", "—", "—", "—"), (vm.RealtimeDisplay, vm.MapsDisplay, vm.PuaDisplay, vm.CfaDisplay));
+    }
+
+    [Fact]
+    public async Task AFailedRead_TurnsEveryChangeOff_ButNotRefresh()
+    {
+        var vm = new DefenderViewModel(new DefenderService(RunnerThatReadsNothing()), NoRestorePoint());
+        await vm.InitializationComplete;
+        vm.SelectedExclusion = @"C:\Games";
+
+        Assert.False(vm.TogglePuaCommand.CanExecute(null));
+        Assert.False(vm.ToggleCfaCommand.CanExecute(null));
+        Assert.False(vm.AddExclusionCommand.CanExecute(null));
+        Assert.False(vm.RemoveExclusionCommand.CanExecute(null));
+        Assert.True(vm.RefreshCommand.CanExecute(null));
+    }
+
+    /// <summary>
+    /// ExecuteAsync runs a command's body whatever CanExecute says, so each change refuses in its body too, before any
+    /// question, folder picker or snapshot.
+    /// </summary>
+    [Theory]
+    [InlineData("TogglePua", "Changing PUA protection")]
+    [InlineData("ToggleCfa", "Changing Controlled Folder Access")]
+    [InlineData("AddExclusion", "Adding an exclusion")]
+    [InlineData("RemoveExclusion", "Removing an exclusion")]
+    public async Task AfterAFailedRead_EveryChange_SaysTheStatusIsNeeded_BeforeAskingAnything(
+        string change, string what)
+    {
+        var folder = Directory.CreateTempSubdirectory("smtest_defender_").FullName;
+        try
+        {
+            var ps = RunnerThatReadsNothing();
+            var restorePoint = RestorePointTaken();
+            var picker = Substitute.For<IDialogService>();
+            picker.PickFolder(Arg.Any<string>()).Returns(folder);
+            var vm = new DefenderViewModel(new DefenderService(ps), restorePoint, picker);
+            await vm.InitializationComplete;
+            vm.SelectedExclusion = @"C:\Games";
+            using var confirm = new DialogAnswer(confirm: true);
+
+            var command = change switch
+            {
+                "TogglePua" => vm.TogglePuaCommand,
+                "ToggleCfa" => vm.ToggleCfaCommand,
+                "AddExclusion" => vm.AddExclusionCommand,
+                _ => vm.RemoveExclusionCommand,
+            };
+            await command.ExecuteAsync(null);
+
+            Assert.Equal($"{what} needs Defender's status, and SysManager has not been able to read it. Press Refresh "
+                + "to try again.", vm.StatusMessage);
+            Assert.Equal(0, confirm.Calls);
+            picker.DidNotReceive().PickFolder(Arg.Any<string>());
+            await restorePoint.DidNotReceive().EnsureAsync(Arg.Any<string>(), Arg.Any<CancellationToken>());
+            await ps.DidNotReceive().RunAsync(Arg.Is<string>(script => script != DefenderService.StatusScript),
+                Arg.Any<IDictionary<string, object?>?>(), Arg.Any<CancellationToken>());
+        }
+        finally { Directory.Delete(folder, recursive: true); }
+    }
+
+    [Fact]
+    public async Task ARunspaceFaultOnTheFirstRead_IsAFailedRead_NotAnEmptyDefender()
+    {
+        var ps = Substitute.For<IPowerShellRunner>();
+        ps.RunAsync(Arg.Any<string>(), Arg.Any<IDictionary<string, object?>?>(), Arg.Any<CancellationToken>())
+          .Returns<Collection<PSObject>>(_ => throw new System.InvalidOperationException("runspace is broken"));
         var vm = new DefenderViewModel(new DefenderService(ps), NoRestorePoint());
         await vm.InitializationComplete;
 
-        // Pretend PUA was on so the toggle requests OFF (target 0), the dangerous case.
-        vm.PuaEnabled = true;
+        Assert.False(vm.IsAvailable);
+        Assert.Equal("Exclusions could not be read", vm.ExclusionsEmptyTitle);
+        Assert.False(vm.TogglePuaCommand.CanExecute(null));
+        Assert.Equal("Could not read Defender status: runspace is broken", vm.StatusMessage);
+    }
 
-        var prevDialog = DialogService.Instance;
-        var dialog = Substitute.For<IDialogService>();
-        dialog.Confirm(Arg.Any<string>(), Arg.Any<string>()).Returns(true); // auto-confirm
-        DialogService.Instance = dialog;
-        try
+    /// <summary>A Refresh that fails after a good read blanks the cards rather than leaving the old read up.</summary>
+    [Fact]
+    public async Task ARefreshThatFails_AfterAGoodRead_BlanksTheCards()
+    {
+        var projection = new PSObject();
+        projection.Properties.Add(new PSNoteProperty("PUAProtection", 1));
+        var ps = Substitute.For<IPowerShellRunner>();
+        var calls = 0;
+        ps.RunAsync(Arg.Any<string>(), Arg.Any<IDictionary<string, object?>?>(), Arg.Any<CancellationToken>())
+          .Returns(_ => ++calls == 1
+              ? new Collection<PSObject> { projection }
+              : throw new System.InvalidOperationException("runspace is broken"));
+        var vm = new DefenderViewModel(new DefenderService(ps), NoRestorePoint());
+        await vm.InitializationComplete;
+        Assert.Equal("Enabled", vm.PuaDisplay);
+
+        await vm.RefreshCommand.ExecuteAsync(null);
+
+        Assert.Equal("—", vm.PuaDisplay);
+        Assert.False(vm.IsAvailable);
+        Assert.False(vm.TogglePuaCommand.CanExecute(null));
+    }
+
+    /// <summary>Until the first read is in, nothing has been read either, so a change asks nothing.</summary>
+    [Fact]
+    public async Task WhileTheFirstReadIsStillGoing_AChangeAsksNothing()
+    {
+        var first = new TaskCompletionSource<Collection<PSObject>>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var ps = Substitute.For<IPowerShellRunner>();
+        ps.RunAsync(Arg.Any<string>(), Arg.Any<IDictionary<string, object?>?>(), Arg.Any<CancellationToken>())
+          .Returns(first.Task);
+        var restorePoint = RestorePointTaken();
+        var vm = new DefenderViewModel(new DefenderService(ps), restorePoint);
+        using var confirm = new DialogAnswer(confirm: false);
+
+        await vm.TogglePuaCommand.ExecuteAsync(null);
+        first.SetResult(new Collection<PSObject>());
+        await vm.InitializationComplete;
+
+        Assert.Equal(0, confirm.Calls);
+        await restorePoint.DidNotReceive().EnsureAsync(Arg.Any<string>(), Arg.Any<CancellationToken>());
+    }
+
+    // ---------- the modes between off and fully on ----------
+    // PUA has an audit mode (2), and Controlled Folder Access has audit (2) and two modes that cover only changes to
+    // the disk itself (3 blocks them, 4 audits them). The toggles counted only 1 as on, so from any of those they
+    // turned the protection fully on, and the next toggle wrote 0: the mode that was there could not be put back.
+
+    /// <summary>
+    /// One Defender setting as Windows keeps it: the status read reports its mode, and a Set changes it the way the
+    /// real cmdlet would, so a test can follow several toggles and the modes they wrote.
+    /// </summary>
+    private sealed class DefenderSetting
+    {
+        public DefenderSetting(string property, int mode)
         {
-            await vm.TogglePuaCommand.ExecuteAsync(null);
-        }
-        finally
-        {
-            DialogService.Instance = prevDialog;
+            Mode = mode;
+            Runner = Substitute.For<IPowerShellRunner>();
+            Runner.RunAsync(Arg.Any<string>(), Arg.Any<IDictionary<string, object?>?>(),
+                    Arg.Any<CancellationToken>())
+                .Returns(call =>
+                {
+                    var script = call.ArgAt<string>(0);
+                    if (script == DefenderService.StatusScript)
+                    {
+                        var projection = new PSObject();
+                        projection.Properties.Add(new PSNoteProperty(property, Mode));
+                        return new Collection<PSObject> { projection };
+                    }
+                    if (script.Contains($"-{property} $Value", StringComparison.Ordinal))
+                    {
+                        var value = (int)call.ArgAt<IDictionary<string, object?>?>(1)!["Value"]!;
+                        Written.Add(value);
+                        if (!HeldByPolicy) Mode = value;
+                    }
+                    return new Collection<PSObject>();
+                });
         }
 
-        Assert.Contains("was not changed", vm.StatusMessage, System.StringComparison.OrdinalIgnoreCase);
-        Assert.DoesNotContain("updated", vm.StatusMessage, System.StringComparison.OrdinalIgnoreCase);
+        public int Mode { get; set; }
+
+        /// <summary>A setting Group Policy holds: Windows takes the Set and keeps the mode it had.</summary>
+        public bool HeldByPolicy { get; set; }
+
+        public List<int> Written { get; } = [];
+
+        public IPowerShellRunner Runner { get; }
+    }
+
+    private static async Task<DefenderViewModel> VmOver(DefenderSetting setting)
+    {
+        var vm = new DefenderViewModel(new DefenderService(setting.Runner), NoRestorePoint());
+        await vm.InitializationComplete;
+        return vm;
+    }
+
+    [Theory]
+    [InlineData(0)]
+    [InlineData(1)]
+    [InlineData(2)]
+    [InlineData(3)]
+    [InlineData(4)]
+    public async Task TwoCfaToggles_LeaveTheModeThatWasThere(int mode)
+    {
+        var setting = new DefenderSetting("EnableControlledFolderAccess", mode);
+        var vm = await VmOver(setting);
+        using var dialog = new DialogAnswer(confirm: true);
+
+        await vm.ToggleCfaCommand.ExecuteAsync(null);
+        await vm.ToggleCfaCommand.ExecuteAsync(null);
+
+        Assert.Equal(new[] { mode == 1 ? 0 : 1, mode }, setting.Written);
+    }
+
+    [Theory]
+    [InlineData(0)]
+    [InlineData(1)]
+    [InlineData(2)]
+    public async Task TwoPuaToggles_LeaveTheModeThatWasThere(int mode)
+    {
+        var setting = new DefenderSetting("PUAProtection", mode);
+        var vm = await VmOver(setting);
+        using var dialog = new DialogAnswer(confirm: true);
+
+        await vm.TogglePuaCommand.ExecuteAsync(null);
+        await vm.TogglePuaCommand.ExecuteAsync(null);
+
+        Assert.Equal(new[] { mode == 1 ? 0 : 1, mode }, setting.Written);
+    }
+
+    /// <summary>
+    /// Once a mode is put back, the toggle turns the protection fully on again and remembers the mode again: while
+    /// SysManager stays open, off is reached through Windows Security, as the questions say.
+    /// </summary>
+    [Fact]
+    public async Task ThreeToggles_FromAuditMode_GoOnThenBackThenOn()
+    {
+        var setting = new DefenderSetting("EnableControlledFolderAccess", 2);
+        var vm = await VmOver(setting);
+        using var dialog = new DialogAnswer(confirm: true);
+
+        for (var i = 0; i < 3; i++) await vm.ToggleCfaCommand.ExecuteAsync(null);
+
+        Assert.Equal(new[] { 1, 2, 1 }, setting.Written);
+    }
+
+    [Fact]
+    public async Task TurningCfaFullyOn_FromADiskOnlyMode_NamesTheMode_AndSaysTurningItOffPutsItBack()
+    {
+        var setting = new DefenderSetting("EnableControlledFolderAccess", 3);
+        var vm = await VmOver(setting);
+        using var dialog = new DialogAnswer(confirm: false);
+
+        await vm.ToggleCfaCommand.ExecuteAsync(null);
+
+        var message = Assert.Single(dialog.Messages);
+        Assert.Contains("is set to \"Block disk modification only\"", message, StringComparison.Ordinal);
+        Assert.Contains("only apps Windows trusts can change files in Documents", message, StringComparison.Ordinal);
+        Assert.Contains("puts \"Block disk modification only\" back", message, StringComparison.Ordinal);
+        Assert.Empty(setting.Written);
+    }
+
+    [Theory]
+    [InlineData(0, "Disabled")]
+    [InlineData(1, "Enabled")]
+    [InlineData(2, "Audit mode")]
+    [InlineData(3, "Block disk modification only")]
+    [InlineData(4, "Audit disk modification only")]
+    public async Task TheCfaCard_NamesEveryModeWindowsDocuments(int mode, string label)
+    {
+        var vm = await VmOver(new DefenderSetting("EnableControlledFolderAccess", mode));
+
+        Assert.Equal(label, vm.CfaDisplay);
+    }
+
+    /// <summary>A mode changed in Windows Security after SysManager turned the protection on is not put back.</summary>
+    [Fact]
+    public async Task ACfaModeChangedOutsideTheTab_IsNotPutBack()
+    {
+        var setting = new DefenderSetting("EnableControlledFolderAccess", 3);
+        var vm = await VmOver(setting);
+        using var dialog = new DialogAnswer(confirm: true);
+
+        await vm.ToggleCfaCommand.ExecuteAsync(null);
+        setting.Mode = 0;
+        await vm.RefreshCommand.ExecuteAsync(null);
+        setting.Mode = 1;
+        await vm.RefreshCommand.ExecuteAsync(null);
+        await vm.ToggleCfaCommand.ExecuteAsync(null);
+
+        Assert.Equal(new[] { 1, 0 }, setting.Written);
+    }
+
+    /// <summary>A turn-on the read-back does not show, held by Group Policy, remembers nothing to put back.</summary>
+    [Fact]
+    public async Task ATurnOnThatDidNotTakeHold_RemembersNoMode()
+    {
+        var setting = new DefenderSetting("EnableControlledFolderAccess", 3) { HeldByPolicy = true };
+        var vm = await VmOver(setting);
+        using var dialog = new DialogAnswer(confirm: true);
+
+        await vm.ToggleCfaCommand.ExecuteAsync(null);
+        setting.HeldByPolicy = false;
+        setting.Mode = 1;
+        await vm.RefreshCommand.ExecuteAsync(null);
+        await vm.ToggleCfaCommand.ExecuteAsync(null);
+
+        Assert.Equal(new[] { 1, 0 }, setting.Written);
     }
 
     [Fact]
@@ -152,11 +495,13 @@ public sealed class DefenderViewModelTests : IDisposable
         // and surfaced as a status message, like RefreshAsync — not escape the async
         // command to the global handler. The first RunAsync (GetStatus at init) succeeds;
         // the Set call faults.
+        var projection = new PSObject();
+        projection.Properties.Add(new PSNoteProperty("PUAProtection", 0));
         var ps = Substitute.For<IPowerShellRunner>();
         var calls = 0;
-        ps.RunAsync(Arg.Any<string>(), Arg.Any<IDictionary<string, object?>?>(), Arg.Any<System.Threading.CancellationToken>())
+        ps.RunAsync(Arg.Any<string>(), Arg.Any<IDictionary<string, object?>?>(), Arg.Any<CancellationToken>())
           .Returns(_ => ++calls <= 1
-              ? new Collection<PSObject>()
+              ? new Collection<PSObject> { projection }
               : throw new System.InvalidOperationException("runspace is broken"));
         var vm = new DefenderViewModel(new DefenderService(ps), NoRestorePoint());
         await vm.InitializationComplete;
@@ -175,8 +520,10 @@ public sealed class DefenderViewModelTests : IDisposable
             DialogService.Instance = prevDialog;
         }
 
+        // The fault came once the change had started, so whether Windows took it is unknown.
         Assert.False(vm.IsBusy);
-        Assert.Contains("could not change pua", vm.StatusMessage, System.StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("cannot tell whether it managed to change PUA protection", vm.StatusMessage,
+            System.StringComparison.Ordinal);
     }
 
     // ---------- session restore point (#1500) ----------
@@ -194,7 +541,7 @@ public sealed class DefenderViewModelTests : IDisposable
         var projection = new PSObject();
         projection.Properties.Add(new PSNoteProperty("PUAProtection", pua));
         var ps = Substitute.For<IPowerShellRunner>();
-        ps.RunAsync(Arg.Any<string>(), Arg.Any<IDictionary<string, object?>?>(), Arg.Any<System.Threading.CancellationToken>())
+        ps.RunAsync(Arg.Any<string>(), Arg.Any<IDictionary<string, object?>?>(), Arg.Any<CancellationToken>())
           .Returns(new Collection<PSObject> { projection });
         return ps;
     }
@@ -209,7 +556,7 @@ public sealed class DefenderViewModelTests : IDisposable
 
         await vm.TogglePuaCommand.ExecuteAsync(null);
 
-        await restorePoint.Received(1).EnsureAsync("SysManager Defender Tweaks", Arg.Any<System.Threading.CancellationToken>());
+        await restorePoint.Received(1).EnsureAsync("SysManager Defender Tweaks", Arg.Any<CancellationToken>());
     }
 
     [Fact]
@@ -223,7 +570,7 @@ public sealed class DefenderViewModelTests : IDisposable
 
         await vm.TogglePuaCommand.ExecuteAsync(null);
 
-        await restorePoint.DidNotReceive().EnsureAsync(Arg.Any<string>(), Arg.Any<System.Threading.CancellationToken>());
+        await restorePoint.DidNotReceive().EnsureAsync(Arg.Any<string>(), Arg.Any<CancellationToken>());
     }
 
     [Fact]
@@ -240,7 +587,7 @@ public sealed class DefenderViewModelTests : IDisposable
 
         await vm.TogglePuaCommand.ExecuteAsync(null);
 
-        await restorePoint.DidNotReceive().EnsureAsync(Arg.Any<string>(), Arg.Any<System.Threading.CancellationToken>());
+        await restorePoint.DidNotReceive().EnsureAsync(Arg.Any<string>(), Arg.Any<CancellationToken>());
         Assert.Equal("Cannot start — Edge/OneDrive Remover is already running.", vm.StatusMessage);
         Assert.False(vm.IsBusy);
     }
@@ -258,7 +605,7 @@ public sealed class DefenderViewModelTests : IDisposable
         await vm.TogglePuaCommand.ExecuteAsync(null);
         await vm.ToggleCfaCommand.ExecuteAsync(null);
 
-        await restorePoint.Received(2).EnsureAsync("SysManager Defender Tweaks", Arg.Any<System.Threading.CancellationToken>());
+        await restorePoint.Received(2).EnsureAsync("SysManager Defender Tweaks", Arg.Any<CancellationToken>());
     }
 
     [Theory]
@@ -322,12 +669,10 @@ public sealed class DefenderViewModelTests : IDisposable
         // A point really was created here, but Defender rejected the change (Tamper Protection or
         // no admin). Mentioning the snapshot next to "was not changed" would read as though
         // something happened and could be undone. Nothing changed, so nothing is claimed.
-        var ps = Substitute.For<IPowerShellRunner>();
-        ps.RunAsync(Arg.Any<string>(), Arg.Any<IDictionary<string, object?>?>(), Arg.Any<System.Threading.CancellationToken>())
-          .Returns(new Collection<PSObject>());   // empty -> DefenderStatus.Unavailable
-        var vm = new DefenderViewModel(new DefenderService(ps), RestorePointTaken());
+        // The read-back still says on, so the change asked for (off) did not happen.
+        var vm = new DefenderViewModel(new DefenderService(RunnerReportingPua(1)), RestorePointTaken());
         await vm.InitializationComplete;
-        vm.PuaEnabled = true;    // asks for OFF (target 0), which the all-zeros status would fake
+        Assert.True(vm.PuaEnabled);
         using var dialog = new DialogAnswer(confirm: true);
 
         await vm.TogglePuaCommand.ExecuteAsync(null);
@@ -347,7 +692,7 @@ public sealed class DefenderViewModelTests : IDisposable
         var projection = new PSObject();
         projection.Properties.Add(new PSNoteProperty("ExclusionPath", paths));
         var ps = Substitute.For<IPowerShellRunner>();
-        ps.RunAsync(Arg.Any<string>(), Arg.Any<IDictionary<string, object?>?>(), Arg.Any<System.Threading.CancellationToken>())
+        ps.RunAsync(Arg.Any<string>(), Arg.Any<IDictionary<string, object?>?>(), Arg.Any<CancellationToken>())
           .Returns(new Collection<PSObject> { projection });
         return ps;
     }
@@ -419,7 +764,7 @@ public sealed class DefenderViewModelTests : IDisposable
         projection.Properties.Add(new PSNoteProperty("RealTimeProtectionEnabled", false));
         projection.Properties.Add(new PSNoteProperty("AMRunningMode", "Passive Mode"));
         var ps = Substitute.For<IPowerShellRunner>();
-        ps.RunAsync(Arg.Any<string>(), Arg.Any<IDictionary<string, object?>?>(), Arg.Any<System.Threading.CancellationToken>())
+        ps.RunAsync(Arg.Any<string>(), Arg.Any<IDictionary<string, object?>?>(), Arg.Any<CancellationToken>())
           .Returns(new Collection<PSObject> { projection });
         var vm = new DefenderViewModel(new DefenderService(ps), NoRestorePoint());
         await vm.InitializationComplete;
@@ -496,7 +841,7 @@ public sealed class DefenderViewModelTests : IDisposable
         projection.Properties.Add(new PSNoteProperty("PUAProtection", pua));
         projection.Properties.Add(new PSNoteProperty("IsTamperProtected", tamperProtected));
         var ps = Substitute.For<IPowerShellRunner>();
-        ps.RunAsync(Arg.Any<string>(), Arg.Any<IDictionary<string, object?>?>(), Arg.Any<System.Threading.CancellationToken>())
+        ps.RunAsync(Arg.Any<string>(), Arg.Any<IDictionary<string, object?>?>(), Arg.Any<CancellationToken>())
           .Returns(new Collection<PSObject> { projection });
         return ps;
     }
@@ -535,9 +880,9 @@ public sealed class DefenderViewModelTests : IDisposable
             Assert.Equal($"{what} needs administrator rights — use \"Run as administrator\" above.", vm.StatusMessage);
             Assert.Equal(0, confirm.Calls);
             picker.DidNotReceive().PickFolder(Arg.Any<string>());
-            await restorePoint.DidNotReceive().EnsureAsync(Arg.Any<string>(), Arg.Any<System.Threading.CancellationToken>());
+            await restorePoint.DidNotReceive().EnsureAsync(Arg.Any<string>(), Arg.Any<CancellationToken>());
             await ps.DidNotReceive().RunAsync(Arg.Is<string>(script => script != DefenderService.StatusScript),
-                Arg.Any<IDictionary<string, object?>?>(), Arg.Any<System.Threading.CancellationToken>());
+                Arg.Any<IDictionary<string, object?>?>(), Arg.Any<CancellationToken>());
         }
         finally { Directory.Delete(folder, recursive: true); }
     }

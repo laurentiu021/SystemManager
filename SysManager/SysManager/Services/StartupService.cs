@@ -3,9 +3,11 @@
 // License: MIT
 
 using System.Collections.Concurrent;
+using System.IO;
 using System.Runtime.InteropServices;
 using Microsoft.Win32;
 using Serilog;
+using SysManager.Helpers;
 using SysManager.Models;
 
 namespace SysManager.Services;
@@ -174,20 +176,119 @@ public sealed class StartupService : IDisposable
     /// know is left with both empty — the view falls back to the publisher, and NO safety chip renders,
     /// so the tab never asserts "safe" on a guess (the report's stated risk).
     /// </summary>
+    /// <remarks>
+    /// <para>A scheduled task's command is its description or its URI, not a command line, so a task row is left
+    /// without either: the first word of its prose picked a Windows program and its label.</para>
+    /// <para>A Windows helper that runs what its command line names (<see cref="ScriptHosts"/>) is described by what
+    /// it runs, with no chip: the database's entry, and its Windows label, describe the helper.</para>
+    /// <para>A Windows program the database knows is judged where <see cref="ProgramPath"/> finds it. When nothing
+    /// resolves it, a bare name Windows' own folders do not have, the row is neither called part of Windows nor "Not
+    /// recognised": nothing says where the file is.</para>
+    /// </remarks>
     internal static void EnrichWithDescriptions(IReadOnlyList<StartupEntry> entries)
     {
         foreach (var entry in entries)
         {
+            if (entry.Source == StartupSource.TaskScheduler) continue;
+
+            if (HostedByWindows(entry.Command) is { } run)
+            {
+                entry.Description = $"Runs {run.Target} with {FriendlyHost(run.Host)}";
+                entry.Safety = "";
+                continue;
+            }
+
             var exe = ExecutableNameFromCommand(entry.Command);
             if (exe.Length == 0) continue;
 
-            var info = ProcessDescriptionService.Instance.Lookup(exe, ExecutablePathFromCommand(entry.Command));
+            var info = ProcessDescriptionService.Instance.Lookup(exe);
             if (info is null) continue;
+            if (info.Safety == ProcessSafety.System)
+            {
+                var path = ProgramPath(entry.Command);
+                if (path.Length == 0) continue;
+                info = ProcessDescriptionService.Instance.Lookup(exe, path);
+                if (info is null) continue;
+            }
 
             entry.Description = info.Description;
             entry.Safety = info.Safety.ToString();
         }
     }
+
+    /// <summary>A Windows helper's name as the database writes it ("Windows PowerShell"), or its file name.</summary>
+    private static string FriendlyHost(string host) =>
+        ProcessDescriptionService.Instance.Lookup(host)?.ShortName is { Length: > 0 } name ? name : host + ".exe";
+
+    /// <summary>
+    /// What the Windows helper at the front of <paramref name="command"/> runs, when the helper is where Windows keeps
+    /// it; null for any other command.
+    /// </summary>
+    /// <remarks>
+    /// A program merely named like one of the helpers, somewhere Windows does not keep its programs, is judged as
+    /// itself: the host rule is for Windows' own copy, whose label and signature would otherwise describe the helper.
+    /// </remarks>
+    internal static HostedRun? HostedByWindows(string command)
+    {
+        if (ScriptHosts.Hosted(command, IsLocalFile) is not { } run) return null;
+        var host = CommandLine.Program(command, IsLocalFile);
+        var windowsCopy = Path.IsPathFullyQualified(host)
+            ? ProcessCriticality.IsWhereWindowsKeepsItsPrograms(host)
+            : InWindowsFolders(host).Length > 0;
+        return windowsCopy ? run : null;
+    }
+
+    /// <summary>
+    /// The program <paramref name="command"/> starts, as the path its label is judged by: a full path as written, or,
+    /// for a bare name the database knows as part of Windows, its copy in the System folder or the Windows folder.
+    /// Empty when there is neither.
+    /// </summary>
+    /// <remarks>
+    /// A bare name is never looked for in the folder SysManager runs in, which is where a relative path would resolve
+    /// to (#3307); it is looked for only in Windows' own two folders, and only when the database knows it as part of
+    /// Windows, so a name like <c>setup.exe</c> is never matched to a file of that name there.
+    /// </remarks>
+    internal static string ProgramPath(string command)
+    {
+        var program = CommandLine.Program(command, IsLocalFile);
+        if (program.Length == 0) return "";
+        if (Path.IsPathFullyQualified(program)) return program;
+        var name = ExecutableNameFromCommand(program);
+        return name.Length > 0 && ProcessDescriptionService.Instance.Lookup(name)?.Safety == ProcessSafety.System
+            ? InWindowsFolders(program)
+            : "";
+    }
+
+    /// <summary>
+    /// A bare program name's copy in the System folder, then in the Windows folder, with ".exe" added when it has no
+    /// extension; empty when it is not a bare name or neither folder has it. Never the launch resolver, whose winget
+    /// branch reads elevation, and never Windows' own search, which tries the working folder first.
+    /// </summary>
+    private static string InWindowsFolders(string program)
+    {
+        var name = program.Trim().Trim('"');
+        if (name.Length == 0 || name.IndexOfAny(['\\', '/', ':']) >= 0) return "";
+        string[] names = Path.HasExtension(name) ? [name] : [name, name + ".exe"];
+        foreach (var folder in (string[])[Environment.SystemDirectory,
+                     Environment.GetFolderPath(Environment.SpecialFolder.Windows)])
+        {
+            if (folder.Length == 0) continue;
+            foreach (var candidate in names)
+            {
+                var path = Path.Combine(folder, candidate);
+                if (File.Exists(path)) return path;
+            }
+        }
+        return "";
+    }
+
+    /// <summary>
+    /// True for a full drive path to a file that is there. A network or device path is never probed: a scan must not
+    /// reach out to another machine, and a relative one would be looked for in the folder SysManager runs in.
+    /// </summary>
+    private static bool IsLocalFile(string path) =>
+        path.Length >= 3 && char.IsAsciiLetter(path[0]) && path[1] == ':' && path[2] == '\\'
+        && Path.IsPathFullyQualified(path) && File.Exists(path);
 
     /// <summary>
     /// The bare executable name (no path, no ".exe", no arguments) from a startup command line, or an
@@ -320,7 +421,9 @@ public sealed class StartupService : IDisposable
                         {
                             shell = Activator.CreateInstance(shellType)!;
                             shortcut = ((dynamic)shell).CreateShortcut(file);
-                            command = ((dynamic)shortcut).TargetPath ?? file;
+                            string target = ((dynamic)shortcut).TargetPath ?? file;
+                            string? arguments = ((dynamic)shortcut).Arguments;
+                            command = ShortcutCommand(target, arguments);
                         }
                     }
                     catch (COMException ex)
@@ -353,6 +456,17 @@ public sealed class StartupService : IDisposable
         {
             Log.Debug("Startup folder I/O error {Folder}: {Error}", folderPath, ex.Message);
         }
+    }
+
+    /// <summary>
+    /// The command a startup shortcut runs: its target, quoted when it holds a space, then its arguments. The target
+    /// alone hid what a shortcut to a Windows helper runs, such as the script a shortcut to PowerShell is given.
+    /// </summary>
+    internal static string ShortcutCommand(string target, string? arguments)
+    {
+        if (string.IsNullOrWhiteSpace(target)) return target;
+        var program = target.Contains(' ') && !target.StartsWith('"') ? $"\"{target}\"" : target;
+        return string.IsNullOrWhiteSpace(arguments) ? program : $"{program} {arguments.Trim()}";
     }
 
     /// <summary>
@@ -896,24 +1010,35 @@ public sealed class StartupService : IDisposable
     }
 
     /// <summary>
-    /// The executable a registry command line actually runs, or empty when it does not resolve to a file
-    /// that exists.
+    /// The file a command line's publisher and signature are read from, or empty when it does not resolve to a file
+    /// that is there.
     /// </summary>
     /// <remarks>
     /// A Run value is a command line, not a path: it may be quoted, carry arguments, or both, and
     /// <see cref="Helpers.CommandLine.Program"/> reads the program out of it as Windows does. Its own parser
     /// cut a quoted "C:\Program Files\App\app.exe" --minimized at the first space, inside the path, so most
     /// Run entries showed no publisher and no signature (#2708).
-    /// <para><c>internal</c> and pure so the resolution is testable on its own. It used to be inline in
-    /// <see cref="ExtractPublisher"/>, which meant the signature check would have needed its own copy of
-    /// the same parsing — two answers to "which file is this entry" is exactly the kind of drift that ends
-    /// with a Publisher and a certificate describing different files.</para>
+    /// <para>One answer to "which file is this entry", <see cref="AttributionPath(string)"/>, read by the label, the
+    /// publisher and the signature alike: two answers is exactly the kind of drift that ends with a Publisher and a
+    /// certificate describing different files. A Windows helper is attributed to the file it runs, or to nothing, and
+    /// never to itself.</para>
     /// </remarks>
-    internal static string ResolveExecutablePath(string command)
-    {
-        var program = Helpers.CommandLine.Program(command);
-        return program.Length > 0 && System.IO.File.Exists(program) ? program : "";
-    }
+    internal static string ResolveExecutablePath(string command) =>
+        AttributionPath(command) is var path && IsLocalFile(path) ? path : "";
+
+    /// <summary>
+    /// The file <paramref name="command"/> is judged by: the file a Windows helper at its front runs, which may be
+    /// none, or else the program it starts (<see cref="ProgramPath"/>).
+    /// </summary>
+    internal static string AttributionPath(string command) =>
+        HostedByWindows(command) is { } run ? run.TargetPath : ProgramPath(command);
+
+    /// <summary>
+    /// The file <paramref name="entry"/> is judged by. Empty for a scheduled task, whose command is its description or
+    /// its URI rather than a command line.
+    /// </summary>
+    internal static string AttributionPath(StartupEntry entry) =>
+        entry.Source == StartupSource.TaskScheduler ? "" : AttributionPath(entry.Command);
 
     /// <summary>
     /// Fills <see cref="StartupEntry.Signature"/> and <see cref="StartupEntry.SignatureDetail"/> for every
@@ -937,8 +1062,8 @@ public sealed class StartupService : IDisposable
 
         foreach (var entry in entries)
         {
-            var path = ResolveExecutablePath(entry.Command);
-            if (path.Length == 0) continue;   // Unknown: nothing to say, so the pill does not render
+            var path = AttributionPath(entry);
+            if (!IsLocalFile(path)) continue;   // Unknown: nothing to say, so the pill does not render
 
             if (!cache.TryGetValue(path, out var verdict))
             {

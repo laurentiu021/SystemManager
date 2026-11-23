@@ -772,7 +772,8 @@ Key services:
   processor, from two `ProcessManagerService` snapshots a second apart, by program rather than by process, never
   SysManager itself or the idle process, with a copy of a part of Windows that runs from a folder Windows does not
   keep its programs in counted as a program of its own (#3010), the second snapshot taking each process's path from
-  the first, since it does not read again what the first read (#3437); what starts with Windows (`StartupService`, a
+  the first, since it does not read again what the first read (#3437), and a busy Windows script host said
+  to run work other programs give it rather than a job of its own; what starts with Windows (`StartupService`, a
   scheduled task only when its
   `StartsWithWindows` is set) and what Windows blamed at its
   last timed start, if that was within 30 days (`BootAnalyzerService`); memory in use, from 90%; and the time since
@@ -886,9 +887,14 @@ Key services:
   which any program can set to "Microsoft Corporation". It uses the shared
   `Helpers/SignatureVerdict`, which asks Windows via `WinVerifyTrust` — **not** the managed
   chain the two fail-closed gates build. Results are cached per resolved executable path,
-  since several entries pointing at one exe is normal. `ResolveExecutablePath` is the single
-  answer to "which file is this entry", shared with `ExtractPublisher`, so the Publisher and
-  the certificate can never describe different files.
+  since several entries pointing at one exe is normal. `AttributionPath` is the single
+  answer to "which file is this entry", read by the label, `ExtractPublisher` and
+  `VerifySignatures` alike, so the label, the Publisher and the certificate can never describe
+  different files: for a Windows helper where Windows keeps it (`Helpers/ScriptHosts`) the file it
+  runs, or nothing; otherwise `ProgramPath`, a full path as written, or a bare name the database
+  knows as part of Windows found in System32 and then the Windows folder, never the working folder
+  (#3307). A scheduled task row's command is its description, so it is attributed to nothing. A
+  network or device path is never probed. Startup shortcuts carry their arguments (`ShortcutCommand`).
 - `Helpers/SelectionCarry` — keeps the user's ticks when a bound list is rebuilt, defined once for
   the ten tabs that rebuild one from a fresh scan: System Health drives, Deep Cleanup categories,
   Shortcut Cleaner, Browser Cleaner, App Updates, Profile Export / Import, App Blocker, Preinstalled Apps,
@@ -2543,6 +2549,14 @@ Key utility classes that don't fit neatly into Services or ViewModels (not an ex
   but no `wpfgfx_cor3.dll`, and one whose `wpfgfx_cor3.dll` will not delete because a running copy has it loaded,
   which is why that file is tried first. `App` runs it once the window is up, off the UI thread, and it does
   nothing when SysManager is elevated, since the folder is the user's to write to.
+- `ScriptHosts` — what a Windows helper runs, read from its command line: PowerShell (its parameter
+  table, prefixes included, and 5.1's command versus PowerShell 7's script for a first positional
+  argument), Command Prompt (`/c`, `/k`, `start` and its title, a separator meaning a command rather than
+  a file), Windows Script Host, mshta, rundll32, regsvr32, the console host (one level of a helper inside
+  another), and Explorer, Windows Installer, the management console, Registry Editor, WSL and Windows
+  Terminal. `HostedRun.TargetPath` is a full drive path to a file that is there, or empty. It never throws,
+  never looks in the working folder and never probes a network path. `IsScriptHost` is the narrower set
+  Why is it slow? uses to say a busy helper runs work other programs give it.
 - `CommandLine` — the program a command line starts, read the way `CreateProcess` reads it (#2708). A
   quoted program runs to its closing quote; an unquoted one is tried at each space, as a file and then
   with a runnable extension added. Right-click Menu (a verb's source, name and explanation) and Startup

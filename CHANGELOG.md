@@ -10,7 +10,7 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
-## [1.136.178] - 2026-11-12
+## [1.136.178] - 2026-11-23
 
 **Startup Manager names the script or file an entry runs through PowerShell, Command Prompt or another Windows
 helper, and no longer calls such an entry part of Windows.**

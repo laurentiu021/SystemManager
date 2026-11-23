@@ -190,9 +190,11 @@ public sealed class TaskSchedulerService
         if (name is not null && TelemetryFullPaths.Contains(ScheduledTaskInfo.FullPathOf(path, name)))
             return TaskCategory.Telemetry;
 
-        bool microsoftPath = path.StartsWith(@"\Microsoft\Windows\", StringComparison.OrdinalIgnoreCase);
-        bool microsoftAuthor = author is not null && author.Contains("Microsoft", StringComparison.OrdinalIgnoreCase);
-        return microsoftPath || microsoftAuthor ? TaskCategory.System : TaskCategory.ThirdParty;
+        // Windows' own folder of tasks, and nothing else: the author is text whoever registered the task wrote, and a
+        // task authored "Microsoft" anywhere else was hidden as a Windows system task and asked about as one.
+        return path.StartsWith(@"\Microsoft\Windows\", StringComparison.OrdinalIgnoreCase)
+            ? TaskCategory.System
+            : TaskCategory.ThirdParty;
     }
 
     private static string? Str(PSObject? obj, string property) => obj?.Properties[property]?.Value?.ToString();

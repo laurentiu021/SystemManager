@@ -423,8 +423,16 @@ public sealed partial class StartupViewModel : ViewModelBase
         UpdateCounts();
     }
 
-    private static bool IsWindowsEntry(StartupEntry entry)
-        => entry.Publisher.Contains("Microsoft", StringComparison.OrdinalIgnoreCase) ||
-           entry.Command.Contains(@"\Windows\", StringComparison.OrdinalIgnoreCase) ||
-           entry.Command.Contains(@"\Microsoft\", StringComparison.OrdinalIgnoreCase);
+    /// <summary>
+    /// Whether "Hide system" hides <paramref name="entry"/>: one SysManager recognises as part of Windows, by its name
+    /// and where it runs, or one whose file Windows confirms Microsoft signed.
+    /// </summary>
+    /// <remarks>
+    /// Not the publisher text or a Windows folder in the command: the first is whatever the file or the task declares,
+    /// and the second held for anything run through a Windows helper, so both hid entries that only named Microsoft.
+    /// A Windows file signed through a catalogue carries no name of its own, so it is hidden by recognition alone.
+    /// </remarks>
+    internal static bool IsWindowsEntry(StartupEntry entry)
+        => entry.Safety == nameof(ProcessSafety.System)
+           || (entry.Signature == SignatureTrust.Verified && Helpers.SignatureVerdict.IsMicrosoft(entry.Signer));
 }

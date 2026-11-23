@@ -177,8 +177,9 @@ public sealed class StartupService : IDisposable
     /// so the tab never asserts "safe" on a guess (the report's stated risk).
     /// </summary>
     /// <remarks>
-    /// <para>A scheduled task's command is its description or its URI, not a command line, so a task row is left
-    /// without either: the first word of its prose picked a Windows program and its label.</para>
+    /// <para>A scheduled task whose definition names no program to run keeps its description or URI as its command,
+    /// which is not a command line, so its row is left without either: the first word of its prose picked a Windows
+    /// program and its label.</para>
     /// <para>A Windows helper that runs what its command line names (<see cref="ScriptHosts"/>) is described by what
     /// it runs, with no chip: the database's entry, and its Windows label, describe the helper.</para>
     /// <para>A Windows program the database knows is judged where <see cref="ProgramPath"/> finds it. When nothing
@@ -189,7 +190,7 @@ public sealed class StartupService : IDisposable
     {
         foreach (var entry in entries)
         {
-            if (entry.Source == StartupSource.TaskScheduler) continue;
+            if (entry.Source == StartupSource.TaskScheduler && !entry.TaskProgramRead) continue;
 
             if (HostedByWindows(entry.Command) is { } run)
             {
@@ -553,10 +554,15 @@ public sealed class StartupService : IDisposable
                     var definition = ReadTaskDefinition(tasksRoot ?? TasksFolder, uri);
                     var enabled = definition?.Enabled ?? true;
                     var startsWithWindows = definition?.StartsWithWindows ?? false;
+                    // What the task runs, from its definition. Its description, prose the task declares, is the
+                    // row's second line, and its author text is the publisher only when no program could be read.
+                    var program = definition?.Program ?? "";
                     results.Add(new StartupEntry
                     {
                         Name = taskName,
-                        Command = description.Length > 0 ? description : uri,
+                        Command = program.Length > 0 ? program : description.Length > 0 ? description : uri,
+                        Description = description,
+                        TaskProgramRead = program.Length > 0,
                         Location = "Task Scheduler",
                         Source = StartupSource.TaskScheduler,
                         RegistryKey = "",
@@ -564,7 +570,7 @@ public sealed class StartupService : IDisposable
                         TaskPath = uri,
                         IsEnabled = enabled,
                         StartsWithWindows = startsWithWindows,
-                        Publisher = author,
+                        Publisher = program.Length > 0 ? ExtractPublisher(program) : author,
                         StatusText = TaskStatus(enabled, startsWithWindows)
                     });
                 }
@@ -604,10 +610,14 @@ public sealed class StartupService : IDisposable
     /// </summary>
     internal static bool? ReadTaskEnabled(string tasksRoot, string uri) => ReadTaskDefinition(tasksRoot, uri)?.Enabled;
 
-    /// <summary>What a scheduled task's definition says about when it runs.</summary>
+    /// <summary>What a scheduled task's definition says about when it runs, and what it runs.</summary>
     /// <param name="Enabled">False when the task itself is disabled.</param>
     /// <param name="StartsWithWindows">True when an enabled sign-in or start-up trigger runs it.</param>
-    internal sealed record TaskDefinition(bool Enabled, bool StartsWithWindows);
+    /// <param name="Program">
+    /// The command line of its first program action (<see cref="TaskProgram"/>), or empty when it runs none or that
+    /// cannot be checked.
+    /// </param>
+    internal sealed record TaskDefinition(bool Enabled, bool StartsWithWindows, string Program = "");
 
     /// <summary>
     /// The definition of the task at <paramref name="uri"/> under <paramref name="tasksRoot"/>: whether it is enabled,
@@ -638,7 +648,7 @@ public sealed class StartupService : IDisposable
             var task = System.Xml.Linq.XDocument.Load(reader).Root;
             var startsWithWindows = Child(task, "Triggers")?.Elements()
                 .Any(t => t.Name.LocalName is "LogonTrigger" or "BootTrigger" && IsOn(t)) ?? false;
-            return new TaskDefinition(IsOn(Child(task, "Settings")), startsWithWindows);
+            return new TaskDefinition(IsOn(Child(task, "Settings")), startsWithWindows, TaskProgram(task));
         }
         catch (Exception ex) when (ex is System.IO.IOException or UnauthorizedAccessException
                                        or System.Xml.XmlException or ArgumentException)
@@ -646,6 +656,76 @@ public sealed class StartupService : IDisposable
             Log.Debug("Scheduled task definition unreadable {Task}: {Error}", uri, ex.Message);
             return null;
         }
+    }
+
+    /// <summary>
+    /// The command line of the first <c>Exec</c> action in <paramref name="task"/>: its program, quoted when it holds a
+    /// space, then its arguments. Empty when the task runs no program (a COM handler, say).
+    /// </summary>
+    /// <remarks>
+    /// <para>A program written with a folder but not a full path runs from the action's working folder, as Windows
+    /// starts it, so it is read there; a bare name is left for <see cref="ProgramPath"/>, which looks only in
+    /// Windows' own folders.</para>
+    /// <para>A variable is expanded in SysManager's own environment. One that differs between accounts (anything but
+    /// the machine-wide folders) would name another account's folder when the task runs as a different user, so such
+    /// a task's program is not read at all: empty, and the row claims no program.</para>
+    /// </remarks>
+    internal static string TaskProgram(System.Xml.Linq.XElement? task)
+    {
+        var exec = Child(task, "Actions")?.Elements().FirstOrDefault(e => e.Name.LocalName == "Exec");
+        var command = Child(exec, "Command")?.Value.Trim().Trim('"').Trim() ?? "";
+        if (command.Length == 0) return "";
+        var arguments = Child(exec, "Arguments")?.Value.Trim() ?? "";
+        var workingFolder = Child(exec, "WorkingDirectory")?.Value.Trim().Trim('"') ?? "";
+
+        if (UsesAccountVariables(command + " " + arguments + " " + workingFolder)
+            && RunsAsAnotherAccount(Child(task, "Principals")))
+            return "";
+
+        var program = Environment.ExpandEnvironmentVariables(command);
+        var folder = Environment.ExpandEnvironmentVariables(workingFolder);
+        if (!Path.IsPathFullyQualified(program) && program.IndexOfAny(['\\', '/']) > 0
+            && Path.IsPathFullyQualified(folder))
+            program = Path.Combine(folder, program);
+
+        var quoted = program.Contains(' ') ? $"\"{program}\"" : program;
+        return arguments.Length > 0 ? $"{quoted} {arguments}" : quoted;
+    }
+
+    /// <summary>The variables whose value is the same for every account on the PC.</summary>
+    private static readonly HashSet<string> MachineVariables = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "SystemRoot", "windir", "SystemDrive", "ProgramFiles", "ProgramFiles(x86)", "ProgramW6432", "ProgramData",
+        "CommonProgramFiles", "CommonProgramFiles(x86)", "CommonProgramW6432", "ALLUSERSPROFILE", "PUBLIC",
+    };
+
+    /// <summary>True when <paramref name="text"/> names a variable whose value differs between accounts.</summary>
+    private static bool UsesAccountVariables(string text)
+    {
+        for (var start = text.IndexOf('%'); start >= 0; start = text.IndexOf('%', start + 1))
+        {
+            var end = text.IndexOf('%', start + 1);
+            if (end < 0) return false;
+            if (!MachineVariables.Contains(text[(start + 1)..end])) return true;
+            start = end;
+        }
+        return false;
+    }
+
+    /// <summary>
+    /// True when the task's principal names an account that is not the one SysManager runs as. A task for a group,
+    /// or with no principal, runs as whoever signs in, this account included.
+    /// </summary>
+    private static bool RunsAsAnotherAccount(System.Xml.Linq.XElement? principals)
+    {
+        var userId = Child(Child(principals, "Principal"), "UserId")?.Value.Trim() ?? "";
+        if (userId.Length == 0) return false;
+        using var me = System.Security.Principal.WindowsIdentity.GetCurrent();
+        var name = me.Name;
+        var shortName = name[(name.LastIndexOf('\\') + 1)..];
+        return !userId.Equals(me.User?.Value, StringComparison.OrdinalIgnoreCase)
+               && !userId.Equals(name, StringComparison.OrdinalIgnoreCase)
+               && !userId.Equals(shortName, StringComparison.OrdinalIgnoreCase);
     }
 
     private static System.Xml.Linq.XElement? Child(System.Xml.Linq.XElement? parent, string name) =>
@@ -1034,11 +1114,11 @@ public sealed class StartupService : IDisposable
         HostedByWindows(command) is { } run ? run.TargetPath : ProgramPath(command);
 
     /// <summary>
-    /// The file <paramref name="entry"/> is judged by. Empty for a scheduled task, whose command is its description or
-    /// its URI rather than a command line.
+    /// The file <paramref name="entry"/> is judged by. Empty for a scheduled task whose program could not be read,
+    /// whose command is then its description or its URI rather than a command line.
     /// </summary>
     internal static string AttributionPath(StartupEntry entry) =>
-        entry.Source == StartupSource.TaskScheduler ? "" : AttributionPath(entry.Command);
+        entry.Source == StartupSource.TaskScheduler && !entry.TaskProgramRead ? "" : AttributionPath(entry.Command);
 
     /// <summary>
     /// Fills <see cref="StartupEntry.Signature"/> and <see cref="StartupEntry.SignatureDetail"/> for every
@@ -1057,7 +1137,7 @@ public sealed class StartupService : IDisposable
     /// </remarks>
     internal static void VerifySignatures(IReadOnlyList<StartupEntry> entries)
     {
-        Dictionary<string, (SignatureTrust Trust, string Detail)> cache =
+        Dictionary<string, (SignatureTrust Trust, string Detail, string Signer)> cache =
             new(StringComparer.OrdinalIgnoreCase);
 
         foreach (var entry in entries)
@@ -1067,12 +1147,16 @@ public sealed class StartupService : IDisposable
 
             if (!cache.TryGetValue(path, out var verdict))
             {
-                verdict = Helpers.SignatureVerdict.Describe(path);
+                var (trust, detail) = Helpers.SignatureVerdict.Describe(path);
+                // Only a signature Windows confirms names who signed it; a refused one could name anybody.
+                var signer = trust == SignatureTrust.Verified ? Helpers.SignatureVerdict.SignerOf(path) : "";
+                verdict = (trust, detail, signer);
                 cache[path] = verdict;
             }
 
             entry.Signature = verdict.Trust;
             entry.SignatureDetail = verdict.Detail;
+            entry.Signer = verdict.Signer;
         }
     }
 }

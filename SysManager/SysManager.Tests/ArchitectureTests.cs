@@ -16702,7 +16702,10 @@ public partial class ArchitectureTests
         // Not display: these steer the toggle and the Open button. Demanding UI for them would push this
         // guard into asking for columns nobody wants, which is how the sibling guard's scope was drawn too.
         // StartsWithWindows decides what "Why is it slow?" counts, and the user reads it in StatusText (#2871).
-        string[] logicOnly = ["Source", "RegistryKey", "ValueName", "TaskPath", "StartsWithWindows"];
+        // Signer decides what "Hide system" hides, and the user reads the same name in SignatureDetail. TaskProgramRead
+        // decides whether a task row's command is judged at all; the user reads the command itself.
+        string[] logicOnly =
+            ["Source", "RegistryKey", "ValueName", "TaskPath", "StartsWithWindows", "Signer", "TaskProgramRead"];
 
         var perSite = ObjectInitializerBodies(service, "StartupEntry")
             .Select(body => InitializerAssignment().Matches(body)

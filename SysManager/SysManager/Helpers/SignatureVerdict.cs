@@ -86,6 +86,21 @@ internal static class SignatureVerdict
     /// this is a separate step rather than folded into the trust check — every phrasing in
     /// <see cref="Describe"/> has a form that works without it.
     /// </remarks>
+    internal static string SignerOf(string path) => Signer(path);
+
+    /// <summary>
+    /// True when <paramref name="signer"/> is a name Microsoft signs its own programs with: Microsoft Corporation,
+    /// Microsoft Windows, and Microsoft Windows Publisher. Not the names Microsoft signs other companies' work with,
+    /// such as "Microsoft Windows Hardware Compatibility Publisher" for drivers or "Microsoft 3rd Party Application
+    /// Component", which vouch for a file without saying Microsoft made it.
+    /// </summary>
+    internal static bool IsMicrosoft(string signer) => MicrosoftSigners.Contains(signer);
+
+    private static readonly HashSet<string> MicrosoftSigners = new(StringComparer.Ordinal)
+    {
+        "Microsoft Corporation", "Microsoft Windows", "Microsoft Windows Publisher",
+    };
+
     private static string Signer(string path)
     {
         var (state, cert, _) = Authenticode.ReadSigner(path);

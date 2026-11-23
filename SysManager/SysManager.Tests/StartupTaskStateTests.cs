@@ -65,7 +65,7 @@ public sealed class StartupTaskStateTests : IDisposable
     {
         WriteTask("Updater", "<Enabled>false</Enabled>", "<LogonTrigger />");
 
-        Assert.Equal(new StartupService.TaskDefinition(Enabled: false, StartsWithWindows: true),
+        Assert.Equal(new StartupService.TaskDefinition(Enabled: false, StartsWithWindows: true, Program: "app.exe"),
                      StartupService.ReadTaskDefinition(_tasksRoot, @"\Updater"));
         Assert.Equal("Disabled (scheduled)", StartupService.TaskStatus(enabled: false, startsWithWindows: true));
     }

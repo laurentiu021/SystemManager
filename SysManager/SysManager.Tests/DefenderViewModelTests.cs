@@ -53,7 +53,8 @@ public sealed class DefenderViewModelTests : IDisposable
     /// </summary>
     private static DefenderViewModel NewVm(IDialogService? dialog = null)
     {
-        var vm = new DefenderViewModel(new DefenderService(RunnerReportingPua(0)), NoRestorePoint(), dialog);
+        var service = new DefenderService(RunnerReportingPua(0), checksTheSignedInAccountsFolders: true);
+        var vm = new DefenderViewModel(service, NoRestorePoint(), dialog);
         vm.InitializationComplete.GetAwaiter().GetResult();
         return vm;
     }
@@ -828,6 +829,50 @@ public sealed class DefenderViewModelTests : IDisposable
         Assert.Equal(0, confirm.Calls);
         Assert.Equal($"SysManager won't exclude \"{drive}\" from scanning: it is a whole drive or network share, so the "
             + "files in it would no longer be checked for malware.", vm.StatusMessage);
+    }
+
+    // ---------- elevated as another account ----------
+    // A standard account elevated with an administrator's password runs as that administrator: the folders the
+    // exclusion rules protect (Downloads, Documents, the profile, the temp folder) were the administrator's, so the
+    // signed-in person's own Downloads passed them. Removing an exclusion makes Defender scan a folder again, so it
+    // stays available.
+
+    [Fact]
+    public async Task ElevatedAsAnotherAccount_AddingAnExclusion_IsRefused_BeforeThePicker()
+    {
+        var ps = RunnerReportingPua(0);
+        var restorePoint = RestorePointTaken();
+        var picker = Substitute.For<IDialogService>();
+        picker.PickFolder(Arg.Any<string>()).Returns(@"C:\Games");
+        var service = new DefenderService(ps, checksTheSignedInAccountsFolders: false);
+        var vm = new DefenderViewModel(service, restorePoint, picker);
+        await vm.InitializationComplete;
+        using var confirm = new DialogAnswer(confirm: true);
+
+        await vm.AddExclusionCommand.ExecuteAsync(null);
+
+        Assert.StartsWith("SysManager won't add an exclusion here", vm.StatusMessage, StringComparison.Ordinal);
+        Assert.Contains("sign in to Windows as that administrator", vm.StatusMessage, StringComparison.Ordinal);
+        picker.DidNotReceive().PickFolder(Arg.Any<string>());
+        Assert.Equal(0, confirm.Calls);
+        await restorePoint.DidNotReceive().EnsureAsync(Arg.Any<string>(), Arg.Any<CancellationToken>());
+        await ps.DidNotReceive().RunAsync(Arg.Is<string>(script => script != DefenderService.StatusScript),
+            Arg.Any<IDictionary<string, object?>?>(), Arg.Any<CancellationToken>());
+    }
+
+    /// <summary>A scope guard: removing an exclusion strengthens protection, so the account check stays off.</summary>
+    [Fact]
+    public async Task ElevatedAsAnotherAccount_RemovingAnExclusion_StillAsks()
+    {
+        var service = new DefenderService(RunnerReportingPua(0), checksTheSignedInAccountsFolders: false);
+        var vm = new DefenderViewModel(service, NoRestorePoint());
+        await vm.InitializationComplete;
+        vm.SelectedExclusion = @"C:\Games";
+        using var confirm = new DialogAnswer(confirm: false);
+
+        await vm.RemoveExclusionCommand.ExecuteAsync(null);
+
+        Assert.Equal(1, confirm.Calls);
     }
 
     // ---------- without administrator rights (#2730) ----------

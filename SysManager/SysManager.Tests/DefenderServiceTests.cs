@@ -73,7 +73,7 @@ public class DefenderServiceTests
                 Arg.Any<IDictionary<string, object?>?>(),
                 Arg.Any<CancellationToken>())
             .Returns(new Collection<PSObject>());
-        var service = new DefenderService(runner);
+        var service = new DefenderService(runner, checksTheSignedInAccountsFolders: true);
 
         await service.SetPuaProtectionAsync(1);
         await service.SetControlledFolderAccessAsync(2);
@@ -173,6 +173,40 @@ public class DefenderServiceTests
         Assert.Throws<ArgumentOutOfRangeException>(() => { _ = service.SetControlledFolderAccessAsync(mode); });
         runner.DidNotReceiveWithAnyArgs().RunAsync(default!, default, default);
     }
+
+    /// <summary>
+    /// Elevated as another account, the folders the exclusion rules protect are that account's, so the service refuses
+    /// an exclusion at its own boundary too, before anything runs.
+    /// </summary>
+    [Fact]
+    public void ElevatedAsAnotherAccount_AddExclusionPathAsync_Throws_AndRunsNothing()
+    {
+        var runner = Substitute.For<IPowerShellRunner>();
+        var service = new DefenderService(runner, checksTheSignedInAccountsFolders: false);
+
+        var refused = Assert.Throws<InvalidOperationException>(
+            () => { _ = service.AddExclusionPathAsync(@"C:\Games"); });
+        Assert.StartsWith("SysManager won't add an exclusion here", refused.Message, StringComparison.Ordinal);
+        runner.DidNotReceiveWithAnyArgs().RunAsync(default!, default, default);
+    }
+
+    /// <summary>
+    /// The account rule fails closed: an exclusion is allowed unelevated, or elevated when the session's account is
+    /// positively the one SysManager runs as, and refused when either SID is missing or they differ.
+    /// </summary>
+    [Theory]
+    [InlineData(false, null, null, true)]
+    [InlineData(false, "S-1-5-21-1-1001", "S-1-5-21-1-1002", true)]
+    [InlineData(true, "S-1-5-21-1-1001", "S-1-5-21-1-1001", true)]
+    [InlineData(true, "S-1-5-21-1-1001", "s-1-5-21-1-1001", true)]
+    [InlineData(true, "S-1-5-21-1-1001", "S-1-5-21-1-1002", false)]
+    [InlineData(true, "S-1-5-21-1-1001", null, false)]
+    [InlineData(true, "S-1-5-21-1-1001", "", false)]
+    [InlineData(true, null, "S-1-5-21-1-1001", false)]
+    [InlineData(true, "", "", false)]
+    public void AnExclusion_ChecksTheSignedInAccountsFolders_OnlyWhenTheAccountsArePositivelyTheSame(
+        bool elevated, string? tokenSid, string? sessionSid, bool expected)
+        => Assert.Equal(expected, DefenderService.ChecksTheRightFolders(elevated, tokenSid, sessionSid));
 
     // ── Exclusion-path validation at the service boundary (idx 151) ───────────
 

@@ -10,6 +10,21 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.136.182] - 2026-11-23
+
+**Defender Tweaks no longer adds a scan exclusion when SysManager runs as a different administrator than the person
+signed in to Windows, because it could not check that the folder does not hold that person's own files.**
+
+### Fixed
+- When a standard account ran SysManager as administrator with another account's password, the checks that keep
+  Downloads, Documents, Desktop, the profile and the temp folder out of the exclusion list looked at the
+  administrator's folders, not the signed-in person's. The signed-in person's own Downloads could then be excluded
+  from scanning.
+
+### Changed
+- In that case adding an exclusion is refused, and the tab says why. It is also refused when Windows does not say
+  which account is signed in. Removing an exclusion and the two protection toggles still work.
+
 ## [1.136.181] - 2026-11-23
 
 **Defender Tweaks no longer shows a reading it never got, and Controlled Folder Access or PUA protection set to one of

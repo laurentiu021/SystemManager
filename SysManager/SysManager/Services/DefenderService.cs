@@ -30,7 +30,45 @@ public sealed class DefenderService
 {
     private readonly IPowerShellRunner _ps;
 
-    public DefenderService(IPowerShellRunner ps) => _ps = ps;
+    public DefenderService(IPowerShellRunner ps)
+        : this(ps, ChecksTheRightFolders(
+            Helpers.AdminHelper.IsElevated(), Helpers.AdminHelper.TokenSid(), Helpers.AdminHelper.OwnSessionSid()))
+    {
+    }
+
+    /// <summary>A service told whether the folders it protects from exclusion are the signed-in person's.</summary>
+    /// <remarks>Internal so a test can be either account, as with MaintenanceSchedulerService.</remarks>
+    internal DefenderService(IPowerShellRunner ps, bool checksTheSignedInAccountsFolders)
+    {
+        _ps = ps;
+        ChecksTheSignedInAccountsFolders = checksTheSignedInAccountsFolders;
+    }
+
+    /// <summary>
+    /// Whether the folders <see cref="ExclusionRefusal(string)"/> protects are the signed-in person's own.
+    /// </summary>
+    internal bool ChecksTheSignedInAccountsFolders { get; }
+
+    /// <summary>
+    /// Whether the folders the exclusion rules read from the account SysManager runs as are the signed-in person's:
+    /// SysManager is not elevated, or the account of its own session is positively the account it runs as.
+    /// </summary>
+    /// <remarks>
+    /// A standard account elevated with an administrator's password runs as that administrator, so the rules
+    /// protected the administrator's Downloads and Documents, and the signed-in person's own passed them. Fails
+    /// closed: a session account Windows does not give is a refusal. The console comparison the per-user tabs use
+    /// answers "the same account" when it cannot name the signed-in one, which is safe for where a setting is written
+    /// and wrong here, where it would let an exclusion through on the administrator's folders.
+    /// </remarks>
+    internal static bool ChecksTheRightFolders(bool elevated, string? tokenSid, string? sessionSid) =>
+        !elevated
+        || (!string.IsNullOrEmpty(tokenSid) && string.Equals(tokenSid, sessionSid, StringComparison.OrdinalIgnoreCase));
+
+    /// <summary>Why an exclusion is refused when <see cref="ChecksTheSignedInAccountsFolders"/> is false.</summary>
+    internal const string AnotherAccountRefusal =
+        "SysManager won't add an exclusion here: it is running as administrator, and it could not confirm that the "
+        + "administrator account is the one signed in to Windows, so it cannot check that the folder does not hold "
+        + "your own files, such as Downloads or Documents. To add one, sign in to Windows as that administrator.";
 
     /// <summary>
     /// The status read. Both reads stop on failure.
@@ -142,6 +180,7 @@ public sealed class DefenderService
         // is public), so an over-broad exclusion can never weaken Defender, even via a non-UI caller.
         if (ExclusionRefusal(path) is { } why)
             throw new ArgumentException($"\"{path}\" cannot be excluded from scanning: it {why}.", nameof(path));
+        if (!ChecksTheSignedInAccountsFolders) throw new InvalidOperationException(AnotherAccountRefusal);
         return ApplyAndVerifyAsync("param([string]$Path) Add-MpPreference -ExclusionPath $Path", new() { ["Path"] = path }, ct);
     }
 

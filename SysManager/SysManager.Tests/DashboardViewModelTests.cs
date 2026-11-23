@@ -1093,8 +1093,7 @@ public sealed class DashboardViewModelTests : IDisposable
             Assert.True(stop.IsCancellationRequested);
             Assert.True(upgrading.CanBeCanceled);
             Assert.False(upgrading.IsCancellationRequested);
-            Assert.Equal("Stopping after the app being updated. It finishes first, so it is not left half-installed.",
-                vm.QuickActionDetail);
+            Assert.Equal(DashboardViewModel.UpdateAllStopping, vm.QuickActionDetail);
 
             finishes.SetException(new UpgradeAllStoppedException(1, 3, stop));
             await running.WaitAsync(TimeSpan.FromSeconds(30));

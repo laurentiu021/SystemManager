@@ -12646,6 +12646,99 @@ public partial class ArchitectureTests
     }
 
     /// <summary>
+    /// A pull request that releases nothing passes the title check by leaving csproj where main has it, which is a bump
+    /// ahead of the newest tag after auto-release refused a merge (#3375).
+    /// </summary>
+    /// <remarks>
+    /// The check required the newest tag's version for a title that releases nothing. After a refusal no tag comes
+    /// until the run by hand, and main's csproj is a bump ahead of it, so the CHANGELOG-only pull request
+    /// auto-release's way back asks for failed, and so did every other pull request that releases nothing. Its error
+    /// then offered to move the refused entry onto a version that is already released. A title that releases
+    /// something still needs a bump from the newest tag.
+    /// </remarks>
+    [Fact]
+    public void ThePrTitleCheck_LetsAPullRequestThatReleasesNothingKeepMainsVersion()
+    {
+        var lines = File.ReadAllLines(
+            Path.Combine(TestPaths.RepoRoot(), ".github", "workflows", "pr-title-bump.yml"));
+        var code = ReleaseStepCode(lines, ReleaseStepLine(lines, "Check the title's required bump against csproj"));
+        foreach (var required in new[]
+                 {
+                     "BASE_SHA: ${{ github.event.pull_request.base.sha }}",
+                     "BASE_CSPROJ=$(git show \"${BASE_SHA}:SysManager/SysManager/SysManager.csproj\"",
+                     "REQUIRED=\"${BASE_CSPROJ:-${TAG#v}}\"",
+                     "REQUIRED=\"$PATCH_NEXT\"", "REQUIRED=\"$MINOR_NEXT\"", "REQUIRED=\"$MAJOR_NEXT\"",
+                 })
+        {
+            Assert.Contains(required, code, StringComparison.Ordinal);
+        }
+        Assert.Contains("fetch-depth: 0", string.Join('\n', lines), StringComparison.Ordinal);
+
+        var none = Assert.Single(code.Split('\n'), l => l.Contains("::error::", StringComparison.Ordinal)
+                                                       && l.Contains("releases nothing", StringComparison.Ordinal));
+        Assert.DoesNotContain("CHANGELOG header", none, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// Every pull request runs the notices tool the way the release does, so a break in it stops the pull request and
+    /// not the release (#3420).
+    /// </summary>
+    /// <remarks>
+    /// The tool first ran in release.yml, after auto-release had pushed the tag, so a licence text renamed under
+    /// tools/licenses, an edit to the tool or an SDK change to how a file-based app builds left a version with a tag
+    /// and no release, which a re-dispatch of the same commit could not recover. The unit tests compare the committed
+    /// notices with the restore graph without running the tool. It runs after them, as in the release, so they read
+    /// the committed copy, and with the release's own checks, so the two steps cannot come apart.
+    /// </remarks>
+    [Fact]
+    public void TheNoticesTool_RunsOnEveryPullRequest_AsTheReleaseRunsIt()
+    {
+        var dir = Path.Combine(TestPaths.RepoRoot(), ".github", "workflows");
+        var ci = File.ReadAllLines(Path.Combine(dir, "ci.yml"));
+        var at = ReleaseStepLine(ci, "Write the third-party notices the release will write");
+        var unit = ReleaseStepLine(ci, "Run unit tests");
+        Assert.True(
+            unit < at && WorkflowJobs.Containing(ci, at).Contains("- name: Run unit tests", StringComparison.Ordinal),
+            $"the notices tool (line {at + 1}) has to run in the unit tests' job, after them (line {unit + 1}).");
+
+        var code = ReleaseStepCode(ci, at);
+        var release = File.ReadAllLines(Path.Combine(dir, "release.yml"));
+        var released = ReleaseStepCode(
+            release, ReleaseStepLine(release, "Write the third-party notices for this build"));
+        foreach (var shared in new[]
+                 {
+                     "dotnet run tools/ThirdPartyNotices.cs", "if ($LASTEXITCODE -ne 0) { throw ",
+                     "git diff --quiet -- THIRD-PARTY-NOTICES.txt",
+                 })
+        {
+            Assert.Contains(shared, code, StringComparison.Ordinal);
+            Assert.Contains(shared, released, StringComparison.Ordinal);
+        }
+        Assert.DoesNotContain("continue-on-error", code, StringComparison.Ordinal);
+        Assert.DoesNotContain(code.Split('\n'), l => l.TrimStart().StartsWith("if:", StringComparison.Ordinal));
+    }
+
+    /// <summary>
+    /// The explanation of the winget fork sync sits above the sync step, not above the token check (#3420).
+    /// </summary>
+    /// <remarks>
+    /// When the winget steps moved out of release.yml (#2975), the sync's comment stayed where the step had been and
+    /// ran straight into the token check's own, so it described the wrong step and the sync had none.
+    /// </remarks>
+    [Fact]
+    public void TheWingetForkSync_IsExplainedAboveItsOwnStep()
+    {
+        var winget = File.ReadAllLines(Path.Combine(TestPaths.RepoRoot(), ".github", "workflows", "winget.yml"));
+        List<string> Above(string step) => Enumerable.Reverse(winget[..ReleaseStepLine(winget, step)])
+            .TakeWhile(l => l.TrimStart().StartsWith('#')).ToList();
+
+        Assert.Contains(Above("Sync the winget-pkgs fork with upstream"),
+            l => l.Contains("must descend from current upstream", StringComparison.Ordinal));
+        Assert.DoesNotContain(Above("Check the winget token before using it"),
+            l => l.Contains("sync", StringComparison.OrdinalIgnoreCase));
+    }
+
+    /// <summary>
     /// The release starts its integrity check with a dispatch, once it is done with the release whichever way that went,
     /// and the check does not wait for the run that started it (#2805).
     /// </summary>

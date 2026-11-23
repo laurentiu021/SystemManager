@@ -18,8 +18,8 @@ namespace SysManager.Services;
 ///
 /// <para>The same <b>SECURITY CONTRACT</b> as <see cref="PowerShellRunner"/> applies:
 /// callers MUST only pass hard-coded script strings to <see cref="RunAsync"/> and
-/// <see cref="RunScriptViaPwshAsync"/>. User input MUST NEVER be interpolated into
-/// scripts.</para>
+/// <see cref="RunScriptViaPwshAsync"/>. A value the user chooses goes in as a declared parameter; only typed or
+/// validated values are written into a script's text.</para>
 /// </summary>
 public interface IPowerShellRunner
 {

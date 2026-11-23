@@ -20,8 +20,9 @@ again.**
   starts, inside single quotes, doubling each `'`. PowerShell also ends a single-quoted string at the typographic
   quotes ‘ ’ ‚ ‛, so a module path holding one did not parse, and no tab that runs PowerShell through a session could
   start it, DNS & Hosts, Restore Points and Preinstalled Apps among them; as administrator Drivers and Windows Update
-  failed too. That has been so since 1.56.2 as administrator and since 1.114.4 without. The path is now escaped with
-  PowerShell's own rule for a single-quoted string, which covers all five quotes.
+  failed too. Two of them side by side did parse, as one, so the session started with a module folder that does not
+  exist in place of the real one. That has been so since 1.56.2 as administrator and since 1.114.4 without. The path
+  is now escaped with PowerShell's own rule for a single-quoted string, which covers all five quotes.
 - 1.136.167 said SysManager's other scripts already take their values as parameters. Most do; a few write a value
   into their text that cannot hold a quote: a number, a Windows Feature name the tab has already checked, a DNS
   address it has already parsed, the module path above.

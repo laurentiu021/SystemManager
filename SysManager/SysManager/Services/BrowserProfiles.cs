@@ -67,8 +67,8 @@ internal sealed class BrowserProfiles(string localAppData, string roamingAppData
     /// Only "Default" and "Profile N" directories are considered — Chromium keeps plenty of other
     /// folders under <c>User Data</c> (<c>Crashpad</c>, <c>ShaderCache</c>, <c>System Profile</c>, …)
     /// and none of them are user profiles, so matching every subdirectory would point a delete at
-    /// paths this tab never advertised. Reparse points are skipped and enumeration failures are
-    /// swallowed, matching <see cref="FirefoxProfileFolders"/>.
+    /// paths this tab never advertised. A profile folder that is a link, or that cannot be looked at, is left
+    /// out, and enumeration failures are swallowed.
     /// </para>
     /// <para>
     /// When the browser is not installed this yields nothing, so no rows appear.
@@ -281,10 +281,12 @@ internal sealed class BrowserProfiles(string localAppData, string roamingAppData
         : NotADefaultProfile;
 
     /// <summary>
-    /// Every Firefox profile folder NAME found under either root, de-duplicated. Reparse points are
-    /// skipped and enumeration failures are swallowed, matching <see cref="ChromiumProfiles"/>. Empty
-    /// when Firefox isn't installed, so no rows appear. Never returns the Profiles root itself, so a
-    /// clean can only ever touch the named targets, never saved logins/bookmarks/prefs.
+    /// Every Firefox profile folder NAME found under either root, de-duplicated. A profiles folder reached
+    /// through a link is not read, and enumeration failures are swallowed. A profile folder that is itself a
+    /// link is named like any other: the extension list looks at what each one is, and the cleaner refuses
+    /// every path reached through a link. Empty when Firefox isn't installed, so no rows appear. Never returns
+    /// the Profiles root itself, so a clean can only ever touch the named targets, never saved
+    /// logins/bookmarks/prefs.
     /// </summary>
     /// <remarks>
     /// BOTH roots are read because Firefox splits one profile across them — <c>cache2</c> under

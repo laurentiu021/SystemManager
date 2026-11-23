@@ -39,11 +39,25 @@ public class SystemFixScriptTests
     private static readonly string Guard =
         WindowsPowerShellScript.StubsInEffect("Stop-Service", "Start-Service", "Test-Path", "Rename-Item");
 
+    // Folders that are not this PC's, named as the real ones are, so a rename shows which folders the script was given.
+    private const string GivenSoftwareDistribution = @"W:\Given\SoftwareDistribution";
+    private const string GivenCatroot2 = @"W:\Given\System32\catroot2";
+
+    /// <summary>
+    /// <see cref="SystemFixService.ResetWindowsUpdateScript"/> called with the two folders, as the runner binds them: a
+    /// script block invoked with the parameters named. The stubs defined before it are in scope inside it.
+    /// </summary>
+    private static string Reset(
+        string softwareDistribution = GivenSoftwareDistribution, string catroot2 = GivenCatroot2) =>
+        "& { " + SystemFixService.ResetWindowsUpdateScript + " } -SoftwareDistribution "
+        + WindowsPowerShellScript.SingleQuoted(softwareDistribution)
+        + " -Catroot2 " + WindowsPowerShellScript.SingleQuoted(catroot2);
+
     [Fact]
     public async Task WhenAFolderCannotBeRenamed_TheResetFails_AndTheServicesStillRestart()
     {
         var (exitCode, output, error) = await WindowsPowerShellScript.RunAsync(
-            ServiceStubs + RenameFailsAsIfInUse + Guard + SystemFixService.ResetWindowsUpdateScript);
+            ServiceStubs + RenameFailsAsIfInUse + Guard + Reset());
 
         Assert.NotEqual(0, exitCode);
         Assert.DoesNotContain(SuccessSentence, output, StringComparison.Ordinal);
@@ -60,12 +74,33 @@ public class SystemFixScriptTests
         // The positive control: the same harness sees the success sentence when nothing fails, so the test above
         // is not passing because the script never prints it.
         var (exitCode, output, _) = await WindowsPowerShellScript.RunAsync(
-            ServiceStubs + RenameSucceeds + Guard + SystemFixService.ResetWindowsUpdateScript);
+            ServiceStubs + RenameSucceeds + Guard + Reset());
 
         Assert.Equal(0, exitCode);
         Assert.Contains(SuccessSentence, output, StringComparison.Ordinal);
         Assert.Contains("SoftwareDistribution", output, StringComparison.Ordinal);
         Assert.Contains("catroot2", output, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// The reset renames the folders it is given, whatever the SystemRoot variable names.
+    /// </summary>
+    /// <remarks>
+    /// It renamed the folders under <c>$env:SystemRoot</c>, which any program running as the user can set. The
+    /// variable is set to a folder under the temp folder inside the test's own PowerShell only, so the test process
+    /// and the account keep theirs, and the renames are stubs, so nothing on disk changes.
+    /// </remarks>
+    [Fact]
+    public async Task ResetWindowsUpdate_RenamesTheFoldersItIsGiven_NotTheOnesSystemRootNames()
+    {
+        var (exitCode, output, _) = await WindowsPowerShellScript.RunAsync(
+            "$env:SystemRoot = Join-Path $env:TEMP 'SM-DECOY-ROOT'; "
+            + ServiceStubs + RenameSucceeds + Guard + Reset());
+
+        Assert.Equal(0, exitCode);
+        Assert.Contains("RENAMED:" + GivenSoftwareDistribution, output, StringComparison.Ordinal);
+        Assert.Contains("RENAMED:" + GivenCatroot2, output, StringComparison.Ordinal);
+        Assert.DoesNotContain("SM-DECOY-ROOT", output, StringComparison.Ordinal);
     }
 
     /// <summary>
@@ -96,7 +131,7 @@ public class SystemFixScriptTests
     public async Task WhenTheStopLoopItselfIsInterrupted_TheServicesAlreadyStoppedStillRestart()
     {
         var (exitCode, output, _) = await WindowsPowerShellScript.RunAsync(
-            StopExitsRightAfterTheSecondService + RenameSucceeds + Guard + SystemFixService.ResetWindowsUpdateScript);
+            StopExitsRightAfterTheSecondService + RenameSucceeds + Guard + Reset());
 
         Assert.Equal(7, exitCode);
         Assert.DoesNotContain(SuccessSentence, output, StringComparison.Ordinal);

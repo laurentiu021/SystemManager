@@ -460,6 +460,28 @@ public class SystemFixesViewModelTests
     }
 
     [Fact]
+    public async Task ResetWindowsUpdate_WithoutTheWindowsFolder_RunsNothing_AndSaysWhy()
+    {
+        using var elevated = AdminHelper.ForceElevation(true);
+        using var dialog = new DialogAnswer(confirm: true);
+        var serviceRunner = Substitute.For<IPowerShellRunner>();
+        var vm = new SystemFixesViewModel(
+            new SystemFixService(serviceRunner, windowsDirectory: "Windows", systemDirectory: "System32"),
+            Substitute.For<IPowerShellRunner>())
+        {
+            SfcSentences = static () => SfcOutput.English,
+        };
+
+        await vm.ResetWindowsUpdateCommand.ExecuteAsync(null);
+
+        Assert.Equal(
+            "Reset Windows Update did not complete: "
+            + "SysManager could not find the Windows folder, so nothing was changed.",
+            vm.StatusMessage);
+        await serviceRunner.DidNotReceiveWithAnyArgs().RunAsync(default!, default, default);
+    }
+
+    [Fact]
     public async Task AFixThatStopsWithNoReason_DoesNotPointAtAnEmptyConsole()
     {
         using var elevated = AdminHelper.ForceElevation(true);

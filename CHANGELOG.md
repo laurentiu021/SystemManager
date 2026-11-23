@@ -10,6 +10,24 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.136.185] - 2026-11-23
+
+**Reset Windows Update and a new restore point act on the folders and drive Windows runs from, whatever an
+environment variable says.**
+
+### Fixed
+- Reset Windows Update (System Fixes) renamed the SoftwareDistribution and catroot2 folders under the folder the
+  SystemRoot environment variable named. Any program running as you can change that variable, also for a SysManager
+  started as administrator, so the reset could rename folders that were not Windows', or find nothing, rename
+  nothing and still say the reset was done. It now renames the folders in the Windows folder Windows reports, and
+  when it cannot find that folder it changes nothing and says so. That has been so since 1.26.0.
+- Making a restore point turns System Protection on first, because Windows makes none while it is off. It turned it
+  on for the drive the SystemDrive variable named, so with that variable changed it could switch protection on for
+  another drive and leave the Windows drive unprotected. It now uses the drive Windows runs from, and makes no point
+  when it cannot find it. That has been so since 1.23.0.
+- `ArchitectureTests.NoScriptReadsItsEnvironment_AndNoCodeTakesTheWindowsFolderFromIt` fails a build whose scripts
+  read an environment variable, or whose code takes the Windows folder or drive from one.
+
 ## [1.136.184] - 2026-11-23
 
 **On a PC whose PowerShell module folders hold a curly quote in their path, the tabs that run PowerShell start

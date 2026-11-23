@@ -306,11 +306,11 @@ public class RestorePointServiceTests
     {
         var runner = RunnerReturning(RestorePointService.CreateOkSentinel);
 
-        Assert.True(await new RestorePointService(runner).CreateAsync(description));
+        Assert.True(await new RestorePointService(runner, clock: null, systemDrive: "S:").CreateAsync(description));
 
         await runner.Received(1).RunAsync(RestorePointService.CreateScript,
             Arg.Is<IDictionary<string, object?>?>(p =>
-                p != null && p.Count == 1 && Equals(p["Description"], description)),
+                p != null && p.Count == 2 && Equals(p["Description"], description) && Equals(p["SystemDrive"], "S:")),
             Arg.Any<CancellationToken>());
     }
 
@@ -318,18 +318,54 @@ public class RestorePointServiceTests
     [InlineData(null)]
     [InlineData("")]
     [InlineData("   ")]
-    public void CreateParameters_WithNoDescription_UseTheDefaultName(string? description)
-        => Assert.Equal(new Dictionary<string, object?> { ["Description"] = "SysManager Restore Point" },
-            RestorePointService.CreateParameters(description));
+    public async Task CreateAsync_WithNoDescription_UsesTheDefaultName(string? description)
+    {
+        var runner = RunnerReturning(RestorePointService.CreateOkSentinel);
+
+        await new RestorePointService(runner, clock: null, systemDrive: "S:").CreateAsync(description!);
+
+        await runner.Received(1).RunAsync(RestorePointService.CreateScript,
+            Arg.Is<IDictionary<string, object?>?>(p =>
+                p != null && Equals(p["Description"], "SysManager Restore Point")),
+            Arg.Any<CancellationToken>());
+    }
 
     [Fact]
-    public void CreateScript_TakesTheDescriptionItIsGiven()
+    public void CreateScript_TakesTheDescriptionAndTheDriveItIsGiven()
     {
-        // The parameter the script declares is the one it passes on, so a value bound to it is the description used.
-        Assert.StartsWith("param([string]$Description) ", RestorePointService.CreateScript, StringComparison.Ordinal);
+        // The parameters the script declares are the ones it passes on, so the values bound to them are the ones used.
+        Assert.StartsWith("param([string]$Description, [string]$SystemDrive) ", RestorePointService.CreateScript,
+            StringComparison.Ordinal);
         Assert.Contains("Checkpoint-Computer -Description $Description ", RestorePointService.CreateScript,
             StringComparison.Ordinal);
+        Assert.Contains("Enable-ComputerRestore -Drive $SystemDrive ", RestorePointService.CreateScript,
+            StringComparison.Ordinal);
+        Assert.DoesNotContain("$env:", RestorePointService.CreateScript, StringComparison.OrdinalIgnoreCase);
     }
+
+    /// <summary>
+    /// Without a drive of the form "C:" no point is made and nothing runs, rather than turning System Protection on
+    /// for whatever the script would bind.
+    /// </summary>
+    [Theory]
+    [InlineData(null)]
+    [InlineData("")]
+    [InlineData(@"S:\")]
+    [InlineData("SS")]
+    [InlineData("1:")]
+    public async Task CreateAsync_WithoutTheWindowsDrive_MakesNoPoint_AndRunsNothing(string? systemDrive)
+    {
+        var runner = RunnerReturning(RestorePointService.CreateOkSentinel);
+
+        Assert.False(await new RestorePointService(runner, clock: null, systemDrive).CreateAsync("Before changes"));
+
+        await runner.DidNotReceiveWithAnyArgs().RunAsync(default!, default, default);
+    }
+
+    [Fact]
+    public void TheServiceTheAppBuilds_TurnsProtectionOnForTheDriveWindowsRunsFrom()
+        => Assert.Equal(HealthScoreService.SystemDriveLetter(),
+            new RestorePointService(Substitute.For<IPowerShellRunner>()).SystemDrive);
 
     [Fact]
     public void BuildRestoreScript_ConfirmsOnlyAfterRestoreComputerReturned()

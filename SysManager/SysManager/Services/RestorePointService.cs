@@ -21,6 +21,8 @@ namespace SysManager.Services;
 /// SECURITY: every script is fixed text except <see cref="BuildRestoreScript"/>'s, which writes in an int, the
 /// sequence number of the point to go back to. The one value the user types, a restore point's description, reaches
 /// <see cref="CreateScript"/> only as its declared Description parameter, through <see cref="CreateParameters"/>.
+/// The drive it turns System Protection on for is its SystemDrive parameter, from Windows itself, never from an
+/// environment variable.
 /// <see cref="PerformanceService.CreateRestorePointAsync"/> only calls this service.
 /// </summary>
 public sealed class RestorePointService
@@ -66,10 +68,25 @@ public sealed class RestorePointService
     /// <param name="ps">The runner.</param>
     /// <param name="clock">What <see cref="CreatePatience"/> is measured on. A test holds it.</param>
     public RestorePointService(IPowerShellRunner ps, TimeProvider? clock = null)
+        : this(ps, clock, HealthScoreService.SystemDriveLetter()) { }
+
+    /// <summary>A service told which drive Windows runs from.</summary>
+    /// <param name="ps">The runner.</param>
+    /// <param name="clock">What <see cref="CreatePatience"/> is measured on.</param>
+    /// <param name="systemDrive">The drive <see cref="CreateAsync"/> turns System Protection on for, as "C:".</param>
+    /// <remarks>Internal so a test can give it a drive that is not this PC's.</remarks>
+    internal RestorePointService(IPowerShellRunner ps, TimeProvider? clock, string? systemDrive)
     {
         _ps = ps;
         _clock = clock ?? TimeProvider.System;
+        SystemDrive = systemDrive;
     }
+
+    /// <summary>
+    /// The drive Windows runs from, as Windows reports it, and the one <see cref="CreateAsync"/> turns System
+    /// Protection on for.
+    /// </summary>
+    internal string? SystemDrive { get; }
 
     /// <summary>
     /// The script <see cref="ListAsync"/> runs. <c>Get-ComputerRestorePoint</c> surfaces SequenceNumber,
@@ -163,12 +180,21 @@ public sealed class RestorePointService
     /// </remarks>
     public async Task<bool> CreateAsync(string description, CancellationToken ct = default)
     {
+        // The drive System Protection is turned on for, as Windows reports it. It was $env:SystemDrive, which any
+        // program running as the user can set, so protection could go on for another drive and not for Windows'.
+        if (SystemDrive is not [var letter, ':'] drive || !char.IsAsciiLetter(letter))
+        {
+            Log.Warning("RestorePoint: the Windows drive {Drive} is not a drive letter, so no point was made",
+                SystemDrive);
+            return false;
+        }
+
         using var patience = new CancellationTokenSource(CreatePatience, _clock);
         using var run = CancellationTokenSource.CreateLinkedTokenSource(ct, patience.Token);
         Task<Collection<PSObject>>? running = null;
         try
         {
-            running = _ps.RunAsync(CreateScript, CreateParameters(description), run.Token);
+            running = _ps.RunAsync(CreateScript, CreateParameters(description, drive), run.Token);
             var results = await running.WaitAsync(run.Token).ConfigureAwait(false);
             var ok = Confirms(results, CreateOkSentinel);
             if (!ok)
@@ -217,14 +243,16 @@ public sealed class RestorePointService
     /// <c>'</c> doubled, but PowerShell also ends a single-quoted string at the typographic quotes ‘ ’ ‚ ‛, which
     /// word processors and phone keyboards type for an apostrophe. A description such as "Bob’s point" ended the string
     /// after "Bob", the script could not run, and no restore point was made.</para>
+    /// <para>The drive is its <c>SystemDrive</c> parameter, the one <see cref="SystemDrive"/> holds, never read from
+    /// <c>$env:SystemDrive</c>.</para>
     /// <para>Internal so the integration suite can run this exact text in a real Windows PowerShell 5.1 with the
     /// restore-point cmdlets shadowed by functions, which is the only way to test the semantics it depends
     /// on.</para>
     /// </remarks>
     internal const string CreateScript =
-        "param([string]$Description) " +
+        "param([string]$Description, [string]$SystemDrive) " +
         "try { " +
-        "Enable-ComputerRestore -Drive $env:SystemDrive -ErrorAction SilentlyContinue; " +
+        "Enable-ComputerRestore -Drive $SystemDrive -ErrorAction SilentlyContinue; " +
         "Checkpoint-Computer -Description $Description -RestorePointType 'MODIFY_SETTINGS' " +
         "-ErrorAction Stop -WarningAction Stop; " +
         "'" + CreateOkSentinel + "' " +
@@ -232,11 +260,13 @@ public sealed class RestorePointService
 
     /// <summary>
     /// The parameters <see cref="CreateScript"/> runs with: the description the caller gave, or SysManager's own name
-    /// for the point when it gave none. Pure, so a test can read what reaches the script.
+    /// for the point when it gave none, and the drive to turn System Protection on for. Pure, so a test can read what
+    /// reaches the script.
     /// </summary>
-    internal static Dictionary<string, object?> CreateParameters(string? description) => new()
+    internal static Dictionary<string, object?> CreateParameters(string? description, string systemDrive) => new()
     {
         ["Description"] = string.IsNullOrWhiteSpace(description) ? "SysManager Restore Point" : description,
+        ["SystemDrive"] = systemDrive,
     };
 
     /// <summary>

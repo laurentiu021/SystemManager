@@ -10,6 +10,23 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.136.189] - 2026-11-26
+
+**Clear History on New App Alerts and Clear on Speed Test now ask about what is actually saved, and delete only
+what they asked about.**
+
+### Fixed
+- New App Alerts' Clear History asked only when the list on screen had alerts. After the saved history could not be
+  read when the tab opened, the list was empty, so one press deleted up to 200 earlier detections that had never
+  been shown, without asking, and said the history was cleared (#3252). It now reads the saved history first: when
+  it cannot, it clears nothing and says so, and otherwise it asks, counting what is saved.
+- The same Clear History, answered Yes, also erased an install noticed while its question was open, which the
+  question had not counted and the list had never shown (#3341). It now removes exactly the alerts it asked about.
+- Speed Test's Clear asked only when the list on screen had results, and then deleted every saved result of that
+  engine. After a first load that could not read the saved results, Clear deleted up to 20 of them unasked, or
+  asked about 1 and deleted 20 (#3253). It now reads the saved results first, says so and deletes nothing when it
+  cannot, asks with their real number, and deletes only the results it asked about.
+
 ## [1.136.188] - 2026-11-23
 
 **Cancelling the Dashboard's Update All Apps now lets the app being updated finish, so it is not left

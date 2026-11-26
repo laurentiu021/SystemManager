@@ -146,33 +146,82 @@ public sealed class AppAlertHistoryTests : IDisposable
     }
 
     [Fact]
-    public void Clear_RemovesTheRecord()
+    public void Remove_OfEveryDetection_RemovesTheRecord()
     {
-        NewHistory().Add(Alert("First"));
+        var first = Alert("First");
+        NewHistory().Add(first);
 
-        Assert.True(NewHistory().Clear());
+        Assert.True(NewHistory().Remove([first]));
 
         Assert.False(File.Exists(StoreFile));
         Assert.Empty(NewHistory().Load().Alerts);
     }
 
     [Fact]
-    public void Clear_WithNothingKept_Succeeds()
+    public void Remove_WithNothingKept_Succeeds()
     {
-        Assert.True(NewHistory().Clear());
+        Assert.True(NewHistory().Remove([Alert("Never kept")]));
     }
 
     [Fact]
-    public void Clear_WhenTheRecordCannotBeRemoved_SaysSo()
+    public void Remove_WhenTheRecordCannotBeRemoved_SaysSo()
     {
-        NewHistory().Add(Alert("First"));
+        var first = Alert("First");
+        NewHistory().Add(first);
 
         bool cleared;
         using (new FileStream(StoreFile, FileMode.Open, FileAccess.Read, FileShare.Read))
-            cleared = NewHistory().Clear();
+            cleared = NewHistory().Remove([first]);
 
         Assert.False(cleared);
         Assert.Single(NewHistory().Load().Alerts);
+    }
+
+    [Fact]
+    public void Remove_WhenWhatIsKeptCannotBeWritten_SaysSo_AndChangesNothing()
+    {
+        var first = Alert("First", 1);
+        NewHistory().Add(first);
+        NewHistory().Add(Alert("Second", 2));
+        var before = File.ReadAllBytes(StoreFile);
+
+        bool removed;
+        using (new FileStream(StoreFile, FileMode.Open, FileAccess.Read, FileShare.Read))
+            removed = NewHistory().Remove([first]);
+
+        Assert.False(removed);
+        Assert.Equal(before, File.ReadAllBytes(StoreFile));
+    }
+
+    /// <summary>
+    /// Removing the detections Clear History asked about keeps any other, such as one noticed while it asked.
+    /// </summary>
+    [Fact]
+    public void Remove_ForgetsOnlyTheDetectionsItIsGiven()
+    {
+        var asked = Alert("Asked about", 1);
+        NewHistory().Add(asked);
+        NewHistory().Add(Alert("Noticed meanwhile", 2));
+
+        Assert.True(NewHistory().Remove([asked]));
+
+        Assert.Equal(["Noticed meanwhile"], NewHistory().Load().Alerts.Select(a => a.Name));
+    }
+
+    /// <summary>A record that could not be read is not an empty one: nothing is removed from it.</summary>
+    [Fact]
+    public void Remove_OfARecordThatCannotBeRead_ChangesNothing()
+    {
+        var kept = Alert("Kept");
+        NewHistory().Add(kept);
+        var before = File.ReadAllBytes(StoreFile);
+
+        bool removed;
+        using (new FileStream(StoreFile, FileMode.Open, FileAccess.Read, FileShare.Delete))
+            removed = NewHistory().Remove([kept]);
+
+        Assert.False(removed);
+        Assert.Equal(before, File.ReadAllBytes(StoreFile));
     }
 
     [Fact]

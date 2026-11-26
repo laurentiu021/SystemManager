@@ -143,23 +143,57 @@ public sealed partial class AppAlertsViewModel : ViewModelBase
         _history.AcknowledgeAll();
     }
 
+    /// <summary>
+    /// Clears the alerts shown and the ones saved, after asking, and only those: what it asks about is read first.
+    /// </summary>
+    /// <remarks>
+    /// This list is the only record of what installed itself, and Recent Changes reads it too. The question was asked
+    /// only when the list on screen had alerts, and then the whole saved record was deleted. After a first read that
+    /// failed, the list was empty, so one press deleted earlier detections never shown, unasked (#3252). And an
+    /// install noticed while the question was open was erased with the rest, uncounted (#3341). The saved record is
+    /// read before anything is asked; what is cleared is what was counted, taken before the question.
+    /// </remarks>
     [RelayCommand]
     private void ClearHistory()
     {
-        // This list is the only record of what installed itself, and Recent Changes reads it too. Confirm before
-        // discarding it — but stay frictionless when there is nothing to lose, otherwise the prompt is pure noise.
-        if (AlertCount > 0 && !DialogService.Instance.Confirm(
-                $"Clear all {AlertCount} recorded alert{(AlertCount == 1 ? "" : "s")}?\n\n" +
+        var saved = _history.Load();
+        if (!saved.Readable)
+        {
+            MonitorStatus = "The saved history could not be read, so nothing was cleared. Try again in a moment.";
+            return;
+        }
+
+        var shown = Alerts.ToList();
+        var onScreen = shown.Select(AppAlertHistory.KeyOf).ToHashSet();
+        List<AppInstallEntry> toClear =
+            [.. shown, .. saved.Alerts.Where(a => !onScreen.Contains(AppAlertHistory.KeyOf(a)))];
+        if (toClear.Count == 0)
+        {
+            MonitorStatus = "There is no recorded alert to clear.";
+            return;
+        }
+
+        if (!DialogService.Instance.Confirm(
+                $"Clear all {toClear.Count} recorded alert{(toClear.Count == 1 ? "" : "s")}?\n\n" +
                 "They are also taken off Recent Changes, and this cannot be undone.",
                 "Clear History — Confirm"))
             return;
 
-        var cleared = _history.Clear();
-        Alerts.Clear();
-        AlertCount = 0;
-        UnacknowledgedCount = 0;
-        MonitorStatus = !cleared
-            ? "Cleared from this list, but the saved copy could not be removed, so it is back the next time SysManager starts."
+        if (!_history.Remove(toClear))
+        {
+            MonitorStatus =
+                "Nothing was cleared: the saved history could not be read or changed. Try again in a moment.";
+            return;
+        }
+
+        foreach (var alert in shown) Alerts.Remove(alert);
+        AlertCount = Alerts.Count;
+        UnacknowledgedCount = Alerts.Count(a => !a.IsAcknowledged);
+        var meanwhile = Alerts.Count == 1
+            ? "1 noticed while you were asked is"
+            : $"{Alerts.Count} noticed while you were asked are";
+        MonitorStatus = Alerts.Count > 0
+            ? $"History cleared. {meanwhile} still listed."
             : IsMonitoring
                 ? "Monitoring active — history cleared."
                 : "History cleared.";

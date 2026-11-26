@@ -222,12 +222,18 @@ public sealed class SpeedTestHistoryService : IDisposable
     /// opposite of what was promised, with no way to tell which state is real. The caller now surfaces the
     /// failure instead of guessing.
     /// </remarks>
-    public async Task<bool> ClearAsync(string? engine = null, CancellationToken ct = default)
+    /// <param name="engine">The engine whose results go, or null for every engine.</param>
+    /// <param name="only">
+    /// When given, only these results go: the ones the caller asked about, so a result saved since stays (#3253).
+    /// </param>
+    /// <param name="ct">Cancels the wait for the file.</param>
+    public async Task<bool> ClearAsync(
+        string? engine = null, IReadOnlyCollection<SpeedTestResult>? only = null, CancellationToken ct = default)
     {
         await _fileLock.WaitAsync(ct).ConfigureAwait(false);
         try
         {
-            if (engine is null)
+            if (engine is null && only is null)
             {
                 if (File.Exists(_historyPath))
                     File.Delete(_historyPath);
@@ -239,7 +245,10 @@ public sealed class SpeedTestHistoryService : IDisposable
             // as it is (#2521). One that does not parse is kept aside, which also leaves no result of this engine.
             if (all is null) return false;
             if (unparsable && !StoreFile.SetAside(_historyPath)) return false;
-            var filtered = all.Where(r => !string.Equals(r.Engine, engine, StringComparison.OrdinalIgnoreCase)).ToList();
+            var filtered = all
+                .Where(r => !((engine is null || string.Equals(r.Engine, engine, StringComparison.OrdinalIgnoreCase))
+                              && (only is null || only.Contains(r))))
+                .ToList();
 
             if (filtered.Count == 0)
             {

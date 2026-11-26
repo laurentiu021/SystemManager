@@ -745,7 +745,8 @@ Edit Windows environment variables without the cramped built-in dialog:
 - Admin elevation banner. Listing, creating and restoring all need administrator
   rights, because Windows answers a standard user's request for the list with
   "Access denied". The tab says so, rather than reporting that there are no
-  restore points
+  restore points. When Windows refuses a Refresh while points are listed, the list
+  and your selection stay, and the status line says they are from the last read
 - To put back one change SysManager made rather than the whole PC, the tab points
   to **Undo Changes**
 

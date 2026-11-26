@@ -152,10 +152,15 @@ public partial class App : Application
         // swap itself over the old executable, do only that and exit — no mutex,
         // no DI, no window. This must run before anything else (and before the
         // single-instance guard, since the old instance may still hold the mutex).
-        if (UpdateApplier.TryParseArgs(e.Args, out var targetExe, out var oldPid, out var verifiedHash))
+        // Every start with the handover marker is a handover: one in a form this version does not install, such as
+        // the one versions up to 1.130.85 send, opened a window instead (#3364).
+        if (UpdateApplier.IsHandover(e.Args))
         {
             LogService.Init();
-            UpdateApplier.Run(targetExe, oldPid, verifiedHash);
+            if (UpdateApplier.TryParseArgs(e.Args, out var targetExe, out var oldPid, out var verifiedHash))
+                UpdateApplier.Run(targetExe, oldPid, verifiedHash);
+            else
+                UpdateApplier.RunMalformed(e.Args);
             Shutdown();
             return;
         }

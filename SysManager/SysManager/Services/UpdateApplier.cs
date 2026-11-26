@@ -133,6 +133,44 @@ internal static class UpdateApplier
     }
 
     /// <summary>
+    /// Whether this start is a handover from the in-app updater: its first argument is <see cref="ApplyUpdateArg"/>,
+    /// whatever follows. <see cref="TryParseArgs"/> says whether it is one this version can install.
+    /// </summary>
+    public static bool IsHandover(string[] args) =>
+        args is { Length: > 0 } && string.Equals(args[0], ApplyUpdateArg, StringComparison.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// A start that begins with <see cref="ApplyUpdateArg"/> but is not in the form <see cref="TryParseArgs"/> takes:
+    /// installs nothing and, when it names SysManager's own executable, waits for the process it names to end and
+    /// starts that executable again.
+    /// </summary>
+    /// <remarks>
+    /// Versions up to 1.130.85 hand an update over with a target and a process id and no checksum, and they are still
+    /// offered the newest release. That start was not taken as a handover, so it opened a window: SysManager closed
+    /// for good while the old copy still held the single-instance mutex, or the new version ran from the updates
+    /// folder while the user's own copy stayed old (#3364). It is never an install, since nothing would check its
+    /// bytes (#2832). The version that started it opens again, and updates once with Manual download.
+    /// </remarks>
+    public static void RunMalformed(string[] args, Action<ProcessStartInfo>? launch = null)
+    {
+        ArgumentNullException.ThrowIfNull(args);
+        Log.Error("Update apply: the handover is not in the form this version takes ({Count} arguments), so nothing "
+            + "is installed. Versions up to 1.130.85 update once with Manual download in About.", args.Length);
+
+        var target = args.Length > 1 ? args[1] : "";
+        if (!IsValidApplyTarget(target, out var reason))
+        {
+            Log.Error("Update apply: not starting {Target} again — {Reason}",
+                LogService.SanitizePath(target), reason);
+            return;
+        }
+
+        if (args.Length > 2 && int.TryParse(args[2], out var pid) && pid > 0)
+            WaitForProcessExit(pid, TimeSpan.FromSeconds(30));
+        Relaunch(target, launch ?? StartTarget);
+    }
+
+    /// <summary>
     /// Decides whether <paramref name="targetExe"/> is a path the applier may overwrite.
     /// </summary>
     /// <remarks>

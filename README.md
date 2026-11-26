@@ -1935,7 +1935,9 @@ them:
   that fails keeps the list you already had. One app Windows cannot read does not hide the others
 - **Reversible for most apps** — removal is per-user, so an app can be reinstalled from the
   Store, unless Microsoft has retired it, as it has Skype and Mail & Calendar. The confirmation
-  names any such app in your selection
+  names any such app in your selection. Windows lists and removes the apps of the account
+  SysManager runs as, so when it runs as administrator under an account it cannot confirm is
+  the one signed in, the tab lists and removes nothing and says why
 - **A Windows restore point is attempted before the first removal**, shared with the other tabs
   that try one before their first change, listed under [Restore Points](#restore-points).
   Described honestly rather than reassuringly: System Restore does
@@ -1978,7 +1980,10 @@ Reclaim space and clear browsing traces, per browser:
 - **Confirmation with an impact summary** before anything is deleted
 - Per-user (no admin); locked files (browser open) are skipped, not forced, and
   symlinks/junctions are never followed. When a browser held every file, the result says
-  nothing was removed and suggests closing the browser, rather than "Browser data cleaned"
+  nothing was removed and suggests closing the browser, rather than "Browser data cleaned".
+  The browser folders are those of the account SysManager runs as, so when it runs as
+  administrator under an account it cannot confirm is the one signed in, the tab scans, lists
+  and cleans nothing and says why
 - **Extensions: see what each browser has added — and who added it.** "Since last week my searches go to
   some other site" is usually an extension. The Extensions view lists every extension in every browser and
   profile above, says in plain words what each one can do ("Changes your search engine", "Can read and

@@ -135,6 +135,21 @@ public sealed partial class BrowserCleanerViewModel : ViewModelBase, ISearchDest
 
     private readonly Func<bool> _runsAsTheSignedInAccount;
 
+    /// <summary>
+    /// What the tab says instead of scanning or cleaning when SysManager may be running as another account than the
+    /// one signed in: the browser folders it would read are that account's (#3392).
+    /// </summary>
+    internal const string NotTheSignedInAccountMessage =
+        "Browser data is read from the account SysManager runs as. " + AdminHelper.NotTheSignedInAccountAdvice;
+
+    /// <summary>True, and says so, when the browser folders may not be the signed-in person's.</summary>
+    private bool RefusedForAnotherAccount(string what)
+    {
+        if (_runsAsTheSignedInAccount()) return false;
+        StatusMessage = what + " " + NotTheSignedInAccountMessage;
+        return true;
+    }
+
     private bool NotBusy => !IsBusy;
 
     private void OnVmPropertyChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
@@ -171,6 +186,7 @@ public sealed partial class BrowserCleanerViewModel : ViewModelBase, ISearchDest
     [RelayCommand(CanExecute = nameof(NotBusy))]
     private async Task ScanExtensionsAsync()
     {
+        if (RefusedForAnotherAccount("No extensions were listed.")) return;
         IsBusy = true;
         IsProgressIndeterminate = true;
         StatusMessage = "Looking for extensions in every browser…";
@@ -254,6 +270,7 @@ public sealed partial class BrowserCleanerViewModel : ViewModelBase, ISearchDest
     [RelayCommand(CanExecute = nameof(NotBusy))]
     private async Task ScanAsync()
     {
+        if (RefusedForAnotherAccount("Nothing was scanned.")) return;
         IsBusy = true;
         IsProgressIndeterminate = true;
         StatusMessage = "Scanning installed browsers…";
@@ -300,6 +317,7 @@ public sealed partial class BrowserCleanerViewModel : ViewModelBase, ISearchDest
     [RelayCommand(CanExecute = nameof(NotBusy))]
     private async Task CleanAsync()
     {
+        if (RefusedForAnotherAccount("Nothing was cleaned.")) return;
         var selected = Items.Where(i => i.IsSelected).ToList();
         if (selected.Count == 0)
         {

@@ -3,6 +3,7 @@
 // License: MIT
 
 using System.IO;
+using System.Xml.Linq;
 using NSubstitute;
 using SysManager.Helpers;
 using SysManager.Models;
@@ -626,33 +627,6 @@ public class FileShredderViewModelTests
 
     // ---------- a OneDrive-synced item is warned about, not silently queued (#2824 point 3) ----------
 
-    [Fact]
-    public void CloudSyncWarning_WhenNothingIsUnderSync_IsEmptySoNoStaleWarningRemains()
-    {
-        Assert.Equal(string.Empty, FileShredderViewModel.DescribeCloudSyncWarning([]));
-    }
-
-    [Fact]
-    public void CloudSyncWarning_ForOneItem_NamesItAndMentionsVersionHistoryAndRecycleBin()
-    {
-        var message = FileShredderViewModel.DescribeCloudSyncWarning(["notes.docx"]);
-
-        Assert.Contains("notes.docx", message, StringComparison.Ordinal);
-        Assert.Contains("OneDrive", message, StringComparison.Ordinal);
-        Assert.Contains("version", message, StringComparison.OrdinalIgnoreCase);
-        Assert.Contains("recycle bin", message, StringComparison.OrdinalIgnoreCase);
-    }
-
-    [Fact]
-    public void CloudSyncWarning_ForSeveralItems_ReportsTheCountAndEveryName()
-    {
-        var message = FileShredderViewModel.DescribeCloudSyncWarning(["a.docx", "b.docx"]);
-
-        Assert.Contains("2", message, StringComparison.Ordinal);
-        Assert.Contains("a.docx", message, StringComparison.Ordinal);
-        Assert.Contains("b.docx", message, StringComparison.Ordinal);
-    }
-
     /// <summary>
     /// The message is only useful if it reaches the screen, and the defect was precisely that a
     /// failure never did. Both add paths must therefore assign StatusMessage on the failure branch —
@@ -685,34 +659,6 @@ public class FileShredderViewModelTests
             + string.Join("\n  ", offenders));
     }
 
-    /// <summary>
-    /// Both add paths must actually call the cloud-sync check on the SUCCESS branch, not just define
-    /// <see cref="FileShredderViewModel.DescribeCloudSyncWarning"/> and leave it unreferenced — asserted
-    /// against the source because a real OneDrive-synced folder is not something a unit test can set up.
-    /// </summary>
-    [Fact]
-    public void BothAddPaths_CheckEveryQueuedItemAgainstOneDriveSync()
-    {
-        var source = File.ReadAllText(TestPaths.AppFile("ViewModels", "FileShredderViewModel.cs"));
-
-        var offenders = new List<string>();
-        foreach (var command in new[] { "private void AddFiles()", "private async Task AddFolderAsync()" })
-        {
-            var start = source.IndexOf(command, StringComparison.Ordinal);
-            Assert.True(start >= 0, $"{command} not found — update this guard.");
-            var body = source[start..source.IndexOf("\n    }", start, StringComparison.Ordinal)];
-
-            // IsInsideAnySubtree is the actual per-item/per-folder containment CHECK, not just a mention
-            // of OneDriveRoots() — AddFiles reads OneDriveRoots() once outside its loop, so matching on
-            // that name alone would stay green even if the per-item check line were deleted.
-            if (!body.Contains("IsInsideAnySubtree", StringComparison.Ordinal))
-                offenders.Add($"{command}: does not check against OneDrive's sync roots");
-        }
-
-        Assert.True(offenders.Count == 0,
-            "an item queued for shredding can sit inside a OneDrive-synced folder with no warning shown:\n  "
-            + string.Join("\n  ", offenders));
-    }
     // ---------- the reason a shred failed has to reach the screen ----------
 
     [Fact]
@@ -1209,5 +1155,260 @@ public class FileShredderViewModelTests
             if (File.Exists(movedTo)) File.Delete(movedTo);
             Directory.Delete(dir, recursive: true);
         }
+    }
+
+    // ---------- an item in OneDrive stays marked while it is queued ----------
+    // The warning that an item sits in a folder OneDrive syncs was a status line built from what the last Add picked,
+    // so the next Add or a Remove cleared it while the item stayed queued, and Shred All then said none of the data
+    // could be recovered.
+
+    /// <summary>A view model over <paramref name="dialog"/>, whose only OneDrive root is
+    /// <paramref name="oneDrive"/>.</summary>
+    private static FileShredderViewModel InOneDriveVm(
+        string oneDrive, IDialogService dialog, FileShredderService? service = null) =>
+        new(service ?? new FileShredderService(), dialog, folderSize: _ => 1, oneDriveRoots: () => [oneDrive]);
+
+    private static IDialogService PickingFiles(params string[][] picks)
+    {
+        var dialog = Substitute.For<IDialogService>();
+        dialog.PickOpenFiles(Arg.Any<string>(), Arg.Any<string>(), Arg.Any<bool>(), Arg.Any<bool>())
+            .Returns(picks[0], picks[1..]);
+        dialog.Confirm(Arg.Any<string>(), Arg.Any<string>()).Returns(true);
+        return dialog;
+    }
+
+    private static string FileIn(string folder, string name)
+    {
+        var path = Path.Combine(folder, name);
+        File.WriteAllText(path, name);
+        return path;
+    }
+
+    [Fact]
+    public void AFileInOneDrive_IsMarkedOnItsRow_AndOneOutsideIsNot()
+    {
+        var oneDrive = Directory.CreateTempSubdirectory("smtest_shred_onedrive_").FullName;
+        var outside = Directory.CreateTempSubdirectory("smtest_shred_local_").FullName;
+        try
+        {
+            var synced = FileIn(oneDrive, "tax.pdf");
+            var local = FileIn(outside, "notes.txt");
+            var vm = InOneDriveVm(oneDrive, PickingFiles([synced, local]));
+
+            vm.AddFilesCommand.Execute(null);
+
+            Assert.True(vm.Items.Single(i => i.Path == synced).InOneDrive);
+            Assert.False(vm.Items.Single(i => i.Path == local).InOneDrive);
+        }
+        finally
+        {
+            Directory.Delete(oneDrive, recursive: true);
+            Directory.Delete(outside, recursive: true);
+        }
+    }
+
+    [Theory]
+    [InlineData("inside")]   // a folder OneDrive syncs
+    [InlineData("holder")]   // a folder that holds the OneDrive folder
+    public async Task AFolderInOrHoldingOneDrive_IsMarked(string which)
+    {
+        var holder = Directory.CreateTempSubdirectory("smtest_shred_holder_").FullName;
+        var oneDrive = Directory.CreateDirectory(Path.Combine(holder, "OneDrive")).FullName;
+        var inside = Directory.CreateDirectory(Path.Combine(oneDrive, "Photos")).FullName;
+        try
+        {
+            var picked = which == "inside" ? inside : holder;
+            var dialog = Substitute.For<IDialogService>();
+            dialog.PickFolder(Arg.Any<string>()).Returns(picked);
+            var vm = InOneDriveVm(oneDrive, dialog);
+
+            await vm.AddFolderCommand.ExecuteAsync(null);
+
+            Assert.True(Assert.Single(vm.Items).InOneDrive);
+            Assert.Contains(
+                "1 item in the queue is in a folder OneDrive syncs", vm.StatusMessage, StringComparison.Ordinal);
+        }
+        finally
+        {
+            Directory.Delete(holder, recursive: true);
+        }
+    }
+
+    [Fact]
+    public async Task AFolderBesideOneDrive_IsNotMarked()
+    {
+        var parent = Directory.CreateTempSubdirectory("smtest_shred_beside_").FullName;
+        var oneDrive = Directory.CreateDirectory(Path.Combine(parent, "OneDrive")).FullName;
+        // A sibling whose name starts the same: compared on a folder boundary, not as text.
+        var beside = Directory.CreateDirectory(Path.Combine(parent, "OneDrive backup")).FullName;
+        try
+        {
+            var dialog = Substitute.For<IDialogService>();
+            dialog.PickFolder(Arg.Any<string>()).Returns(beside);
+            var vm = InOneDriveVm(oneDrive, dialog);
+
+            await vm.AddFolderCommand.ExecuteAsync(null);
+
+            Assert.False(Assert.Single(vm.Items).InOneDrive);
+            Assert.DoesNotContain("OneDrive", vm.StatusMessage, StringComparison.Ordinal);
+        }
+        finally
+        {
+            Directory.Delete(parent, recursive: true);
+        }
+    }
+
+    [Fact]
+    public void TheOneDriveLine_FollowsTheWholeQueue_NotTheLastAdd()
+    {
+        var oneDrive = Directory.CreateTempSubdirectory("smtest_shred_onedrive_").FullName;
+        var outside = Directory.CreateTempSubdirectory("smtest_shred_local_").FullName;
+        try
+        {
+            var synced = FileIn(oneDrive, "tax.pdf");
+            var local = FileIn(outside, "notes.txt");
+            var vm = InOneDriveVm(oneDrive, PickingFiles([synced], [local]));
+            const string line = "1 item in the queue is in a folder OneDrive syncs";
+
+            vm.AddFilesCommand.Execute(null);
+            Assert.Contains(line, vm.StatusMessage, StringComparison.Ordinal);
+
+            vm.AddFilesCommand.Execute(null);
+            Assert.Contains(line, vm.StatusMessage, StringComparison.Ordinal);
+
+            vm.RemoveItemCommand.Execute(vm.Items.Single(i => i.Path == local));
+            Assert.Contains(line, vm.StatusMessage, StringComparison.Ordinal);
+
+            vm.RemoveItemCommand.Execute(vm.Items.Single(i => i.Path == synced));
+            Assert.DoesNotContain("OneDrive", vm.StatusMessage, StringComparison.Ordinal);
+        }
+        finally
+        {
+            Directory.Delete(oneDrive, recursive: true);
+            Directory.Delete(outside, recursive: true);
+        }
+    }
+
+    [Fact]
+    public async Task ShredAll_NamesWhatOneDriveCanKeep_InTheQuestionAndTheSummary()
+    {
+        var oneDrive = Directory.CreateTempSubdirectory("smtest_shred_onedrive_").FullName;
+        var outside = Directory.CreateTempSubdirectory("smtest_shred_local_").FullName;
+        using var activity = new ActivityLogScope();
+        try
+        {
+            var synced = FileIn(oneDrive, "tax.pdf");
+            var local = FileIn(outside, "notes.txt");
+            string? question = null;
+            var dialog = PickingFiles([synced, local]);
+            dialog.Confirm(Arg.Any<string>(), Arg.Any<string>()).Returns(call =>
+            {
+                question = call.ArgAt<string>(0);
+                return true;
+            });
+            var vm = InOneDriveVm(oneDrive, dialog);
+            vm.AddFilesCommand.Execute(null);
+
+            await vm.ShredAllCommand.ExecuteAsync(null);
+
+            Assert.Equal(
+                FileShredderViewModel.DescribeShredQuestion(2, ShredMethod.Standard, ["tax.pdf"]), question);
+            Assert.False(File.Exists(synced));
+            Assert.False(File.Exists(local));
+            Assert.StartsWith(
+                "Complete — 2 shredded, 0 failed. \"tax.pdf\": OneDrive may still keep a copy in its version history "
+                + "or recycle bin.",
+                vm.StatusMessage, StringComparison.Ordinal);
+        }
+        finally
+        {
+            Directory.Delete(oneDrive, recursive: true);
+            Directory.Delete(outside, recursive: true);
+        }
+    }
+
+    [Fact]
+    public void TheQuestion_WithNothingFromOneDrive_IsTheOneItAlwaysWas()
+    {
+        Assert.Equal(
+            "You are about to permanently shred 3 item(s) using the Standard method.\n\n"
+            + "This action is IRREVERSIBLE. The data cannot be recovered.\n\nContinue?",
+            FileShredderViewModel.DescribeShredQuestion(3, ShredMethod.Standard, []));
+    }
+
+    [Fact]
+    public void TheQuestion_WithSomeFromOneDrive_SaysTheRestCannotBeRecovered()
+    {
+        var question = FileShredderViewModel.DescribeShredQuestion(3, ShredMethod.Standard, ["a.pdf", "Photos"]);
+
+        Assert.Equal(
+            "You are about to permanently shred 3 item(s) using the Standard method.\n\n"
+            + "2 of them are in a folder OneDrive syncs: \"a.pdf\", \"Photos\". They are destroyed on this PC, but "
+            + "OneDrive's version history and recycle bin can keep their original. The other item cannot be "
+            + "recovered.\n\nContinue?",
+            question);
+        Assert.DoesNotContain("IRREVERSIBLE", question, StringComparison.Ordinal);
+    }
+
+    [Theory]
+    [InlineData(1, "It is in a folder OneDrive syncs: \"a.pdf\". It is destroyed on this PC, but OneDrive's version "
+                   + "history and recycle bin can keep its original.\n\nContinue?")]
+    [InlineData(2, "1 of them is in a folder OneDrive syncs: \"a.pdf\". It is destroyed on this PC, but OneDrive's "
+                   + "version history and recycle bin can keep its original. The other item cannot be recovered."
+                   + "\n\nContinue?")]
+    [InlineData(4, "1 of them is in a folder OneDrive syncs: \"a.pdf\". It is destroyed on this PC, but OneDrive's "
+                   + "version history and recycle bin can keep its original. The other 3 items cannot be recovered."
+                   + "\n\nContinue?")]
+    public void TheQuestion_CountsWhatOneDriveCanKeep_AndWhatItCannot(int total, string ending)
+    {
+        var question = FileShredderViewModel.DescribeShredQuestion(total, ShredMethod.Quick, ["a.pdf"]);
+
+        Assert.EndsWith(ending, question, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void TheQuestion_WhenEveryItemIsFromOneDrive_SaysAll()
+    {
+        var question = FileShredderViewModel.DescribeShredQuestion(2, ShredMethod.Quick, ["a.pdf", "b.pdf"]);
+
+        Assert.Contains(
+            "All 2 are in a folder OneDrive syncs: \"a.pdf\", \"b.pdf\".", question, StringComparison.Ordinal);
+        Assert.DoesNotContain("The other", question, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void QuotedNames_ShowsFive_ThenHowManyMore()
+    {
+        Assert.Equal("\"a\", \"b\", \"c\", \"d\", \"e\" and 2 more",
+            FileShredderViewModel.QuotedNames(["a", "b", "c", "d", "e", "f", "g"]));
+        Assert.Equal("\"a\", \"b\", \"c\", \"d\", \"e\"", FileShredderViewModel.QuotedNames(["a", "b", "c", "d", "e"]));
+    }
+
+    [Theory]
+    [InlineData(0, "")]
+    [InlineData(1, "1 item in the queue is in a folder OneDrive syncs: OneDrive's version history and recycle bin can "
+                   + "keep its original after it is shredded here.")]
+    [InlineData(2, "2 items in the queue are in a folder OneDrive syncs: OneDrive's version history and recycle bin "
+                   + "can keep their original after they are shredded here.")]
+    public void TheQueueLine_CountsTheMarkedItems(int count, string line)
+    {
+        Assert.Equal(line, FileShredderViewModel.DescribeQueueInOneDrive(count));
+    }
+
+    [Fact]
+    public void TheQueue_MarksAnItemInOneDrive_BesideItsName()
+    {
+        XNamespace wpf = "http://schemas.microsoft.com/winfx/2006/xaml/presentation";
+        var view = XDocument.Load(TestPaths.AppFile("Views", "FileShredderView.xaml"));
+        var nameColumn = Assert.Single(view.Descendants(wpf + "DataGridTemplateColumn"),
+            column => (string?)column.Attribute("Header") == "Name");
+
+        Assert.Equal("Name", (string?)nameColumn.Attribute("SortMemberPath"));
+        var mark = Assert.Single(nameColumn.Descendants(wpf + "Border"),
+            border => (string?)border.Attribute("Visibility")
+                      == "{Binding InOneDrive, Converter={StaticResource FlexVis}}");
+        Assert.Equal("in OneDrive", (string?)mark.Descendants(wpf + "TextBlock").Single().Attribute("Text"));
+        Assert.Equal("{DynamicResource WarningText}",
+            (string?)mark.Descendants(wpf + "TextBlock").Single().Attribute("Foreground"));
     }
 }

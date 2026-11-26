@@ -94,7 +94,35 @@
                         </Style>
                     </DataGrid.Style>
                     <DataGrid.Columns>
-                        <DataGridTextColumn Header="Name" Binding="{Binding Name}" Width="200" MinWidth="100"/>
+                        <!-- The mark beside the name says the item is in a folder OneDrive syncs, the badge Browser
+                             Cleaner uses for "signs you out". A Grid that takes only the width it needs: a name too
+                             long for the column trims to leave the mark room (#3214). -->
+                        <DataGridTemplateColumn Header="Name" SortMemberPath="Name" Width="200" MinWidth="100">
+                            <DataGridTemplateColumn.CellTemplate>
+                                <DataTemplate>
+                                    <Grid HorizontalAlignment="Left" VerticalAlignment="Center">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="*"/>
+                                            <ColumnDefinition Width="Auto"/>
+                                        </Grid.ColumnDefinitions>
+                                        <TextBlock Text="{Binding Name}" TextTrimming="CharacterEllipsis"
+                                                   ToolTip="{Binding Text, RelativeSource={RelativeSource Self}}"
+                                                   helpers:CutText.ToolTip="True"/>
+                                        <Border Grid.Column="1" Background="{DynamicResource Surface3}"
+                                                CornerRadius="{StaticResource RadiusSm}" Padding="6,1" Margin="8,0,0,0"
+                                                VerticalAlignment="Center"
+                                                Visibility="{Binding InOneDrive, Converter={StaticResource FlexVis}}">
+                                            <Border.ToolTip>
+                                                <ToolTip>This item is in a folder OneDrive syncs. Shredding it here does
+                                                    not reach the copies OneDrive keeps.</ToolTip>
+                                            </Border.ToolTip>
+                                            <TextBlock Text="in OneDrive" Style="{StaticResource Micro}"
+                                                       Foreground="{DynamicResource WarningText}"/>
+                                        </Border>
+                                    </Grid>
+                                </DataTemplate>
+                            </DataGridTemplateColumn.CellTemplate>
+                        </DataGridTemplateColumn>
                         <DataGridTextColumn Header="Path" Binding="{Binding Path}" Width="*" MinWidth="120"/>
                         <DataGridTextColumn Header="Size" Binding="{Binding SizeDisplay}" SortMemberPath="SizeBytes" Width="90" MinWidth="60"/>
                         <DataGridTextColumn Header="Status" Binding="{Binding Status}" Width="160" MinWidth="80"/>

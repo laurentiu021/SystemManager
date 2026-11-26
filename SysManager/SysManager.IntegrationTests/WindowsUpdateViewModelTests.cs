@@ -158,12 +158,21 @@ public class WindowsUpdateViewModelTests
         using var elevated = AdminHelper.ForceElevation(true);
         var runner = new RecordingRunner();
         var vm = new WindowsUpdateViewModel(runner, new WindowsUpdateService(), new WindowsUpdatePolicyService());
+        // The refusal says why in a window too, and this suite has a WPF Application, so the real service would
+        // show it and wait for a click that never comes.
+        var previous = DialogService.Instance;
+        var dialog = new RecordingDialog();
+        DialogService.Instance = dialog;
+        try
+        {
+            await vm.InstallModuleCommand.ExecuteAsync(null);
 
-        await vm.InstallModuleCommand.ExecuteAsync(null);
-
-        Assert.Contains("non-administrator", vm.StatusMessage, StringComparison.OrdinalIgnoreCase);
-        Assert.False(vm.IsBusy);
-        Assert.Equal(0, runner.Calls);
+            Assert.Contains("non-administrator", vm.StatusMessage, StringComparison.OrdinalIgnoreCase);
+            Assert.False(vm.IsBusy);
+            Assert.Equal(0, runner.Calls);
+            Assert.Equal(1, dialog.Prompts);
+        }
+        finally { DialogService.Instance = previous; }
     }
 
     /// <summary>

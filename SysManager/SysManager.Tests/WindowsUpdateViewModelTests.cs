@@ -120,6 +120,8 @@ public sealed class WindowsUpdateViewModelTests : IDisposable
             new WindowsUpdateService(),
             Policy(),
             static () => true);
+        // The refusal also says why in a window; a substitute shows it, so no test can wait on a real one.
+        using var answer = new DialogAnswer(confirm: false);
 
         await vm.InstallModuleCommand.ExecuteAsync(null);
 
@@ -1334,6 +1336,7 @@ public sealed class WindowsUpdateViewModelTests : IDisposable
     public async Task InstallModule_WhenElevated_RefusesBecauseTheModuleIsPerUser()
     {
         var vm = NewVm(elevated: true, out var runner);
+        using var answer = new DialogAnswer(confirm: false);
 
         await vm.InstallModuleCommand.ExecuteAsync(null);
 

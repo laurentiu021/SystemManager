@@ -85,7 +85,6 @@
                             Command="{Binding RemoveModuleCommand}"
                             Visibility="{Binding CanRemoveModule, Converter={StaticResource FlexVis}}"
                             AutomationProperties.Name="Remove PSWindowsUpdate from your modules folder"
-                            AutomationProperties.HelpText="History stops working until you install it again."
                             ToolTip="Takes it out of your own modules folder. History needs it installed again."
                             Style="{StaticResource DangerButton}" Padding="12,4" Margin="8,0,0,0"
                             VerticalAlignment="Center"/>

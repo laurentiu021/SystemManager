@@ -268,6 +268,7 @@ public class AdminHelperTests
     [InlineData("Services", "PrivacyService.cs", "AdminHelper.PerUserRegistryRoot()")]
     [InlineData("Services", "PrivacyMonitorService.cs", "AdminHelper.PerUserRegistryRoot()")]
     [InlineData("Services", "NotificationBlockerService.cs", "AdminHelper.PerUserRegistryRoot()")]
+    [InlineData("Services", "GamingTweaks.cs", "AdminHelper.PerUserRegistryRoot()")]
     [InlineData("Services", "MaintenanceSchedulerService.cs", "AdminHelper.IsElevatedAsAnotherUser()")]
     [InlineData("Services", "PerformanceService.cs", "AdminHelper.PerUserRegistryRoot()")]
     [InlineData("Services", "DefenderService.cs", "AdminHelper.OwnSessionSid()")]

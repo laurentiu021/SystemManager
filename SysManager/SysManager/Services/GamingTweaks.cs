@@ -6,6 +6,7 @@ using System.Diagnostics;
 using System.ServiceProcess;
 using Microsoft.Win32;
 using Serilog;
+using SysManager.Helpers;
 using SysManager.Models;
 
 namespace SysManager.Services;
@@ -230,6 +231,40 @@ internal sealed class SearchIndexingTweak(
         if (_status() is ServiceControllerStatus.StopPending)
             await _waitUntilStopped(StopWait).ConfigureAwait(false);
         await _start().ConfigureAwait(false);
+        await StartDependentsAsync().ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// Starts the services that depend on Windows Search and were running before the stop, which stopped them too
+    /// (#3244).
+    /// </summary>
+    /// <remarks>
+    /// The names come back from the session's record in the user's own folder and are started as administrator, so
+    /// only a name that is a service depending on Windows Search now is started. One Windows will not start is named,
+    /// after the others are tried, so the step is reported as not restored.
+    /// </remarks>
+    private async Task StartDependentsAsync()
+    {
+        if (_dependentsRunning.Count == 0) return;
+        var current = new HashSet<string>(_dependents(), StringComparer.OrdinalIgnoreCase);
+        List<string> notStarted = [];
+        foreach (var name in _dependentsRunning.Where(current.Contains).Distinct(StringComparer.OrdinalIgnoreCase))
+        {
+            try
+            {
+                await _startDependent(name).ConfigureAwait(false);
+            }
+            catch (InvalidOperationException ex)
+            {
+                Log.Warning("Gaming Profile: {Service}, which depends on Windows Search, could not be started again: "
+                    + "{Error}", name, ex.Message);
+                notStarted.Add(name);
+            }
+        }
+
+        if (notStarted.Count > 0)
+            throw new InvalidOperationException(
+                $"Windows Search was started again, but {string.Join(", ", notStarted)} could not be.");
     }
 
     /// <summary>The services that depend on Windows Search, or none when it cannot be read.</summary>
@@ -301,7 +336,20 @@ internal sealed class NotificationsTweak(
     // The registry root is injectable (defaulting to HKCU) for the same reason as
     // NotificationBlockerService and AppBlockerService: it lets the apply/revert round-trip be
     // tested against a redirected subkey instead of the machine's real notification settings.
-    private RegistryKey Root => baseKey ?? Registry.CurrentUser;
+    /// <summary>
+    /// Opens the push-notifications key for writing, under <paramref name="root"/> or, when none is given, under the
+    /// signed-in account's own settings.
+    /// </summary>
+    /// <remarks>
+    /// Not <c>Registry.CurrentUser</c>: run as another administrator, that is the administrator's, and game mode
+    /// silenced their notifications while the person playing still got theirs (#3244). The Notifications tab's own
+    /// root. The root opened here is closed again; disposing <c>Registry.CurrentUser</c> leaves it open.
+    /// </remarks>
+    private static RegistryKey OpenPushKey(RegistryKey? root)
+    {
+        using var owned = root is null ? AdminHelper.PerUserRegistryRoot() : null;
+        return (root ?? owned!).CreateSubKey(NotificationBlockerService.PushKeyPath, writable: true);
+    }
 
     public string Label => "Silence notifications";
     public bool RequiresAdmin => false;
@@ -311,7 +359,8 @@ internal sealed class NotificationsTweak(
     {
         try
         {
-            using var key = (baseKey ?? Registry.CurrentUser)
+            using var owned = baseKey is null ? AdminHelper.PerUserRegistryRoot() : null;
+            using var key = (baseKey ?? owned!)
                 .OpenSubKey(NotificationBlockerService.PushKeyPath, writable: false);
             return key?.GetValue(NotificationBlockerService.ToastValueName) is int i ? i : null;
         }
@@ -323,7 +372,7 @@ internal sealed class NotificationsTweak(
     {
         // Toasts already suppressed (ToastEnabled == 0) → no-op; nothing to change or restore.
         if (originalToastEnabled == 0) return Task.FromResult(GamingTweakResult.NoChange);
-        using var key = Root.CreateSubKey(NotificationBlockerService.PushKeyPath, writable: true);
+        using var key = OpenPushKey(baseKey);
         key.SetValue(NotificationBlockerService.ToastValueName, 0, RegistryValueKind.DWord);
         Log.Information("Gaming Profile: notifications silenced (ToastEnabled=0)");
         return Task.FromResult(GamingTweakResult.Applied);
@@ -365,7 +414,7 @@ internal sealed class NotificationsTweak(
             return Task.CompletedTask;
         }
 
-        using var key = Root.CreateSubKey(NotificationBlockerService.PushKeyPath, writable: true);
+        using var key = OpenPushKey(baseKey);
         if (originalToastEnabled is { } v)
             key.SetValue(NotificationBlockerService.ToastValueName, v, RegistryValueKind.DWord);
         else

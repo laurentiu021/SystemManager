@@ -2190,7 +2190,10 @@ offers, "rate us" prompts:
   nothing, because everything was already set or a step failed, says so, and game mode stays off
 - **Fully reversible & snapshot-based** — the original state (power plan, visual
   effects, indexing, notifications) is captured before any change and restored exactly;
-  SysManager also tries a System Restore point first (best-effort, needs administrator)
+  SysManager also tries a System Restore point first (best-effort, needs administrator).
+  Pausing indexing stops the services that depend on Windows Search too, so the ones that were
+  running are noted and started again after it. Notifications are silenced for the person signed
+  in, as on the Notification Blocker tab, even when SysManager runs as another administrator
 - **Your own changes win** — if you switch notifications back on yourself while a profile is
   running (Customization → Notification Blocker, or Windows Settings, which is the same switch), the
   restore leaves that switch as you set it. If you mute them yourself on the Notification Blocker

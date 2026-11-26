@@ -21,6 +21,28 @@ namespace SysManager.Tests;
 /// </summary>
 public sealed class NotificationsTweakTests : IDisposable
 {
+    /// <summary>
+    /// The step writes the switch the Notifications tab writes, so it takes its default root from the same place: the
+    /// signed-in account's own hive while SysManager runs as another administrator (#3244, #2826). It used
+    /// <c>Registry.CurrentUser</c>, so game mode silenced the administrator's notifications and reported it applied.
+    /// </summary>
+    [Fact]
+    public void TheStepTakesItsDefaultRoot_WhereTheNotificationsTabDoes()
+    {
+        var tweaks = SourceBraces.CodeOnly(File.ReadAllText(TestPaths.AppFile("Services", "GamingTweaks.cs")));
+        var start = tweaks.IndexOf("internal sealed class NotificationsTweak(", StringComparison.Ordinal);
+        Assert.True(start >= 0, "NotificationsTweak was not found in GamingTweaks.cs");
+        var next = tweaks.IndexOf("internal sealed class ", start + 1, StringComparison.Ordinal);
+        var body = next < 0 ? tweaks[start..] : tweaks[start..next];
+        Assert.True(body.Length > 500, $"the slice of NotificationsTweak is only {body.Length} characters");
+
+        Assert.DoesNotContain("Registry.CurrentUser", body, StringComparison.Ordinal);
+        Assert.Contains("AdminHelper.PerUserRegistryRoot()", body, StringComparison.Ordinal);
+        var tab = SourceBraces.CodeOnly(
+            File.ReadAllText(TestPaths.AppFile("Services", "NotificationBlockerService.cs")));
+        Assert.Contains("AdminHelper.PerUserRegistryRoot()", tab, StringComparison.Ordinal);
+    }
+
     private readonly string _rootName = @"Software\SysManagerTests\NotifTweak_" + Guid.NewGuid().ToString("N");
     private readonly RegistryKey _root;
 

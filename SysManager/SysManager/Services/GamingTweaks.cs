@@ -181,7 +181,10 @@ internal sealed class SearchIndexingTweak(
     Func<Task>? stop = null,
     Func<Task>? start = null,
     Func<ServiceControllerStatus?>? status = null,
-    Func<TimeSpan, Task>? waitUntilStopped = null) : IGamingTweak
+    Func<TimeSpan, Task>? waitUntilStopped = null,
+    IReadOnlyList<string>? dependentsRunning = null,
+    Func<string, Task>? startDependent = null,
+    Func<IReadOnlyCollection<string>>? dependents = null) : IGamingTweak
 {
     public const string ServiceName = "WSearch";
 
@@ -192,6 +195,9 @@ internal sealed class SearchIndexingTweak(
     private readonly Func<Task> _start = start ?? (() => ServiceManagerService.StartServiceAsync(ServiceName));
     private readonly Func<ServiceControllerStatus?> _status = status ?? ReadStatus;
     private readonly Func<TimeSpan, Task> _waitUntilStopped = waitUntilStopped ?? WaitUntilStoppedAsync;
+    private readonly IReadOnlyList<string> _dependentsRunning = dependentsRunning ?? [];
+    private readonly Func<string, Task> _startDependent = startDependent ?? ServiceManagerService.StartServiceAsync;
+    private readonly Func<IReadOnlyCollection<string>> _dependents = dependents ?? Dependents;
 
     public string Label => "Pause search indexing";
     public bool RequiresAdmin => true;
@@ -224,6 +230,28 @@ internal sealed class SearchIndexingTweak(
         if (_status() is ServiceControllerStatus.StopPending)
             await _waitUntilStopped(StopWait).ConfigureAwait(false);
         await _start().ConfigureAwait(false);
+    }
+
+    /// <summary>The services that depend on Windows Search, or none when it cannot be read.</summary>
+    internal static IReadOnlyCollection<string> Dependents() => DependentsWhere(_ => true);
+
+    /// <summary>
+    /// The services that depend on Windows Search and are running now, or none when it cannot be read.
+    /// </summary>
+    internal static IReadOnlyList<string> RunningDependents() =>
+        DependentsWhere(s => s.Status == ServiceControllerStatus.Running);
+
+    private static List<string> DependentsWhere(Func<ServiceController, bool> keep)
+    {
+        try
+        {
+            using var sc = new ServiceController(ServiceName);
+            var dependents = sc.DependentServices;
+            try { return [.. dependents.Where(keep).Select(d => d.ServiceName)]; }
+            finally { foreach (var d in dependents) d.Dispose(); }
+        }
+        catch (InvalidOperationException) { return []; }   // not installed, or not readable
+        catch (System.ComponentModel.Win32Exception) { return []; }
     }
 
     private static ServiceControllerStatus? ReadStatus()

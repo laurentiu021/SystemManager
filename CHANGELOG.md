@@ -10,6 +10,22 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.136.196] - 2026-11-26
+
+**Gaming Profile puts back the services that pausing search stopped, and silences notifications for the person
+signed in.**
+
+### Fixed
+- Pausing search indexing stops Windows Search, and Windows stops every running service that depends on it first.
+  Only Windows Search was started again, on stop, on game exit and after a crash, so a dependent that was running,
+  Windows Media Player Network Sharing while streaming to a TV say, stayed stopped until the next restart (#3244).
+  Game mode now notes which of them were running and starts them again after Windows Search. Only a service that
+  still depends on Windows Search is started, and one Windows will not start is named as not restored.
+- "Silence notifications" wrote to the account SysManager runs as. Started as administrator with another
+  account's password, game mode silenced that administrator's notifications and reported the step as applied,
+  while the person playing still got them (#3244). It now writes where the Notifications tab does: the signed-in
+  account's own settings.
+
 ## [1.136.195] - 2026-11-26
 
 **Edge/OneDrive Remover's Restore Edge is all or nothing, and the card says when Edge's automatic updates are off.**

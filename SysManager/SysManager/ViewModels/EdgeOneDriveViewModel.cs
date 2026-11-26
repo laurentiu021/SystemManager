@@ -72,7 +72,10 @@ public sealed partial class EdgeOneDriveViewModel : ElevatedViewModelBase
         ? "Microsoft Edge is not installed."
         : EdgeBackgroundDisabled
             ? "Edge is de-integrated (background mode and startup boost are off)."
-            : "Edge is active (background mode / startup boost may be on).");
+            : EdgeUpdateTasksEnabled == false
+                ? "Edge is active, but its automatic-update tasks are off, so its security fixes can arrive late. "
+                  + "Restore Edge turns them back on."
+                : "Edge is active (background mode / startup boost may be on).");
 
     /// <summary>What Edge says while it is disabled and why, on the Edge card (#2880).</summary>
     public string EdgeManagedNotice => EdgeOneDriveService.ManagedBrowserNotice;

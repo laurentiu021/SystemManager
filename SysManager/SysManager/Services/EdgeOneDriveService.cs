@@ -276,13 +276,28 @@ public sealed partial class EdgeOneDriveService
     /// <summary>
     /// Restores Edge to Windows defaults: clears the background/startup-boost policy values and
     /// re-enables its auto-update scheduled tasks. Returns <see cref="EdgeOneDriveOutcome.NeedsAdmin"/>
-    /// if the machine policy write is denied, and <see cref="EdgeOneDriveOutcome.Failed"/> when no update task is
-    /// found or one cannot be enabled.
+    /// if the machine policy write is denied, and <see cref="EdgeOneDriveOutcome.Failed"/>, with the policy values put
+    /// back as they were, when no update task is found or one cannot be enabled.
     /// </summary>
+    /// <remarks>
+    /// All or nothing, as <see cref="DisableEdgeAsync"/> is. The values stayed cleared when the task step failed, so
+    /// the card said Edge was active while its update tasks were still off (#3396).
+    /// </remarks>
     public async Task<EdgeOneDriveOutcome> RestoreEdgeAsync(CancellationToken ct = default)
     {
+        var before = ReadEdgePolicyValues();
         if (!TrySetEdgeBackgroundDisabled(false)) return EdgeOneDriveOutcome.NeedsAdmin;
-        if (!await TrySetEdgeTasksAsync(enabled: true, ct).ConfigureAwait(false)) return EdgeOneDriveOutcome.Failed;
+        var done = false;
+        try
+        {
+            done = await TrySetEdgeTasksAsync(enabled: true, ct).ConfigureAwait(false);
+        }
+        finally
+        {
+            // Also when the run throws rather than reports, as a cancelled one does.
+            if (!done) RestoreEdgePolicyValues(before);
+        }
+        if (!done) return EdgeOneDriveOutcome.Failed;
         Log.Information("Edge: restored background/startup-boost and update tasks");
         return EdgeOneDriveOutcome.Success;
     }
@@ -452,7 +467,8 @@ public sealed partial class EdgeOneDriveService
 
     internal static string BuildQueryEdgeTasksScript() =>
         $"$tasks = {FindEdgeTasksPipeline("SilentlyContinue")}; " +
-        "[PSCustomObject]@{ AnyEnabled = (@($tasks | Where-Object { [string]$_.State -ne 'Disabled' }).Count -gt 0) }";
+        "[PSCustomObject]@{ Found = $tasks.Count; " +
+        "AnyEnabled = (@($tasks | Where-Object { [string]$_.State -ne 'Disabled' }).Count -gt 0) }";
 
     /// <summary>
     /// Runs the enable/disable script and says whether it did its job: at least one update task found, and none
@@ -480,19 +496,27 @@ public sealed partial class EdgeOneDriveService
         }
     }
 
+    /// <summary>
+    /// Whether one of Edge's automatic-update tasks is on, or null when that is not known: the query failed or
+    /// reported nothing, or found no task to read.
+    /// </summary>
+    /// <remarks>
+    /// Each of those read as "off", which the card could not tell from tasks really turned off (#3396).
+    /// </remarks>
     private async Task<bool?> QueryEdgeUpdateTasksEnabledAsync(CancellationToken ct)
     {
         try
         {
             var results = await _ps.RunAsync(BuildQueryEdgeTasksScript(), cancellationToken: ct).ConfigureAwait(false);
-            if (results.Count == 0) return false;
+            if (results.Count == 0) return null;
+            if (results[0].Properties["Found"]?.Value is not int found || found == 0) return null;
             // The script projects a PowerShell [bool], which marshals back as System.Boolean.
             return results[0].Properties["AnyEnabled"]?.Value is true;
         }
         catch (System.Management.Automation.RuntimeException ex)
         {
             Log.Debug("Edge: query update tasks failed: {Error}", ex.Message);
-            return false;
+            return null;
         }
     }
 

@@ -145,8 +145,23 @@ public class EdgeOneDriveScriptTests
         // The task elsewhere is enabled, and does not count.
         var (_, output, _) = await WindowsPowerShellScript.RunAsync(
             Tasks((Core, "\\", core), (Ua, "\\", ua), (Elsewhere, "\\Contoso\\", "Ready")) + Stubs + Guard +
-            "$r = & {" + EdgeOneDriveService.BuildQueryEdgeTasksScript() + "} ; \"ANYENABLED=$($r.AnyEnabled)\"");
+            "$r = & {" + EdgeOneDriveService.BuildQueryEdgeTasksScript() + "} ; "
+            + "\"ANYENABLED=$($r.AnyEnabled) FOUND=$($r.Found)\"");
 
-        Assert.Contains($"ANYENABLED={expected}", output, StringComparison.Ordinal);
+        Assert.Contains($"ANYENABLED={expected} FOUND=2", output, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// With no Edge update task in the root folder the query says it found none, so the card does not call Edge's
+    /// updates off (#3396).
+    /// </summary>
+    [Fact]
+    public async Task TheStatusQuery_SaysWhenItFoundNoEdgeTask()
+    {
+        var (_, output, _) = await WindowsPowerShellScript.RunAsync(
+            Tasks((Elsewhere, "\\Contoso\\", "Disabled")) + Stubs + Guard +
+            "$r = & {" + EdgeOneDriveService.BuildQueryEdgeTasksScript() + "} ; \"FOUND=$($r.Found)\"");
+
+        Assert.Contains("FOUND=0", output, StringComparison.Ordinal);
     }
 }

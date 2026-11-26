@@ -18801,8 +18801,9 @@ public partial class ArchitectureTests
             }
         }
 
-        // Vacuity floors: 128 text columns in the views, 35 of them with a cell style of their own, for #3214.
-        Assert.True(columns >= 128, $"only {columns} text columns were read in the views, out of 128 when written.");
+        // Vacuity floors: 128 text columns in the views, 35 of them with a cell style of their own, for #3214. 127 since
+        // File Shredder's Name column became a template column, to carry the "in OneDrive" mark beside the name.
+        Assert.True(columns >= 127, $"only {columns} text columns were read in the views, out of 127 when measured.");
         Assert.True(styles >= 35, $"only {styles} text-column cell styles were read, out of 35 when written.");
         Assert.True(wrong.Count == 0,
             "these list columns do not draw their cells in GridCellText:\n  " + string.Join("\n  ", wrong));

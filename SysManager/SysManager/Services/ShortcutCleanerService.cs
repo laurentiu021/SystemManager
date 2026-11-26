@@ -274,12 +274,17 @@ public sealed partial class ShortcutCleanerService
     /// rewritten at the same place say, or a Recent item whose document was put back, was deleted anyway, permanently
     /// when the Recycle Bin was not ticked, after a confirmation that still called it broken. It is kept now, and named
     /// in <see cref="ShortcutDeletion.WorkAgain"/>.
+    /// <para>Only a target that is there again counts as working again. A target that could not be reached, a folder
+    /// shared from another PC now, or a shortcut that names no file any more was read as working again too, and the
+    /// tab dropped a still-broken shortcut from its list saying so (#3299); those are kept and named in
+    /// <see cref="ShortcutDeletion.Unchecked"/>. A shortcut Windows would not remove is named in
+    /// <see cref="ShortcutDeletion.Refused"/>, so the tab says why nothing went rather than "Deleted 0" (#3336).</para>
     /// </remarks>
     public static ShortcutDeletion DeleteShortcuts(IEnumerable<BrokenShortcut> shortcuts, bool toRecycleBin)
     {
         string?[] synced = [.. SyncRoots(Environment.GetEnvironmentVariable)];
         return DeleteShortcuts(shortcuts, toRecycleBin, Helpers.RecycleBinHelper.SendToRecycleBin,
-            lnk => JudgeShortcut(lnk, synced)?.Outcome == ShortcutOutcome.Broken);
+            lnk => JudgeShortcut(lnk, synced)?.Outcome);
     }
 
     /// <summary>
@@ -287,21 +292,29 @@ public sealed partial class ShortcutCleanerService
     /// in, so a test sees what is recycled without putting files in the Recycle Bin of the machine running it, and
     /// decides which shortcuts are still broken without writing real ones. No test reached this before (#2741).
     /// </summary>
-    /// <param name="stillBroken">Whether the shortcut at a path is broken now.</param>
+    /// <param name="recheck">What the shortcut at a path is now, or null when it no longer names a file target.</param>
     internal static ShortcutDeletion DeleteShortcuts(IEnumerable<BrokenShortcut> shortcuts, bool toRecycleBin,
-                                                     Func<string, bool> recycle, Func<string, bool> stillBroken)
+                                                     Func<string, bool> recycle, Func<string, ShortcutOutcome?> recheck)
     {
         int deleted = 0;
         List<BrokenShortcut> workAgain = [];
+        List<BrokenShortcut> notChecked = [];
+        List<BrokenShortcut> refused = [];
         foreach (var s in shortcuts.Where(x => x.IsSelected))
         {
             try
             {
                 if (!File.Exists(s.ShortcutPath)) continue;
-                if (!stillBroken(s.ShortcutPath))
+                switch (recheck(s.ShortcutPath))
                 {
-                    workAgain.Add(s);
-                    continue;
+                    case ShortcutOutcome.Fine:
+                        workAgain.Add(s);
+                        continue;
+                    case not ShortcutOutcome.Broken:
+                        // Unreachable, shared from another PC now, or no file target: not shown to be broken.
+                        Log.Information("Shortcut kept: it could not be judged again: {Path}", s.ShortcutPath);
+                        notChecked.Add(s);
+                        continue;
                 }
 
                 if (toRecycleBin)
@@ -312,29 +325,44 @@ public sealed partial class ShortcutCleanerService
                     {
                         Log.Warning("Shortcut left alone: its folder is reached through a link now: {Path}",
                             s.ShortcutPath);
+                        refused.Add(s);
                         continue;
                     }
 
                     // Only count it if the shell actually recycled the file.
                     if (recycle(s.ShortcutPath))
+                    {
                         deleted++;
+                    }
                     else
+                    {
                         Log.Warning("Recycle failed (shell reported error): {Path}", s.ShortcutPath);
+                        refused.Add(s);
+                    }
                 }
                 else if (SafeFileWalk.DeleteFile(s.ShortcutPath))
                 {
                     deleted++;
                 }
             }
-            catch (IOException ex) { Log.Warning(ex, "Failed to delete shortcut: {Path}", s.ShortcutPath); }
-            catch (UnauthorizedAccessException ex) { Log.Warning(ex, "Access denied deleting shortcut: {Path}", s.ShortcutPath); }
+            catch (IOException ex)
+            {
+                Log.Warning(ex, "Failed to delete shortcut: {Path}", s.ShortcutPath);
+                refused.Add(s);
+            }
+            catch (UnauthorizedAccessException ex)
+            {
+                Log.Warning(ex, "Access denied deleting shortcut: {Path}", s.ShortcutPath);
+                refused.Add(s);
+            }
             catch (COMException ex)
             {
                 // A shortcut the shell can no longer read is not shown to be broken, so it is left.
                 Log.Warning(ex, "Could not read shortcut again before deleting it: {Path}", s.ShortcutPath);
+                notChecked.Add(s);
             }
         }
-        return new ShortcutDeletion(deleted, workAgain);
+        return new ShortcutDeletion(deleted, workAgain, notChecked, refused);
     }
 
     private static List<(string Label, string Path)> GetScanLocations()

@@ -10,6 +10,21 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.136.192] - 2026-11-26
+
+**Shortcut Cleaner's Delete says what it kept and why, and no longer records a delete that removed nothing.**
+
+### Fixed
+- Delete judges each ticked shortcut again before removing it, and kept one whose target was back. Every other
+  answer was taken as "back" too: a drive unplugged or locked, a folder now shared from another PC, a shortcut no
+  longer naming a file. The tab said the shortcut worked again and dropped it from the list, though it was still
+  broken (#3299). Those are now kept and listed, and the status says they could not be checked again.
+- A delete Windows refused, such as one for all users without administrator rights, was reported as
+  "Deleted 0 shortcuts", with a "Shortcuts deleted" notice and a "Permanently deleted 0" line in Recent activity
+  that Recent Changes counted as a change (#3336). The status now says how many could not be removed, and that
+  shortcuts for all users need administrator rights when that is why. The notice and the activity line appear only
+  when something was removed.
+
 ## [1.136.191] - 2026-11-26
 
 **If you run SysManager 1.130.85 or earlier, update once with Manual download in About: pressing Install now

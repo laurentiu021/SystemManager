@@ -36,7 +36,19 @@ public sealed partial class BrokenShortcut : ObservableObject, Helpers.ISelectab
 /// The ticked shortcuts whose targets were back by the time of the delete, so they were kept: the program was installed
 /// again, say, or a document put back.
 /// </param>
-public sealed record ShortcutDeletion(int Deleted, IReadOnlyList<BrokenShortcut> WorkAgain);
+/// <param name="Unchecked">
+/// The ticked shortcuts that could not be judged again, so they were kept: their target's drive was unplugged or
+/// locked, their folder is shared from another PC now, or the shell could not read them.
+/// </param>
+/// <param name="Refused">
+/// The ticked shortcuts, still broken, that were not removed: Windows refused, or their folder is reached through a
+/// link now.
+/// </param>
+public sealed record ShortcutDeletion(
+    int Deleted,
+    IReadOnlyList<BrokenShortcut> WorkAgain,
+    IReadOnlyList<BrokenShortcut> Unchecked,
+    IReadOnlyList<BrokenShortcut> Refused);
 
 /// <summary>
 /// What a shortcut scan found: the shortcuts whose target is CONFIRMED gone, and how many it could not

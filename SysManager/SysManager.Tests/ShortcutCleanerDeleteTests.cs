@@ -38,7 +38,8 @@ public sealed class ShortcutCleanerDeleteTests : IDisposable
     private static bool NeverCalled(string path) => throw new InvalidOperationException($"{path} was recycled");
 
     /// <summary>Every shortcut is still broken when it is judged again.</summary>
-    private static bool StillBroken(string path) => true;
+    private static ShortcutCleanerService.ShortcutOutcome? StillBroken(string path) =>
+        ShortcutCleanerService.ShortcutOutcome.Broken;
 
     [Fact]
     public void Permanently_DeletesTheTickedShortcutsAndNoOthers()
@@ -123,7 +124,9 @@ public sealed class ShortcutCleanerDeleteTests : IDisposable
         var still = Shortcut("Still");
 
         var result = ShortcutCleanerService.DeleteShortcuts([back, still], toRecycleBin: false, NeverCalled,
-            path => path != back.ShortcutPath);
+            path => path == back.ShortcutPath
+                ? ShortcutCleanerService.ShortcutOutcome.Fine
+                : ShortcutCleanerService.ShortcutOutcome.Broken);
 
         Assert.Equal(1, result.Deleted);
         Assert.Same(back, Assert.Single(result.WorkAgain));
@@ -142,7 +145,51 @@ public sealed class ShortcutCleanerDeleteTests : IDisposable
 
         Assert.Equal(0, result.Deleted);
         Assert.Empty(result.WorkAgain);
+        Assert.Same(unreadable, Assert.Single(result.Unchecked));
         Assert.True(File.Exists(unreadable.ShortcutPath));
+    }
+
+    /// <summary>
+    /// A shortcut that could not be judged again, its target's drive unplugged, its folder shared from another PC
+    /// now, or no file target any more, is kept and said to be unchecked, never said to work again (#3299).
+    /// </summary>
+    [Theory]
+    [InlineData("Unreachable")]
+    [InlineData("Shared")]
+    [InlineData(null)]
+    public void AShortcutThatCannotBeCheckedAgain_IsKept_AndNotSaidToWorkAgain(string? outcome)
+    {
+        var undecided = Shortcut("Undecided");
+        ShortcutCleanerService.ShortcutOutcome? now =
+            outcome is null ? null : Enum.Parse<ShortcutCleanerService.ShortcutOutcome>(outcome);
+
+        var result = ShortcutCleanerService.DeleteShortcuts([undecided], toRecycleBin: false, NeverCalled, _ => now);
+
+        Assert.Equal(0, result.Deleted);
+        Assert.Empty(result.WorkAgain);
+        Assert.Same(undecided, Assert.Single(result.Unchecked));
+        Assert.True(File.Exists(undecided.ShortcutPath));
+    }
+
+    /// <summary>
+    /// A broken shortcut Windows will not remove is reported as refused, so the tab can say why nothing went
+    /// (#3336).
+    /// </summary>
+    [Fact]
+    public void AShortcutThatWasNotRemoved_IsReportedAsRefused()
+    {
+        var readOnly = Shortcut("ReadOnly");
+        File.SetAttributes(readOnly.ShortcutPath, FileAttributes.ReadOnly);
+        var recycleRefused = Shortcut("RecycleRefused");
+
+        var permanently = ShortcutCleanerService.DeleteShortcuts([readOnly], toRecycleBin: false, NeverCalled,
+            StillBroken);
+        var recycled = ShortcutCleanerService.DeleteShortcuts([recycleRefused], toRecycleBin: true, _ => false,
+            StillBroken);
+
+        Assert.Same(readOnly, Assert.Single(permanently.Refused));
+        Assert.Same(recycleRefused, Assert.Single(recycled.Refused));
+        Assert.Equal(0, permanently.Deleted + recycled.Deleted);
     }
 
     /// <summary>

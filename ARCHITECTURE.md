@@ -1474,7 +1474,9 @@ Key services:
 - `ShortcutCleanerService` — scans the Desktop and Public Desktop, both Start Menus, Quick Launch and Recent
   Items for broken shortcuts (dead targets) and offers safe removal. A network target is never judged gone,
   and `Judge` leaves a shortcut with a missing target alone when it sits in a folder OneDrive shares with the
-  user's other PCs (`SyncRoots`, from the `OneDrive*` variables), where it may still work.
+  user's other PCs (`SyncRoots`, from the `OneDrive*` variables), where it may still work. `DeleteShortcuts`
+  judges each ticked shortcut again: only a target that is back counts as working again (`WorkAgain`); one it
+  cannot judge is kept (`Unchecked`), and one Windows will not remove is reported (`Refused`).
 - `BulkInstallerService` — installs apps via winget in batch with
   per-item progress and error reporting. Its installed list and its search read their own
   runs' output, so a search during the list, or during an install, reads only its own table (#2771).

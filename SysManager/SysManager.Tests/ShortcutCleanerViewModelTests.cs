@@ -4,6 +4,7 @@
 
 using System.IO;
 using NSubstitute;
+using SysManager.Helpers;
 using SysManager.Models;
 using SysManager.Services;
 using SysManager.ViewModels;
@@ -11,7 +12,8 @@ using Xunit;
 
 namespace SysManager.Tests;
 
-// Serialized: the DeleteSelected gate tests swap the static DialogService.Instance.
+// Serialized: the DeleteSelected gate tests swap the static DialogService.Instance, and one pins
+// AdminHelper.ElevationProbe.
 [Collection("ProcessWideStatics")]
 public class ShortcutCleanerViewModelTests
 {
@@ -81,6 +83,119 @@ public class ShortcutCleanerViewModelTests
         s.IsSelected = false;
         Assert.Equal("IsSelected", changedProp);
     }
+
+    // ── what Delete Selected says when it removed nothing (#3299, #3336) ──
+
+    /// <summary>
+    /// A ticked shortcut that could not be judged again stays listed, is not said to work again, and a delete that
+    /// removed nothing writes no "deleted 0" line to Recent activity.
+    /// </summary>
+    [Fact]
+    public async Task DeleteSelected_ThatRemovedNothing_KeepsTheRow_SaysWhy_AndRecordsNothing()
+    {
+        using var activity = new ActivityLogScope();
+        using var confirm = new DialogAnswer(true);
+        var dir = Directory.CreateTempSubdirectory("ShortcutVmDelete_").FullName;
+        try
+        {
+            var path = Path.Combine(dir, "Unreadable.lnk");
+            File.WriteAllBytes(path, [0x4C, 0x00, 0x00, 0x00]);   // not a shortcut the shell can read
+            var vm = new ShortcutCleanerViewModel(new ShortcutCleanerService()) { MoveToRecycleBin = false };
+            vm.BrokenShortcuts.Add(new BrokenShortcut { Name = "Unreadable", ShortcutPath = path, IsSelected = true });
+
+            await vm.DeleteSelectedCommand.ExecuteAsync(null);
+
+            Assert.Single(vm.BrokenShortcuts);
+            Assert.True(File.Exists(path));
+            Assert.DoesNotContain("works again", vm.ScanStatus, StringComparison.Ordinal);
+            Assert.Contains("could not be checked again", vm.ScanStatus, StringComparison.Ordinal);
+            Assert.DoesNotContain(ActivityLogService.Instance.GetRecent(10), e => e.Action == "Shortcut Cleaner");
+        }
+        finally { Directory.Delete(dir, recursive: true); }
+    }
+
+    /// <summary>
+    /// A shortcut Windows will not remove stays listed and is counted as not removed. Outside the folders for all users
+    /// the status does not send a standard user to Run as administrator, and nothing is recorded (#3336).
+    /// </summary>
+    [Fact]
+    public async Task DeleteSelected_ThatWindowsRefuses_KeepsTheRow_AndSaysItCouldNotBeRemoved()
+    {
+        using var notElevated = AdminHelper.ForceElevation(false);
+        using var activity = new ActivityLogScope();
+        using var confirm = new DialogAnswer(true);
+        var dir = Directory.CreateTempSubdirectory("ShortcutVmRefused_").FullName;
+        var path = Path.Combine(dir, "Gone.lnk");
+        try
+        {
+            WriteShortcut(path, Path.Combine(dir, "missing", "app.exe"));
+            File.SetAttributes(path, FileAttributes.ReadOnly);
+            var vm = new ShortcutCleanerViewModel(new ShortcutCleanerService()) { MoveToRecycleBin = false };
+            vm.BrokenShortcuts.Add(new BrokenShortcut { Name = "Gone", ShortcutPath = path, IsSelected = true });
+
+            await vm.DeleteSelectedCommand.ExecuteAsync(null);
+
+            Assert.Single(vm.BrokenShortcuts);
+            Assert.True(File.Exists(path));
+            Assert.Contains("1 could not be removed.", vm.ScanStatus, StringComparison.Ordinal);
+            Assert.DoesNotContain("administrator", vm.ScanStatus, StringComparison.Ordinal);
+            Assert.DoesNotContain(ActivityLogService.Instance.GetRecent(10), e => e.Action == "Shortcut Cleaner");
+        }
+        finally
+        {
+            if (File.Exists(path)) File.SetAttributes(path, FileAttributes.Normal);
+            Directory.Delete(dir, recursive: true);
+        }
+    }
+
+    /// <summary>
+    /// Writes a real shortcut to <paramref name="target"/>, in process through the shell's own object, so the delete
+    /// judges it as the scan would.
+    /// </summary>
+    private static void WriteShortcut(string lnk, string target)
+    {
+        dynamic shell = Activator.CreateInstance(Type.GetTypeFromProgID("WScript.Shell", throwOnError: true)!)!;
+        try
+        {
+            var shortcut = shell.CreateShortcut(lnk);
+            shortcut.TargetPath = target;
+            shortcut.Save();
+        }
+        finally { System.Runtime.InteropServices.Marshal.FinalReleaseComObject(shell); }
+    }
+
+    /// <summary>
+    /// A refused delete is counted, and the status names administrator rights only when one of the refused shortcuts
+    /// is for all users and SysManager is not elevated (#3336).
+    /// </summary>
+    [Theory]
+    [InlineData(false, true, true)]
+    [InlineData(true, true, false)]
+    [InlineData(false, false, false)]
+    public void DescribeRefused_NamesAdministratorRights_OnlyForAnAllUsersShortcut_WhenNotElevated(
+        bool elevated, bool forAllUsers, bool namesAdministrator)
+    {
+        var expected = " 1 could not be removed."
+            + (namesAdministrator
+                ? " Shortcuts for all users need administrator rights: use Run as administrator."
+                : "");
+        var shared = Path.Combine(Path.GetTempPath(), "AllUsers");
+        var shortcut = new BrokenShortcut
+        {
+            Name = "Old",
+            ShortcutPath = Path.Combine(forAllUsers ? shared : Path.Combine(Path.GetTempPath(), "Mine"), "Old.lnk"),
+        };
+
+        Assert.Equal(expected, ShortcutCleanerViewModel.DescribeRefused([shortcut], elevated, shared));
+        Assert.Equal("", ShortcutCleanerViewModel.DescribeRefused([], elevated, shared));
+    }
+
+    [Theory]
+    [InlineData(0, "")]
+    [InlineData(1, " 1 could not be checked again, so it was kept.")]
+    [InlineData(3, " 3 could not be checked again, so they were kept.")]
+    public void DescribeUnchecked_CountsTheKeptShortcuts(int count, string expected) =>
+        Assert.Equal(expected, ShortcutCleanerViewModel.DescribeUnchecked(count));
 
     // ── DeleteSelected confirmation gate (destructive — removes broken .lnk files) ──
 

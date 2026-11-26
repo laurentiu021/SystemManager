@@ -150,7 +150,8 @@ public sealed partial class ShortcutCleanerViewModel : ElevatedViewModelBase
         var result = await Task.Run(() => ShortcutCleanerService.DeleteShortcuts(selected, MoveToRecycleBin));
         var deleted = result.Deleted;
 
-        // Remove deleted items from the list, and the ones that work again: they are not broken any more.
+        // Remove deleted items from the list, and the ones that work again: they are not broken any more. The ones
+        // that could not be checked again, or that Windows would not remove, are still there and stay listed.
         foreach (var s in selected.Where(s => !System.IO.File.Exists(s.ShortcutPath)).Concat(result.WorkAgain).ToList())
         {
             BrokenShortcuts.Remove(s);
@@ -158,8 +159,17 @@ public sealed partial class ShortcutCleanerViewModel : ElevatedViewModelBase
 
         BrokenCount = BrokenShortcuts.Count;
         SelectedCount = BrokenShortcuts.Count(x => x.IsSelected);
-        ScanStatus = $"Deleted {deleted} shortcut{(deleted == 1 ? "" : "s")}."
-                     + $"{DescribeWorkingAgain(result.WorkAgain.Count)} {BrokenCount} remaining.";
+        ScanStatus = (deleted > 0 ? $"Deleted {deleted} shortcut{(deleted == 1 ? "" : "s")}." : "Nothing was deleted.")
+                     + DescribeWorkingAgain(result.WorkAgain.Count)
+                     + DescribeUnchecked(result.Unchecked.Count)
+                     + DescribeRefused(result.Refused, IsElevated, AllUsersFolders())
+                     + $" {BrokenCount} remaining.";
+        Log.Information("Deleted {Count} broken shortcuts (recycle bin: {RecycleBin}); {Unchecked} not checked again, "
+            + "{Refused} not removed", deleted, MoveToRecycleBin, result.Unchecked.Count, result.Refused.Count);
+
+        // A delete that removed nothing is neither announced nor recorded: a "deleted 0" line in Recent activity
+        // was counted as a change by Recent Changes (#3336).
+        if (deleted == 0) return;
         ToastService.Instance.Show("Shortcuts deleted", $"{deleted} shortcut{(deleted == 1 ? "" : "s")} removed");
         // Records whether the shortcuts are recoverable, which is the part that matters if the user
         // later wonders where one went. Counts only, no shortcut names.
@@ -167,7 +177,42 @@ public sealed partial class ShortcutCleanerViewModel : ElevatedViewModelBase
             string.Create(CultureInfo.InvariantCulture,
                 $"{(MoveToRecycleBin ? "Moved" : "Permanently deleted")} {deleted:N0} broken shortcut{(deleted == 1 ? "" : "s")}") +
             (MoveToRecycleBin ? " to the Recycle Bin" : ""));
-        Log.Information("Deleted {Count} broken shortcuts (recycle bin: {RecycleBin})", deleted, MoveToRecycleBin);
+    }
+
+    /// <summary>
+    /// The folders whose shortcuts are for every account on the PC: removing one needs administrator rights.
+    /// </summary>
+    private static string?[] AllUsersFolders() =>
+    [
+        Environment.GetFolderPath(Environment.SpecialFolder.CommonDesktopDirectory),
+        Environment.GetFolderPath(Environment.SpecialFolder.CommonStartMenu),
+    ];
+
+    /// <summary>
+    /// The sentence for the ticked shortcuts kept because they could not be judged again, with a space before it, or
+    /// nothing.
+    /// </summary>
+    internal static string DescribeUnchecked(int count) => count switch
+    {
+        0 => "",
+        1 => " 1 could not be checked again, so it was kept.",
+        _ => $" {count} could not be checked again, so they were kept.",
+    };
+
+    /// <summary>
+    /// The sentence for the ticked shortcuts Windows would not remove, with a space before it, or nothing. When one of
+    /// them is in a folder for all users and SysManager is not running as administrator, it says that is needed.
+    /// </summary>
+    internal static string DescribeRefused(IReadOnlyCollection<BrokenShortcut> refused, bool elevated,
+                                           params string?[] allUsersFolders)
+    {
+        if (refused.Count == 0) return "";
+        var sentence = refused.Count == 1 ? " 1 could not be removed." : $" {refused.Count} could not be removed.";
+        var forAllUsers = !elevated
+            && refused.Any(s => SystemPaths.IsInsideAnySubtree(s.ShortcutPath, allUsersFolders));
+        return forAllUsers
+            ? sentence + " Shortcuts for all users need administrator rights: use Run as administrator."
+            : sentence;
     }
 
     /// <summary>

@@ -54,12 +54,21 @@ public sealed partial class FileShredderViewModel : ViewModelBase
 
         var skipped = new List<string>();
         var underCloudSync = new List<string>();
+        var withTheirFolder = new List<string>();
+        string? holderName = null;
         var cloudRoots = OneDriveRoots();
 
         foreach (var filePath in files)
         {
             if (Items.Any(i => i.Path.Equals(filePath, StringComparison.OrdinalIgnoreCase)))
                 continue;
+
+            if (QueuedFolderHolding(filePath) is { } holder)
+            {
+                withTheirFolder.Add(Path.GetFileName(filePath));
+                holderName = holder.Name;
+                continue;
+            }
 
             try
             {
@@ -92,8 +101,78 @@ public sealed partial class FileShredderViewModel : ViewModelBase
         }
 
         StatusMessage = string.Join(" ",
-            new[] { DescribeSkipped(skipped), DescribeCloudSyncWarning(underCloudSync) }.Where(s => s.Length > 0));
+            new[]
+            {
+                DescribeSkipped(skipped),
+                DescribeInsideQueuedFolder(withTheirFolder, holderName),
+                DescribeCloudSyncWarning(underCloudSync),
+            }.Where(s => s.Length > 0));
     }
+
+    /// <summary>
+    /// The folder in the queue whose shred destroys <paramref name="path"/> too, or null.
+    /// </summary>
+    /// <remarks>
+    /// Shred All works through the queue in order, so a file queued beside the folder it sits in was destroyed with
+    /// the folder, and its own turn then failed with "File not found": the run reported a destroyed file as not
+    /// shredded (#3358). Only a path the folder's shred reaches counts: the folder's walk does not follow links, so
+    /// an item reached through one, or a folder reached through one, is queued on its own as before. A path that
+    /// cannot be checked counts as reached through a link. So does a folder the shred refuses as a whole, your
+    /// Documents or Desktop say: it destroys nothing inside it, and the files in it are yours to shred one by one.
+    /// </remarks>
+    private ShredItem? QueuedFolderHolding(string path) =>
+        Items.FirstOrDefault(folder => folder.IsFolder && ShreddedWith(path, folder.Path));
+
+    /// <summary>
+    /// Whether the shred of <paramref name="folder"/> destroys <paramref name="path"/>: it is inside it, neither is
+    /// reached through a link, and the shred takes the folder at all.
+    /// </summary>
+    private bool ShreddedWith(string path, string folder) =>
+        !path.Equals(folder, StringComparison.OrdinalIgnoreCase)
+        && SystemPaths.IsInsideSubtree(path, folder)
+        && !SafeFileWalk.IsReachedThroughLink(folder)
+        && !SafeFileWalk.IsReachedThroughLink(path)
+        && ShredTakes(folder);
+
+    /// <summary>
+    /// Whether a shred of <paramref name="folder"/> would start: the same check the shred makes first.
+    /// </summary>
+    private bool ShredTakes(string folder)
+    {
+        try
+        {
+            _service.ValidatePath(folder, requireCanonical: true);
+            return true;
+        }
+        catch (System.Security.SecurityException) { return false; }
+        catch (IOException) { return false; }
+        catch (UnauthorizedAccessException) { return false; }
+        catch (ArgumentException) { return false; }
+    }
+
+    /// <summary>
+    /// The sentence for the picked items not queued because a folder in the list already shreds them, or nothing.
+    /// </summary>
+    internal static string DescribeInsideQueuedFolder(IReadOnlyList<string> names, string? folder) => names.Count switch
+    {
+        0 => string.Empty,
+        1 => $"\"{names[0]}\" is inside \"{folder}\", which is already in the list, so it is shredded with that "
+             + "folder.",
+        _ => $"{names.Count} of the items you picked are inside a folder already in the list, so they are shredded "
+             + "with it.",
+    };
+
+    /// <summary>
+    /// The sentence for the queued items a folder just added takes the place of, or nothing.
+    /// </summary>
+    internal static string DescribeTakenIntoFolder(int count, string folder) => count switch
+    {
+        0 => string.Empty,
+        1 => $"1 item already in the list is inside \"{folder}\", so it was taken off the list and is shredded with "
+             + "that folder.",
+        _ => $"{count} items already in the list are inside \"{folder}\", so they were taken off the list and are "
+             + "shredded with that folder.",
+    };
 
     /// <summary>
     /// Builds the message shown when items the user picked could not be queued. Returning an empty
@@ -155,6 +234,16 @@ public sealed partial class FileShredderViewModel : ViewModelBase
             StatusMessage = $"Reading \"{dirInfo.Name}\"…";
             var size = await Task.Run(() => _folderSize(folderPath)).ConfigureAwait(true);
 
+            // Read against the queue as it is now, after the sizing: the queue can change while it runs.
+            if (QueuedFolderHolding(folderPath) is { } holder)
+            {
+                StatusMessage = DescribeInsideQueuedFolder([dirInfo.Name], holder.Name);
+                return;
+            }
+
+            var inside = Items.Where(i => ShreddedWith(i.Path, folderPath)).ToList();
+            foreach (var item in inside) Items.Remove(item);
+
             Items.Add(new ShredItem
             {
                 Path = folderPath,
@@ -162,9 +251,14 @@ public sealed partial class FileShredderViewModel : ViewModelBase
                 SizeBytes = size,
                 IsFolder = true
             });
-            StatusMessage = SystemPaths.IsInsideAnySubtree(folderPath, OneDriveRoots())
-                ? DescribeCloudSyncWarning([dirInfo.Name])
-                : string.Empty;
+            StatusMessage = string.Join(" ",
+                new[]
+                {
+                    DescribeTakenIntoFolder(inside.Count, dirInfo.Name),
+                    SystemPaths.IsInsideAnySubtree(folderPath, OneDriveRoots())
+                        ? DescribeCloudSyncWarning([dirInfo.Name])
+                        : string.Empty,
+                }.Where(s => s.Length > 0));
         }
         // No {Path} and no attached exception in either arm — the folder's name and location must not
         // survive into the log (#2796).

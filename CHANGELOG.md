@@ -20,7 +20,8 @@ prospective user reads. CI fails a pull request whose newest entry is missing it
   ("File not found"), counted it, and left it in the list (#3358). A file or folder inside a folder already in the
   list is not added again, and adding a folder takes the place of queued items inside it. The status line says
   so in both cases. An item reached through a link inside the folder is still queued on its own, since the
-  folder's shred does not follow links.
+  folder's shred does not follow links, and so is one inside a folder the shred refuses as a whole, such as
+  Documents.
 
 ## [1.136.193] - 2026-11-26
 

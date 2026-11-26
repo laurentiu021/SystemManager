@@ -383,6 +383,29 @@ public class FileShredderViewModelTests
     }
 
     /// <summary>
+    /// A folder the shred refuses as a whole, your Documents say, destroys nothing inside it, so a file inside it
+    /// stays queued on its own rather than being said to go with the folder.
+    /// </summary>
+    [Fact]
+    public async Task AFileInsideAFolderTheShredRefuses_IsStillQueued()
+    {
+        var held = Directory.CreateTempSubdirectory("smtest_shredder_").FullName;
+        var inside = Path.Combine(held, "a.jpg");
+        File.WriteAllText(inside, "a");
+        try
+        {
+            var service = new FileShredderService(openExclusiveWrite: null, heldRoots: [held]);
+            var vm = new FileShredderViewModel(service, Picking([held], inside));
+            await vm.AddFolderCommand.ExecuteAsync(null);
+            vm.AddFilesCommand.Execute(null);
+
+            Assert.Equal(2, vm.Items.Count);
+            Assert.DoesNotContain("shredded with", vm.StatusMessage, StringComparison.Ordinal);
+        }
+        finally { Directory.Delete(held, recursive: true); }
+    }
+
+    /// <summary>
     /// A file reached through a link inside the queued folder is not one the folder's shred destroys, since that
     /// shred does not follow links: it stays queued on its own.
     /// </summary>

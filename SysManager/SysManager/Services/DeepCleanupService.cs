@@ -332,7 +332,13 @@ public sealed class DeepCleanupService
             // Without a bin to ask, which only a test leaves out, there is nothing to report.
             if (d.IsRecycleBin)
             {
-                if (recycleBin?.Query() is { } bin)
+                // Another account's bin is not measured, so it is not ticked: elevated with another administrator's
+                // password, the scan sized that administrator's bin and ticked it (#3316).
+                if (recycleBin is { BelongsToAnotherAccount: true })
+                {
+                    skipped = 1;
+                }
+                else if (recycleBin?.Query() is { } bin)
                 {
                     size = bin.Bytes;
                     files = (int)Math.Min(bin.Items, int.MaxValue);
@@ -504,7 +510,11 @@ public sealed class DeepCleanupService
                 // count, so that the summary can name the bin: it is the part of a clean someone may later come
                 // looking for.
                 var bin = _recycleBin.Empty();
-                if (!bin.Emptied)
+                if (bin.NotTheSignedInAccounts)
+                {
+                    errors.Add($"{cat.Name}: not emptied. {AdminHelper.NotTheSignedInAccountAdvice}");
+                }
+                else if (!bin.Emptied)
                 {
                     errors.Add($"{cat.Name}: the Recycle Bin could not be emptied.");
                 }

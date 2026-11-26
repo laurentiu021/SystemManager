@@ -70,7 +70,9 @@ public sealed class DeepCleanupRecycleBinTests
 
         bucket.IsSelected = true;
         var result = await service.CleanAsync([bucket]);
-        Assert.Contains(AdminHelper.NotTheSignedInAccountAdvice, result.Summary, StringComparison.Ordinal);
+        var error = Assert.Single(result.Errors);
+        Assert.Contains(AdminHelper.NotTheSignedInAccountAdvice, error, StringComparison.Ordinal);
+        bin.DidNotReceive().Query();
     }
 
     // ── The scan ─────────────────────────────────────────────────────────────

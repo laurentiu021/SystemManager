@@ -60,8 +60,15 @@ public sealed class ShellRecycleBin : IRecycleBin
     public bool BelongsToAnotherAccount => !_isTheSignedInAccounts();
 
     /// <inheritdoc/>
-    public RecycleBinContents? Query() => _query();
+    /// <remarks>
+    /// Null for another account's bin: what the shell would count is not the signed-in person's (#3316).
+    /// </remarks>
+    public RecycleBinContents? Query() => BelongsToAnotherAccount ? null : _query();
 
     /// <inheritdoc/>
-    public RecycleBinEmptyResult Empty() => _empty();
+    /// <remarks>
+    /// Refused for another account's bin. Every caller asks <see cref="BelongsToAnotherAccount"/> first and says why;
+    /// this holds even for one that does not, since the shell would empty that account's bin for good (#3316).
+    /// </remarks>
+    public RecycleBinEmptyResult Empty() => BelongsToAnotherAccount ? RecycleBinEmptyResult.AnotherAccounts : _empty();
 }

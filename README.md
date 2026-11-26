@@ -960,7 +960,10 @@ System → System Fixes, where the tab name matches what they do.
   activity records it, and the size shown is measured again
 - Empty the Recycle Bin. Its size is the one Windows reports, as Explorer shows it, so an
   empty bin reads "Empty" and is left as it is; each time it is emptied, Recent activity
-  records it with what it held
+  records it with what it held. Windows empties the bin of the account SysManager runs as, so
+  when it runs as administrator under an account it cannot confirm is the one signed in, the
+  bin reads "Left alone (another account)" and is neither measured nor emptied, on Quick
+  Cleanup, Deep Cleanup and the Quick Tune-Up alike
 - **Component store (WinSxS), reported before it is touched.** WinSxS routinely holds
   several gigabytes of superseded Windows components, and it is where the free editions of
   the mainstream cleaners find their biggest number. "Check component store" runs the

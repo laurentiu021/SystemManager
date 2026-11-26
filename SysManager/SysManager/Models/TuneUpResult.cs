@@ -79,6 +79,8 @@ public sealed record TuneUpResult
     public string RecycleBinDisplay => this switch
     {
         { RecycleBinSkipped: true } => "",
+        { RecycleBinNotTheSignedInAccounts: true } =>
+            "The Recycle Bin was left alone: SysManager is running as administrator under another account.",
         { RecycleBinEmptied: false } => "The Recycle Bin could not be emptied.",
         { RecycleBinBefore: { Items: 0 } } => "The Recycle Bin was already empty.",
         { RecycleBinBefore: { } bin } => $"Recycle Bin emptied ({bin.Display}).",

@@ -110,6 +110,7 @@ public sealed class TuneUpService : ITuneUpService
                 TempErrors = temp.Errors,
                 RecycleBinEmptied = bin?.Emptied ?? false,
                 RecycleBinSkipped = bin is null,
+                RecycleBinNotTheSignedInAccounts = bin?.NotTheSignedInAccounts ?? false,
                 RecycleBinBefore = bin?.Before,
                 Cancelled = true,
             };
@@ -124,6 +125,7 @@ public sealed class TuneUpService : ITuneUpService
             TempErrors = temp.Errors,
             RecycleBinEmptied = bin?.Emptied ?? false,
             RecycleBinSkipped = !emptyRecycleBin,
+            RecycleBinNotTheSignedInAccounts = bin?.NotTheSignedInAccounts ?? false,
             RecycleBinBefore = bin?.Before,
             BrokenShortcutsFound = brokenCount ?? 0,
             DiskResults = diskSummaries ?? [],

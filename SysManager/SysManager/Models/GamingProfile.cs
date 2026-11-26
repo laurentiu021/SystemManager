@@ -101,6 +101,16 @@ public sealed record GamingSnapshot
     /// <summary>Whether the Windows Search service was running before apply (null = not captured).</summary>
     public bool? SearchWasRunning { get; init; }
 
+    /// <summary>
+    /// The services that depend on Windows Search and were running before apply (null = not captured).
+    /// </summary>
+    /// <remarks>
+    /// Stopping Windows Search stops them first, and only Windows Search was started again, so one that was running,
+    /// Windows Media Player Network Sharing while streaming to a TV say, stayed stopped until the next restart
+    /// (#3244). Null is a snapshot from before this field existed: revert then starts Windows Search alone, as it did.
+    /// </remarks>
+    public IReadOnlyList<string>? SearchDependentsRunning { get; init; }
+
     /// <summary>The HKCU ToastEnabled DWORD before apply (null = value was absent → default on).</summary>
     public int? OriginalToastEnabled { get; init; }
 

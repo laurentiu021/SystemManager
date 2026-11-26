@@ -1649,6 +1649,72 @@ public class GamingProfileServiceTests
         Assert.Equal(["wait", "start"], calls);
     }
 
+    // ── Pause search indexing: the services that depend on it (#3244) ──
+    // Stopping Windows Search stops every running service that depends on it first, and the revert started only Windows
+    // Search, so one that was running stayed stopped until the next restart.
+
+    [Fact]
+    public async Task ARevert_StartsTheDependentsThatWereRunning_AfterTheIndexer()
+    {
+        var calls = new List<string>();
+        var tweak = new SearchIndexingTweak(wasRunning: true,
+            stop: () => Task.CompletedTask,
+            start: () => { calls.Add("WSearch"); return Task.CompletedTask; },
+            status: () => System.ServiceProcess.ServiceControllerStatus.Stopped,
+            waitUntilStopped: _ => Task.CompletedTask,
+            dependentsRunning: ["WMPNetworkSvc"],
+            startDependent: name => { calls.Add(name); return Task.CompletedTask; },
+            dependents: () => ["WMPNetworkSvc", "SomeOtherDependent"]);
+
+        await tweak.RevertAsync(CancellationToken.None);
+
+        Assert.Equal(["WSearch", "WMPNetworkSvc"], calls);
+    }
+
+    /// <summary>
+    /// The names come back from a file in the user's own folder, and the revert runs as administrator, so only a name
+    /// that is still a service depending on Windows Search is started.
+    /// </summary>
+    [Fact]
+    public async Task ARevert_StartsOnlyNamesThatStillDependOnTheIndexer()
+    {
+        var started = new List<string>();
+        var tweak = new SearchIndexingTweak(wasRunning: true,
+            stop: () => Task.CompletedTask,
+            start: () => Task.CompletedTask,
+            status: () => System.ServiceProcess.ServiceControllerStatus.Stopped,
+            waitUntilStopped: _ => Task.CompletedTask,
+            dependentsRunning: ["WMPNetworkSvc", "Spooler"],
+            startDependent: name => { started.Add(name); return Task.CompletedTask; },
+            dependents: () => ["WMPNetworkSvc"]);
+
+        await tweak.RevertAsync(CancellationToken.None);
+
+        Assert.DoesNotContain("Spooler", started);
+    }
+
+    /// <summary>
+    /// A dependent Windows will not start is still tried after the others, and the step says it is not back.
+    /// </summary>
+    [Fact]
+    public async Task ARevert_WhereADependentWillNotStart_StartsTheRest_AndSaysSo()
+    {
+        var started = new List<string>();
+        var tweak = new SearchIndexingTweak(wasRunning: true,
+            stop: () => Task.CompletedTask,
+            start: () => Task.CompletedTask,
+            status: () => System.ServiceProcess.ServiceControllerStatus.Stopped,
+            waitUntilStopped: _ => Task.CompletedTask,
+            dependentsRunning: ["First", "Second"],
+            startDependent: name => name == "First"
+                ? throw new InvalidOperationException("Could not start service 'First'")
+                : Task.Run(() => started.Add(name)),
+            dependents: () => ["First", "Second"]);
+
+        await Assert.ThrowsAsync<InvalidOperationException>(() => tweak.RevertAsync(CancellationToken.None));
+        Assert.Equal(["Second"], started);
+    }
+
     [Fact]
     public async Task ARevertOfAStoppedIndexer_StartsItWithoutWaiting()
     {

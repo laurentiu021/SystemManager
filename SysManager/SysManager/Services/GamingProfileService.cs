@@ -512,6 +512,7 @@ public sealed class GamingProfileService : IGamingProfileService, IDisposable
             OriginalPowerPlanGuid = planGuid,
             OriginalUiEffectsEnabled = profile.DisableVisualEffects && PerformanceService.GetUiEffectsEnabled(),
             SearchWasRunning = profile.PauseSearchIndexing ? IsSearchRunning() : null,
+            SearchDependentsRunning = profile.PauseSearchIndexing ? SearchIndexingTweak.RunningDependents() : null,
             OriginalToastEnabled = profile.SilenceNotifications ? NotificationsTweak.ReadToastEnabled() : null,
             // Captured alongside the value it qualifies: on its own, a ToastEnabled of 0 at revert cannot
             // say whether this profile wrote it or the user did.
@@ -576,7 +577,9 @@ public sealed class GamingProfileService : IGamingProfileService, IDisposable
         if (profile.DisableVisualEffects) steps.Add(new VisualEffectsTweak(_performance, snapshot.OriginalUiEffectsEnabled));
         if (profile.FinestTimerResolution) steps.Add(new TimerResolutionTweak(_timer));
         if (profile.PurgeStandbyMemory) steps.Add(new StandbyPurgeTweak(_standby));
-        if (profile.PauseSearchIndexing) steps.Add(new SearchIndexingTweak(snapshot.SearchWasRunning ?? false));
+        if (profile.PauseSearchIndexing)
+            steps.Add(new SearchIndexingTweak(snapshot.SearchWasRunning ?? false,
+                dependentsRunning: snapshot.SearchDependentsRunning));
         if (profile.SilenceNotifications)
             steps.Add(new NotificationsTweak(
                 snapshot.OriginalToastEnabled, writeCountAtApply: snapshot.ToastWriteCountAtApply));

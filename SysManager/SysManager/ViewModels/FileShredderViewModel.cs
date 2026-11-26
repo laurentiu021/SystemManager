@@ -27,6 +27,8 @@ public sealed partial class FileShredderViewModel : ViewModelBase
     private readonly IDialogService _dialog;
     // How a folder added to the queue is sized: the folder's files, or a stand-in in a test.
     private readonly Func<string, long> _folderSize;
+    // OneDrive's sync roots on this PC, or a test's own folders.
+    private readonly Func<string?[]> _oneDriveRoots;
     private CancellationTokenSource? _cts;
 
     public BulkObservableCollection<ShredItem> Items { get; } = new();
@@ -37,12 +39,15 @@ public sealed partial class FileShredderViewModel : ViewModelBase
     /// <summary>Builds the File Shredder tab over an empty queue.</summary>
     /// <param name="dialog">Defaults to <see cref="DialogService.Instance"/> (#2860).</param>
     /// <param name="folderSize">How a folder added to the queue is sized; <see cref="FolderSize"/> unless a test says.</param>
+    /// <param name="oneDriveRoots">OneDrive's sync roots; <see cref="OneDriveRoots"/> unless a test says.</param>
     public FileShredderViewModel(
-        FileShredderService service, IDialogService? dialog = null, Func<string, long>? folderSize = null)
+        FileShredderService service, IDialogService? dialog = null, Func<string, long>? folderSize = null,
+        Func<string?[]>? oneDriveRoots = null)
     {
         _service = service;
         _dialog = dialog ?? DialogService.Instance;
         _folderSize = folderSize ?? FolderSize;
+        _oneDriveRoots = oneDriveRoots ?? OneDriveRoots;
         Items.CollectionChanged += (_, _) => ShredAllCommand.NotifyCanExecuteChanged();
     }
 
@@ -204,6 +209,78 @@ public sealed partial class FileShredderViewModel : ViewModelBase
              + "inside a OneDrive-synced folder — OneDrive's own version history and recycle bin may "
              + "still keep a copy after this overwrites and deletes them locally."
     };
+
+    /// <summary>
+    /// Whether <paramref name="path"/> is in a folder one of <paramref name="roots"/> syncs, or, for a folder, holds
+    /// one.
+    /// </summary>
+    /// <remarks>
+    /// A folder that holds a OneDrive folder, D:\Work holding D:\Work\OneDrive say, is marked too: its shred reaches
+    /// the files OneDrive syncs, and not the copies OneDrive keeps.
+    /// </remarks>
+    internal static bool IsInOneDrive(string path, bool isFolder, string?[] roots) =>
+        SystemPaths.IsInsideAnySubtree(path, roots)
+        || (isFolder && roots.Any(root => SystemPaths.IsInsideSubtree(root ?? string.Empty, path)));
+
+    /// <summary>The status line's sentence for the queued items marked as in OneDrive, or nothing.</summary>
+    /// <remarks>
+    /// Built from the whole queue, so adding or removing other items does not clear it. It was built from what the
+    /// last Add picked, so the next Add, or a Remove, took the warning off the screen while the item stayed queued.
+    /// </remarks>
+    internal static string DescribeQueueInOneDrive(int count) => count switch
+    {
+        0 => string.Empty,
+        1 => "1 item in the queue is in a folder OneDrive syncs: OneDrive's version history and recycle bin can keep "
+             + "its original after it is shredded here.",
+        _ => $"{count} items in the queue are in a folder OneDrive syncs: OneDrive's version history and recycle bin "
+             + "can keep their original after they are shredded here.",
+    };
+
+    /// <summary>The names, each in quotes: five at most, then how many more.</summary>
+    internal static string QuotedNames(IReadOnlyList<string> names)
+    {
+        const int Shown = 5;
+        var quoted = string.Join(", ", names.Take(Shown).Select(name => $"\"{name}\""));
+        return names.Count > Shown ? $"{quoted} and {names.Count - Shown} more" : quoted;
+    }
+
+    /// <summary>The question Shred All asks, naming the items OneDrive can keep a copy of.</summary>
+    /// <remarks>
+    /// With nothing from OneDrive in the run, the question is the one it always was. With something from OneDrive, it
+    /// no longer says that all of the data cannot be recovered: OneDrive's version history and recycle bin can keep
+    /// the original of what it syncs.
+    /// </remarks>
+    internal static string DescribeShredQuestion(int total, ShredMethod method, IReadOnlyList<string> inOneDrive)
+    {
+        var opening = $"You are about to permanently shred {total} item(s) using the {method} method.\n\n";
+        if (inOneDrive.Count == 0)
+            return opening + "This action is IRREVERSIBLE. The data cannot be recovered.\n\nContinue?";
+
+        var one = inOneDrive.Count == 1;
+        var which = (inOneDrive.Count == total, one) switch
+        {
+            (true, true) => "It is in a folder OneDrive syncs",
+            (true, false) => $"All {total} are in a folder OneDrive syncs",
+            (false, true) => "1 of them is in a folder OneDrive syncs",
+            (false, false) => $"{inOneDrive.Count} of them are in a folder OneDrive syncs",
+        };
+        var kept = one
+            ? "It is destroyed on this PC, but OneDrive's version history and recycle bin can keep its original."
+            : "They are destroyed on this PC, but OneDrive's version history and recycle bin can keep their original.";
+        var others = total - inOneDrive.Count;
+        var rest = others switch
+        {
+            0 => string.Empty,
+            1 => " The other item cannot be recovered.",
+            _ => $" The other {others} items cannot be recovered.",
+        };
+        return opening + $"{which}: {QuotedNames(inOneDrive)}. {kept}{rest}\n\nContinue?";
+    }
+
+    /// <summary>The finished summary's sentence for the destroyed items OneDrive may keep a copy of.</summary>
+    internal static string DescribeOneDriveCopies(IReadOnlyList<string> names) => names.Count == 0
+        ? string.Empty
+        : $"{QuotedNames(names)}: OneDrive may still keep a copy in its version history or recycle bin.";
 
     /// <summary>
     /// OneDrive's local sync roots on this machine, or empty entries where a kind is not set up.

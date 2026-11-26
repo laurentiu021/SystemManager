@@ -22,6 +22,12 @@ public sealed partial class ShredItem : ObservableObject
     public required long SizeBytes { get; init; }
     public bool IsFolder { get; init; }
 
+    /// <summary>
+    /// Whether the item is in a folder OneDrive syncs, or is a folder that holds one: shredding it here does not reach
+    /// the copies OneDrive keeps in its version history and recycle bin. Shown as a mark on the item's row.
+    /// </summary>
+    public bool InOneDrive { get; init; }
+
     public string SizeDisplay => FormatHelper.FormatSize(SizeBytes);
 }
 

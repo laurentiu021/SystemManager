@@ -10,6 +10,19 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.136.200] - 2026-11-26
+
+**File Shredder marks an item in a folder OneDrive syncs on its own row, and its question and summary name it.**
+
+### Fixed
+- The warning that a queued item sits in a folder OneDrive syncs appeared only on the status line, built from what
+  the last Add picked, so the next Add or a Remove took it off the screen while the item stayed queued, and Shred All
+  then said none of the data could be recovered. Each such item now has an "in OneDrive" mark beside its name, the
+  status line counts the whole queue, the Shred All question names those items and says that OneDrive's version
+  history and recycle bin can keep their original, and the finished summary names the ones that were shredded. A
+  folder that holds a OneDrive folder is marked too. With nothing from OneDrive in the run, the question is the one
+  it was.
+
 ## [1.136.199] - 2026-11-26
 
 **Windows Update now asks before it installs PSWindowsUpdate, and can take it off again.**

@@ -11433,6 +11433,7 @@ public partial class ArchitectureTests
             ["BrowserCleanerView.xaml"] = ["Clean selected on Deep Cleanup and on Browser Cleaner"],
             ["CleanupView.xaml"] = ["Empty Recycle Bin"],
             ["DebloaterView.xaml"] = ["Remove selected on Preinstalled Apps"],
+            ["DefenderView.xaml"] = ["Add folder on Defender Tweaks"],
             ["DeepCleanupView.xaml"] = ["Clean selected on Deep Cleanup"],
             ["DiskAnalyzerView.xaml"] = ["Run as administrator"],
             ["FileLockView.xaml"] = ["End process on File Lock Detector"],

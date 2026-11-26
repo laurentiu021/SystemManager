@@ -64,23 +64,49 @@ public sealed partial class DebloaterViewModel : ViewModelBase
     [NotifyPropertyChangedFor(nameof(EmptyTitle), nameof(EmptyMessage))]
     private bool _listFailed;
 
-    public string EmptyTitle => ListFailed ? "Installed apps could not be read"
+    /// <summary>
+    /// True when the apps were not listed because SysManager may be running as another account than the one signed
+    /// in: the apps Windows lists and removes would be that account's (#3365).
+    /// </summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(EmptyTitle), nameof(EmptyMessage))]
+    private bool _notTheSignedInAccount;
+
+    /// <summary>The sentence the tab gives for not listing, with what it means for this tab first.</summary>
+    internal const string NotTheSignedInAccountMessage =
+        "Store apps are listed and removed for the account SysManager runs as. "
+        + AdminHelper.NotTheSignedInAccountAdvice;
+
+    public string EmptyTitle => NotTheSignedInAccount ? "Apps were not listed"
+        : ListFailed ? "Installed apps could not be read"
         : HasScanned ? "No Store apps found" : "No apps loaded";
 
-    public string EmptyMessage => ListFailed
+    public string EmptyMessage => NotTheSignedInAccount ? NotTheSignedInAccountMessage
+        : ListFailed
         ? "Windows did not answer when SysManager asked for the installed apps. Press Refresh to try again."
         : HasScanned
             ? "There are no removable Store apps on this system."
             : "Press Refresh to scan installed Store apps.";
 
-    public DebloaterViewModel(DebloaterService service, ISessionRestorePoint restorePoint)
+    /// <summary>Builds the tab and starts its first read of the installed Store apps.</summary>
+    /// <param name="service">What the tab lists and removes the apps through.</param>
+    /// <param name="restorePoint">The session's restore point, tried before the first removal.</param>
+    /// <param name="runsAsTheSignedInAccount">
+    /// Whether SysManager runs as the account signed in to Windows; <see cref="AdminHelper.RunsAsTheSignedInAccount"/>
+    /// unless a test decides it.
+    /// </param>
+    public DebloaterViewModel(DebloaterService service, ISessionRestorePoint restorePoint,
+        Func<bool>? runsAsTheSignedInAccount = null)
     {
         _service = service;
         _restorePoint = restorePoint;
+        _runsAsTheSignedInAccount = runsAsTheSignedInAccount ?? AdminHelper.RunsAsTheSignedInAccount;
         StatusMessage = "Loading installed apps…";
         PropertyChanged += OnVmPropertyChanged;
         InitializeAsync(RefreshAsync);
     }
+
+    private readonly Func<bool> _runsAsTheSignedInAccount;
 
     private bool NotBusy => !IsBusy;
 
@@ -122,6 +148,13 @@ public sealed partial class DebloaterViewModel : ViewModelBase
     [RelayCommand(CanExecute = nameof(NotBusy))]
     private async Task RefreshAsync()
     {
+        if (!_runsAsTheSignedInAccount())
+        {
+            NotTheSignedInAccount = true;
+            StatusMessage = "Apps were not listed. " + NotTheSignedInAccountMessage;
+            return;
+        }
+
         IsBusy = true;
         IsProgressIndeterminate = true;
         StatusMessage = "Reading installed Store apps…";
@@ -189,6 +222,13 @@ public sealed partial class DebloaterViewModel : ViewModelBase
     [RelayCommand(CanExecute = nameof(CanActOnApps))]
     private async Task RemoveSelectedAsync()
     {
+        // Before anything is asked or taken: Remove-AppxPackage removes the app for the account SysManager runs as.
+        if (!_runsAsTheSignedInAccount())
+        {
+            StatusMessage = "Nothing was removed. " + NotTheSignedInAccountMessage;
+            return;
+        }
+
         // Protected packages can never be selected for removal, even if a binding tries.
         var targets = Apps.Where(a => a.IsSelected && !a.IsProtected).ToList();
         if (targets.Count == 0)

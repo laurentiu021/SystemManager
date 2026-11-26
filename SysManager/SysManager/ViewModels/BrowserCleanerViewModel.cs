@@ -109,11 +109,17 @@ public sealed partial class BrowserCleanerViewModel : ViewModelBase, ISearchDest
     /// Lists what can be cleaned; <paramref name="service"/>'s own scan unless a test passes its own, to decide what a
     /// scan finds and whether it is cancelled (#2759).
     /// </param>
+    /// <param name="runsAsTheSignedInAccount">
+    /// Whether SysManager runs as the account signed in to Windows; <see cref="AdminHelper.RunsAsTheSignedInAccount"/>
+    /// unless a test decides it.
+    /// </param>
     public BrowserCleanerViewModel(BrowserCleanerService service, IBrowserExtensionService extensions,
         Func<string, bool>? copyText = null, IDialogService? dialog = null, IOperationLock? operationLock = null,
         IToastService? toast = null, IActivityLog? activityLog = null,
-        Func<CancellationToken, Task<IReadOnlyList<BrowserCleanupItem>>>? scan = null)
+        Func<CancellationToken, Task<IReadOnlyList<BrowserCleanupItem>>>? scan = null,
+        Func<bool>? runsAsTheSignedInAccount = null)
     {
+        _runsAsTheSignedInAccount = runsAsTheSignedInAccount ?? AdminHelper.RunsAsTheSignedInAccount;
         _service = service;
         _scan = scan ?? service.ScanAsync;
         _extensions = extensions;
@@ -125,6 +131,23 @@ public sealed partial class BrowserCleanerViewModel : ViewModelBase, ISearchDest
         StatusMessage = "Scanning installed browsers…";
         PropertyChanged += OnVmPropertyChanged;
         InitializeAsync(ScanAsync);
+    }
+
+    private readonly Func<bool> _runsAsTheSignedInAccount;
+
+    /// <summary>
+    /// What the tab says instead of scanning or cleaning when SysManager may be running as another account than the
+    /// one signed in: the browser folders it would read are that account's (#3392).
+    /// </summary>
+    internal const string NotTheSignedInAccountMessage =
+        "Browser data is read from the account SysManager runs as. " + AdminHelper.NotTheSignedInAccountAdvice;
+
+    /// <summary>True, and says so, when the browser folders may not be the signed-in person's.</summary>
+    private bool RefusedForAnotherAccount(string what)
+    {
+        if (_runsAsTheSignedInAccount()) return false;
+        StatusMessage = what + " " + NotTheSignedInAccountMessage;
+        return true;
     }
 
     private bool NotBusy => !IsBusy;
@@ -163,6 +186,7 @@ public sealed partial class BrowserCleanerViewModel : ViewModelBase, ISearchDest
     [RelayCommand(CanExecute = nameof(NotBusy))]
     private async Task ScanExtensionsAsync()
     {
+        if (RefusedForAnotherAccount("No extensions were listed.")) return;
         IsBusy = true;
         IsProgressIndeterminate = true;
         StatusMessage = "Looking for extensions in every browser…";
@@ -246,6 +270,7 @@ public sealed partial class BrowserCleanerViewModel : ViewModelBase, ISearchDest
     [RelayCommand(CanExecute = nameof(NotBusy))]
     private async Task ScanAsync()
     {
+        if (RefusedForAnotherAccount("Nothing was scanned.")) return;
         IsBusy = true;
         IsProgressIndeterminate = true;
         StatusMessage = "Scanning installed browsers…";
@@ -292,6 +317,7 @@ public sealed partial class BrowserCleanerViewModel : ViewModelBase, ISearchDest
     [RelayCommand(CanExecute = nameof(NotBusy))]
     private async Task CleanAsync()
     {
+        if (RefusedForAnotherAccount("Nothing was cleaned.")) return;
         var selected = Items.Where(i => i.IsSelected).ToList();
         if (selected.Count == 0)
         {

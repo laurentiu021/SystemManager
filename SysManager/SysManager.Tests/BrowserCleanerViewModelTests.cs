@@ -41,6 +41,34 @@ public class BrowserCleanerViewModelTests
         return vm;
     }
 
+    // ── run as another account, the browser data is that account's (#3392) ──
+    // The folders come from the account SysManager runs as. Started as administrator with another account's password,
+    // the tab listed that administrator's browser data and deleted it, while the signed-in person's was untouched.
+
+    [Fact]
+    public async Task RunAsAnotherAccount_ScansNothing_CleansNothing_AndSaysWhy()
+    {
+        var root = Path.Combine(Path.GetTempPath(), "smtest_browsercleaner_" + Guid.NewGuid().ToString("N"));
+        var extensions = Substitute.For<IBrowserExtensionService>();
+        var dialog = Substitute.For<IDialogService>();
+        var scanned = 0;
+        var vm = new BrowserCleanerViewModel(
+            new BrowserCleanerService(Path.Combine(root, "Local"), Path.Combine(root, "Roaming")), extensions,
+            dialog: dialog,
+            scan: _ => { scanned++; return Task.FromResult<IReadOnlyList<BrowserCleanupItem>>([]); },
+            runsAsTheSignedInAccount: () => false);
+        await vm.InitializationComplete;
+        Assert.Contains(AdminHelper.NotTheSignedInAccountAdvice, vm.StatusMessage, StringComparison.Ordinal);
+
+        await vm.ScanExtensionsCommand.ExecuteAsync(null);
+        await vm.CleanCommand.ExecuteAsync(null);
+
+        Assert.Equal(0, scanned);
+        await extensions.DidNotReceiveWithAnyArgs().ScanAsync(default);
+        dialog.DidNotReceiveWithAnyArgs().Confirm(default!, default!);
+        Assert.Contains(AdminHelper.NotTheSignedInAccountAdvice, vm.StatusMessage, StringComparison.Ordinal);
+    }
+
     private static BrowserExtension Extension(string name, ExtensionOrigin origin = ExtensionOrigin.Store) =>
         new(name, "1.0", origin, false, null, origin == ExtensionOrigin.Store ? "the Chrome Web Store" : "", [], false, null);
 

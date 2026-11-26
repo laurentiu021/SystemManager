@@ -5,6 +5,7 @@
 using System.Collections.ObjectModel;
 using System.Management.Automation;
 using NSubstitute;
+using SysManager.Helpers;
 using SysManager.Models;
 using SysManager.Services;
 using SysManager.ViewModels;
@@ -184,6 +185,50 @@ public class DebloaterViewModelTests
             new DebloaterService(runner ?? RunnerThatRemovesSuccessfully()), restorePoint);
         vm.InitializationComplete.GetAwaiter().GetResult();
         return vm;
+    }
+
+    // ── run as another account, the apps are that account's (#3365) ──
+    // Get-AppxPackage and Remove-AppxPackage act for the account SysManager runs as. Started as administrator with
+    // another account's password, the tab listed that administrator's apps and removed them from that account, while
+    // the signed-in person's stayed installed.
+
+    [Fact]
+    public async Task RunAsAnotherAccount_ListsNothing_AndSaysWhy()
+    {
+        var runner = Substitute.For<IPowerShellRunner>();
+        runner.RunAsync(Arg.Any<string>(), Arg.Any<IDictionary<string, object?>>(), Arg.Any<CancellationToken>())
+            .Returns(Task.FromResult(new Collection<PSObject>()));
+
+        var vm = new DebloaterViewModel(new DebloaterService(runner), NoRestorePoint(),
+            runsAsTheSignedInAccount: () => false);
+        await vm.InitializationComplete;
+
+        await runner.DidNotReceiveWithAnyArgs().RunAsync(default!, default, default);
+        Assert.Equal("Apps were not listed", vm.EmptyTitle);
+        Assert.Contains(AdminHelper.NotTheSignedInAccountAdvice, vm.EmptyMessage, StringComparison.Ordinal);
+        Assert.Contains(AdminHelper.NotTheSignedInAccountAdvice, vm.StatusMessage, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task RunAsAnotherAccount_RemovesNothing_AndAsksNothing()
+    {
+        var runner = Substitute.For<IPowerShellRunner>();
+        runner.RunAsync(Arg.Any<string>(), Arg.Any<IDictionary<string, object?>>(), Arg.Any<CancellationToken>())
+            .Returns(Task.FromResult(new Collection<PSObject>()));
+        var restorePoint = RestorePointTaken();
+        using var dialog = new DialogAnswer(confirm: true);
+        var vm = new DebloaterViewModel(new DebloaterService(runner), restorePoint,
+            runsAsTheSignedInAccount: () => false);
+        await vm.InitializationComplete;
+        runner.ClearReceivedCalls();
+        vm.Apps.Add(Removable("Contoso.AppA"));
+
+        await vm.RemoveSelectedCommand.ExecuteAsync(null);
+
+        Assert.Equal(0, dialog.Calls);
+        await runner.DidNotReceiveWithAnyArgs().RunAsync(default!, default, default);
+        await restorePoint.DidNotReceiveWithAnyArgs().EnsureAsync(default!, default);
+        Assert.Contains(AdminHelper.NotTheSignedInAccountAdvice, vm.StatusMessage, StringComparison.Ordinal);
     }
 
     [Fact]

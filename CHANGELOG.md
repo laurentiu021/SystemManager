@@ -10,6 +10,18 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.136.194] - 2026-11-26
+
+**File Shredder no longer reports a file as failed after its folder's shred destroyed it.**
+
+### Fixed
+- Add Files and Add Folder skipped only an item already in the list, so a folder and a file inside it could both
+  be queued. Shred All destroyed the file with the folder, then reported the file's own turn as failed
+  ("File not found"), counted it, and left it in the list (#3358). A file or folder inside a folder already in the
+  list is not added again, and adding a folder takes the place of queued items inside it. The status line says
+  so in both cases. An item reached through a link inside the folder is still queued on its own, since the
+  folder's shred does not follow links.
+
 ## [1.136.193] - 2026-11-26
 
 **Restore Points keeps its list when Windows refuses a Refresh.**

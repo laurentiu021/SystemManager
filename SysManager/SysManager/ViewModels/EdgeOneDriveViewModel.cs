@@ -46,6 +46,11 @@ public sealed partial class EdgeOneDriveViewModel : ElevatedViewModelBase
     [NotifyPropertyChangedFor(nameof(EdgeStateText))]
     private bool _edgeBackgroundDisabled;
 
+    /// <summary>Whether one of Edge's automatic-update tasks is on, or null when the read could not tell.</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(EdgeStateText))]
+    private bool? _edgeUpdateTasksEnabled;
+
     /// <summary>
     /// True once a read of the state has worked. Until then the four flags above are only their defaults, and the card
     /// said "OneDrive is not installed." while it was still looking (#2810).
@@ -315,6 +320,7 @@ public sealed partial class EdgeOneDriveViewModel : ElevatedViewModelBase
         OneDriveRunning = status.OneDriveRunning;
         EdgeInstalled = status.EdgeInstalled;
         EdgeBackgroundDisabled = status.EdgeBackgroundDisabled;
+        EdgeUpdateTasksEnabled = status.EdgeUpdateTasksEnabled;
         StatusRead = true;
     }
 

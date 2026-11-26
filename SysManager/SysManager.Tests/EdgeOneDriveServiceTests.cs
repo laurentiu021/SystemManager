@@ -249,8 +249,27 @@ public sealed class EdgeOneDriveServiceTests : IDisposable
         Assert.Equal(EdgeOneDriveOutcome.Failed, await _svc.RestoreEdgeAsync());
     }
 
+    /// <summary>
+    /// A Restore that cannot turn the update tasks back on puts the policy values back, as Disable does: the card
+    /// then said Edge was active while its update tasks were still off (#3396).
+    /// </summary>
+    [Theory]
+    [InlineData(0, false)]
+    [InlineData(2, true)]
+    public async Task RestoreEdgeAsync_WhenTheTasksAreNotChanged_PutsThePolicyBack(int found, bool refused)
+    {
+        SeedEdgePolicy("BackgroundModeEnabled", 0);
+        SeedEdgePolicy("StartupBoostEnabled", 0);
+        TaskScriptsReport(TaskReport(found, refused));
+
+        Assert.Equal(EdgeOneDriveOutcome.Failed, await _svc.RestoreEdgeAsync());
+
+        Assert.Equal(0, ReadEdgePolicy("BackgroundModeEnabled"));
+        Assert.Equal(0, ReadEdgePolicy("StartupBoostEnabled"));
+    }
+
     [Fact]
-    public async Task RestoreEdgeAsync_TaskMutationFails_ReturnsFailedInsteadOfPartialSuccess()
+    public async Task RestoreEdgeAsync_TaskMutationFails_ReturnsFailed_AndPutsThePolicyBack()
     {
         using (var key = _root.CreateSubKey(EdgePolicyPath, writable: true)!)
         {
@@ -267,8 +286,8 @@ public sealed class EdgeOneDriveServiceTests : IDisposable
         var outcome = await _svc.RestoreEdgeAsync();
 
         Assert.Equal(EdgeOneDriveOutcome.Failed, outcome);
-        Assert.Null(ReadEdgePolicy("BackgroundModeEnabled"));
-        Assert.Null(ReadEdgePolicy("StartupBoostEnabled"));
+        Assert.Equal(0, ReadEdgePolicy("BackgroundModeEnabled"));
+        Assert.Equal(0, ReadEdgePolicy("StartupBoostEnabled"));
     }
 
     // ── GetStatusAsync reads the redirected registry back ───────────────────
@@ -427,6 +446,43 @@ public sealed class EdgeOneDriveServiceTests : IDisposable
         await _runner.Received(1).RunProcessAsync(
             Path.Combine(_setupDir, "OneDriveSetup.exe"), "/uninstall",
             Arg.Any<CancellationToken>(), Arg.Any<System.Text.Encoding?>());
+    }
+
+    // ── whether Edge's update tasks are on: known, or not known (#3396) ──
+
+    private void QueryReports(int found, bool anyEnabled)
+    {
+        var report = new PSObject();
+        report.Properties.Add(new PSNoteProperty("Found", found));
+        report.Properties.Add(new PSNoteProperty("AnyEnabled", anyEnabled));
+        _runner.RunAsync(EdgeOneDriveService.BuildQueryEdgeTasksScript(), Arg.Any<IDictionary<string, object?>?>(),
+                Arg.Any<CancellationToken>())
+            .Returns(new Collection<PSObject> { report });
+    }
+
+    [Theory]
+    [InlineData(2, true, true)]
+    [InlineData(2, false, false)]
+    public async Task GetStatusAsync_ReportsTheUpdateTasks_WhenItFoundThem(int found, bool anyEnabled, bool expected)
+    {
+        QueryReports(found, anyEnabled);
+
+        Assert.Equal(expected, (await _svc.GetStatusAsync()).EdgeUpdateTasksEnabled);
+    }
+
+    /// <summary>
+    /// No update task found, or a query that failed, says nothing about Edge's updates: it was read as "off".
+    /// </summary>
+    [Fact]
+    public async Task GetStatusAsync_WhenNoUpdateTaskIsFound_OrTheQueryFails_DoesNotKnow()
+    {
+        QueryReports(found: 0, anyEnabled: false);
+        Assert.Null((await _svc.GetStatusAsync()).EdgeUpdateTasksEnabled);
+
+        _runner.RunAsync(EdgeOneDriveService.BuildQueryEdgeTasksScript(), Arg.Any<IDictionary<string, object?>?>(),
+                Arg.Any<CancellationToken>())
+            .Returns<Task<Collection<PSObject>>>(_ => throw new RuntimeException("Task Scheduler is not available."));
+        Assert.Null((await _svc.GetStatusAsync()).EdgeUpdateTasksEnabled);
     }
 
     [Fact]

@@ -118,6 +118,29 @@ public sealed class EdgeOneDriveViewModelTests : IDisposable
         Assert.Contains("de-integrated", vm.EdgeStateText);
     }
 
+    /// <summary>
+    /// Edge's update tasks turned off while its policies are clear, by a Restore that failed halfway, another tool or
+    /// Startup Manager, showed as "Edge is active" (#3396). The card says the updates are off, and only
+    /// when the read knows it.
+    /// </summary>
+    [Fact]
+    public void EdgeStateText_SaysWhenEdgesUpdateTasksAreOff_OnlyWhenThatIsKnown()
+    {
+        var vm = NewVm();
+        vm.EdgeInstalled = true;
+        vm.EdgeBackgroundDisabled = false;
+
+        vm.EdgeUpdateTasksEnabled = false;
+        Assert.Contains("automatic-update tasks are off", vm.EdgeStateText, StringComparison.Ordinal);
+        Assert.Contains("Restore Edge", vm.EdgeStateText, StringComparison.Ordinal);
+
+        vm.EdgeUpdateTasksEnabled = null;
+        Assert.DoesNotContain("update", vm.EdgeStateText, StringComparison.Ordinal);
+
+        vm.EdgeUpdateTasksEnabled = true;
+        Assert.DoesNotContain("update", vm.EdgeStateText, StringComparison.Ordinal);
+    }
+
     // ── Before the first read, and when it fails (#2810) ───────────────────
 
     [Fact]

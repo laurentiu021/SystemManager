@@ -157,7 +157,7 @@ public sealed partial class EdgeOneDriveService
         bool oneDrivePinned = ReadOneDrivePinned(oneDriveInstalled);
         bool edgeInstalled = ResolveEdgeExe() is not null;
         bool edgeBackgroundDisabled = ReadEdgeBackgroundDisabled();
-        bool edgeUpdateTasksEnabled = await QueryEdgeUpdateTasksEnabledAsync(ct).ConfigureAwait(false);
+        bool? edgeUpdateTasksEnabled = await QueryEdgeUpdateTasksEnabledAsync(ct).ConfigureAwait(false);
 
         return new EdgeOneDriveStatus(
             OneDriveInstalled: oneDriveInstalled,
@@ -480,7 +480,7 @@ public sealed partial class EdgeOneDriveService
         }
     }
 
-    private async Task<bool> QueryEdgeUpdateTasksEnabledAsync(CancellationToken ct)
+    private async Task<bool?> QueryEdgeUpdateTasksEnabledAsync(CancellationToken ct)
     {
         try
         {

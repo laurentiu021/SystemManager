@@ -10,6 +10,20 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.136.195] - 2026-11-26
+
+**Edge/OneDrive Remover's Restore Edge is all or nothing, and the card says when Edge's automatic updates are off.**
+
+### Fixed
+- Restore Edge cleared both Edge policy values first and turned the update tasks back on second. When the task
+  step failed, it left the policies cleared, and the card said "Edge is active" while Edge's update tasks were
+  still off, so its security fixes could arrive late (#3396). Restore now puts the policy values back when the
+  task step fails, as Disable already does.
+- The status read asked Windows whether Edge's update tasks were on and nothing showed the answer, so tasks turned
+  off outside this tab, by another tool or in Startup Manager, were invisible. When Edge's policies are clear but its
+  update tasks are off, the card now says so and that Restore Edge turns them back on. When no update task is
+  found, or the tasks cannot be read, it says nothing about updates rather than calling them off.
+
 ## [1.136.194] - 2026-11-26
 
 **File Shredder no longer reports a file as failed after its folder's shred destroyed it.**

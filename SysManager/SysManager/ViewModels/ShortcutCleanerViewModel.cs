@@ -162,7 +162,7 @@ public sealed partial class ShortcutCleanerViewModel : ElevatedViewModelBase
         ScanStatus = (deleted > 0 ? $"Deleted {deleted} shortcut{(deleted == 1 ? "" : "s")}." : "Nothing was deleted.")
                      + DescribeWorkingAgain(result.WorkAgain.Count)
                      + DescribeUnchecked(result.Unchecked.Count)
-                     + DescribeRefused(result.Refused, AdminHelper.IsElevated(), AllUsersFolders())
+                     + DescribeRefused(result.Refused, IsElevated, AllUsersFolders())
                      + $" {BrokenCount} remaining.";
         Log.Information("Deleted {Count} broken shortcuts (recycle bin: {RecycleBin}); {Unchecked} not checked again, "
             + "{Refused} not removed", deleted, MoveToRecycleBin, result.Unchecked.Count, result.Refused.Count);

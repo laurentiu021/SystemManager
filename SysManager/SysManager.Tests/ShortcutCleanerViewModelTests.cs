@@ -4,6 +4,7 @@
 
 using System.IO;
 using NSubstitute;
+using SysManager.Helpers;
 using SysManager.Models;
 using SysManager.Services;
 using SysManager.ViewModels;
@@ -11,7 +12,8 @@ using Xunit;
 
 namespace SysManager.Tests;
 
-// Serialized: the DeleteSelected gate tests swap the static DialogService.Instance.
+// Serialized: the DeleteSelected gate tests swap the static DialogService.Instance, and one pins
+// AdminHelper.ElevationProbe.
 [Collection("ProcessWideStatics")]
 public class ShortcutCleanerViewModelTests
 {
@@ -110,6 +112,56 @@ public class ShortcutCleanerViewModelTests
             Assert.DoesNotContain(ActivityLogService.Instance.GetRecent(10), e => e.Action == "Shortcut Cleaner");
         }
         finally { Directory.Delete(dir, recursive: true); }
+    }
+
+    /// <summary>
+    /// A shortcut Windows will not remove stays listed and is counted as not removed. Outside the folders for all users
+    /// the status does not send a standard user to Run as administrator, and nothing is recorded (#3336).
+    /// </summary>
+    [Fact]
+    public async Task DeleteSelected_ThatWindowsRefuses_KeepsTheRow_AndSaysItCouldNotBeRemoved()
+    {
+        using var notElevated = AdminHelper.ForceElevation(false);
+        using var activity = new ActivityLogScope();
+        using var confirm = new DialogAnswer(true);
+        var dir = Directory.CreateTempSubdirectory("ShortcutVmRefused_").FullName;
+        var path = Path.Combine(dir, "Gone.lnk");
+        try
+        {
+            WriteShortcut(path, Path.Combine(dir, "missing", "app.exe"));
+            File.SetAttributes(path, FileAttributes.ReadOnly);
+            var vm = new ShortcutCleanerViewModel(new ShortcutCleanerService()) { MoveToRecycleBin = false };
+            vm.BrokenShortcuts.Add(new BrokenShortcut { Name = "Gone", ShortcutPath = path, IsSelected = true });
+
+            await vm.DeleteSelectedCommand.ExecuteAsync(null);
+
+            Assert.Single(vm.BrokenShortcuts);
+            Assert.True(File.Exists(path));
+            Assert.Contains("1 could not be removed.", vm.ScanStatus, StringComparison.Ordinal);
+            Assert.DoesNotContain("administrator", vm.ScanStatus, StringComparison.Ordinal);
+            Assert.DoesNotContain(ActivityLogService.Instance.GetRecent(10), e => e.Action == "Shortcut Cleaner");
+        }
+        finally
+        {
+            if (File.Exists(path)) File.SetAttributes(path, FileAttributes.Normal);
+            Directory.Delete(dir, recursive: true);
+        }
+    }
+
+    /// <summary>
+    /// Writes a real shortcut to <paramref name="target"/>, in process through the shell's own object, so the delete
+    /// judges it as the scan would.
+    /// </summary>
+    private static void WriteShortcut(string lnk, string target)
+    {
+        dynamic shell = Activator.CreateInstance(Type.GetTypeFromProgID("WScript.Shell", throwOnError: true)!)!;
+        try
+        {
+            var shortcut = shell.CreateShortcut(lnk);
+            shortcut.TargetPath = target;
+            shortcut.Save();
+        }
+        finally { System.Runtime.InteropServices.Marshal.FinalReleaseComObject(shell); }
     }
 
     /// <summary>

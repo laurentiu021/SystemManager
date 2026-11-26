@@ -35,8 +35,6 @@ public sealed class AppAlertsViewUiTests
 
         public void Rename(AppInstallEntry alert, string name, string publisher) { }
 
-        public bool Clear() => true;
-
         public bool Remove(IReadOnlyCollection<AppInstallEntry> alerts) => true;
     }
 

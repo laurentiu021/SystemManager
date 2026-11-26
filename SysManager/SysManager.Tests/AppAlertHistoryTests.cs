@@ -146,33 +146,51 @@ public sealed class AppAlertHistoryTests : IDisposable
     }
 
     [Fact]
-    public void Clear_RemovesTheRecord()
+    public void Remove_OfEveryDetection_RemovesTheRecord()
     {
-        NewHistory().Add(Alert("First"));
+        var first = Alert("First");
+        NewHistory().Add(first);
 
-        Assert.True(NewHistory().Clear());
+        Assert.True(NewHistory().Remove([first]));
 
         Assert.False(File.Exists(StoreFile));
         Assert.Empty(NewHistory().Load().Alerts);
     }
 
     [Fact]
-    public void Clear_WithNothingKept_Succeeds()
+    public void Remove_WithNothingKept_Succeeds()
     {
-        Assert.True(NewHistory().Clear());
+        Assert.True(NewHistory().Remove([Alert("Never kept")]));
     }
 
     [Fact]
-    public void Clear_WhenTheRecordCannotBeRemoved_SaysSo()
+    public void Remove_WhenTheRecordCannotBeRemoved_SaysSo()
     {
-        NewHistory().Add(Alert("First"));
+        var first = Alert("First");
+        NewHistory().Add(first);
 
         bool cleared;
         using (new FileStream(StoreFile, FileMode.Open, FileAccess.Read, FileShare.Read))
-            cleared = NewHistory().Clear();
+            cleared = NewHistory().Remove([first]);
 
         Assert.False(cleared);
         Assert.Single(NewHistory().Load().Alerts);
+    }
+
+    [Fact]
+    public void Remove_WhenWhatIsKeptCannotBeWritten_SaysSo_AndChangesNothing()
+    {
+        var first = Alert("First", 1);
+        NewHistory().Add(first);
+        NewHistory().Add(Alert("Second", 2));
+        var before = File.ReadAllBytes(StoreFile);
+
+        bool removed;
+        using (new FileStream(StoreFile, FileMode.Open, FileAccess.Read, FileShare.Read))
+            removed = NewHistory().Remove([first]);
+
+        Assert.False(removed);
+        Assert.Equal(before, File.ReadAllBytes(StoreFile));
     }
 
     /// <summary>

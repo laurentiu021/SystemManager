@@ -316,27 +316,50 @@ public sealed partial class SpeedTestViewModel : ViewModelBase
     /// </remarks>
     private async Task ClearHistoryAsync(string engine, BulkObservableCollection<SpeedTestResult> history)
     {
-        int count = history.Count;
-        if (count > 0 && !DialogService.Instance.Confirm(
+        // What is asked about, and deleted, is what is saved, read first. The question counted the rows on screen,
+        // which are none when the first load could not read the file, and the delete took every saved result of the
+        // engine, a result saved while the question was open included (#3253).
+        if (await _history.LoadAsync() is not { } saved)
+        {
+            SetStatus(engine, $"Your saved {engine} results could not be read, so nothing was deleted. "
+                + "Try again in a moment.");
+            return;
+        }
+
+        var toDelete = saved.Where(r => string.Equals(r.Engine, engine, StringComparison.OrdinalIgnoreCase)).ToList();
+        if (toDelete.Count == 0)
+        {
+            SetStatus(engine, $"There are no saved {engine} results to delete.");
+            return;
+        }
+
+        int count = toDelete.Count;
+        if (!DialogService.Instance.Confirm(
                 $"Delete all {count} saved {engine} result{(count == 1 ? "" : "s")}?\n\n" +
                 "The saved history is removed from disk and cannot be recovered.",
                 $"Clear {engine} History — Confirm"))
             return;
 
-        if (!await _history.ClearAsync(engine))
+        if (!await _history.ClearAsync(engine, toDelete))
         {
-            // Reported under the engine's OWN card. The two engines have separate status lines in separate
-            // cards (SpeedTestView.xaml binds OoklaStatus and HttpStatus independently), so writing to the
-            // wrong one would put an Ookla failure under the HTTP heading.
-            var message = $"{engine} history could not be cleared — the saved file could not be read or written.";
-            if (string.Equals(engine, "Ookla", StringComparison.OrdinalIgnoreCase)) OoklaStatus = message;
-            else HttpStatus = message;
-
             // Leave the rows on screen: they still exist on disk, so showing them is the honest state.
+            SetStatus(engine,
+                $"{engine} history could not be cleared — the saved file could not be read or written.");
             return;
         }
 
-        history.Clear();
+        foreach (var gone in history.Where(toDelete.Contains).ToList()) history.Remove(gone);
+    }
+
+    /// <summary>
+    /// Says <paramref name="message"/> under the engine's OWN card. The two engines have separate status lines in
+    /// separate cards (SpeedTestView.xaml binds OoklaStatus and HttpStatus independently), so writing to the wrong one
+    /// would put an Ookla message under the HTTP heading.
+    /// </summary>
+    private void SetStatus(string engine, string message)
+    {
+        if (string.Equals(engine, "Ookla", StringComparison.OrdinalIgnoreCase)) OoklaStatus = message;
+        else HttpStatus = message;
     }
 
     [RelayCommand]

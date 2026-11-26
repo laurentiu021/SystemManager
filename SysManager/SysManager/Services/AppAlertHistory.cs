@@ -40,13 +40,14 @@ public interface IAppAlertHistory
     /// </summary>
     void Rename(AppInstallEntry alert, string name, string publisher);
 
-    /// <summary>Forgets every detection. Returns false when the record could not be removed.</summary>
-    bool Clear();
-
     /// <summary>
     /// Forgets the detections <paramref name="alerts"/> names and keeps every other. Returns false, and changes
     /// nothing, when the record could not be read or written.
     /// </summary>
+    /// <remarks>
+    /// Clear History removes what it asked about, not the whole record: an install noticed while its question was
+    /// open was never counted (#3341), and a record that could not be read is not an empty one (#3252).
+    /// </remarks>
     bool Remove(IReadOnlyCollection<AppInstallEntry> alerts);
 }
 
@@ -114,24 +115,39 @@ public sealed class AppAlertHistory : IAppAlertHistory
         }
     }
 
-    public bool Clear()
+    public bool Remove(IReadOnlyCollection<AppInstallEntry> alerts)
     {
+        ArgumentNullException.ThrowIfNull(alerts);
         lock (_lock)
         {
-            try
-            {
-                if (File.Exists(_filePath)) File.Delete(_filePath);
-                return true;
-            }
-            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
-            {
-                Log.Debug("App alert history not cleared: {Error}", ex.Message);
-                return false;
-            }
+            if (ReadStore() is not { } stored) return false;
+            var asked = alerts.Select(KeyOf).ToHashSet();
+            var kept = stored.Where(a => !asked.Contains(KeyOf(a))).ToList();
+            if (kept.Count == stored.Count) return true;
+            return kept.Count > 0 ? Save(kept) : DeleteRecord();
         }
     }
 
-    public bool Remove(IReadOnlyCollection<AppInstallEntry> alerts) => Clear();
+    /// <summary>What tells one detection from another: what was found, where, how, and when.</summary>
+    internal static (string Name, string InstallPath, string Source, DateTime DetectedAt) KeyOf(
+        AppInstallEntry alert) => (alert.Name, alert.InstallPath ?? "", alert.Source ?? "", alert.DetectedAt);
+
+    private static (string Name, string InstallPath, string Source, DateTime DetectedAt) KeyOf(StoredAlert alert) =>
+        (alert.Name, alert.InstallPath, alert.Source, alert.DetectedAt);
+
+    private bool DeleteRecord()
+    {
+        try
+        {
+            if (File.Exists(_filePath)) File.Delete(_filePath);
+            return true;
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            Log.Debug("App alert history not cleared: {Error}", ex.Message);
+            return false;
+        }
+    }
 
     /// <summary>One detection as the file holds it.</summary>
     internal sealed record StoredAlert(string Name, string Publisher, string InstallPath, DateTime DetectedAt, string Source,
@@ -167,16 +183,18 @@ public sealed class AppAlertHistory : IAppAlertHistory
         }
     }
 
-    private void Save(List<StoredAlert> alerts)
+    private bool Save(List<StoredAlert> alerts)
     {
         try
         {
             Directory.CreateDirectory(Path.GetDirectoryName(_filePath)!);
             AtomicFile.WriteAllText(_filePath, JsonSerializer.Serialize(alerts));
+            return true;
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
             Log.Debug("App alert history not saved: {Error}", ex.Message);
+            return false;
         }
     }
 

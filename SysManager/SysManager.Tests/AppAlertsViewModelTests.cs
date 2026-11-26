@@ -23,7 +23,7 @@ public class AppAlertsViewModelTests
     {
         var history = Substitute.For<IAppAlertHistory>();
         history.Load().Returns(new AppAlertsRead([], Readable: true));
-        history.Clear().Returns(true);
+        history.Remove(Arg.Any<IReadOnlyCollection<AppInstallEntry>>()).Returns(true);
         return history;
     }
 
@@ -86,7 +86,7 @@ public class AppAlertsViewModelTests
         Assert.Equal(2, vm.Alerts.Count);
         Assert.Equal(2, vm.AlertCount);
         Assert.Equal(2, vm.UnacknowledgedCount);
-        history.DidNotReceive().Clear();
+        history.DidNotReceiveWithAnyArgs().Remove(default!);
     }
 
     [Fact]
@@ -100,7 +100,7 @@ public class AppAlertsViewModelTests
         using var _ = new DialogAnswer(true);
         vm.ClearHistoryCommand.Execute(null);
 
-        history.Received(1).Clear();
+        history.Received(1).Remove(Arg.Is<IReadOnlyCollection<AppInstallEntry>>(a => a.Single().Name == "App1"));
         Assert.Equal("History cleared.", vm.MonitorStatus);
     }
 
@@ -120,19 +120,26 @@ public class AppAlertsViewModelTests
         Assert.DoesNotContain("not saved", asked, StringComparison.Ordinal);
     }
 
+    /// <summary>
+    /// A saved copy that could not be changed leaves the list as it was, so what is shown is still what is saved.
+    /// </summary>
     [Fact]
-    public void ClearHistory_WhenTheKeptCopyCannotBeRemoved_SaysItComesBack()
+    public void ClearHistory_WhenTheKeptCopyCannotBeChanged_ClearsNothing_AndSaysSo()
     {
         var history = NoHistory();
-        history.Clear().Returns(false);
+        history.Remove(Arg.Any<IReadOnlyCollection<AppInstallEntry>>()).Returns(false);
         var vm = NewVm(history);
+        vm.Alerts.Add(new AppInstallEntry { Name = "App1" });
+        vm.AlertCount = 1;
 
         using var _ = new DialogAnswer(true);
         vm.ClearHistoryCommand.Execute(null);
 
-        Assert.Empty(vm.Alerts);
-        Assert.Contains("could not be removed", vm.MonitorStatus, StringComparison.Ordinal);
+        Assert.Single(vm.Alerts);
+        Assert.Equal(1, vm.AlertCount);
+        Assert.StartsWith("Nothing was cleared", vm.MonitorStatus, StringComparison.Ordinal);
     }
+
 
     // ---------- Clear History clears what it asked about, and only what it could read (#3252, #3341) ----------
 
@@ -386,15 +393,17 @@ public class AppAlertsViewModelTests
     [Fact]
     public void ClearHistory_WithNothingToLose_DoesNotPrompt()
     {
-        // An empty list has nothing to confirm; prompting there would be pure noise. Answer
-        // "No" and assert the clear still ran — proving no dialog gated it.
-        var vm = NewVm();
+        // Nothing shown and nothing saved: nothing to confirm, and prompting there would be pure noise. Nothing is
+        // removed either, and the status says there was nothing to clear.
+        var history = NoHistory();
+        var vm = NewVm(history);
 
         using var answer = new DialogAnswer(false);
         vm.ClearHistoryCommand.Execute(null);
 
         Assert.Equal(0, answer.Calls);
-        Assert.Contains("cleared", vm.MonitorStatus);
+        history.DidNotReceiveWithAnyArgs().Remove(default!);
+        Assert.Equal("There is no recorded alert to clear.", vm.MonitorStatus);
     }
 
     [Fact]

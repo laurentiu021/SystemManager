@@ -198,6 +198,39 @@ public class RestorePointsViewModelTests
         Assert.DoesNotContain("No restore points", vm.StatusMessage, StringComparison.OrdinalIgnoreCase);
     }
 
+    // ---------- a refused refresh keeps what was listed (#3362) ----------
+    // A Refresh Windows refused replaced the list with an empty one: the selection went, Restore was disabled, and an
+    // administrator read "Restore points could not be listed" over a PC whose points were on screen a moment before.
+
+    [Fact]
+    public async Task Refresh_ThatWindowsRefuses_AfterAGoodOne_KeepsTheRowsAndTheSelection()
+    {
+        using var elevated = AdminHelper.ForceElevation(true);
+        var runner = Substitute.For<IPowerShellRunner>();
+        var refuse = false;
+        var listed = Answering((7, "Before the driver update", Now), (8, "Before the game", Now.AddHours(1)));
+        runner.RunAsync(Arg.Any<string>(), Arg.Any<IDictionary<string, object?>?>(), Arg.Any<CancellationToken>())
+            .Returns(call => refuse
+                ? throw new RuntimeException("The System Restore service is busy")
+                : listed(call.ArgAt<CancellationToken>(2)));
+        var vm = new RestorePointsViewModel(new RestorePointService(runner));
+        await vm.InitializationComplete;
+        Assert.Equal(2, vm.RestorePoints.Count);
+        var chosen = vm.RestorePoints[1];
+        vm.SelectedPoint = chosen;
+
+        refuse = true;
+        await vm.RefreshCommand.ExecuteAsync(null);
+
+        Assert.Equal(2, vm.RestorePoints.Count);
+        Assert.Same(chosen, vm.SelectedPoint);
+        Assert.True(vm.HasPoints);
+        Assert.False(vm.ListWasRefused);
+        Assert.True(vm.RestoreCommand.CanExecute(null));
+        Assert.Contains("from the last read", vm.StatusMessage, StringComparison.Ordinal);
+        Assert.Contains("Press Refresh to try again", vm.StatusMessage, StringComparison.Ordinal);
+    }
+
     // ---------- what a Cancel during Create did (#2843) ----------
     // A cancel stops SysManager waiting, not a checkpoint Windows has begun. The tab said "Cancelled." without looking,
     // and the same over a point it had just made when the cancel came during the list read after it.

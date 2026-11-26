@@ -10,6 +10,16 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.136.193] - 2026-11-26
+
+**Restore Points keeps its list when Windows refuses a Refresh.**
+
+### Fixed
+- A Refresh that Windows refused, with the System Restore service busy say, emptied a list that was showing restore
+  points. The selection went with it, Restore was unavailable, and an administrator read "Restore points could not
+  be listed" until a later Refresh worked (#3362). The list and the selection now stay, and the status line says
+  the list is from the last read. A refused read of an empty list still says why it is empty, as before.
+
 ## [1.136.192] - 2026-11-26
 
 **Shortcut Cleaner's Delete says what it kept and why, and no longer records a delete that removed nothing.**

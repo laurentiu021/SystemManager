@@ -2212,7 +2212,10 @@ Key services:
   helpers, and the directory is injectable — like `BandwidthHistoryService` — so tests cover the
   load and retention paths without touching the user's own history. A retention setting that
   cannot be read or used is not taken as 7 days: `PruneWindowDays` keeps what the longest option
-  would until the user chooses again. Strictly local — no system writes, nothing leaves the machine.
+  would until the user chooses again; `RetentionKnown` and `KeptDays` let the tab show that window (#3308).
+  `ReadOldestOutsideAsync` tells a history that could not be read from one with nothing outside a window, so the
+  tab asks before a shorter Keep whenever a sample would go and changes nothing when it cannot tell (#3260).
+  Strictly local — no system writes, nothing leaves the machine.
 - Bandwidth Monitor sources — `IBandwidthMonitorService` is the seam with two implementations:
   `ConnectionBandwidthSource` (default, no admin) takes total throughput from `GetIfTable2`: the
   pure `CountedAdapters` keeps the hardware adapters that are up, so a VPN, Hyper-V or hotspot

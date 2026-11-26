@@ -95,6 +95,15 @@ public sealed class ResourceHistoryService : IDisposable
     /// <summary>Days of history to keep. Changed through <see cref="ChangeRetentionAsync"/>.</summary>
     public int RetentionDays => _retentionDays;
 
+    /// <summary>Whether the saved Keep choice could be read and is one this version offers.</summary>
+    public bool RetentionKnown => _retentionKnown;
+
+    /// <summary>
+    /// The days actually kept: the saved choice, or while it cannot be read or used, the longest one offered, which
+    /// is not <see cref="RetentionDays"/> then (#3308).
+    /// </summary>
+    public int KeptDays => PruneWindowDays;
+
     /// <summary>
     /// Keeps <paramref name="days"/> days of history from now on, once the choice is saved, and prunes to it.
     /// </summary>
@@ -120,35 +129,48 @@ public sealed class ResourceHistoryService : IDisposable
 
     /// <summary>The oldest sample's time if keeping <paramref name="days"/> days would remove it, else null.</summary>
     /// <remarks>
-    /// What a shorter window costs, for the tab to ask about before it is chosen. The file is oldest-first, so its
-    /// first readable line is the oldest sample.
+    /// What a shorter window costs. Null also when the history could not be read, which the hourly prune treats as
+    /// nothing to do; the tab, which asks before samples go, reads <see cref="ReadOldestOutsideAsync"/> instead.
     /// </remarks>
     public async Task<DateTimeOffset?> OldestSampleOutsideAsync(int days, CancellationToken ct = default)
+        => (await ReadOldestOutsideAsync(days, ct).ConfigureAwait(false)).Oldest;
+
+    /// <summary>
+    /// What keeping <paramref name="days"/> days would remove: whether the history could be read, and its oldest
+    /// sample's time when that sample is outside the window.
+    /// </summary>
+    /// <remarks>
+    /// The file is oldest-first, so its first readable line is the oldest sample. A history that could not be read
+    /// is not one with nothing to remove: the tab asked before a shorter window only when a sample was found, so a
+    /// file locked at that moment let the shorter window go through unasked (#3260).
+    /// </remarks>
+    public async Task<(bool Readable, DateTimeOffset? Oldest)> ReadOldestOutsideAsync(
+        int days, CancellationToken ct = default)
     {
         try { await _fileLock.WaitAsync(ct).ConfigureAwait(false); }
-        catch (OperationCanceledException) { return null; }
+        catch (OperationCanceledException) { return (false, null); }
         try
         {
-            if (!File.Exists(_dataPath)) return null;
+            if (!File.Exists(_dataPath)) return (true, null);
             var cutoff = _time.GetUtcNow() - TimeSpan.FromDays(days);
             // Read asynchronously: the tab asks from the UI thread, and only the first readable line is needed.
             using var reader = new StreamReader(_dataPath);
             while (await reader.ReadLineAsync(ct).ConfigureAwait(false) is { } line)
             {
                 if (!TryParse(line, out var sample)) continue;
-                return sample!.Timestamp < cutoff ? sample.Timestamp : null;
+                return (true, sample!.Timestamp < cutoff ? sample.Timestamp : null);
             }
-            return null;
+            return (true, null);
         }
         catch (IOException ex)
         {
             Log.Debug("Resource history oldest sample read failed: {Error}", ex.Message);
-            return null;
+            return (false, null);
         }
         catch (UnauthorizedAccessException ex)
         {
             Log.Debug("Resource history oldest sample read denied: {Error}", ex.Message);
-            return null;
+            return (false, null);
         }
         finally { if (!_disposed) _fileLock.Release(); }
     }

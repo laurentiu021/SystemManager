@@ -17,14 +17,18 @@ namespace SysManager.Models;
 /// disable its auto-update scheduled tasks), which needs administrator rights.
 /// </para>
 /// </summary>
+/// <param name="EdgeUpdateTasksEnabled">
+/// Whether one of Edge's automatic-update tasks is on, or null when that is not known: the tasks could not be read,
+/// or none was found.
+/// </param>
 public sealed record EdgeOneDriveStatus(
     bool OneDriveInstalled,
     bool OneDriveRunning,
     bool OneDrivePinned,
     bool EdgeInstalled,
-    bool EdgeUpdateTasksEnabled,
+    bool? EdgeUpdateTasksEnabled,
     bool EdgeBackgroundDisabled)
 {
     /// <summary>The all-false snapshot returned when the state could not be read.</summary>
-    public static EdgeOneDriveStatus Empty { get; } = new(false, false, false, false, false, false);
+    public static EdgeOneDriveStatus Empty { get; } = new(false, false, false, false, null, false);
 }

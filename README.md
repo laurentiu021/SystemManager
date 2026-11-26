@@ -2014,7 +2014,10 @@ Get Microsoft Edge and OneDrive out of your way — reversibly:
 - **A Restore button for each** — reinstall OneDrive and re-pin its sidebar entry, or
   clear the Edge policies and re-enable its update tasks — so nothing here is one-way.
   The OneDrive entry comes back only once its setup has succeeded; a failed reinstall
-  is reported as failed, just as a failed removal is
+  is reported as failed, just as a failed removal is. Restore Edge is all or nothing, like
+  Disable: when its update tasks cannot be turned back on, the policies are put back as
+  they were. The Edge card says when Edge's automatic-update tasks are off, and that
+  Restore Edge turns them back on
 - **Honest about the default browser** — Windows hash-protects the default-browser
   choice, so no app can switch it for you; the tab opens Windows' default-apps settings
   and guides you instead of pretending to change it

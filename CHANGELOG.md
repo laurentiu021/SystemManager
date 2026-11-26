@@ -10,6 +10,27 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.136.199] - 2026-11-26
+
+**Windows Update now asks before it installs PSWindowsUpdate, and can take it off again.**
+
+### Changed
+- Install PSWindowsUpdate asks first. The question says the module is a community module, not made by Microsoft,
+  that it comes from the PowerShell Gallery into your own modules folder, that the NuGet provider is installed with
+  it when PowerShell does not have it yet and stays, and how to take the module off again. One click used to
+  install both with no question.
+
+### Added
+- Remove PSWindowsUpdate, beside Check now, once Check now finds a copy that an install put in your own modules
+  folder. It asks first and takes off only that copy; a copy installed for all users is left alone. An install and a
+  removal are both written to Recent Changes.
+
+### Fixed
+- As administrator, the module card said the module was required even when it was installed, and its Install only
+  wrote a line at the bottom of the page (#3339). The heading now says update history needs a normal,
+  non-administrator session, and Install opens a window that says what to do: close SysManager and open it again
+  without "Run as administrator".
+
 ## [1.136.198] - 2026-11-26
 
 **Started as administrator with another account's password, Preinstalled Apps and Browser Cleaner no longer act

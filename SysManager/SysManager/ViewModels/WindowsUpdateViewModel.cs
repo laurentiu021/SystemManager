@@ -38,6 +38,65 @@ public sealed partial class WindowsUpdateViewModel : ViewModelBase
         'INSTALLED'
         """;
 
+    /// <summary>
+    /// Whether PSWindowsUpdate can be loaded, and whether a copy of it is one this tab can take off again.
+    /// </summary>
+    /// <remarks>
+    /// Writes AVAILABLE or MISSING, and REMOVABLE after AVAILABLE when a copy sits in the account's own modules
+    /// folder with the PSGetModuleInfo.xml that Install-Module leaves. A copy installed for all users, or put in
+    /// the folder by hand, has no such file there, and Uninstall-Module would refuse it anyway. Read-only, and it
+    /// does not load PowerShellGet, so Check now stays as quick as it was.
+    /// </remarks>
+    internal const string PsWindowsUpdateProbeScript = """
+        $userModules = (Join-Path ([Environment]::GetFolderPath('MyDocuments')) 'WindowsPowerShell\Modules') + '\'
+        $found = @(Get-Module -ListAvailable -Name PSWindowsUpdate)
+        if ($found.Count -eq 0) { 'MISSING' }
+        else {
+            'AVAILABLE'
+            $mine = @($found | Where-Object {
+                ([string]$_.ModuleBase).StartsWith($userModules, [StringComparison]::OrdinalIgnoreCase) -and
+                (Test-Path -LiteralPath (Join-Path $_.ModuleBase 'PSGetModuleInfo.xml'))
+            })
+            if ($mine.Count -gt 0) { 'REMOVABLE' }
+        }
+        """;
+
+    /// <summary>Takes off every copy of PSWindowsUpdate that Install-Module put in the account's modules folder.</summary>
+    /// <remarks>
+    /// Only those copies: a copy installed for all users or by something else is left as it is. The NuGet provider
+    /// the install may have added stays, as the question before the install says, since other modules can need it.
+    /// </remarks>
+    internal const string PsWindowsUpdateRemoveScript = """
+        $ErrorActionPreference = 'Stop'
+        $userModules = (Join-Path ([Environment]::GetFolderPath('MyDocuments')) 'WindowsPowerShell\Modules') + '\'
+        $mine = @(Get-InstalledModule -Name PSWindowsUpdate -AllVersions -ErrorAction SilentlyContinue |
+            Where-Object {
+                ([string]$_.InstalledLocation).StartsWith($userModules, [StringComparison]::OrdinalIgnoreCase)
+            })
+        if ($mine.Count -eq 0) { throw 'No copy of PSWindowsUpdate installed for this account was found.' }
+        foreach ($module in $mine) { Uninstall-Module -InputObject $module -Force }
+        'REMOVED'
+        """;
+
+    /// <summary>The question before the install: what the module is, where it goes, and how to take it off.</summary>
+    internal const string InstallModuleQuestion =
+        "PSWindowsUpdate is a community module, not made by Microsoft. It comes from the PowerShell Gallery and goes "
+        + "into your own PowerShell modules folder, for your account only.\n\n"
+        + "If PowerShell does not have the NuGet provider yet, it is installed first and stays installed.\n\n"
+        + "To take it off again: press Check now on this tab, then Remove PSWindowsUpdate.\n\n"
+        + "Install PSWindowsUpdate?";
+
+    internal const string RemoveModuleQuestion =
+        "Remove PSWindowsUpdate from your modules folder?\n\n"
+        + "The History view stops working until you install it again.";
+
+    /// <summary>What Install pressed as administrator says, in a window rather than only on the status line.</summary>
+    internal const string ElevatedInstallExplanation =
+        "PSWindowsUpdate installs into your own account's modules folder, so SysManager has to be running normally, "
+        + "not as administrator.\n\n"
+        + "Close SysManager, open it again without \"Run as administrator\", "
+        + "then press Install PSWindowsUpdate on this tab.";
+
     internal const int HistoryModuleImportFailedExitCode = 41;
     internal const int HistoryQueryFailedExitCode = 42;
 
@@ -101,7 +160,12 @@ public sealed partial class WindowsUpdateViewModel : ViewModelBase
 
     [ObservableProperty] private bool _moduleAvailable;
     [ObservableProperty] private string _moduleStatus = "Checking PSWindowsUpdate module...";
-    [ObservableProperty] private bool _isElevated;
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(ModuleCardTitle))]
+    private bool _isElevated;
+
+    /// <summary>Whether Check now found a copy of PSWindowsUpdate that Remove can take off.</summary>
+    [ObservableProperty] private bool _canRemoveModule;
     [ObservableProperty] private int _updateCount;
     [ObservableProperty] private string _tableSummary = "";
     [ObservableProperty] private bool _showConsole;
@@ -168,6 +232,9 @@ public sealed partial class WindowsUpdateViewModel : ViewModelBase
         ModuleStatus = "PSWindowsUpdate is used for the History view only.";
         RefreshPolicy();
     }
+
+    /// <summary>The heading of the card shown while the module cannot be used.</summary>
+    public string ModuleCardTitle => "PSWindowsUpdate module is required";
 
     private void RefreshPolicy() => PolicySummary = DescribePolicy(_policy.Read(DateTime.Now));
 
@@ -279,6 +346,7 @@ public sealed partial class WindowsUpdateViewModel : ViewModelBase
         InstallUpdatesCommand.NotifyCanExecuteChanged();
         CheckModuleCommand.NotifyCanExecuteChanged();
         InstallModuleCommand.NotifyCanExecuteChanged();
+        RemoveModuleCommand.NotifyCanExecuteChanged();
     }
 
     protected override void Dispose(bool disposing)
@@ -394,6 +462,9 @@ public sealed partial class WindowsUpdateViewModel : ViewModelBase
         catch (OperationCanceledException) { StatusMessage = "Module install cancelled."; }
         finally { IsBusy = false; IsProgressIndeterminate = false; }
     }
+
+    [RelayCommand(CanExecute = nameof(NotBusy))]
+    private Task RemoveModuleAsync() => Task.CompletedTask;
 
     [RelayCommand(CanExecute = nameof(NotBusy))]
     private async Task ListUpdatesAsync()

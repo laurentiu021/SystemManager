@@ -139,6 +139,8 @@ public sealed class WindowsUpdateViewModelTests : IDisposable
             new WindowsUpdateService(),
             Policy(),
             static () => false);
+        using var answer = new DialogAnswer(confirm: true);
+        using var log = new ActivityLogScope();
 
         await vm.InstallModuleCommand.ExecuteAsync(null);
 
@@ -161,6 +163,7 @@ public sealed class WindowsUpdateViewModelTests : IDisposable
             new WindowsUpdateService(),
             Policy(),
             static () => false);
+        using var answer = new DialogAnswer(confirm: true);
 
         await vm.InstallModuleCommand.ExecuteAsync(null);
 
@@ -343,6 +346,7 @@ public sealed class WindowsUpdateViewModelTests : IDisposable
     [InlineData("CheckPendingRebootCommand")]
     [InlineData("InstallUpdatesCommand")]
     [InlineData("InstallModuleCommand")]
+    [InlineData("RemoveModuleCommand")]
     [InlineData("CheckModuleCommand")]
     [InlineData("CancelCommand")]
     [InlineData("RelaunchAsAdminCommand")]
@@ -413,6 +417,8 @@ public sealed class WindowsUpdateViewModelTests : IDisposable
         var tokens = new List<CancellationToken>();
         var (runner, waiting) = RunnerThatWaitsAtCall(waitingCall, tokens);
         var vm = new WindowsUpdateViewModel(runner, Substitute.For<IWindowsUpdateService>(), Policy(), () => false);
+        using var answer = new DialogAnswer(confirm: true);
+        using var log = new ActivityLogScope();
 
         var install = vm.InstallModuleCommand.ExecuteAsync(null);
         vm.CancelCommand.Execute(null);
@@ -1349,6 +1355,8 @@ public sealed class WindowsUpdateViewModelTests : IDisposable
     public async Task InstallModule_WhenNotElevated_ReachesTheRunner()
     {
         var vm = NewVm(elevated: false, out var runner);
+        using var answer = new DialogAnswer(confirm: true);
+        using var log = new ActivityLogScope();
 
         await vm.InstallModuleCommand.ExecuteAsync(null);
 
@@ -1484,6 +1492,286 @@ public sealed class WindowsUpdateViewModelTests : IDisposable
         vm.IsBusy = true;
 
         Assert.Same(vm.CancelCommand, vm.EscapeCancel);
+    }
+
+    // ---------- PSWindowsUpdate: asked before it installs, and a way to take it off again ----------
+    //
+    // One click installed a community module, and the NuGet provider with it, from the PowerShell Gallery, with no
+    // question first and nothing in the app to take it off again. As administrator the card claimed the module was
+    // missing and its Install only wrote a line in the footer (#3339).
+
+    /// <summary>
+    /// A runner that answers the module probe with <paramref name="probeLines"/> and every other script with
+    /// <paramref name="exitCode"/>.
+    /// </summary>
+    private static IPowerShellRunner ModuleRunner(int exitCode, params string[] probeLines)
+    {
+        var runner = Substitute.For<IPowerShellRunner>();
+        runner.RunScriptViaPwshAsync(Arg.Any<string>(), Arg.Any<CancellationToken>()).Returns(ci =>
+        {
+            if (ci.ArgAt<string>(0) != WindowsUpdateViewModel.PsWindowsUpdateProbeScript)
+                return Task.FromResult(exitCode);
+            foreach (var line in probeLines)
+                runner.LineReceived += Raise.Event<Action<PowerShellLine>>(PowerShellLine.Output(line));
+            return Task.FromResult(0);
+        });
+        return runner;
+    }
+
+    private WindowsUpdateViewModel ModuleVm(IPowerShellRunner runner, bool elevated) =>
+        new(runner, Substitute.For<IWindowsUpdateService>(), Policy(), () => elevated);
+
+    [Fact]
+    public async Task InstallModule_AsksFirst_AndANoInstallsNothing()
+    {
+        using var answer = new DialogAnswer(confirm: false);
+        var runner = ModuleRunner(0);
+        var vm = ModuleVm(runner, elevated: false);
+
+        await vm.InstallModuleCommand.ExecuteAsync(null);
+
+        var question = Assert.Single(answer.Messages);
+        Assert.Contains("community module, not made by Microsoft", question, StringComparison.Ordinal);
+        Assert.Contains("PowerShell Gallery", question, StringComparison.Ordinal);
+        Assert.Contains("NuGet provider", question, StringComparison.Ordinal);
+        Assert.Contains("Remove PSWindowsUpdate", question, StringComparison.Ordinal);
+        await runner.DidNotReceiveWithAnyArgs().RunScriptViaPwshAsync(default!, default);
+        Assert.False(vm.IsBusy);
+        // Still offered: someone who said no can change their mind.
+        Assert.True(vm.InstallModuleCommand.CanExecute(null));
+    }
+
+    [Fact]
+    public async Task InstallModule_Confirmed_InstallsAndRecordsIt()
+    {
+        using var answer = new DialogAnswer(confirm: true);
+        using var log = new ActivityLogScope();
+        var runner = ModuleRunner(0, "AVAILABLE", "REMOVABLE");
+        var vm = ModuleVm(runner, elevated: false);
+
+        await vm.InstallModuleCommand.ExecuteAsync(null);
+
+        Assert.Equal(1, answer.Calls);
+        await runner.Received(1).RunScriptViaPwshAsync(
+            WindowsUpdateViewModel.PsWindowsUpdateInstallScript, Arg.Any<CancellationToken>());
+        Assert.True(vm.ModuleAvailable);
+        Assert.True(vm.CanRemoveModule);
+        var entry = Assert.Single(ActivityLogService.Instance.GetRecent(10));
+        Assert.Equal(("Windows Update", "Installed PSWindowsUpdate for your account"), (entry.Action, entry.Detail));
+    }
+
+    [Fact]
+    public async Task InstallModule_ThatFails_RecordsNothing()
+    {
+        using var answer = new DialogAnswer(confirm: true);
+        using var log = new ActivityLogScope();
+        var vm = ModuleVm(ModuleRunner(1), elevated: false);
+
+        await vm.InstallModuleCommand.ExecuteAsync(null);
+
+        Assert.Contains("failed", vm.StatusMessage, StringComparison.OrdinalIgnoreCase);
+        Assert.Empty(ActivityLogService.Instance.GetRecent(10));
+    }
+
+    [Fact]
+    public async Task InstallModule_AsAdministrator_StaysOffered_AndExplainsInAWindow()
+    {
+        var previous = DialogService.Instance;
+        var dialog = Substitute.For<IDialogService>();
+        DialogService.Instance = dialog;
+        try
+        {
+            var runner = ModuleRunner(0);
+            var vm = ModuleVm(runner, elevated: true);
+            Assert.True(vm.InstallModuleCommand.CanExecute(null));
+
+            await vm.InstallModuleCommand.ExecuteAsync(null);
+
+            dialog.Received(1).Inform(WindowsUpdateViewModel.ElevatedInstallExplanation, Arg.Any<string>());
+            dialog.DidNotReceiveWithAnyArgs().Confirm(default!, default!);
+            await runner.DidNotReceiveWithAnyArgs().RunScriptViaPwshAsync(default!, default);
+            Assert.False(vm.IsBusy);
+        }
+        finally
+        {
+            DialogService.Instance = previous;
+        }
+    }
+
+    [Fact]
+    public void ElevatedInstallExplanation_SaysHowToGetAWorkingInstall()
+    {
+        var text = WindowsUpdateViewModel.ElevatedInstallExplanation;
+
+        Assert.Contains("Close SysManager", text, StringComparison.Ordinal);
+        Assert.Contains("without \"Run as administrator\"", text, StringComparison.Ordinal);
+    }
+
+    [Theory]
+    [InlineData(false, "PSWindowsUpdate module is required")]
+    [InlineData(true, "Update history needs a normal, non-administrator session")]
+    public void ModuleCardTitle_DoesNotClaimTheModuleIsMissing_AsAdministrator(bool elevated, string title)
+    {
+        var vm = ModuleVm(ModuleRunner(0), elevated);
+
+        Assert.Equal(title, vm.ModuleCardTitle);
+    }
+
+    [Fact]
+    public async Task CheckModule_RunsTheProbe_AndOffersRemoveForTheAccountsOwnCopy()
+    {
+        var runner = ModuleRunner(0, "AVAILABLE", "REMOVABLE");
+        var vm = ModuleVm(runner, elevated: false);
+
+        await vm.CheckModuleCommand.ExecuteAsync(null);
+
+        await runner.Received(1).RunScriptViaPwshAsync(
+            WindowsUpdateViewModel.PsWindowsUpdateProbeScript, Arg.Any<CancellationToken>());
+        Assert.True(vm.ModuleAvailable);
+        Assert.True(vm.CanRemoveModule);
+    }
+
+    [Fact]
+    public async Task CheckModule_DoesNotOfferRemove_ForACopyInstalledElsewhere()
+    {
+        var vm = ModuleVm(ModuleRunner(0, "AVAILABLE"), elevated: false);
+
+        await vm.CheckModuleCommand.ExecuteAsync(null);
+
+        Assert.True(vm.ModuleAvailable);
+        Assert.False(vm.CanRemoveModule);
+    }
+
+    [Fact]
+    public async Task CheckModule_DoesNotOfferRemove_AsAdministrator()
+    {
+        var vm = ModuleVm(ModuleRunner(0, "AVAILABLE", "REMOVABLE"), elevated: true);
+
+        await vm.CheckModuleCommand.ExecuteAsync(null);
+
+        Assert.False(vm.CanRemoveModule);
+    }
+
+    [Fact]
+    public async Task CheckModule_ThatFindsNothing_ShowsTheInstallCard()
+    {
+        var vm = ModuleVm(ModuleRunner(0, "MISSING"), elevated: false);
+
+        await vm.CheckModuleCommand.ExecuteAsync(null);
+
+        Assert.False(vm.ModuleAvailable);
+        Assert.False(vm.CanRemoveModule);
+        Assert.Equal("PSWindowsUpdate is not installed. Install it to enable update history.", vm.ModuleStatus);
+    }
+
+    [Fact]
+    public async Task RemoveModule_AsksFirst_AndANoRemovesNothing()
+    {
+        using var answer = new DialogAnswer(confirm: false);
+        var runner = ModuleRunner(0);
+        var vm = ModuleVm(runner, elevated: false);
+        vm.CanRemoveModule = true;
+
+        await vm.RemoveModuleCommand.ExecuteAsync(null);
+
+        var question = Assert.Single(answer.Messages);
+        Assert.Contains("History view stops working", question, StringComparison.Ordinal);
+        await runner.DidNotReceiveWithAnyArgs().RunScriptViaPwshAsync(default!, default);
+        Assert.True(vm.CanRemoveModule);
+    }
+
+    [Fact]
+    public async Task RemoveModule_Confirmed_RemovesRecordsIt_AndOffersInstallAgain()
+    {
+        using var answer = new DialogAnswer(confirm: true);
+        using var log = new ActivityLogScope();
+        var runner = ModuleRunner(0, "MISSING");
+        var vm = ModuleVm(runner, elevated: false);
+        vm.CanRemoveModule = true;
+
+        await vm.RemoveModuleCommand.ExecuteAsync(null);
+
+        Assert.Equal(1, answer.Calls);
+        await runner.Received(1).RunScriptViaPwshAsync(
+            WindowsUpdateViewModel.PsWindowsUpdateRemoveScript, Arg.Any<CancellationToken>());
+        Assert.False(vm.ModuleAvailable);
+        Assert.False(vm.CanRemoveModule);
+        Assert.True(vm.InstallModuleCommand.CanExecute(null));
+        Assert.False(vm.IsBusy);
+        var entry = Assert.Single(ActivityLogService.Instance.GetRecent(10));
+        Assert.Equal(("Windows Update", "Removed PSWindowsUpdate from your modules folder"),
+            (entry.Action, entry.Detail));
+    }
+
+    [Fact]
+    public async Task RemoveModule_ThatLeavesAnotherCopy_SaysTheHistoryStillWorks()
+    {
+        using var answer = new DialogAnswer(confirm: true);
+        using var log = new ActivityLogScope();
+        var vm = ModuleVm(ModuleRunner(0, "AVAILABLE"), elevated: false);
+        vm.CanRemoveModule = true;
+
+        await vm.RemoveModuleCommand.ExecuteAsync(null);
+
+        Assert.True(vm.ModuleAvailable);
+        Assert.False(vm.CanRemoveModule);
+        Assert.Contains("Another copy", vm.StatusMessage, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task RemoveModule_ThatFails_RecordsNothing_AndSaysSo()
+    {
+        using var answer = new DialogAnswer(confirm: true);
+        using var log = new ActivityLogScope();
+        var vm = ModuleVm(ModuleRunner(1, "AVAILABLE", "REMOVABLE"), elevated: false);
+        vm.CanRemoveModule = true;
+
+        await vm.RemoveModuleCommand.ExecuteAsync(null);
+
+        Assert.Contains("could not be removed", vm.StatusMessage, StringComparison.Ordinal);
+        Assert.True(vm.CanRemoveModule);
+        Assert.Empty(ActivityLogService.Instance.GetRecent(10));
+    }
+
+    [Fact]
+    public async Task RemoveModule_AsAdministrator_RefusesWithoutAsking()
+    {
+        using var answer = new DialogAnswer(confirm: true);
+        var runner = ModuleRunner(0);
+        var vm = ModuleVm(runner, elevated: true);
+
+        await vm.RemoveModuleCommand.ExecuteAsync(null);
+
+        Assert.Equal(0, answer.Calls);
+        await runner.DidNotReceiveWithAnyArgs().RunScriptViaPwshAsync(default!, default);
+        Assert.Contains("non-administrator", vm.StatusMessage, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void RemoveScript_TakesOffOnlyTheAccountsOwnCopies()
+    {
+        var script = WindowsUpdateViewModel.PsWindowsUpdateRemoveScript;
+
+        Assert.Contains("$ErrorActionPreference = 'Stop'", script, StringComparison.Ordinal);
+        Assert.Contains("GetFolderPath('MyDocuments')", script, StringComparison.Ordinal);
+        Assert.Contains("([string]$_.InstalledLocation).StartsWith($userModules", script, StringComparison.Ordinal);
+        Assert.Contains("Uninstall-Module -InputObject $module -Force", script, StringComparison.Ordinal);
+        Assert.DoesNotContain("AllUsers", script, StringComparison.Ordinal);
+        Assert.DoesNotContain("Remove-Item", script, StringComparison.Ordinal);
+        Assert.DoesNotContain("PackageProvider", script, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void ProbeScript_OffersRemoveOnlyForWhatInstallModuleLeftInTheAccountsFolder()
+    {
+        var script = WindowsUpdateViewModel.PsWindowsUpdateProbeScript;
+
+        Assert.Contains("GetFolderPath('MyDocuments')", script, StringComparison.Ordinal);
+        Assert.Contains("PSGetModuleInfo.xml", script, StringComparison.Ordinal);
+        Assert.Contains("'REMOVABLE'", script, StringComparison.Ordinal);
+        // Read-only and quick: PowerShellGet takes seconds to load.
+        Assert.DoesNotContain("Get-InstalledModule", script, StringComparison.Ordinal);
+        Assert.DoesNotContain("Uninstall-Module", script, StringComparison.Ordinal);
     }
 }
 

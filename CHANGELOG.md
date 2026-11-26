@@ -10,6 +10,17 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.136.201] - 2026-11-26
+
+**On Defender Tweaks, Add folder is red now, like the app's other actions that weaken a protection.**
+
+### Fixed
+- Adding a scan exclusion turns off malware scanning for that folder, and Add folder was the tab's only purple
+  button, the colour the app keeps for its main safe actions. It now uses the red style the tab's own rule keeps for
+  an action that weakens protection, and says on hover and to a screen reader that files in a folder you add are no
+  longer scanned for malware. The question before it is unchanged, and Remove stays grey: it makes Defender scan the
+  folder again.
+
 ## [1.136.200] - 2026-11-26
 
 **File Shredder marks an item in a folder OneDrive syncs on its own row, and its question and summary name it.**

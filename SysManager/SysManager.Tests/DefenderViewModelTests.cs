@@ -958,4 +958,27 @@ public sealed class DefenderViewModelTests : IDisposable
     [InlineData(true, false, "PUA protection was not changed — Windows did not apply it.")]
     public void NotChangedMessage_NamesTamperProtectionOnlyWithAdministratorRights(bool elevated, bool tamperProtected, string expected)
         => Assert.Equal(expected, DefenderViewModel.NotChangedMessage("PUA protection", elevated, tamperProtected));
+
+    // ---------- Add folder looks like what it does: it turns scanning off for that folder ----------
+
+    /// <summary>
+    /// Add folder weakens protection, so it wears the Danger style the view's own rule keeps for that, not the purple
+    /// the app keeps for its main safe actions, and says what it does to a screen reader and on hover. Remove stays
+    /// grey: it makes Defender scan the folder again.
+    /// </summary>
+    [Fact]
+    public void AddFolder_IsStyledAsAnActionThatWeakensProtection_AndSaysWhy()
+    {
+        System.Xml.Linq.XNamespace wpf = "http://schemas.microsoft.com/winfx/2006/xaml/presentation";
+        var buttons = System.Xml.Linq.XDocument.Load(TestPaths.AppFile("Views", "DefenderView.xaml"))
+            .Descendants(wpf + "Button").ToList();
+        var add = Assert.Single(buttons, b => (string?)b.Attribute("Command") == "{Binding AddExclusionCommand}");
+        var remove = Assert.Single(buttons, b => (string?)b.Attribute("Command") == "{Binding RemoveExclusionCommand}");
+        const string Why = "Files in a folder you add are no longer scanned for malware.";
+
+        Assert.Equal("{StaticResource DangerButton}", (string?)add.Attribute("Style"));
+        Assert.Equal(Why, (string?)add.Attribute("AutomationProperties.HelpText"));
+        Assert.Equal(Why, (string?)add.Attribute("ToolTip"));
+        Assert.Equal("{StaticResource SecondaryButton}", (string?)remove.Attribute("Style"));
+    }
 }

@@ -110,9 +110,13 @@
                         <ColumnDefinition Width="Auto"/>
                     </Grid.ColumnDefinitions>
                     <TextBlock Grid.Column="0" Text="Scan exclusions (folders)" Style="{StaticResource SectionTitle}" VerticalAlignment="Center"/>
+                    <!-- Red: an exclusion turns off malware scanning for the folder, so adding one weakens
+                         protection, the case the note below keeps DangerButton for. -->
                     <Button Grid.Column="1" Content="Add folder…" Command="{Binding AddExclusionCommand}"
-                            Style="{StaticResource PrimaryButton}" Margin="0,0,8,0" Padding="12,6"
-                            AutomationProperties.Name="Add folder… — an exclusion folder"/>
+                            Style="{StaticResource DangerButton}" Margin="0,0,8,0" Padding="12,6"
+                            AutomationProperties.Name="Add folder… — an exclusion folder"
+                            AutomationProperties.HelpText="Files in a folder you add are no longer scanned for malware."
+                            ToolTip="Files in a folder you add are no longer scanned for malware."/>
                     <!-- Removing an exclusion makes Defender scan that folder again — it
                          strengthens protection, so it is neutral list-management, not a
                          destructive action. Reserve DangerButton for actions that weaken

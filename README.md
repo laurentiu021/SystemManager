@@ -896,10 +896,14 @@ Across the tab:
   does changing when updates are installed — deferring, pausing or restoring the default;
   without it the tab says so before asking you to approve anything
 - PSWindowsUpdate is optional (used only for the History view); install it
-  from a normal, non-administrator SysManager session. The installer validates
+  from a normal, non-administrator SysManager session. **Install PSWindowsUpdate** asks first, and says that it is
+  a community module not made by Microsoft, that it goes into your own modules folder, and that the NuGet provider
+  comes with it when PowerShell does not have it yet. The installer validates
   the official PowerShell Gallery endpoint and uses the current-user module directory.
   A **Check now** button confirms on demand whether the module is present, so you
-  don't have to run Update History to find out. Cancel or Escape stops the install or the check, which can
+  don't have to run Update History to find out. Once it finds a copy that an install put in your own modules
+  folder, **Remove PSWindowsUpdate** beside it takes that copy off again, after asking. An install and a removal
+  show in Recent Changes. Cancel or Escape stops the install, the removal or the check, which can
   hang on a slow or blocked PowerShell Gallery
 - **Update timing & deferral** — defer feature updates by N days while security
   patches keep flowing, pause all updates for a bounded window (max 35 days, then
@@ -3217,7 +3221,8 @@ To remove it completely:
      renamed has its own. SysManager deletes an older version's folder itself once nothing in it has been
      written for a week, when it runs without administrator rights
    - the PSWindowsUpdate module, only if you pressed **Install PSWindowsUpdate** on **Windows Update**:
-     run `Uninstall-Module PSWindowsUpdate` in Windows PowerShell, not as administrator. If Windows
+     press **Check now** there, then **Remove PSWindowsUpdate**, or run `Uninstall-Module PSWindowsUpdate` in
+     Windows PowerShell, not as administrator. If Windows
      PowerShell had no NuGet provider yet, the one it installed for your account is in
      `%LocalAppData%\PackageManagement\ProviderAssemblies\nuget`, and is safe to leave
    - the record Ookla's speed-test CLI keeps in your profile that its licence was accepted, only if you

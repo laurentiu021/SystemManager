@@ -47,7 +47,7 @@
                     <StackPanel Orientation="Horizontal">
                         <TextBlock Text="&#xE946;" FontFamily="Segoe Fluent Icons,Segoe MDL2 Assets"
                                    FontSize="18" Foreground="{DynamicResource Warning}" VerticalAlignment="Center" Margin="0,0,10,0"/>
-                        <TextBlock Text="PSWindowsUpdate module is required" Style="{StaticResource SectionTitle}"
+                        <TextBlock Text="{Binding ModuleCardTitle}" Style="{StaticResource SectionTitle}"
                                    Foreground="{DynamicResource Warning}" VerticalAlignment="Center"/>
                     </StackPanel>
                     <TextBlock Text="{Binding ModuleStatus}" Style="{StaticResource Subtle}" Margin="28,6,0,0" TextWrapping="Wrap"/>
@@ -71,13 +71,24 @@
         <Border Grid.Row="2" Style="{StaticResource Card}" Margin="28,16,28,0"
                 Visibility="{Binding ModuleAvailable, Converter={StaticResource FlexVis}}">
             <DockPanel>
-                <Button DockPanel.Dock="Right" Content="Check now"
-                        Command="{Binding CheckModuleCommand}"
-                        AutomationProperties.AutomationId="btn-windows-update-check-module"
-                        AutomationProperties.Name="Check now — check whether PSWindowsUpdate is installed"
-                        ToolTip="Confirm now whether the PSWindowsUpdate module is available"
-                        Style="{StaticResource GhostButton}" Padding="12,4" Margin="16,0,0,0"
-                        VerticalAlignment="Center"/>
+                <!-- Remove sits right of Check now and shows only once Check now has found a copy an install put
+                     in the account's own modules folder. Red, as an action someone might regret. -->
+                <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" VerticalAlignment="Center">
+                    <Button Content="Check now"
+                            Command="{Binding CheckModuleCommand}"
+                            AutomationProperties.AutomationId="btn-windows-update-check-module"
+                            AutomationProperties.Name="Check now — check whether PSWindowsUpdate is installed"
+                            ToolTip="Confirm now whether the PSWindowsUpdate module is available"
+                            Style="{StaticResource GhostButton}" Padding="12,4" Margin="16,0,0,0"
+                            VerticalAlignment="Center"/>
+                    <Button Content="Remove PSWindowsUpdate"
+                            Command="{Binding RemoveModuleCommand}"
+                            Visibility="{Binding CanRemoveModule, Converter={StaticResource FlexVis}}"
+                            AutomationProperties.Name="Remove PSWindowsUpdate from your modules folder"
+                            ToolTip="Takes it out of your own modules folder. History needs it installed again."
+                            Style="{StaticResource DangerButton}" Padding="12,4" Margin="8,0,0,0"
+                            VerticalAlignment="Center"/>
+                </StackPanel>
                 <!-- DockPanel, not a horizontal StackPanel: ModuleStatus is a sentence, and inside a
                      horizontal StackPanel its TextWrapping is inert — the child is measured with infinite
                      width, so a long status was clipped rather than wrapped. -->

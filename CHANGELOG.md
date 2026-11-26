@@ -10,6 +10,23 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.136.190] - 2026-11-26
+
+**Resource History asks before a shorter Keep removes samples whenever it would, and the tab then shows only what
+it kept.**
+
+### Fixed
+- Choosing a shorter Keep window asks first, because older samples are removed for good. It asked only when the
+  oldest sample could be read, so with the history file locked at that moment the shorter window went through
+  unasked (#3260). Now nothing changes while the history cannot be read, and the tab says so.
+- With the saved Keep choice unreadable, or one this version does not offer, the history keeps 30 days while the
+  Keep box said 7. Choosing 14 then counted as longer, asked nothing, and removed every sample between 14 and 30
+  days old (#3308). The box now shows the window actually kept, and the question is asked whenever a sample would
+  go, whatever the previous choice.
+- After a shorter Keep was saved, the chart, the summary and Export CSV still showed the samples it had just
+  removed, until the range changed or Refresh was pressed (#3360). The tab now reads the history again first.
+- All three have been so since the question came in, in 1.136.113.
+
 ## [1.136.189] - 2026-11-26
 
 **Clear History on New App Alerts and Clear on Speed Test now ask about what is actually saved, and delete only

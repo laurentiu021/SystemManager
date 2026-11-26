@@ -104,7 +104,9 @@ public sealed partial class ResourceHistoryViewModel : ViewModelBase
     {
         _service = service;
         _dialog = dialog ?? DialogService.Instance;
-        _retentionDays = service.RetentionDays;
+        // The window actually kept. With the saved choice unreadable the service keeps the longest one, and the box
+        // said 7, so a longer choice than 7 that was shorter than what was kept removed samples unasked (#3308).
+        _retentionDays = service.RetentionKnown ? service.RetentionDays : service.KeptDays;
         _selectedRange = RangeOptions[2]; // Last 24 hours
 
         UsageXAxes = [BuildTimeAxis()];
@@ -149,10 +151,22 @@ public sealed partial class ResourceHistoryViewModel : ViewModelBase
     /// Going from 30 days to 7 rewrote the file at once without the 23 days before, for good, and the tab only said
     /// "Keeping 7 days of history."; choosing 30 again brought nothing back. And a choice whose save failed was
     /// announced as kept all the same (#2790). Speed Test asks before the same kind of loss, in the same words.
+    /// <para>It asks whenever a sample would go, whatever the previous choice, and changes nothing while the history
+    /// cannot be read, since what would go cannot be counted then (#3260, #3308). A saved choice reads the tab again,
+    /// so the chart, the summary and Export CSV stop showing the samples it removed (#3360).</para>
     /// </remarks>
     private async Task ChangeRetentionAsync(int previous, int chosen)
     {
-        if (chosen < previous && await _service.OldestSampleOutsideAsync(chosen) is { } oldest
+        var (readable, outside) = await _service.ReadOldestOutsideAsync(chosen);
+        if (!readable)
+        {
+            PutRetentionBack(previous);
+            StatusMessage = "The saved history could not be read just now, so nothing changed: it still keeps "
+                + $"{previous} days. Try again in a moment.";
+            return;
+        }
+
+        if (outside is { } oldest
             && !_dialog.Confirm(
                 $"Keep only the last {chosen} days of history?\n\n"
                 + "The samples older than that, back to "
@@ -173,6 +187,7 @@ public sealed partial class ResourceHistoryViewModel : ViewModelBase
             return;
         }
 
+        await ReloadAsync();
         StatusMessage = $"Keeping {chosen} days of history.";
     }
 

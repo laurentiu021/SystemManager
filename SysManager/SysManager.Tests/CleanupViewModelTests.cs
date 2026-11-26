@@ -448,6 +448,27 @@ public class CleanupViewModelTests
         return bin;
     }
 
+    /// <summary>
+    /// Another account's bin is not emptied, and nothing is asked first: elevated with another administrator's password,
+    /// the bin was that administrator's, emptied for good, while the signed-in person's stayed full (#3316).
+    /// </summary>
+    [Fact]
+    public async Task EmptyRecycleBin_OfAnotherAccountsBin_AsksNothing_EmptiesNothing_AndSaysWhy()
+    {
+        using var activity = new ActivityLogScope();
+        using var confirm = new DialogAnswer(confirm: true);
+        var bin = Bin(new RecycleBinEmptyResult(true, new RecycleBinContents(4096, 2)));
+        bin.BelongsToAnotherAccount.Returns(true);
+        var vm = NewVm(recycleBin: bin);
+
+        await vm.EmptyRecycleBinCommand.ExecuteAsync(null);
+
+        Assert.Equal(0, confirm.Calls);
+        bin.DidNotReceive().Empty();
+        Assert.Equal("The Recycle Bin was not emptied. " + AdminHelper.NotTheSignedInAccountAdvice, vm.StatusMessage);
+        Assert.Empty(ActivityLogService.Instance.GetRecent(10));
+    }
+
     [Fact]
     public async Task EmptyRecycleBin_WhenWindowsRefuses_SaysSo_AndRecordsNothing()
     {

@@ -319,6 +319,13 @@ public sealed partial class CleanupViewModel : ElevatedViewModelBase
     private async Task EmptyRecycleBinAsync()
     {
         if (IsBinRunning) return;
+        // Asked before the question: run as another administrator, the shell's bin is that administrator's, and it was
+        // emptied for good while the signed-in person's stayed full (#3316).
+        if (_recycleBin.BelongsToAnotherAccount)
+        {
+            StatusMessage = "The Recycle Bin was not emptied. " + AdminHelper.NotTheSignedInAccountAdvice;
+            return;
+        }
         if (!DialogService.Instance.Confirm(
                 "Permanently empty the Recycle Bin? Its contents cannot be recovered.",
                 "Confirm Empty Recycle Bin"))

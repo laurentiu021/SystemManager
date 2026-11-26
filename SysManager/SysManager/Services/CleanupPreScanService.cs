@@ -45,13 +45,17 @@ public sealed class CleanupPreScanService(IRecycleBin recycleBin) : ICleanupPreS
     /// The shell's count is what Empty Recycle Bin then empties, and like the empty it covers the current user's bin
     /// only. Walking the bin's folders counted the shell's own bookkeeping as well, the <c>desktop.ini</c> every bin
     /// folder holds, so an empty bin read "0.0 MB in Recycle Bin" rather than "Empty".
+    /// <para>Another account's bin is not measured: run as another administrator, the shell counts that
+    /// administrator's bin, and the card showed it as the signed-in person's (#3316).</para>
     /// </remarks>
-    internal string MeasureRecycleBin() => recycleBin.Query() switch
-    {
-        null => "Unable to scan",
-        { Items: 0 } => "Empty",
-        { } bin => Megabytes(bin.Bytes, "in Recycle Bin"),
-    };
+    internal string MeasureRecycleBin() => recycleBin.BelongsToAnotherAccount
+        ? "Left alone (another account)"
+        : recycleBin.Query() switch
+        {
+            null => "Unable to scan",
+            { Items: 0 } => "Empty",
+            { } bin => Megabytes(bin.Bytes, "in Recycle Bin"),
+        };
 
     /// <summary>Total size of the given files, skipping any that cannot be read.</summary>
     private static long SumFileLengths(IEnumerable<string> files)

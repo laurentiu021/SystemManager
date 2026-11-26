@@ -23,6 +23,9 @@ public sealed record TuneUpResult
     public bool RecycleBinEmptied { get; init; }
     public bool RecycleBinSkipped { get; init; }
 
+    /// <summary>True when the bin was left alone because it may belong to another account (#3316).</summary>
+    public bool RecycleBinNotTheSignedInAccounts { get; init; }
+
     /// <summary>
     /// What the Recycle Bin held just before the Tune-Up emptied it, as the shell counted it. Null when the shell could
     /// not say, or the Tune-Up was not asked to empty it.
@@ -76,6 +79,8 @@ public sealed record TuneUpResult
     public string RecycleBinDisplay => this switch
     {
         { RecycleBinSkipped: true } => "",
+        { RecycleBinNotTheSignedInAccounts: true } =>
+            "The Recycle Bin was left alone: SysManager is running as administrator under another account.",
         { RecycleBinEmptied: false } => "The Recycle Bin could not be emptied.",
         { RecycleBinBefore: { Items: 0 } } => "The Recycle Bin was already empty.",
         { RecycleBinBefore: { } bin } => $"Recycle Bin emptied ({bin.Display}).",

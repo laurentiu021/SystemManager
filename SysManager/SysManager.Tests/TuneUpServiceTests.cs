@@ -784,6 +784,25 @@ public class TuneUpServiceTests
 
     private static readonly RecycleBinContents TwoItems = new(2048, 2);
 
+    /// <summary>
+    /// A Tune-Up that left another account's bin alone says so, rather than that the bin could not be emptied (#3316).
+    /// </summary>
+    [Fact]
+    public async Task ATuneUpThatLeftAnotherAccountsBinAlone_SaysWhy()
+    {
+        var result = await TuneUpService.RunStepsAsync(
+            () => Task.FromResult(new TempCleanResult(0, 0, 0, Cancelled: false)),
+            () => RecycleBinEmptyResult.AnotherAccounts,
+            () => throw new IOException("no shortcuts here"),
+            () => throw new InvalidOperationException("no disks here"),
+            () => throw new InvalidOperationException("no WMI here"),
+            emptyRecycleBin: true, progress: null, CancellationToken.None);
+
+        Assert.True(result.RecycleBinNotTheSignedInAccounts);
+        Assert.Contains("another account", result.RecycleBinDisplay, StringComparison.Ordinal);
+        Assert.DoesNotContain("could not be emptied", result.RecycleBinDisplay, StringComparison.Ordinal);
+    }
+
     [Fact]
     public async Task ATuneUpCancelledDuringTheTempSweep_ReturnsWhatItFreed_AndLeavesTheBin()
     {

@@ -213,4 +213,12 @@ public readonly record struct RecycleBinEmptyResult(bool Emptied, RecycleBinCont
 {
     /// <summary>True when the bin held nothing, so the shell was not asked to empty it.</summary>
     public bool WasAlreadyEmpty => Before is { Items: 0 };
+
+    /// <summary>
+    /// True when the bin was left alone because it may belong to another account than the one signed in (#3316).
+    /// </summary>
+    public bool NotTheSignedInAccounts { get; init; }
+
+    /// <summary>The result of an empty refused because the bin may be another account's.</summary>
+    public static RecycleBinEmptyResult AnotherAccounts { get; } = new(false, null) { NotTheSignedInAccounts = true };
 }

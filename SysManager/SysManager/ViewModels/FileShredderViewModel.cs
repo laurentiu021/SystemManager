@@ -58,10 +58,9 @@ public sealed partial class FileShredderViewModel : ViewModelBase
         if (files.Count == 0) return;
 
         var skipped = new List<string>();
-        var underCloudSync = new List<string>();
         var withTheirFolder = new List<string>();
         string? holderName = null;
-        var cloudRoots = OneDriveRoots();
+        var cloudRoots = _oneDriveRoots();
 
         foreach (var filePath in files)
         {
@@ -83,9 +82,9 @@ public sealed partial class FileShredderViewModel : ViewModelBase
                     Path = filePath,
                     Name = info.Name,
                     SizeBytes = info.Length,
-                    IsFolder = false
+                    IsFolder = false,
+                    InOneDrive = IsInOneDrive(filePath, isFolder: false, cloudRoots),
                 });
-                if (SystemPaths.IsInsideAnySubtree(filePath, cloudRoots)) underCloudSync.Add(info.Name);
             }
             catch (IOException ex)
             {
@@ -110,9 +109,12 @@ public sealed partial class FileShredderViewModel : ViewModelBase
             {
                 DescribeSkipped(skipped),
                 DescribeInsideQueuedFolder(withTheirFolder, holderName),
-                DescribeCloudSyncWarning(underCloudSync),
+                QueueInOneDrive(),
             }.Where(s => s.Length > 0));
     }
+
+    /// <summary>The status line's sentence for the items in the queue now that are marked as in OneDrive.</summary>
+    private string QueueInOneDrive() => DescribeQueueInOneDrive(Items.Count(item => item.InOneDrive));
 
     /// <summary>
     /// The folder in the queue whose shred destroys <paramref name="path"/> too, or null.
@@ -191,23 +193,6 @@ public sealed partial class FileShredderViewModel : ViewModelBase
         1 => $"Could not add \"{skipped[0]}\" — it could not be read, so it is NOT in the list below.",
         _ => $"Could not add {skipped.Count} of the items you picked ({string.Join(", ", skipped)}) — "
              + "they could not be read, so they are NOT in the list below."
-    };
-
-    /// <summary>
-    /// Warns that an item queued for shredding sits inside a cloud-synced folder (OneDrive): the
-    /// overwrite and delete happen locally, OneDrive syncs both, but its own version history and
-    /// recycle bin can still keep the original — the tab already warns about SSD wear-levelling the
-    /// same way for the same reason (#2824).
-    /// <para>Named separately so the wording is assertable without a real OneDrive folder.</para>
-    /// </summary>
-    internal static string DescribeCloudSyncWarning(IReadOnlyList<string> underCloudSync) => underCloudSync.Count switch
-    {
-        0 => string.Empty,
-        1 => $"\"{underCloudSync[0]}\" is inside a OneDrive-synced folder — OneDrive's own version "
-             + "history and recycle bin may still keep a copy after this overwrites and deletes it locally.",
-        _ => $"{underCloudSync.Count} of the items you picked ({string.Join(", ", underCloudSync)}) are "
-             + "inside a OneDrive-synced folder — OneDrive's own version history and recycle bin may "
-             + "still keep a copy after this overwrites and deletes them locally."
     };
 
     /// <summary>
@@ -314,7 +299,11 @@ public sealed partial class FileShredderViewModel : ViewModelBase
             // Read against the queue as it is now, after the sizing: the queue can change while it runs.
             if (QueuedFolderHolding(folderPath) is { } holder)
             {
-                StatusMessage = DescribeInsideQueuedFolder([dirInfo.Name], holder.Name);
+                StatusMessage = string.Join(" ", new[]
+                {
+                    DescribeInsideQueuedFolder([dirInfo.Name], holder.Name),
+                    QueueInOneDrive(),
+                }.Where(s => s.Length > 0));
                 return;
             }
 
@@ -326,15 +315,14 @@ public sealed partial class FileShredderViewModel : ViewModelBase
                 Path = folderPath,
                 Name = dirInfo.Name,
                 SizeBytes = size,
-                IsFolder = true
+                IsFolder = true,
+                InOneDrive = IsInOneDrive(folderPath, isFolder: true, _oneDriveRoots()),
             });
             StatusMessage = string.Join(" ",
                 new[]
                 {
                     DescribeTakenIntoFolder(inside.Count, dirInfo.Name),
-                    SystemPaths.IsInsideAnySubtree(folderPath, OneDriveRoots())
-                        ? DescribeCloudSyncWarning([dirInfo.Name])
-                        : string.Empty,
+                    QueueInOneDrive(),
                 }.Where(s => s.Length > 0));
         }
         // No {Path} and no attached exception in either arm — the folder's name and location must not
@@ -379,8 +367,9 @@ public sealed partial class FileShredderViewModel : ViewModelBase
     [RelayCommand(CanExecute = nameof(CanEditQueue))]
     private void RemoveItem(ShredItem? item)
     {
-        if (item is not null)
-            Items.Remove(item);
+        if (item is null) return;
+        Items.Remove(item);
+        StatusMessage = QueueInOneDrive();
     }
 
     [RelayCommand(CanExecute = nameof(CanShredAll))]
@@ -396,8 +385,7 @@ public sealed partial class FileShredderViewModel : ViewModelBase
         // for each item, so switching it part-way changed the overwrite for the rest of the run (#2757).
         var method = SelectedMethod;
         var confirmed = _dialog.Confirm(
-            $"You are about to permanently shred {batch.Length} item(s) using the {method} method.\n\n" +
-            "This action is IRREVERSIBLE. The data cannot be recovered.\n\nContinue?",
+            DescribeShredQuestion(batch.Length, method, [.. batch.Where(i => i.InOneDrive).Select(i => i.Name)]),
             "Confirm Secure Shred");
 
         if (!confirmed) return;
@@ -563,7 +551,10 @@ public sealed partial class FileShredderViewModel : ViewModelBase
                 ? $"Stopped — {completed} shredded, {failed} failed."
                 : $"Complete — {completed} shredded, {failed} failed.";
 
-            StatusMessage = notices.Count == 0 ? headline : headline + " " + string.Join(" ", notices);
+            StatusMessage = string.Join(" ",
+                new[] { headline, DescribeOneDriveCopies([.. destroyed.Where(i => i.InOneDrive).Select(i => i.Name)]) }
+                    .Concat(notices)
+                    .Where(s => s.Length > 0));
             ToastService.Instance.Show(
                 cancelled ? "File Shredder stopped" : "File Shredder complete",
                 $"{completed} shredded, {failed} failed");

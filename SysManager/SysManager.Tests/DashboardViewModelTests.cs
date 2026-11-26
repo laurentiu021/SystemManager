@@ -1127,13 +1127,18 @@ public sealed class DashboardViewModelTests : IDisposable
             return Task.FromException<WingetResult>(stopped);
         });
         vm = NewVm(winget);
-        await vm.InitializationComplete;
+        // The launch's own round of checks finishes first, so a check it makes late cannot pass for the new one.
+        await LoadedWithAlertsAsync(vm);
+        var launchRound = vm.AlertScans;
         winget.ClearReceivedCalls();
 
         await vm.QuickUpdateAppsCommand.ExecuteAsync(null);
 
         var entry = Assert.Single(ActivityLogService.Instance.GetRecent(10), e => e.Action == "App Updates");
         Assert.Equal("Upgrade all stopped after 2 of 3 apps", entry.Detail);
+        // The new round runs on its own; it is waited for rather than raced, which read as no check at all.
+        Assert.NotSame(launchRound, vm.AlertScans);
+        await vm.AlertScans.WaitAsync(Bound);
         await winget.Received().ListUpgradableAsync(Arg.Any<CancellationToken>());
     }
 

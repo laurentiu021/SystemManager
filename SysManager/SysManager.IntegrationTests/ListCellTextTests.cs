@@ -77,9 +77,10 @@ public sealed class ListCellTextTests
             }
         });
 
-        // Vacuity floors: 35 lists and 128 text columns in the views when written.
+        // Vacuity floors: 35 lists and 128 text columns in the views when written. 127 columns since File Shredder's
+        // Name column became a template column, to carry the "in OneDrive" mark beside the name.
         Assert.True(grids >= 35, $"only {grids} lists were found in the views, out of 35 when written.");
-        Assert.True(columns >= 128, $"only {columns} text columns were read, out of 128 when written.");
+        Assert.True(columns >= 127, $"only {columns} text columns were read, out of 127 when measured.");
         Assert.True(wrong.Count == 0,
             "these lists cut a long value at the column's edge:\n  " + string.Join("\n  ", wrong));
     }

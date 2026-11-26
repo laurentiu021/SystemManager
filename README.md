@@ -1615,7 +1615,10 @@ Answers "what is actually using my space?" by listing the biggest files in one p
   confirm is the one the whole run uses: the box is off until the run ends
 - Add files or entire folders via file picker dialogs. A folder is measured in the background, so a large
   one never freezes the window, and a folder inside it that cannot be read is passed over, as the shred
-  passes over it, rather than turning the whole folder away
+  passes over it, rather than turning the whole folder away. A file or folder inside a folder already in
+  the list is not added again, since that folder's shred destroys it, and adding a folder takes the place
+  of queued items inside it; the status line says so. One reached through a link, or inside a folder the
+  shred refuses as a whole, stays queued on its own
 - The Size column sorts by the file's size in bytes, not by its text
 - Per-item progress, and **Cancel stops the queue rather than abandoning a file mid-overwrite.**
   Nothing that has not started is touched; a file whose overwrite has already begun is finished

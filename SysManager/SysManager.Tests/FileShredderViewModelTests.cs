@@ -299,6 +299,136 @@ public class FileShredderViewModelTests
         }
     }
 
+    // ── an item inside a queued folder is shredded with it (#3358) ──
+    // Add Files and Add Folder skipped only an exact duplicate, so a folder and a file inside it could both be queued.
+    // Shred All destroyed the file with the folder, then reported the file's own turn as Failed: "File not found".
+
+    private static IDialogService Picking(string?[] folders, params string[] files)
+    {
+        var dialog = Substitute.For<IDialogService>();
+        dialog.PickFolder(Arg.Any<string>()).Returns(folders[0], folders[1..]);
+        dialog.PickOpenFiles(Arg.Any<string>(), Arg.Any<string>(), Arg.Any<bool>(), Arg.Any<bool>()).Returns(files);
+        dialog.Confirm(Arg.Any<string>(), Arg.Any<string>()).Returns(true);
+        return dialog;
+    }
+
+    [Fact]
+    public async Task AFileInsideAQueuedFolder_IsNotQueuedAgain_AndShredAllReportsNoFailure()
+    {
+        var folder = Directory.CreateTempSubdirectory("smtest_shredder_").FullName;
+        var inside = Path.Combine(folder, "a.jpg");
+        File.WriteAllText(inside, "a");
+        using var activity = new ActivityLogScope();
+        try
+        {
+            var vm = NewVm(Picking([folder], inside));
+            await vm.AddFolderCommand.ExecuteAsync(null);
+            vm.AddFilesCommand.Execute(null);
+
+            Assert.Equal(folder, Assert.Single(vm.Items).Path);
+            Assert.Contains("\"a.jpg\"", vm.StatusMessage, StringComparison.Ordinal);
+            Assert.Contains("shredded with", vm.StatusMessage, StringComparison.Ordinal);
+
+            await vm.ShredAllCommand.ExecuteAsync(null);
+
+            Assert.False(Directory.Exists(folder));
+            Assert.StartsWith("Complete — 1 shredded, 0 failed.", vm.StatusMessage, StringComparison.Ordinal);
+            Assert.Empty(vm.Items);
+        }
+        finally { if (Directory.Exists(folder)) Directory.Delete(folder, recursive: true); }
+    }
+
+    [Fact]
+    public async Task AFolderAddedOverQueuedItemsInsideIt_TakesTheirPlace_AndTheStatusSaysWhy()
+    {
+        var folder = Directory.CreateTempSubdirectory("smtest_shredder_").FullName;
+        var inside = Path.Combine(folder, "a.jpg");
+        var sub = Directory.CreateDirectory(Path.Combine(folder, "Sub")).FullName;
+        File.WriteAllText(inside, "a");
+        File.WriteAllText(Path.Combine(sub, "b.txt"), "bb");
+        try
+        {
+            var vm = NewVm(Picking([sub, folder], inside));
+            vm.AddFilesCommand.Execute(null);
+            await vm.AddFolderCommand.ExecuteAsync(null);
+            Assert.Equal(2, vm.Items.Count);
+
+            await vm.AddFolderCommand.ExecuteAsync(null);
+
+            var only = Assert.Single(vm.Items);
+            Assert.Equal(folder, only.Path);
+            Assert.True(only.IsFolder);
+            Assert.Contains("shredded with", vm.StatusMessage, StringComparison.Ordinal);
+        }
+        finally { Directory.Delete(folder, recursive: true); }
+    }
+
+    /// <summary>A folder whose name starts the same is not the folder: both stay queued.</summary>
+    [Fact]
+    public async Task AFileInASiblingFolderWithALongerName_IsStillQueued()
+    {
+        var root = Directory.CreateTempSubdirectory("smtest_shredder_").FullName;
+        var photos = Directory.CreateDirectory(Path.Combine(root, "Photos")).FullName;
+        var other = Path.Combine(Directory.CreateDirectory(Path.Combine(root, "Photos2")).FullName, "a.jpg");
+        File.WriteAllText(other, "a");
+        try
+        {
+            var vm = NewVm(Picking([photos], other));
+            await vm.AddFolderCommand.ExecuteAsync(null);
+            vm.AddFilesCommand.Execute(null);
+
+            Assert.Equal(2, vm.Items.Count);
+        }
+        finally { Directory.Delete(root, recursive: true); }
+    }
+
+    /// <summary>
+    /// A folder the shred refuses as a whole, your Documents say, destroys nothing inside it, so a file inside it
+    /// stays queued on its own rather than being said to go with the folder.
+    /// </summary>
+    [Fact]
+    public async Task AFileInsideAFolderTheShredRefuses_IsStillQueued()
+    {
+        var held = Directory.CreateTempSubdirectory("smtest_shredder_").FullName;
+        var inside = Path.Combine(held, "a.jpg");
+        File.WriteAllText(inside, "a");
+        try
+        {
+            var service = new FileShredderService(openExclusiveWrite: null, heldRoots: [held]);
+            var vm = new FileShredderViewModel(service, Picking([held], inside));
+            await vm.AddFolderCommand.ExecuteAsync(null);
+            vm.AddFilesCommand.Execute(null);
+
+            Assert.Equal(2, vm.Items.Count);
+            Assert.DoesNotContain("shredded with", vm.StatusMessage, StringComparison.Ordinal);
+        }
+        finally { Directory.Delete(held, recursive: true); }
+    }
+
+    /// <summary>
+    /// A file reached through a link inside the queued folder is not one the folder's shred destroys, since that
+    /// shred does not follow links: it stays queued on its own.
+    /// </summary>
+    [Fact]
+    public async Task AFileReachedThroughALinkInsideAQueuedFolder_IsStillQueued()
+    {
+        var root = Directory.CreateTempSubdirectory("smtest_shredder_").FullName;
+        var queued = Directory.CreateDirectory(Path.Combine(root, "Queued")).FullName;
+        var elsewhere = Directory.CreateDirectory(Path.Combine(root, "Elsewhere")).FullName;
+        File.WriteAllText(Path.Combine(elsewhere, "x.txt"), "x");
+        var link = Path.Combine(queued, "Link");
+        try
+        {
+            Symlinks.RequireJunction(link, elsewhere);
+            var vm = NewVm(Picking([queued], Path.Combine(link, "x.txt")));
+            await vm.AddFolderCommand.ExecuteAsync(null);
+            vm.AddFilesCommand.Execute(null);
+
+            Assert.Equal(2, vm.Items.Count);
+        }
+        finally { Symlinks.RemoveLinkThenTree(link, root); }
+    }
+
     [Fact]
     public void RemoveItem_WithNull_DoesNotCrash()
     {

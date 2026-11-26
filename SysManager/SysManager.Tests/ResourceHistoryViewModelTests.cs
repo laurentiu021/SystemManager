@@ -229,6 +229,84 @@ public class ResourceHistoryViewModelReloadTests : IDisposable
         Assert.Equal("SysManager could not save the change, so it still keeps 30 days of history.", vm.StatusMessage);
     }
 
+    // ── A shorter Keep never removes samples it did not ask about, and the tab then shows what is kept ──
+
+    /// <summary>
+    /// With the history unreadable at the moment of the change, the samples a shorter window would remove cannot be
+    /// counted, so nothing is asked, nothing changes, and the tab says so (#3260).
+    /// </summary>
+    [Fact]
+    public async Task AShorterKeep_WhenTheHistoryCannotBeRead_ChangesNothing_AndSaysSo()
+    {
+        var (service, vm, dialog) = await KeptForThirty(yes: true, DateTime.Now.AddDays(-20));
+        using var history = service;
+        using var tab = vm;
+
+        using (new FileStream(HistoryPath, FileMode.Open, FileAccess.Read, FileShare.Delete))
+        {
+            vm.RetentionDays = 7;
+            await vm.RetentionChange;
+        }
+
+        dialog.DidNotReceiveWithAnyArgs().Confirm(default!, default!);
+        Assert.Equal((30, 30), (vm.RetentionDays, service.RetentionDays));
+        Assert.Equal(2, File.ReadAllLines(HistoryPath).Length);
+        Assert.Contains("could not be read", vm.StatusMessage, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// A saved Keep choice that could not be read keeps the longest window, so the box shows that window, and a
+    /// choice shorter than it asks before it removes anything, though it is longer than the 7 days the box used to
+    /// show (#3308).
+    /// </summary>
+    [Fact]
+    public async Task AKeepChoiceThatCouldNotBeRead_ShowsTheWindowKept_AndAShorterOneAsksFirst()
+    {
+        File.WriteAllText(Path.Combine(_dir, "resource-history-config.json"), "{\"RetentionDays\":99}");
+        using var service = SeededService(Point(DateTime.Now.AddDays(-20)), Point(DateTime.Now.AddMinutes(-5)));
+        var dialog = Substitute.For<IDialogService>();
+        dialog.Confirm(Arg.Any<string>(), Arg.Any<string>()).Returns(false);
+        using var vm = new ResourceHistoryViewModel(service, dialog);
+        await vm.InitializationComplete;
+
+        Assert.Equal(30, vm.RetentionDays);
+
+        vm.RetentionDays = 14;
+        await vm.RetentionChange;
+
+        dialog.Received(1).Confirm(
+            Arg.Is<string>(m => m.StartsWith("Keep only the last 14 days of history?", StringComparison.Ordinal)),
+            "Resource History — Confirm");
+        Assert.Equal(30, vm.RetentionDays);
+        Assert.Equal(2, File.ReadAllLines(HistoryPath).Length);
+    }
+
+    /// <summary>
+    /// After a shorter Keep is saved, the tab is read again, so the chart, the summary and Export CSV cover only what
+    /// is kept, not the samples the question said were removed (#3360).
+    /// </summary>
+    [Fact]
+    public async Task ASavedShorterKeep_ReadsTheTabAgain_SoTheSummaryCoversOnlyWhatIsKept()
+    {
+        using var service = SeededService(
+            new ResourceSample(DateTime.Now.AddDays(-20), 90, 20, null, null, null),
+            new ResourceSample(DateTime.Now.AddMinutes(-5), 10, 20, null, null, null));
+        Assert.True(await service.ChangeRetentionAsync(30));
+        var dialog = Substitute.For<IDialogService>();
+        dialog.Confirm(Arg.Any<string>(), Arg.Any<string>()).Returns(true);
+        using var vm = new ResourceHistoryViewModel(service, dialog);
+        await vm.InitializationComplete;
+        vm.SelectedRange = vm.RangeOptions.Single(r => r.Label == "Last 30 days");
+        await vm.ReloadCommand.ExecuteAsync(null);
+        Assert.Contains("peak 90%", vm.Summary, StringComparison.Ordinal);
+
+        vm.RetentionDays = 7;
+        await vm.RetentionChange;
+
+        Assert.Contains("CPU avg 10% · peak 10%", vm.Summary, StringComparison.Ordinal);
+        Assert.Equal("Keeping 7 days of history.", vm.StatusMessage);
+    }
+
     [Fact]
     public async Task ARedundantRefreshOnTheSameRangeStillShowsThatRange()
     {

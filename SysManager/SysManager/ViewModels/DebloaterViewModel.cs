@@ -73,14 +73,25 @@ public sealed partial class DebloaterViewModel : ViewModelBase
             ? "There are no removable Store apps on this system."
             : "Press Refresh to scan installed Store apps.";
 
-    public DebloaterViewModel(DebloaterService service, ISessionRestorePoint restorePoint)
+    /// <summary>Builds the tab and starts its first read of the installed Store apps.</summary>
+    /// <param name="service">What the tab lists and removes the apps through.</param>
+    /// <param name="restorePoint">The session's restore point, tried before the first removal.</param>
+    /// <param name="runsAsTheSignedInAccount">
+    /// Whether SysManager runs as the account signed in to Windows; <see cref="AdminHelper.RunsAsTheSignedInAccount"/>
+    /// unless a test decides it.
+    /// </param>
+    public DebloaterViewModel(DebloaterService service, ISessionRestorePoint restorePoint,
+        Func<bool>? runsAsTheSignedInAccount = null)
     {
         _service = service;
         _restorePoint = restorePoint;
+        _runsAsTheSignedInAccount = runsAsTheSignedInAccount ?? AdminHelper.RunsAsTheSignedInAccount;
         StatusMessage = "Loading installed apps…";
         PropertyChanged += OnVmPropertyChanged;
         InitializeAsync(RefreshAsync);
     }
+
+    private readonly Func<bool> _runsAsTheSignedInAccount;
 
     private bool NotBusy => !IsBusy;
 

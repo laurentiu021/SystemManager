@@ -10,6 +10,20 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.136.198] - 2026-11-26
+
+**Started as administrator with another account's password, Preinstalled Apps and Browser Cleaner no longer act
+on that account's apps and browser data.**
+
+### Fixed
+- Preinstalled Apps lists and removes Store apps for the account SysManager runs as. Started as administrator with
+  another account's password, it listed that administrator's apps and removed them from that account, while the
+  signed-in person's stayed installed (#3365). When SysManager cannot confirm that it runs as the account signed
+  in to Windows, the tab now lists and removes nothing, and says why and that opening SysManager normally fixes it.
+- Browser Cleaner read its folders from the account SysManager runs as, so in the same case it listed that
+  administrator's browser data and extensions as yours, and Clean deleted that account's history and cookies
+  (#3392). It now scans, lists and cleans nothing in that case, and says why.
+
 ## [1.136.197] - 2026-11-26
 
 **Started as administrator with another account's password, SysManager no longer empties that account's Recycle

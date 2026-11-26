@@ -109,11 +109,17 @@ public sealed partial class BrowserCleanerViewModel : ViewModelBase, ISearchDest
     /// Lists what can be cleaned; <paramref name="service"/>'s own scan unless a test passes its own, to decide what a
     /// scan finds and whether it is cancelled (#2759).
     /// </param>
+    /// <param name="runsAsTheSignedInAccount">
+    /// Whether SysManager runs as the account signed in to Windows; <see cref="AdminHelper.RunsAsTheSignedInAccount"/>
+    /// unless a test decides it.
+    /// </param>
     public BrowserCleanerViewModel(BrowserCleanerService service, IBrowserExtensionService extensions,
         Func<string, bool>? copyText = null, IDialogService? dialog = null, IOperationLock? operationLock = null,
         IToastService? toast = null, IActivityLog? activityLog = null,
-        Func<CancellationToken, Task<IReadOnlyList<BrowserCleanupItem>>>? scan = null)
+        Func<CancellationToken, Task<IReadOnlyList<BrowserCleanupItem>>>? scan = null,
+        Func<bool>? runsAsTheSignedInAccount = null)
     {
+        _runsAsTheSignedInAccount = runsAsTheSignedInAccount ?? AdminHelper.RunsAsTheSignedInAccount;
         _service = service;
         _scan = scan ?? service.ScanAsync;
         _extensions = extensions;
@@ -126,6 +132,8 @@ public sealed partial class BrowserCleanerViewModel : ViewModelBase, ISearchDest
         PropertyChanged += OnVmPropertyChanged;
         InitializeAsync(ScanAsync);
     }
+
+    private readonly Func<bool> _runsAsTheSignedInAccount;
 
     private bool NotBusy => !IsBusy;
 

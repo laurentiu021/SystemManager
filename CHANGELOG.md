@@ -10,6 +10,20 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.136.191] - 2026-11-26
+
+**If you run SysManager 1.130.85 or earlier, update once with Manual download in About: pressing Install now
+reopens the version you are on instead of closing SysManager for good.**
+
+### Fixed
+- Versions up to 1.130.85 hand an update over to the new version in an older form, without the checksum the new
+  version needs to check what it installs (1.130.86, #2987). The new version did not take that start as a handover
+  and opened as an ordinary window: either SysManager closed and did not come back, because the old copy still held
+  its place, or the new version ran from the updates folder while your own copy stayed old, and offered the same
+  update at every start (#3364). Every start that begins as a handover is now taken as one. One in a form this
+  version does not install installs nothing, says so in the log, and, once the version that started it has
+  closed, starts that version again. Nothing is installed without a checksum, as before.
+
 ## [1.136.190] - 2026-11-26
 
 **Resource History asks before a shorter Keep removes samples whenever it would, and the tab then shows only what

@@ -132,6 +132,14 @@ internal static class UpdateApplier
         return true;
     }
 
+    /// <summary>Whether this start is a handover from the in-app updater, whatever follows the marker.</summary>
+    public static bool IsHandover(string[] args) => TryParseArgs(args, out _, out _, out _);
+
+    /// <summary>A start that begins with the marker but is not a handover this version takes.</summary>
+    public static void RunMalformed(string[] args, Action<ProcessStartInfo>? launch = null)
+    {
+    }
+
     /// <summary>
     /// Decides whether <paramref name="targetExe"/> is a path the applier may overwrite.
     /// </summary>

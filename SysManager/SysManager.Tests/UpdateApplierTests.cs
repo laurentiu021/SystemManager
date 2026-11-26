@@ -99,6 +99,91 @@ public class UpdateApplierTests
         Assert.False(UpdateApplier.TryParseArgs(args, out _, out _, out _));
     }
 
+    // ---------- a handover in an older build's form reopens that build (#3364) ----------
+    // Versions up to 1.130.85 hand an update over with a target and a process id and no checksum. That start was not
+    // taken as a handover, so it opened a window: SysManager closed for good while the old copy held the mutex, or the
+    // new version ran from the updates folder while the user's own copy stayed old.
+
+    [Theory]
+    [InlineData(1)]   // the marker alone
+    [InlineData(2)]   // with a target
+    [InlineData(3)]   // the form versions up to 1.130.85 use: a target and a process id, no checksum
+    [InlineData(4)]   // the form this version takes
+    public void AStartThatBeginsWithTheMarker_IsAHandover_WhateverFollows(int count)
+    {
+        string[] full = [UpdateApplier.ApplyUpdateArg, @"C:\x.exe", "123", AnyHash];
+
+        Assert.True(UpdateApplier.IsHandover(full[..count]));
+    }
+
+    [Fact]
+    public void AStartWithoutTheMarkerFirst_IsNotAHandover()
+    {
+        Assert.False(UpdateApplier.IsHandover([]));
+        Assert.False(UpdateApplier.IsHandover(["--cleanup"]));
+        Assert.False(UpdateApplier.IsHandover([@"C:\x.exe", UpdateApplier.ApplyUpdateArg]));
+    }
+
+    /// <summary>
+    /// An older build's handover installs nothing, since nothing checks its bytes, and starts the build it came from
+    /// again, so SysManager neither closes for good nor runs from the updates folder.
+    /// </summary>
+    [Fact]
+    public void AnOlderBuildsHandover_InstallsNothing_AndReopensTheBuildItCameFrom()
+    {
+        var dir = Directory.CreateTempSubdirectory("ApplierOldForm_");
+        try
+        {
+            var target = CopyOfThisBuild(dir);
+            var before = Sha256(target);
+            var started = new List<ProcessStartInfo>();
+
+            UpdateApplier.RunMalformed([UpdateApplier.ApplyUpdateArg, target, "999999"], started.Add);
+
+            Assert.Equal(before, Sha256(target));
+            Assert.False(File.Exists(target + ".new"));
+            Assert.Equal(target, Assert.Single(started).FileName);
+        }
+        finally { dir.Delete(recursive: true); }
+    }
+
+    /// <summary>A malformed handover naming a file that is not SysManager starts nothing at all.</summary>
+    [Fact]
+    public void AMalformedHandover_NamingAFileThatIsNotSysManager_StartsNothing()
+    {
+        var dir = Directory.CreateTempSubdirectory("ApplierOldFormOther_");
+        try
+        {
+            var other = Path.Combine(dir.FullName, "other.exe");
+            File.WriteAllText(other, "not SysManager");
+            var started = new List<ProcessStartInfo>();
+
+            UpdateApplier.RunMalformed([UpdateApplier.ApplyUpdateArg, other, "999999"], started.Add);
+            UpdateApplier.RunMalformed([UpdateApplier.ApplyUpdateArg], started.Add);
+
+            Assert.Empty(started);
+            Assert.Equal("not SysManager", File.ReadAllText(other));
+        }
+        finally { dir.Delete(recursive: true); }
+    }
+
+    /// <summary>
+    /// Startup takes every start that begins with the marker as a handover, before the CLI and the single-instance
+    /// check, and hands one it cannot take to <see cref="UpdateApplier.RunMalformed"/>.
+    /// </summary>
+    [Fact]
+    public void Startup_TakesEveryStartWithTheMarker_AsAHandover()
+    {
+        var source = File.ReadAllText(Path.Combine(TestPaths.AppProject(), "App.xaml.cs"));
+        var startup = source[source.IndexOf("protected override void OnStartup", StringComparison.Ordinal)..];
+        var handover = startup.IndexOf("UpdateApplier.IsHandover(e.Args)", StringComparison.Ordinal);
+        var cli = startup.IndexOf("CliRunner.IsCliInvocation(e.Args)", StringComparison.Ordinal);
+
+        Assert.True(handover >= 0, "OnStartup no longer asks UpdateApplier.IsHandover first.");
+        Assert.True(cli > handover, "the CLI check runs before the handover check.");
+        Assert.Contains("UpdateApplier.RunMalformed(e.Args)", startup[handover..cli], StringComparison.Ordinal);
+    }
+
     [Fact]
     public void TryParseArgs_IsCaseInsensitiveOnSentinel()
     {

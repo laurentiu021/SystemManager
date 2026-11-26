@@ -1509,7 +1509,11 @@ Answers "what is actually using my space?" by listing the biggest files in one p
   scanning again cannot quietly put back a shortcut you decided to keep
 - Move to Recycle Bin or permanent delete, with confirmation dialog. **Each shortcut is judged again just
   before it goes**, by the same rules as the scan, so one that works again by then, its program installed
-  again or its document put back, is kept and taken off the list, and the status line says how many
+  again or its document put back, is kept and taken off the list, and the status line says how many.
+  One that cannot be checked again, its drive unplugged say, is kept and stays listed. When Windows refuses
+  a delete, the status line says how many could not be removed, and that shortcuts for all users need
+  Run as administrator when that is why. Nothing is announced or recorded in Recent activity for a delete
+  that removed nothing
 - COM-based IShellLink resolution for accurate target validation
 
 ### Scheduled Maintenance 🔬

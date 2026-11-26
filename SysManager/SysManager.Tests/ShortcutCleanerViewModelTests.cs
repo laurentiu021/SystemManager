@@ -112,6 +112,39 @@ public class ShortcutCleanerViewModelTests
         finally { Directory.Delete(dir, recursive: true); }
     }
 
+    /// <summary>
+    /// A refused delete is counted, and the status names administrator rights only when one of the refused shortcuts
+    /// is for all users and SysManager is not elevated (#3336).
+    /// </summary>
+    [Theory]
+    [InlineData(false, true, true)]
+    [InlineData(true, true, false)]
+    [InlineData(false, false, false)]
+    public void DescribeRefused_NamesAdministratorRights_OnlyForAnAllUsersShortcut_WhenNotElevated(
+        bool elevated, bool forAllUsers, bool namesAdministrator)
+    {
+        var expected = " 1 could not be removed."
+            + (namesAdministrator
+                ? " Shortcuts for all users need administrator rights: use Run as administrator."
+                : "");
+        var shared = Path.Combine(Path.GetTempPath(), "AllUsers");
+        var shortcut = new BrokenShortcut
+        {
+            Name = "Old",
+            ShortcutPath = Path.Combine(forAllUsers ? shared : Path.Combine(Path.GetTempPath(), "Mine"), "Old.lnk"),
+        };
+
+        Assert.Equal(expected, ShortcutCleanerViewModel.DescribeRefused([shortcut], elevated, shared));
+        Assert.Equal("", ShortcutCleanerViewModel.DescribeRefused([], elevated, shared));
+    }
+
+    [Theory]
+    [InlineData(0, "")]
+    [InlineData(1, " 1 could not be checked again, so it was kept.")]
+    [InlineData(3, " 3 could not be checked again, so they were kept.")]
+    public void DescribeUnchecked_CountsTheKeptShortcuts(int count, string expected) =>
+        Assert.Equal(expected, ShortcutCleanerViewModel.DescribeUnchecked(count));
+
     // ── DeleteSelected confirmation gate (destructive — removes broken .lnk files) ──
 
     [Fact]

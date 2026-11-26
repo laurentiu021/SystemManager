@@ -1717,7 +1717,8 @@ Answers "what is actually using my space?" by listing the biggest files in one p
   Ookla run is not a comparison. A quick test from the Dashboard joins the HTTP history too,
   even while this tab is open. If the saved results cannot be read, the tab says so rather
   than showing none, and a new result is never saved over them. An empty entry among them is
-  skipped and the rest are shown
+  skipped and the rest are shown. Clear asks with the number actually saved, deletes nothing
+  while they cannot be read, and keeps a result saved while it was asking
 - A history table that has nothing left to scroll the way the wheel turns passes the turn to the page
 - **A trend above each history**, drawn from the same results, so "is my internet worse than
   it used to be, or is it just today?" is answered at a glance: download and upload over time,
@@ -1863,7 +1864,8 @@ Answers "what is actually using my space?" by listing the biggest files in one p
   while it does. Monitoring itself is shown by the status line, not by a bar that never finishes
 - **The list is kept between sessions** — the last 200 detections, with the time each was noticed,
   in your `%LocalAppData%\SysManager` folder — and Recent Changes lists them too. Clear History clears
-  both, and asks first, since it cannot be undone
+  both, and asks first, since it cannot be undone. It counts what is saved, not only what is listed, clears
+  nothing when the saved list cannot be read, and keeps an install noticed while it was asking
 - Notifies you when a new install is detected, so you find out even when you are
   on another tab or the window is in the notification area: a notice inside the window while
   it is on screen, and a Windows notification from the SysManager icon while it is minimized

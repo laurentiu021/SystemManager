@@ -1331,7 +1331,8 @@ Key services:
   `UninstallerService.ParseUninstallCommand`, and `BelongsTo` decides through `SystemPaths.IsInsideSubtree` (#2878).
 - `AppAlertHistory` (`IAppAlertHistory`) — New App Alerts' detections, newest first, the last 200, in
   `app-alerts.json` (#1507). Reads before it writes under one lock, sets a file that does not parse aside, and
-  writes nothing over one it could not read.
+  writes nothing over one it could not read. `Remove` forgets the detections Clear History asked about and keeps
+  every other, and refuses a record it could not read (#3252, #3341).
 - `RecentChangesService` (`IRecentChangesService`) — one look for the Recent Changes tab (#1507): SysManager's
   activity log, Windows' reliability history, the installed programs kept from the last look, New App Alerts'
   detections and Settings Watchdog's sightings, put in one list by `Combine`, each program once by the best record

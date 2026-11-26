@@ -245,6 +245,55 @@ public sealed class SpeedTestViewModelTests : IDisposable
         Assert.Empty(vm.HttpHistory);
     }
 
+    // ---------- Clear asks about what is saved, not what the list shows (#3253) ----------
+    // The question counted the rows on screen, and the delete took every saved result of that engine. After a first
+    // load that could not read the file, the list was empty, so Clear deleted results it had never shown, unasked.
+
+    private string HistoryFile => System.IO.Path.Combine(_dir, Services.SpeedTestHistoryService.FileName);
+
+    /// <summary>Holds the saved results open so they cannot be read, as another program can.</summary>
+    private System.IO.FileStream Unreadable() =>
+        new(HistoryFile, System.IO.FileMode.Open, System.IO.FileAccess.Read, System.IO.FileShare.Delete);
+
+    [Fact]
+    public async Task ClearHistory_AfterAFailedFirstLoad_AsksAboutTheSavedResults()
+    {
+        var history = NewHistory();
+        for (var minute = 1; minute <= 3; minute++) await history.SaveAsync(At("HTTP", minute));
+        SpeedTestViewModel vm;
+        using (Unreadable())
+        {
+            vm = new SpeedTestViewModel(NewShared(), history);
+            await vm.InitializationComplete;
+        }
+        Assert.Empty(vm.HttpHistory);
+        using var answer = new DialogAnswer(false);
+
+        await vm.ClearHttpHistoryCommand.ExecuteAsync(null);
+
+        Assert.Contains("Delete all 3 saved HTTP results?", Assert.Single(answer.Messages), StringComparison.Ordinal);
+        Assert.Equal(3, (await history.LoadAsync())!.Count);
+    }
+
+    [Fact]
+    public async Task ClearHistory_WhenTheSavedResultsCannotBeRead_AsksNothing_DeletesNothing_AndSaysSo()
+    {
+        var history = NewHistory();
+        await history.SaveAsync(At("HTTP", 1));
+        var vm = new SpeedTestViewModel(NewShared(), history);
+        await vm.InitializationComplete;
+        var before = System.IO.File.ReadAllBytes(HistoryFile);
+        using var answer = new DialogAnswer(true);
+
+        using (Unreadable())
+            await vm.ClearHttpHistoryCommand.ExecuteAsync(null);
+
+        Assert.Equal(0, answer.Calls);
+        Assert.Equal(before, System.IO.File.ReadAllBytes(HistoryFile));
+        Assert.Contains("could not be read", vm.HttpStatus, StringComparison.Ordinal);
+        Assert.Single(vm.HttpHistory);
+    }
+
     // ---------- the trend above each history table (#1499) ----------
 
     [Fact]

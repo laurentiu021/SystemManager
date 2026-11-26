@@ -172,6 +172,25 @@ public sealed class SpeedTestHistoryServiceTests : IDisposable
         Assert.Equal([200, 100], (await LoadedAsync(svc)).Select(r => r.DownloadMbps).OrderDescending());
     }
 
+    /// <summary>
+    /// Given the results Clear asked about, a result saved since stays, though it is the same engine's (#3253).
+    /// </summary>
+    [Fact]
+    public async Task ClearAsync_GivenTheResultsAskedAbout_KeepsOneSavedSince()
+    {
+        using var svc = NewService();
+        var first = Result("HTTP", 100, at: new DateTime(2026, 1, 1, 12, 1, 0));
+        var second = Result("HTTP", 110, at: new DateTime(2026, 1, 1, 12, 2, 0));
+        var later = Result("HTTP", 120, at: new DateTime(2026, 1, 1, 12, 3, 0));
+        await svc.SaveAsync(first);
+        await svc.SaveAsync(second);
+        await svc.SaveAsync(later);
+
+        Assert.True(await svc.ClearAsync("HTTP", [first, second]));
+
+        Assert.Equal([later], await LoadedAsync(svc));
+    }
+
     [Fact]
     public async Task ClearAsync_OneEngine_LeavesTheOtherEnginesResults()
     {

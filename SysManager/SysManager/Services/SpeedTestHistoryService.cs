@@ -222,7 +222,8 @@ public sealed class SpeedTestHistoryService : IDisposable
     /// opposite of what was promised, with no way to tell which state is real. The caller now surfaces the
     /// failure instead of guessing.
     /// </remarks>
-    public async Task<bool> ClearAsync(string? engine = null, CancellationToken ct = default)
+    public async Task<bool> ClearAsync(
+        string? engine = null, IReadOnlyCollection<SpeedTestResult>? only = null, CancellationToken ct = default)
     {
         await _fileLock.WaitAsync(ct).ConfigureAwait(false);
         try

@@ -175,6 +175,37 @@ public sealed class AppAlertHistoryTests : IDisposable
         Assert.Single(NewHistory().Load().Alerts);
     }
 
+    /// <summary>
+    /// Removing the detections Clear History asked about keeps any other, such as one noticed while it asked.
+    /// </summary>
+    [Fact]
+    public void Remove_ForgetsOnlyTheDetectionsItIsGiven()
+    {
+        var asked = Alert("Asked about", 1);
+        NewHistory().Add(asked);
+        NewHistory().Add(Alert("Noticed meanwhile", 2));
+
+        Assert.True(NewHistory().Remove([asked]));
+
+        Assert.Equal(["Noticed meanwhile"], NewHistory().Load().Alerts.Select(a => a.Name));
+    }
+
+    /// <summary>A record that could not be read is not an empty one: nothing is removed from it.</summary>
+    [Fact]
+    public void Remove_OfARecordThatCannotBeRead_ChangesNothing()
+    {
+        var kept = Alert("Kept");
+        NewHistory().Add(kept);
+        var before = File.ReadAllBytes(StoreFile);
+
+        bool removed;
+        using (new FileStream(StoreFile, FileMode.Open, FileAccess.Read, FileShare.Delete))
+            removed = NewHistory().Remove([kept]);
+
+        Assert.False(removed);
+        Assert.Equal(before, File.ReadAllBytes(StoreFile));
+    }
+
     [Fact]
     public void WhenTheRecordCannotBeRead_ItSaysSo_AndADetectionWritesNothingOverIt()
     {

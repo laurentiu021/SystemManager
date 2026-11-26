@@ -42,6 +42,12 @@ public interface IAppAlertHistory
 
     /// <summary>Forgets every detection. Returns false when the record could not be removed.</summary>
     bool Clear();
+
+    /// <summary>
+    /// Forgets the detections <paramref name="alerts"/> names and keeps every other. Returns false, and changes
+    /// nothing, when the record could not be read or written.
+    /// </summary>
+    bool Remove(IReadOnlyCollection<AppInstallEntry> alerts);
 }
 
 /// <summary>The record behind <see cref="IAppAlertHistory"/>, in <c>app-alerts.json</c>.</summary>
@@ -124,6 +130,8 @@ public sealed class AppAlertHistory : IAppAlertHistory
             }
         }
     }
+
+    public bool Remove(IReadOnlyCollection<AppInstallEntry> alerts) => Clear();
 
     /// <summary>One detection as the file holds it.</summary>
     internal sealed record StoredAlert(string Name, string Publisher, string InstallPath, DateTime DetectedAt, string Source,

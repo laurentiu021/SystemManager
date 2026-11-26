@@ -96,6 +96,15 @@ public sealed partial class RestorePointsViewModel : ElevatedViewModelBase
         try
         {
             var points = await _service.ListAsync(_cts.Token).ConfigureAwait(true);
+            if (points is null && RestorePoints.Count > 0)
+            {
+                // A refused read changes nothing on screen: what was listed stays listed, with its selection, as on
+                // Task Scheduler (#2487). Emptying it disabled Restore over points shown a moment before (#3362).
+                StatusMessage = "Windows would not list the restore points this time, so the list below is from the "
+                    + "last read. Press Refresh to try again.";
+                return;
+            }
+
             ListWasRefused = points is null;
             RestorePoints.ReplaceWith(points ?? []);
             HasPoints = RestorePoints.Count > 0;

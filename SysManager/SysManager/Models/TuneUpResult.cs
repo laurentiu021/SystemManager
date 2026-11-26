@@ -23,6 +23,9 @@ public sealed record TuneUpResult
     public bool RecycleBinEmptied { get; init; }
     public bool RecycleBinSkipped { get; init; }
 
+    /// <summary>True when the bin was left alone because it may belong to another account (#3316).</summary>
+    public bool RecycleBinNotTheSignedInAccounts { get; init; }
+
     /// <summary>
     /// What the Recycle Bin held just before the Tune-Up emptied it, as the shell counted it. Null when the shell could
     /// not say, or the Tune-Up was not asked to empty it.

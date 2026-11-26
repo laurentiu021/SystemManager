@@ -61,8 +61,7 @@ public sealed class DefenderService
     /// and wrong here, where it would let an exclusion through on the administrator's folders.
     /// </remarks>
     internal static bool ChecksTheRightFolders(bool elevated, string? tokenSid, string? sessionSid) =>
-        !elevated
-        || (!string.IsNullOrEmpty(tokenSid) && string.Equals(tokenSid, sessionSid, StringComparison.OrdinalIgnoreCase));
+        Helpers.AdminHelper.IsTheSignedInAccount(elevated, tokenSid, sessionSid);
 
     /// <summary>Why an exclusion is refused when <see cref="ChecksTheSignedInAccountsFolders"/> is false.</summary>
     internal const string AnotherAccountRefusal =

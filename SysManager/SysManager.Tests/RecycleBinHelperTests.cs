@@ -5,8 +5,46 @@
 using System.IO;
 using System.Text.RegularExpressions;
 using SysManager.Helpers;
+using SysManager.Services;
 
 namespace SysManager.Tests;
+
+/// <summary>
+/// The shell's bin is the bin of the account SysManager runs as. Elevated with another administrator's password, that
+/// is the administrator's, and Empty Recycle Bin emptied it for good, while the signed-in person's stayed full (#3316).
+/// </summary>
+/// <remarks>The shell calls are stand-ins, so nothing here measures or empties the bin of the PC running it.</remarks>
+public sealed class ShellRecycleBinAccountTests
+{
+    [Fact]
+    public void AnotherAccountsBin_IsNeitherMeasuredNorEmptied()
+    {
+        var calls = 0;
+        var bin = new ShellRecycleBin(() => false,
+            () => { calls++; return new RecycleBinContents(4096, 2); },
+            () => { calls++; return new RecycleBinEmptyResult(true, new RecycleBinContents(4096, 2)); });
+
+        Assert.True(bin.BelongsToAnotherAccount);
+        Assert.Null(bin.Query());
+        var emptied = bin.Empty();
+
+        Assert.Equal(0, calls);
+        Assert.False(emptied.Emptied);
+        Assert.True(emptied.NotTheSignedInAccounts);
+    }
+
+    [Fact]
+    public void TheSignedInAccountsBin_IsMeasuredAndEmptiedAsBefore()
+    {
+        var bin = new ShellRecycleBin(() => true,
+            () => new RecycleBinContents(4096, 2),
+            () => new RecycleBinEmptyResult(true, new RecycleBinContents(4096, 2)));
+
+        Assert.False(bin.BelongsToAnotherAccount);
+        Assert.Equal(new RecycleBinContents(4096, 2), bin.Query());
+        Assert.True(bin.Empty().Emptied);
+    }
+}
 
 /// <summary>
 /// What the shared "send to the Recycle Bin" asks the shell for (#1527), and what emptying the bin decides from what the

@@ -23,14 +23,45 @@ public interface IRecycleBin
     /// <summary>Empties the bin on every drive, without asking, and reports what it held just before.</summary>
     /// <remarks>Can take a long time on a full bin. Callers confirm first and keep it off the UI thread.</remarks>
     RecycleBinEmptyResult Empty();
+
+    /// <summary>
+    /// True when the bin the shell would measure and empty may not be the signed-in person's: SysManager runs as
+    /// administrator, and the account of its session is not positively the one it runs as (#3316).
+    /// </summary>
+    bool BelongsToAnotherAccount => false;
 }
 
 /// <summary>The real Recycle Bin, through <see cref="RecycleBinHelper"/>.</summary>
 public sealed class ShellRecycleBin : IRecycleBin
 {
-    /// <inheritdoc/>
-    public RecycleBinContents? Query() => RecycleBinHelper.Query();
+    private readonly Func<bool> _isTheSignedInAccounts;
+    private readonly Func<RecycleBinContents?> _query;
+    private readonly Func<RecycleBinEmptyResult> _empty;
+
+    /// <summary>The bin of the account SysManager runs as, refused when that may not be the signed-in one.</summary>
+    public ShellRecycleBin()
+        : this(AdminHelper.RunsAsTheSignedInAccount, RecycleBinHelper.Query, RecycleBinHelper.Empty)
+    {
+    }
+
+    /// <summary>
+    /// A bin over the shell calls given, so a test can be either account without measuring or emptying the bin of the
+    /// PC running it.
+    /// </summary>
+    internal ShellRecycleBin(Func<bool> isTheSignedInAccounts, Func<RecycleBinContents?> query,
+                             Func<RecycleBinEmptyResult> empty)
+    {
+        _isTheSignedInAccounts = isTheSignedInAccounts;
+        _query = query;
+        _empty = empty;
+    }
 
     /// <inheritdoc/>
-    public RecycleBinEmptyResult Empty() => RecycleBinHelper.Empty();
+    public bool BelongsToAnotherAccount => !_isTheSignedInAccounts();
+
+    /// <inheritdoc/>
+    public RecycleBinContents? Query() => _query();
+
+    /// <inheritdoc/>
+    public RecycleBinEmptyResult Empty() => _empty();
 }

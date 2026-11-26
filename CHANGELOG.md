@@ -10,6 +10,20 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.136.197] - 2026-11-26
+
+**Started as administrator with another account's password, SysManager no longer empties that account's Recycle
+Bin.**
+
+### Fixed
+- Windows empties the Recycle Bin of the account a program runs as. Started as administrator with another
+  account's password, the family-PC case, SysManager runs as that administrator, so Quick Cleanup, Deep Cleanup and
+  the Quick Tune-Up measured and permanently emptied the administrator's bin, while the signed-in person's stayed
+  full (#3316). When SysManager cannot confirm that it runs as the account signed in to Windows, the bin is now
+  neither measured nor emptied. Quick Cleanup's card reads "Left alone (another account)", Deep Cleanup leaves the
+  bin unticked, and each says why and that opening SysManager normally fixes it. When SysManager runs as the
+  signed-in account, elevated or not, nothing changes.
+
 ## [1.136.196] - 2026-11-26
 
 **Gaming Profile puts back the services that pausing search stopped, and silences notifications for the person

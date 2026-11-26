@@ -127,6 +127,34 @@ public static partial class AdminHelper
     }
 
     /// <summary>
+    /// True when the account SysManager runs as is positively the one signed in to its own session: it is not
+    /// elevated, or it is elevated with that account's own token.
+    /// </summary>
+    /// <remarks>
+    /// For an action that removes the signed-in person's own data where Windows acts for the account the process runs
+    /// as, emptying the Recycle Bin say (#3316): elevated with another administrator's password, that is the
+    /// administrator's. Fails closed, unlike <see cref="IsElevatedAsAnotherUser"/>, which answers "the same account"
+    /// when it cannot name the signed-in one: safe for where a setting is written, wrong for what is deleted. The rule
+    /// <c>DefenderService</c> checks an exclusion's folders by.
+    /// </remarks>
+    public static bool RunsAsTheSignedInAccount() => IsTheSignedInAccount(IsElevated(), TokenSid(), OwnSessionSid());
+
+    /// <summary>
+    /// Whether a process that is <paramref name="elevated"/> or not, running as <paramref name="tokenSid"/> in a session
+    /// whose account is <paramref name="sessionSid"/>, runs as the account signed in to it.
+    /// </summary>
+    internal static bool IsTheSignedInAccount(bool elevated, string? tokenSid, string? sessionSid) =>
+        !elevated
+        || (!string.IsNullOrEmpty(tokenSid) && string.Equals(tokenSid, sessionSid, StringComparison.OrdinalIgnoreCase));
+
+    /// <summary>
+    /// What a per-user action says when it refuses because <see cref="RunsAsTheSignedInAccount"/> is false.
+    /// </summary>
+    public const string NotTheSignedInAccountAdvice =
+        "SysManager is running as administrator, and it could not confirm that this is the account signed in to "
+        + "Windows. Close SysManager and open it normally, then try again.";
+
+    /// <summary>
     /// The registry root a per-user service should read and write: the signed-in account's own
     /// <c>HKEY_CURRENT_USER</c>-equivalent hive when elevated as a different account, or
     /// <see cref="Registry.CurrentUser"/> otherwise.

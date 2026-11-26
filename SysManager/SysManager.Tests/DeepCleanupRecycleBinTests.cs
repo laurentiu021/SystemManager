@@ -49,6 +49,30 @@ public sealed class DeepCleanupRecycleBinTests
         return categories;
     }
 
+    // ── Another account's bin (#3316) ────────────────────────────────────────
+
+    /// <summary>
+    /// Another account's bin is not measured, so it is not ticked, and a clean that empties it anyway says why it was
+    /// left. Elevated with another administrator's password, the scan sized that administrator's bin and ticked it.
+    /// </summary>
+    [Fact]
+    public async Task AnotherAccountsBin_IsNotMeasuredOrTicked_AndAnEmptyOfItSaysWhy()
+    {
+        using var roots = new TempCleanupRoots();
+        var bin = Bin(new RecycleBinContents(3000, 3), RecycleBinEmptyResult.AnotherAccounts);
+        bin.BelongsToAnotherAccount.Returns(true);
+        var service = new DeepCleanupService(roots, recycleBin: bin);
+
+        var categories = await service.ScanAsync();
+        var bucket = Named(categories, BucketName);
+        Assert.False(bucket.IsSelected);
+        bin.DidNotReceive().Query();
+
+        bucket.IsSelected = true;
+        var result = await service.CleanAsync([bucket]);
+        Assert.Contains(AdminHelper.NotTheSignedInAccountAdvice, result.Summary, StringComparison.Ordinal);
+    }
+
     // ── The scan ─────────────────────────────────────────────────────────────
 
     [Fact]

@@ -24,6 +24,20 @@ public sealed class CleanupPreScanServiceTests
         return new CleanupPreScanService(bin).MeasureRecycleBin();
     }
 
+    /// <summary>
+    /// Another account's bin is not measured, and the label says why rather than showing its size (#3316).
+    /// </summary>
+    [Fact]
+    public void AnotherAccountsBin_IsNotMeasured()
+    {
+        var bin = Substitute.For<IRecycleBin>();
+        bin.BelongsToAnotherAccount.Returns(true);
+        bin.Query().Returns(new RecycleBinContents(4096, 2));
+
+        Assert.Equal("Left alone (another account)", new CleanupPreScanService(bin).MeasureRecycleBin());
+        bin.DidNotReceive().Query();
+    }
+
     [Fact]
     public void AnEmptyBin_ReadsEmpty()
     {

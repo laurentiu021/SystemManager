@@ -316,9 +316,9 @@ public sealed partial class SpeedTestViewModel : ViewModelBase
     /// </remarks>
     private async Task ClearHistoryAsync(string engine, BulkObservableCollection<SpeedTestResult> history)
     {
-        // What is asked about, and deleted, is what is saved, read first. The question counted the rows on screen,
-        // which are none when the first load could not read the file, and the delete took every saved result of the
-        // engine, a result saved while the question was open included (#3253).
+        // What is asked about, and deleted, is what is saved, read first, with the rows shown. The question counted
+        // only the rows on screen, which are none when the first load could not read the file, and the delete took
+        // every saved result of the engine, a result saved while the question was open included (#3253).
         if (await _history.LoadAsync() is not { } saved)
         {
             SetStatus(engine, $"Your saved {engine} results could not be read, so nothing was deleted. "
@@ -326,7 +326,10 @@ public sealed partial class SpeedTestViewModel : ViewModelBase
             return;
         }
 
-        var toDelete = saved.Where(r => string.Equals(r.Engine, engine, StringComparison.OrdinalIgnoreCase)).ToList();
+        // What is saved for the engine, and the rows shown that were never saved, such as one whose save failed.
+        var toDelete = saved.Where(r => string.Equals(r.Engine, engine, StringComparison.OrdinalIgnoreCase))
+            .Union(history)
+            .ToList();
         if (toDelete.Count == 0)
         {
             SetStatus(engine, $"There are no saved {engine} results to delete.");

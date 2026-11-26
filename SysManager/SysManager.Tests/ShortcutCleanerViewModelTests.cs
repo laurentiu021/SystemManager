@@ -82,6 +82,36 @@ public class ShortcutCleanerViewModelTests
         Assert.Equal("IsSelected", changedProp);
     }
 
+    // ── what Delete Selected says when it removed nothing (#3299, #3336) ──
+
+    /// <summary>
+    /// A ticked shortcut that could not be judged again stays listed, is not said to work again, and a delete that
+    /// removed nothing writes no "deleted 0" line to Recent activity.
+    /// </summary>
+    [Fact]
+    public async Task DeleteSelected_ThatRemovedNothing_KeepsTheRow_SaysWhy_AndRecordsNothing()
+    {
+        using var activity = new ActivityLogScope();
+        using var confirm = new DialogAnswer(true);
+        var dir = Directory.CreateTempSubdirectory("ShortcutVmDelete_").FullName;
+        try
+        {
+            var path = Path.Combine(dir, "Unreadable.lnk");
+            File.WriteAllBytes(path, [0x4C, 0x00, 0x00, 0x00]);   // not a shortcut the shell can read
+            var vm = new ShortcutCleanerViewModel(new ShortcutCleanerService()) { MoveToRecycleBin = false };
+            vm.BrokenShortcuts.Add(new BrokenShortcut { Name = "Unreadable", ShortcutPath = path, IsSelected = true });
+
+            await vm.DeleteSelectedCommand.ExecuteAsync(null);
+
+            Assert.Single(vm.BrokenShortcuts);
+            Assert.True(File.Exists(path));
+            Assert.DoesNotContain("works again", vm.ScanStatus, StringComparison.Ordinal);
+            Assert.Contains("could not be checked again", vm.ScanStatus, StringComparison.Ordinal);
+            Assert.DoesNotContain(ActivityLogService.Instance.GetRecent(10), e => e.Action == "Shortcut Cleaner");
+        }
+        finally { Directory.Delete(dir, recursive: true); }
+    }
+
     // ── DeleteSelected confirmation gate (destructive — removes broken .lnk files) ──
 
     [Fact]

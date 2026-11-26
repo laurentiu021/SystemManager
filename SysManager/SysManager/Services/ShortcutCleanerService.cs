@@ -279,7 +279,7 @@ public sealed partial class ShortcutCleanerService
     {
         string?[] synced = [.. SyncRoots(Environment.GetEnvironmentVariable)];
         return DeleteShortcuts(shortcuts, toRecycleBin, Helpers.RecycleBinHelper.SendToRecycleBin,
-            lnk => JudgeShortcut(lnk, synced)?.Outcome == ShortcutOutcome.Broken);
+            lnk => JudgeShortcut(lnk, synced)?.Outcome);
     }
 
     /// <summary>
@@ -287,10 +287,11 @@ public sealed partial class ShortcutCleanerService
     /// in, so a test sees what is recycled without putting files in the Recycle Bin of the machine running it, and
     /// decides which shortcuts are still broken without writing real ones. No test reached this before (#2741).
     /// </summary>
-    /// <param name="stillBroken">Whether the shortcut at a path is broken now.</param>
+    /// <param name="recheck">What the shortcut at a path is now, or null when it no longer names a file target.</param>
     internal static ShortcutDeletion DeleteShortcuts(IEnumerable<BrokenShortcut> shortcuts, bool toRecycleBin,
-                                                     Func<string, bool> recycle, Func<string, bool> stillBroken)
+                                                     Func<string, bool> recycle, Func<string, ShortcutOutcome?> recheck)
     {
+        bool stillBroken(string path) => recheck(path) == ShortcutOutcome.Broken;
         int deleted = 0;
         List<BrokenShortcut> workAgain = [];
         foreach (var s in shortcuts.Where(x => x.IsSelected))
@@ -334,7 +335,7 @@ public sealed partial class ShortcutCleanerService
                 Log.Warning(ex, "Could not read shortcut again before deleting it: {Path}", s.ShortcutPath);
             }
         }
-        return new ShortcutDeletion(deleted, workAgain);
+        return new ShortcutDeletion(deleted, workAgain, [], []);
     }
 
     private static List<(string Label, string Path)> GetScanLocations()

@@ -2640,6 +2640,10 @@ offers, "rate us" prompts:
   thirty seconds rather than leaving the bar frozen, and either way SysManager says what
   happened. If the download is blocked, a "Manual download" button opens GitHub in the
   browser.
+- **On 1.130.85 or earlier, update once with Manual download.** Those versions hand the new one
+  the update in an older form, without the checksum it checks the file against, so it installs
+  nothing and opens the version you were on again. Download the new exe and use it in place of the
+  old one; from then on Install works.
 - SHA256 hash verification before install — the downloaded build is checked
   against the published `.sha256`, so a damaged or truncated download is blocked.
   Both files come from the same release, so this catches a corrupted download rather

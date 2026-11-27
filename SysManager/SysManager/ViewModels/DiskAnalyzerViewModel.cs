@@ -31,6 +31,9 @@ public sealed partial class DiskAnalyzerViewModel : ViewModelBase
     private readonly DiskScanHistoryService _history;
     private readonly DiskAnalyzerPreferenceService _preferences;
     private readonly IDialogService _dialog;
+
+    // Whether SysManager runs as administrator, which decides what a folder Windows would not list is told (#3423).
+    private readonly bool _elevated;
     private readonly bool _loadingPreferences;
     private CancellationTokenSource? _cts;
 
@@ -113,10 +116,21 @@ public sealed partial class DiskAnalyzerViewModel : ViewModelBase
 
     public string EmptyMessage => IsBusy ? "Measuring how much space each folder in the selected location uses."
         : LastFailure != DiskAnalyzerService.AnalysisFailure.None
-        ? DescribeFailure(LastFailure)
+        ? DescribeFailure(LastFailure, _elevated)
         : HasScanned
             ? "This folder has no subfolders using measurable space."
             : "Pick a folder and analyze to see what's using space.";
+
+    /// <summary><see cref="DescribeFailure(DiskAnalyzerService.AnalysisFailure)"/>, as SysManager running
+    /// <paramref name="elevated"/> or not would say it.</summary>
+    /// <remarks>
+    /// Elevated, a folder Windows would not list is one whose permissions leave administrators out, so "Try Run as
+    /// administrator" sent the user round a relaunch to the same refusal (#3423).
+    /// </remarks>
+    internal static string DescribeFailure(DiskAnalyzerService.AnalysisFailure failure, bool elevated) =>
+        elevated && failure == DiskAnalyzerService.AnalysisFailure.Unreadable
+            ? FolderUnreadableElevatedReason
+            : DescribeFailure(failure);
 
     /// <summary>What to tell the user when the chosen folder could not be measured. Pure, so each case is testable.</summary>
     internal static string DescribeFailure(DiskAnalyzerService.AnalysisFailure failure) => failure switch
@@ -132,9 +146,11 @@ public sealed partial class DiskAnalyzerViewModel : ViewModelBase
     /// <summary>
     /// Whether the empty state's advice names a button with nothing behind it. <c>FolderUnreadableReason</c>
     /// says "Try Run as administrator", and only this failure is the kind that button can actually fix — a
-    /// missing folder or a link needs a different folder picked, not elevation (#2859).
+    /// missing folder or a link needs a different folder picked, not elevation (#2859). Not while SysManager already
+    /// runs as administrator: the relaunch would reopen it to the same refusal (#3423).
     /// </summary>
-    public bool CanRelaunchAsAdminForFailure => LastFailure == DiskAnalyzerService.AnalysisFailure.Unreadable;
+    public bool CanRelaunchAsAdminForFailure =>
+        !_elevated && LastFailure == DiskAnalyzerService.AnalysisFailure.Unreadable;
 
     // Drive-level info
     [ObservableProperty] private long _driveTotal;
@@ -167,8 +183,9 @@ public sealed partial class DiskAnalyzerViewModel : ViewModelBase
     /// <param name="dialog">Defaults to <see cref="DialogService.Instance"/> (#2860).</param>
     public DiskAnalyzerViewModel(
         DiskAnalyzerService service, DiskScanHistoryService history, DiskAnalyzerPreferenceService? preferences = null,
-        IDialogService? dialog = null)
+        IDialogService? dialog = null, Func<bool>? isElevated = null)
     {
+        _elevated = (isElevated ?? AdminHelper.IsElevated)();
         _service = service;
         _history = history;
         _preferences = preferences ?? new DiskAnalyzerPreferenceService();
@@ -284,7 +301,7 @@ public sealed partial class DiskAnalyzerViewModel : ViewModelBase
                 ClearResults();
                 LastFailure = analysis.Failure;
                 ScanSummary = "This folder could not be measured.";
-                StatusMessage = $"This folder could not be measured. {DescribeFailure(analysis.Failure)}";
+                StatusMessage = $"This folder could not be measured. {DescribeFailure(analysis.Failure, _elevated)}";
                 return;
             }
 

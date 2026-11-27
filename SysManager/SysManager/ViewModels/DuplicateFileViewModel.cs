@@ -35,6 +35,9 @@ public sealed partial class DuplicateFileViewModel : ViewModelBase
 
     private readonly DuplicateFileService _service;
     private readonly IDialogService _dialog;
+
+    // Whether SysManager runs as administrator, which decides what a folder Windows would not list is told (#3423).
+    private readonly bool _elevated;
     private CancellationTokenSource? _cts;
 
     public BulkObservableCollection<DuplicateFileGroup> Groups { get; } = new();
@@ -91,13 +94,24 @@ public sealed partial class DuplicateFileViewModel : ViewModelBase
         : HasScanned ? "No duplicates found" : "No scan yet";
     public string EmptyMessage => IsBusy ? "Looking for files with identical content in the selected folder."
         : LastFailure != DuplicateFileService.ScanFailure.None
-        ? DescribeFailure(LastFailure)
+        ? DescribeFailure(LastFailure, _elevated)
         : HasScanned
             ? "No files with identical content in the selected folder."
             : "Pick a folder and scan to find files with identical content.";
 
     /// <summary>The empty state's title, and the status line's start, when the folder could not be scanned.</summary>
     internal const string CouldNotScanTitle = "This folder could not be scanned";
+
+    /// <summary><see cref="DescribeFailure(DuplicateFileService.ScanFailure)"/>, as SysManager running
+    /// <paramref name="elevated"/> or not would say it.</summary>
+    /// <remarks>
+    /// Elevated, a folder Windows would not list is one whose permissions leave administrators out, so "Try Run as
+    /// administrator" sent the user round a relaunch to the same refusal (#3423).
+    /// </remarks>
+    internal static string DescribeFailure(DuplicateFileService.ScanFailure failure, bool elevated) =>
+        elevated && failure == DuplicateFileService.ScanFailure.Unreadable
+            ? FolderUnreadableElevatedReason
+            : DescribeFailure(failure);
 
     /// <summary>
     /// What to tell the user when the chosen folder could not be scanned. Pure, so each case is testable.
@@ -117,8 +131,10 @@ public sealed partial class DuplicateFileViewModel : ViewModelBase
 
     /// <summary>Builds the Duplicate Finder tab over its known-folder presets.</summary>
     /// <param name="dialog">Defaults to <see cref="DialogService.Instance"/> (#2860).</param>
-    public DuplicateFileViewModel(DuplicateFileService service, IDialogService? dialog = null)
+    public DuplicateFileViewModel(DuplicateFileService service, IDialogService? dialog = null,
+                                  Func<bool>? isElevated = null)
     {
+        _elevated = (isElevated ?? AdminHelper.IsElevated)();
         _service = service;
         _dialog = dialog ?? DialogService.Instance;
         PropertyChanged += (_, e) =>
@@ -222,7 +238,7 @@ public sealed partial class DuplicateFileViewModel : ViewModelBase
                 ClearResults();
                 LastFailure = scan.Failure;
                 ScanSummary = CouldNotScanTitle + ".";
-                StatusMessage = $"{CouldNotScanTitle}. {DescribeFailure(scan.Failure)}";
+                StatusMessage = $"{CouldNotScanTitle}. {DescribeFailure(scan.Failure, _elevated)}";
                 return;
             }
 

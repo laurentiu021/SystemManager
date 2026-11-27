@@ -302,6 +302,12 @@ public sealed partial class AppUpdatesViewModel : ViewModelBase
     /// <summary>What an app a stopped batch never reached says, in place of the scan's "Pending".</summary>
     internal const string NotStartedStatus = "Not started";
 
+    /// <summary>
+    /// What an app this session already updated says when winget finds nothing newer for it, in place of
+    /// "No applicable update found", which counted it as a failure (#3354).
+    /// </summary>
+    internal const string UpToDateStatus = "Up to date";
+
     /// <summary>Stops a scan, or a batch before its next app: the update running now finishes.</summary>
     [RelayCommand]
     private void Cancel()

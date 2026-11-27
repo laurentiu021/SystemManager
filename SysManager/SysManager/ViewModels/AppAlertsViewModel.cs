@@ -223,7 +223,9 @@ public sealed partial class AppAlertsViewModel : ViewModelBase
     {
         // The uninstall-tree enumeration walks hundreds of HKLM subkeys — off the UI thread, like the baseline.
         var found = await Task.Run(_service.CheckNow).ConfigureAwait(true);
-        if (found == 0)
+        // Stop stays clickable while the check reads, and writes its own line. Written regardless, this one said
+        // monitoring was active once it had stopped (#3418).
+        if (found == 0 && IsMonitoring)
             MonitorStatus = WithGap("Checked just now — no new installations. Monitoring active.");
     }
 

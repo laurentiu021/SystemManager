@@ -149,7 +149,7 @@ public sealed class SystemFixService : IDisposable
             foreach ($s in $services) { Stop-Service -Name $s -Force -ErrorAction SilentlyContinue }
             $sd = $SoftwareDistribution
             $cr = $Catroot2
-            $stamp = (Get-Date).ToString('yyyyMMddHHmmss')
+            $stamp = (Get-Date).ToString('yyyyMMddHHmmss', [cultureinfo]::InvariantCulture)
             if (Test-Path $sd) { Rename-Item $sd "$sd.old.$stamp" }
             if (Test-Path $cr) { Rename-Item $cr "$cr.old.$stamp" }
         }

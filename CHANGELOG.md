@@ -10,6 +10,16 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.136.211] - 2026-11-27
+
+**New App Alerts no longer says monitoring is active after you pressed Stop during a check.**
+
+### Fixed
+- Stop stays clickable while F5 checks New App Alerts for new installations, which reads every uninstall entry
+  (#3418). Pressed during that check, it stopped monitoring and said so, and then the check finished and replaced
+  that line with its own, which ends "Monitoring active.", so the tab claimed to be watching for installs while
+  nothing ran. The check now writes its line only if monitoring is still on when it finishes.
+
 ## [1.136.210] - 2026-11-27
 
 **In Windows Update, pressing Install selected again after a failed update no longer marks the updates that did

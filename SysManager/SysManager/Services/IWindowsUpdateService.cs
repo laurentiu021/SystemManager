@@ -31,10 +31,21 @@ public interface IWindowsUpdateService
     Task<IReadOnlyList<UpdateEntry>> ScanAsync(IProgress<string>? progress = null, CancellationToken ct = default);
 
     /// <summary>
-    /// Downloads and installs the given updates, setting each entry's status as it goes. Once it has started it returns
-    /// a report however it ends, a cancel or a Windows Update Agent error included, so what went in is counted.
+    /// Downloads and installs the given updates, reporting each entry's status as it goes. Once it has started it
+    /// returns a report however it ends, a cancel or a Windows Update Agent error included, so what went in is counted.
     /// </summary>
+    /// <remarks>
+    /// It changes no entry. The entries are the rows the Windows Update grid shows, and the install runs on a worker
+    /// thread, so the caller sets <see cref="UpdateEntry.Status"/> from <paramref name="statuses"/> on the window's
+    /// thread (#3399).
+    /// </remarks>
     /// <param name="progress">Where this install's progress lines go, or nowhere, on a worker thread too.</param>
+    /// <param name="statuses">
+    /// Where each entry's new status goes, such as "Downloading…" or "Installed", or nowhere, on a worker thread too.
+    /// </param>
     Task<InstallReport> InstallAsync(
-        IReadOnlyList<UpdateEntry> entries, IProgress<string>? progress = null, CancellationToken ct = default);
+        IReadOnlyList<UpdateEntry> entries,
+        IProgress<string>? progress = null,
+        IProgress<(UpdateEntry Entry, string Status)>? statuses = null,
+        CancellationToken ct = default);
 }

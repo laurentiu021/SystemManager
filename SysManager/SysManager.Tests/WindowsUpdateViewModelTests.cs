@@ -462,7 +462,8 @@ public sealed class WindowsUpdateViewModelTests : IDisposable
                 [new UpdateEntry { Title = "Update a", UpdateId = "a" }]);
         });
         wu.InstallAsync(
-                Arg.Any<IReadOnlyList<UpdateEntry>>(), Arg.Any<IProgress<string>?>(), Arg.Any<CancellationToken>())
+                Arg.Any<IReadOnlyList<UpdateEntry>>(), Arg.Any<IProgress<string>?>(),
+                Arg.Any<IProgress<(UpdateEntry Entry, string Status)>?>(), Arg.Any<CancellationToken>())
             .Returns(ci =>
             {
                 ci.ArgAt<IProgress<string>?>(1)?.Report("[1/1] Update a");
@@ -515,17 +516,22 @@ public sealed class WindowsUpdateViewModelTests : IDisposable
 
     // ---------- an install that stops early says how far it got, and leaves no row pending (#2791) ----------
 
-    /// <summary>A view model, elevated, over an agent whose install sets the rows' statuses and returns
+    /// <summary>A view model, elevated, over an agent whose install reports the rows' statuses and returns
     /// <paramref name="report"/>, or throws <paramref name="failure"/>.</summary>
     private WindowsUpdateViewModel VmWhoseInstall(
-        Action<IReadOnlyList<UpdateEntry>> run, InstallReport report, Exception? failure = null)
+        Action<IReadOnlyList<UpdateEntry>, IProgress<(UpdateEntry Entry, string Status)>?> run,
+        InstallReport report,
+        Exception? failure = null)
     {
         var wu = Substitute.For<IWindowsUpdateService>();
         wu.InstallAsync(
-                Arg.Any<IReadOnlyList<UpdateEntry>>(), Arg.Any<IProgress<string>?>(), Arg.Any<CancellationToken>())
+                Arg.Any<IReadOnlyList<UpdateEntry>>(), Arg.Any<IProgress<string>?>(),
+                Arg.Any<IProgress<(UpdateEntry Entry, string Status)>?>(), Arg.Any<CancellationToken>())
             .Returns(ci =>
             {
-                run(ci.ArgAt<IReadOnlyList<UpdateEntry>>(0));
+                run(
+                    ci.ArgAt<IReadOnlyList<UpdateEntry>>(0),
+                    ci.ArgAt<IProgress<(UpdateEntry Entry, string Status)>?>(2));
                 return failure is null ? Task.FromResult(report) : Task.FromException<InstallReport>(failure);
             });
         var vm = new WindowsUpdateViewModel(Substitute.For<IPowerShellRunner>(), wu, Policy(), () => true);
@@ -537,7 +543,7 @@ public sealed class WindowsUpdateViewModelTests : IDisposable
     [Fact]
     public async Task AnInstallCancelledPartWay_SaysHowManyWentIn_AndMarksTheRest()
     {
-        var vm = VmWhoseInstall(rows => rows[0].Status = "Installed (reboot required)",
+        var vm = VmWhoseInstall((rows, statuses) => statuses?.Report((rows[0], "Installed (reboot required)")),
             new InstallReport(1, 0, true, Cancelled: true));
         using var dialog = new DialogAnswer(confirm: true);
 
@@ -550,7 +556,7 @@ public sealed class WindowsUpdateViewModelTests : IDisposable
     [Fact]
     public async Task AnInstallTheAgentStopped_SaysSo_AndLeavesNoRowPending()
     {
-        var vm = VmWhoseInstall(rows => rows[0].Status = "Downloading…",
+        var vm = VmWhoseInstall((rows, statuses) => statuses?.Report((rows[0], "Downloading…")),
             new InstallReport(0, 0, false, AgentError: unchecked((int)0x8024402C)));
         using var dialog = new DialogAnswer(confirm: true);
 
@@ -563,7 +569,7 @@ public sealed class WindowsUpdateViewModelTests : IDisposable
     [Fact]
     public async Task AnInstallThatThrows_LeavesNoRowPending()
     {
-        var vm = VmWhoseInstall(_ => { }, default,
+        var vm = VmWhoseInstall((_, _) => { }, default,
             new System.Runtime.InteropServices.COMException("search failed", unchecked((int)0x80240032)));
         using var dialog = new DialogAnswer(confirm: true);
 
@@ -571,6 +577,51 @@ public sealed class WindowsUpdateViewModelTests : IDisposable
 
         Assert.Equal("WUA error: 0x80240032", vm.StatusMessage);
         Assert.Equal(["Not applied", "Not applied"], vm.Updates.Select(u => u.Status));
+    }
+
+    // ---------- the rows an install changes are set on the window's thread (#3399) ----------
+
+    /// <summary>
+    /// An install sets each row it changes on the thread that started it, and the row ends on the agent's last word.
+    /// </summary>
+    /// <remarks>
+    /// The agent set each row's status inside its <c>Task.Run</c>, on the rows the grid shows, which #3127 had stopped
+    /// Process Manager and Right-Click Menu doing. Driven with the real agent over a stand-in session, under a context
+    /// that queues what is posted to it, as WPF's does.
+    /// </remarks>
+    [Fact]
+    public void AnInstall_SetsEachRowOnTheThreadThatStartedIt()
+    {
+        var ui = new UiThreadContext();
+        var previous = SynchronizationContext.Current;
+        SynchronizationContext.SetSynchronizationContext(ui);
+        try
+        {
+            var uiThread = Environment.CurrentManagedThreadId;
+            var session = new FakeUpdateSession();
+            session.Pending.Add(new FakeUpdate { Title = "Update a", Id = "a" });
+            var agent = new WindowsUpdateService(() => session, () => new FakeCollection<FakeUpdate>());
+            var vm = new WindowsUpdateViewModel(Substitute.For<IPowerShellRunner>(), agent, Policy(), () => true);
+            var row = new UpdateEntry { Title = "Update a", UpdateId = "a", IsSelected = true };
+            vm.Updates.Add(row);
+            var setOn = new System.Collections.Concurrent.ConcurrentQueue<(string Status, int Thread)>();
+            row.PropertyChanged += (_, e) =>
+            {
+                if (e.PropertyName == nameof(UpdateEntry.Status))
+                    setOn.Enqueue((row.Status, Environment.CurrentManagedThreadId));
+            };
+            using var dialog = new DialogAnswer(confirm: true);
+
+            ui.RunUntil(vm.InstallUpdatesCommand.ExecuteAsync(null));
+
+            Assert.Equal("Installed", row.Status);
+            Assert.Equal("Installed 1/1.", vm.StatusMessage);
+            Assert.All(setOn, set => Assert.Equal(uiThread, set.Thread));
+        }
+        finally
+        {
+            SynchronizationContext.SetSynchronizationContext(previous);
+        }
     }
 
     [Theory]

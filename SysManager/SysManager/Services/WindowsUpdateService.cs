@@ -127,6 +127,7 @@ public sealed class WindowsUpdateService : IWindowsUpdateService
     public Task<InstallReport> InstallAsync(
         IReadOnlyList<UpdateEntry> entries,
         IProgress<string>? progress = null,
+        IProgress<(UpdateEntry Entry, string Status)>? statuses = null,
         CancellationToken ct = default) =>
         Task.Run(() =>
         {

@@ -753,7 +753,7 @@ public sealed partial class WindowsUpdateViewModel : ViewModelBase
         try
         {
             var progress = new SettlingProgress<string>(OnWuLog);
-            var report = await progress.SettleAfterAsync(reporter => _wu.InstallAsync(selected, reporter, _cts.Token));
+            var report = await progress.SettleAfterAsync(reporter => _wu.InstallAsync(selected, reporter, ct: _cts.Token));
             // A run that stopped early leaves the rows it did not finish as it, or this tab, last set them. They say
             // what happened instead, and the count and the restart notice come all the same (#2791).
             if (report.Cancelled) MarkUnfinished(selected, "Cancelled");

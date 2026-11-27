@@ -483,7 +483,7 @@ public sealed class LeftoverService : ILeftoverService
                 return;
             }
             Directory.CreateDirectory(Path.GetDirectoryName(_pendingPath)!);
-            AtomicFile.WriteAllText(_pendingPath, JsonSerializer.Serialize(stored, JsonOptions));
+            AtomicFile.WriteAllText(_pendingPath, Serialize(stored));
         }
         catch (IOException ex) { Log.Warning("Uninstaller leftovers: pending record not saved: {Error}", ex.Message); }
         catch (UnauthorizedAccessException ex) { Log.Warning("Uninstaller leftovers: pending record denied: {Error}", ex.Message); }
@@ -497,6 +497,9 @@ public sealed class LeftoverService : ILeftoverService
 
     /// <summary>The stored groups, or none for a record that is empty, malformed or from a future shape.</summary>
     internal static IReadOnlyList<StoredGroup> Parse(string? json) => ParseOrNull(json) ?? [];
+
+    /// <summary>The record's text for <paramref name="stored"/>, as it is written.</summary>
+    internal static string Serialize(IReadOnlyList<StoredGroup> stored) => JsonSerializer.Serialize(stored, JsonOptions);
 
     /// <summary>The stored groups, none for an empty record, or null for one that is not a record at all.</summary>
     private static IReadOnlyList<StoredGroup>? ParseOrNull(string? json)

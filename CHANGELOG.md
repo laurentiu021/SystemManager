@@ -10,6 +10,20 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.136.203] - 2026-11-27
+
+**On a standard account, the Uninstaller now offers the leftovers it promised once SysManager is opened as
+administrator with another account's password.**
+
+### Fixed
+- After an uninstall without administrator rights, the leftovers under Program Files or ProgramData that need those
+  rights are kept for later, and each says to open the Uninstaller again as administrator to remove it. They were
+  kept in the profile of the account SysManager runs as, so on a standard account, where running as administrator
+  means typing another account's password, that session read the administrator's own list and never offered them
+  (#3335). The list is now the one in the signed-in person's own profile, read and cleared from there, with every
+  check it had before and nothing ticked. A list whose folder in that profile is reached through a link is neither
+  read nor written.
+
 ## [1.136.202] - 2026-11-27
 
 **Started as administrator with another account's password, New App Alerts now notices what the signed-in person

@@ -26,6 +26,13 @@ public interface ILeftoverEnvironment
     /// <summary><c>%LocalAppData%</c>.</summary>
     string LocalAppData { get; }
 
+    /// <summary>
+    /// The <c>%LocalAppData%</c> of the account signed in to Windows, where the record of what waits for administrator
+    /// rights is kept: <see cref="LocalAppData"/> unless SysManager runs elevated as another account, and null when
+    /// that account's folder cannot be found.
+    /// </summary>
+    string? SignedInLocalAppData { get; }
+
     /// <summary><c>%ProgramData%</c>.</summary>
     string ProgramData { get; }
 
@@ -91,6 +98,8 @@ public sealed class SystemLeftoverEnvironment : ILeftoverEnvironment
     public string RoamingAppData { get; } = Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData);
 
     public string LocalAppData { get; } = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
+
+    public string? SignedInLocalAppData { get; } = SignedInAccount.LocalAppData();
 
     public string ProgramData { get; } = Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData);
 

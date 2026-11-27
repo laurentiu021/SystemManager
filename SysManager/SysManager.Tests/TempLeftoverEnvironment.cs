@@ -28,6 +28,9 @@ public sealed class TempLeftoverEnvironment : ILeftoverEnvironment, IDisposable
 
     public string RoamingAppData { get; }
     public string LocalAppData { get; }
+
+    /// <summary>The signed-in account's <c>%LocalAppData%</c>: <see cref="LocalAppData"/> unless a test says.</summary>
+    public string? SignedInLocalAppData { get; set; }
     public string ProgramData { get; }
     public string UserProfile { get; }
     public string WindowsDirectory { get; }
@@ -65,6 +68,7 @@ public sealed class TempLeftoverEnvironment : ILeftoverEnvironment, IDisposable
         UserProfile = Sub(@"Users\me");
         RoamingAppData = Sub(@"Users\me\AppData\Roaming");
         LocalAppData = Sub(@"Users\me\AppData\Local");
+        SignedInLocalAppData = LocalAppData;
         Documents = Sub(@"Users\me\Documents");
         ProgramData = Sub("ProgramData");
         WindowsDirectory = Sub("Windows");

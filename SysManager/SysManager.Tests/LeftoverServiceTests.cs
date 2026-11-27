@@ -721,4 +721,94 @@ public sealed class LeftoverServiceTests : IDisposable
         Assert.IsType<SystemLeftoverEnvironment>(typeof(LeftoverService)
             .GetField("_env", BindingFlags.NonPublic | BindingFlags.Instance)!.GetValue(service));
     }
+
+    // ── The record belongs to the account signed in to Windows (#3335) ───────────────────────────
+    // On a standard account, running as administrator means typing another account's password, and that session read
+    // the administrator's own record, never the one the signed-in person's uninstall wrote, so the leftovers it
+    // promised to offer were never offered.
+
+    /// <summary>The signed-in person's <c>%LocalAppData%</c>, in a profile other than the session's own.</summary>
+    private string TheirLocalAppData() =>
+        TempLeftoverEnvironment.Folder(Path.Combine(_env.Root, @"Users\child\AppData\Local"));
+
+    /// <summary>Writes the record the signed-in person's uninstall left in <paramref name="localAppData"/>.</summary>
+    private static string WriteTheirRecord(string localAppData, params string[] folders)
+    {
+        var record = Path.Combine(localAppData, "SysManager", "uninstaller-leftovers.json");
+        Directory.CreateDirectory(Path.GetDirectoryName(record)!);
+        LeftoverService.StoredGroup[] groups =
+        [
+            new("Acme Notes", "Acme",
+                [.. folders.Select(f => new LeftoverService.StoredFolder(f, LeftoverConfidence.Certain, "Acme"))]),
+        ];
+        File.WriteAllText(record, LeftoverService.Serialize(groups));
+        return record;
+    }
+
+    [Fact]
+    public void TheRecord_IsKeptInTheSignedInAccountsOwnFolder()
+    {
+        var theirs = TheirLocalAppData();
+        _env.SignedInLocalAppData = theirs;
+
+        var service = Service();
+
+        Assert.Equal(Path.Combine(theirs, "SysManager", "uninstaller-leftovers.json"), service.PendingPath);
+    }
+
+    [Fact]
+    public void AnAdministratorSessionAsAnotherAccount_OffersWhatTheSignedInPersonsUninstallLeft()
+    {
+        var theirs = TheirLocalAppData();
+        var install = TempLeftoverEnvironment.Folder(Path.Combine(_env.ProgramFiles, "Acme Notes"), bytes: 7);
+        var record = WriteTheirRecord(theirs, install);
+        _env.SignedInLocalAppData = theirs;
+        _env.IsElevated = true;
+        var service = Service();
+
+        var pending = Assert.Single(service.LoadPending());
+
+        Assert.Equal([install], pending.Items.Select(i => i.Location));
+        Assert.False(pending.Items[0].IsSelected);
+
+        service.ForgetPending([install]);
+        Assert.False(File.Exists(record), "the signed-in person's record still lists what was removed");
+    }
+
+    [Fact]
+    public void ARecordFolderReachedThroughALink_IsNeitherReadNorWritten()
+    {
+        var theirs = TheirLocalAppData();
+        var install = TempLeftoverEnvironment.Folder(Path.Combine(_env.ProgramFiles, "Acme Notes"), bytes: 7);
+        var elsewhere = TempLeftoverEnvironment.Folder(Path.Combine(_env.Root, "Elsewhere"));
+        var planted = WriteTheirRecord(elsewhere, install);
+        var before = File.ReadAllBytes(planted);
+        // The account's SysManager folder is a junction into somewhere the administrator session would then write.
+        Symlinks.RequireJunction(Path.Combine(theirs, "SysManager"), Path.Combine(elsewhere, "SysManager"));
+        _env.SignedInLocalAppData = theirs;
+        _env.IsElevated = true;
+        var service = Service();
+
+        Assert.Empty(service.LoadPending());
+        service.RememberPending([new LeftoverGroup
+        {
+            AppName = "Other",
+            Items =
+            [
+                Folder(TempLeftoverEnvironment.Folder(Path.Combine(_env.ProgramFiles, "Other")), needsAdmin: true),
+            ],
+        }]);
+        service.ForgetPending([install]);
+
+        Assert.Equal(before, File.ReadAllBytes(planted));
+    }
+
+    [Fact]
+    public void WhenTheSignedInAccountsFolderCannotBeFound_TheSessionsOwnRecordIsUsed()
+    {
+        _env.SignedInLocalAppData = null;
+
+        Assert.Equal(
+            Path.Combine(_env.LocalAppData, "SysManager", "uninstaller-leftovers.json"), Service().PendingPath);
+    }
 }

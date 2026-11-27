@@ -10,6 +10,19 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.136.212] - 2026-11-27
+
+**In App Updates, pressing Upgrade selected again after some apps failed no longer reports the apps that just
+updated as failed.**
+
+### Fixed
+- After a batch, the apps that updated stayed ticked (#3354). When some failed, for example because they were
+  running, pressing **Upgrade selected** again, the only way to retry, ran winget for every app again. winget found
+  nothing newer for the ones it had just updated, so each "Updated" turned into "No applicable update found" and
+  the summary counted them as failed, as in "Updated 2 of 5 · 3 failed." for apps that were current. An app that
+  updates is now unticked, so the retry runs only the apps that did not. An app this session updated and that is
+  ticked again reads "Up to date" and is counted as already up to date, not as a failure.
+
 ## [1.136.211] - 2026-11-27
 
 **New App Alerts no longer says monitoring is active after you pressed Stop during a check.**

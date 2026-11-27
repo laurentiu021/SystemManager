@@ -584,4 +584,93 @@ public class AppUpdatesViewModelTests
 
         Assert.DoesNotContain(vm.Packages, p => p.Status == AppUpdatesViewModel.NotStartedStatus);
     }
+
+    // ---------- Upgrade selected again, after some apps failed (#3354) ----------
+    // The apps that updated stayed ticked, so the retry ran winget for them again. Each ended with
+    // UPDATE_NOT_APPLICABLE, and "Updated" turned into "No applicable update found", counted as a failure.
+
+    /// <summary>
+    /// A winget that updates every app, except <paramref name="running"/> the first time, which fails as a running app
+    /// does, and that finds nothing newer for an app it updated, as the real one does.
+    /// </summary>
+    private static IWingetService WingetWhere(string running, List<string> sent)
+    {
+        var updated = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var wasRunning = false;
+        var winget = Substitute.For<IWingetService>();
+        winget.UpgradeAsync(Arg.Any<string>(), Arg.Any<CancellationToken>()).Returns(call =>
+        {
+            var id = call.ArgAt<string>(0);
+            sent.Add(id);
+            if (updated.Contains(id)) return WingetResult.From(WingetExitCodes.UpdateNotApplicable);
+            if (id == running && !wasRunning)
+            {
+                wasRunning = true;
+                return WingetResult.From(WingetExitCodes.InstallPackageInUse);
+            }
+            updated.Add(id);
+            return WingetResult.From(0);
+        });
+        return winget;
+    }
+
+    [Fact]
+    public async Task UpgradeSelectedAgain_RunsOnlyTheAppsThatDidNotUpdate()
+    {
+        var sent = new List<string>();
+        var vm = new AppUpdatesViewModel(WingetWhere(running: "b", sent));
+        var a = Package("App A", "a");
+        var b = Package("App B", "b");
+        vm.Packages.Add(a);
+        vm.Packages.Add(b);
+        using var dialog = new DialogAnswer(confirm: true);
+
+        await vm.UpgradeSelectedCommand.ExecuteAsync(null);
+        sent.Clear();
+        await vm.UpgradeSelectedCommand.ExecuteAsync(null);
+
+        Assert.Equal(["b"], sent);
+        Assert.False(a.IsSelected);
+        Assert.Equal("Updated", a.Status);
+        Assert.Equal("Updated 1 of 1.", vm.StatusMessage);
+    }
+
+    [Fact]
+    public async Task AnAppThisSessionUpdated_TickedAgain_IsUpToDate_NotFailed()
+    {
+        var sent = new List<string>();
+        var vm = new AppUpdatesViewModel(WingetWhere(running: "b", sent));
+        var a = Package("App A", "a");
+        var b = Package("App B", "b");
+        vm.Packages.Add(a);
+        vm.Packages.Add(b);
+        using var dialog = new DialogAnswer(confirm: true);
+
+        await vm.UpgradeSelectedCommand.ExecuteAsync(null);
+        a.IsSelected = true;
+        await vm.UpgradeSelectedCommand.ExecuteAsync(null);
+
+        Assert.Equal(AppUpdatesViewModel.UpToDateStatus, a.Status);
+        Assert.Equal("Updated 1 of 2 · 1 already up to date.", vm.StatusMessage);
+    }
+
+    [Fact]
+    public async Task NoApplicableUpdate_ForAnAppThisSessionDidNotUpdate_IsStillAFailure()
+    {
+        // Only this session's own update makes "no applicable update" mean current. Otherwise winget found the app
+        // with nothing it can put on this PC, which the user asked for and did not get.
+        var winget = Substitute.For<IWingetService>();
+        winget.UpgradeAsync(Arg.Any<string>(), Arg.Any<CancellationToken>())
+            .Returns(WingetResult.From(WingetExitCodes.UpdateNotApplicable));
+        var vm = new AppUpdatesViewModel(winget);
+        var a = Package("App A", "a");
+        vm.Packages.Add(a);
+        using var dialog = new DialogAnswer(confirm: true);
+
+        await vm.UpgradeSelectedCommand.ExecuteAsync(null);
+
+        Assert.Equal("No applicable update found", a.Status);
+        Assert.Equal("Updated 0 of 1 · 1 failed.", vm.StatusMessage);
+        Assert.True(a.IsSelected);
+    }
 }

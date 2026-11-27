@@ -101,27 +101,36 @@ public sealed class SpeedTestHistoryService : IDisposable
         var json = await StoreFile.ReadTextAsync(_historyPath, ct).ConfigureAwait(false);
         if (json is null) return (null, false);
         if (json.Length == 0) return ([], false);
+        return ParseHistory(json) is { } results ? (results, false) : ([], true);
+    }
+
+    /// <summary>The results <paramref name="json"/> holds, or null when it is not a history.</summary>
+    private static List<SpeedTestResult>? ParseHistory(string json)
+    {
         try
         {
             var entries = JsonSerializer.Deserialize<List<SpeedTestHistoryEntry>>(json, JsonOpts);
-            if (entries is null) return ([], false);
+            if (entries is null) return [];
 
             // A null element is valid JSON too, and reading its engine threw on every load and every save, so each
             // finished test failed to be saved (#2749). It is dropped and the rest load.
-            return (entries.Where(e => e is not null).Select(e => new SpeedTestResult(
+            return entries.Where(e => e is not null).Select(e => new SpeedTestResult(
                 e.Engine ?? "HTTP",
                 e.DownloadMbps,
                 e.UploadMbps,
                 e.PingMs,
                 e.Server ?? "",
-                e.CompletedAt)).ToList(), false);
+                e.CompletedAt)).ToList();
         }
         catch (JsonException ex)
         {
             Log.Warning(ex, "Failed to parse speed test history JSON");
-            return ([], true);
+            return null;
         }
     }
+
+    /// <summary>Whether <paramref name="json"/> is a history the service would load, as a profile import asks.</summary>
+    internal static bool Reads(string json) => ParseHistory(json) is not null;
 
     /// <summary>
     /// Saves a new result, appending to existing history. Trims to

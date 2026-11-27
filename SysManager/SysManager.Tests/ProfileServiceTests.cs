@@ -150,14 +150,15 @@ public class ProfileServiceTests : IDisposable
     [Fact]
     public void ApplySections_WritesKnownFiles()
     {
+        var theme = ThemeJson();
         var sections = new[]
         {
-            new ConfigSection("theme", "Theme & appearance", "theme.json", "{\"preset\":\"warm-ember\"}"),
+            new ConfigSection("theme", "Theme & appearance", "theme.json", theme),
         };
         var applied = _svc.ApplySections(sections);
 
         Assert.Equal(1, applied);
-        Assert.Equal("{\"preset\":\"warm-ember\"}", File.ReadAllText(Path.Combine(_dir, "theme.json")));
+        Assert.Equal(theme, File.ReadAllText(Path.Combine(_dir, "theme.json")));
     }
 
     [Fact]
@@ -167,7 +168,7 @@ public class ProfileServiceTests : IDisposable
         var sections = new[]
         {
             new ConfigSection("rogue", "Rogue", "..\\..\\evil.json", "should-not-write"),
-            new ConfigSection("theme", "Theme", "theme.json", "{\"ok\":true}"),
+            new ConfigSection("theme", "Theme", "theme.json", ThemeJson()),
         };
         var applied = _svc.ApplySections(sections);
 
@@ -204,7 +205,7 @@ public class ProfileServiceTests : IDisposable
     [InlineData("")]
     public void DisplayNameOf_NamesAKey_ExactlyWhenAnImportWritesIt(string key)
     {
-        var applied = _svc.ApplySections([new ConfigSection(key, "Theme & appearance", "theme.json", "{}")]);
+        var applied = _svc.ApplySections([new ConfigSection(key, "Theme & appearance", "theme.json", ThemeJson())]);
 
         Assert.Equal(applied == 1, ProfileService.DisplayNameOf(key) is not null);
     }
@@ -224,8 +225,8 @@ public class ProfileServiceTests : IDisposable
         // Apply both sections.
         svc.ApplySections(
         [
-            new ConfigSection("theme", "Theme", "theme.json", "{\"preset\":\"midnight\"}"),
-            new ConfigSection("speedtest", "Speed-test history", "speedtest-history.json", "[1,2]"),
+            new ConfigSection("theme", "Theme", "theme.json", ThemeJson()),
+            new ConfigSection("speedtest", "Speed-test history", "speedtest-history.json", "[]"),
         ]);
 
         // theme.json must land in Roaming; speedtest-history.json in Local.
@@ -236,7 +237,7 @@ public class ProfileServiceTests : IDisposable
 
         // And export reads them back from the correct bases.
         var sections = svc.AvailableSections();
-        Assert.Contains(sections, s => s.Key == "theme" && s.Json.Contains("midnight"));
+        Assert.Contains(sections, s => s.Key == "theme" && s.Json.Contains("dark-forest"));
         Assert.Contains(sections, s => s.Key == "speedtest");
     }
 
@@ -649,5 +650,101 @@ public class ProfileServiceTests : IDisposable
 
         Assert.NotNull(choices);
         Assert.Equal(["tips"], choices!.Protections.Keys);
+    }
+
+    // ---------- an import writes only what the owning service reads, and keeps what it replaces (#3450) ----------
+    // Every section but gaming was written straight over its file, unread and with no copy kept, so a section edited by
+    // hand, copied from a damaged file or written by a newer format left this PC's history, presets or settings in a
+    // file their own service could not read, and the import still counted it.
+
+    /// <summary>A theme file as <see cref="ThemeService"/> writes one.</summary>
+    internal static string ThemeJson()
+    {
+        var dir = Directory.CreateTempSubdirectory("smtest_profile_theme_").FullName;
+        try
+        {
+            new ThemeService(dir).SetPreset("dark-forest");
+            return File.ReadAllText(Path.Combine(dir, ThemeService.FileName));
+        }
+        finally
+        {
+            Directory.Delete(dir, recursive: true);
+        }
+    }
+
+    /// <summary>Each file section's key and file, with content its own service writes.</summary>
+    public static TheoryData<string, string, string> ReadableSections() => new()
+    {
+        { "theme", ThemeService.FileName, ThemeJson() },
+        { "speedtest", SpeedTestHistoryService.FileName, "[]" },
+        { "updatecheck", UpdateCheckPreferenceService.FileName,
+            UpdateCheckPreferenceService.Serialize(UpdateCheckPreferenceService.Default) },
+        { "darkmode", WindowsThemeService.FileName,
+            System.Text.Json.JsonSerializer.Serialize(new DarkModeSchedule()) },
+        { "volume", VolumePresetService.FileName, VolumePresetService.Serialize([]) },
+        { "closebehaviour", ClosePreferenceService.FileName,
+            ClosePreferenceService.Serialize(CloseBehavior.MinimizeToTray) },
+        { "standby", StandbyPreferenceService.FileName,
+            StandbyPreferenceService.Serialize(StandbyPreferenceService.Default) },
+        { "appicons", AppIconService.FileName, "{\"NetworkFetchEnabled\":true}" },
+    };
+
+    [Theory]
+    [MemberData(nameof(ReadableSections))]
+    public void ApplySections_WritesASectionItsOwnServiceReads(string key, string fileName, string content)
+    {
+        var applied = _svc.ApplySections([new ConfigSection(key, key, fileName, content)]);
+
+        Assert.Equal(1, applied);
+        Assert.Equal(content, File.ReadAllText(Path.Combine(_dir, fileName)));
+    }
+
+    [Theory]
+    [MemberData(nameof(ReadableSections))]
+    public void ApplySections_SkipsASectionItsOwnServiceCannotRead_AndLeavesTheFileAsItWas(
+        string key, string fileName, string content)
+    {
+        WriteConfig(fileName, content);
+
+        foreach (var bad in new[] { "this is not JSON", "{\"half\": ", "   " })
+        {
+            var applied = _svc.ApplySections([new ConfigSection(key, key, fileName, bad)]);
+
+            Assert.Equal(0, applied);
+            Assert.Equal(content, File.ReadAllText(Path.Combine(_dir, fileName)));
+        }
+        Assert.False(File.Exists(Path.Combine(_dir, fileName + ProfileService.BeforeImportSuffix)));
+    }
+
+    [Fact]
+    public async Task AMalformedSpeedTestSection_LeavesTheHistory_AndIsNotCounted()
+    {
+        var history = new SpeedTestHistoryService(_dir);
+        Assert.True(await history.SaveAsync(new SpeedTestResult("HTTP", 100, 20, 9, "Example", DateTime.Now)));
+        var before = await history.LoadAsync();
+
+        var applied = _svc.ApplySections(
+            [new ConfigSection("speedtest", "Speed-test history", "speedtest-history.json", "{\"not\":1}")]);
+
+        Assert.Equal(0, applied);
+        var after = await new SpeedTestHistoryService(_dir).LoadAsync();
+        Assert.NotNull(after);
+        Assert.Equal(before, after);
+    }
+
+    [Fact]
+    public void ApplySections_KeepsTheFileItReplaces_BesideIt()
+    {
+        var mine = VolumePresetService.Serialize([]);
+        WriteConfig(VolumePresetService.FileName, mine);
+
+        _svc.ApplySections([new ConfigSection("volume", "Volume presets", VolumePresetService.FileName, "[ ]")]);
+        _svc.ApplySections([new ConfigSection("theme", "Theme", ThemeService.FileName, ThemeJson())]);
+
+        Assert.Equal("[ ]", File.ReadAllText(Path.Combine(_dir, VolumePresetService.FileName)));
+        Assert.Equal(mine,
+            File.ReadAllText(Path.Combine(_dir, VolumePresetService.FileName + ProfileService.BeforeImportSuffix)));
+        // Nothing was there to keep for the theme.
+        Assert.False(File.Exists(Path.Combine(_dir, ThemeService.FileName + ProfileService.BeforeImportSuffix)));
     }
 }

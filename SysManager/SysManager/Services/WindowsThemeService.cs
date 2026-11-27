@@ -110,6 +110,14 @@ public sealed partial class WindowsThemeService : IWindowsThemeService
         _unparsableAtLoad = false;
         if (string.IsNullOrWhiteSpace(json)) return new DarkModeSchedule();
 
+        if (TryParseSchedule(json) is { } schedule) return schedule;
+        _unparsableAtLoad = true;
+        return new DarkModeSchedule();
+    }
+
+    /// <summary>The schedule <paramref name="json"/> holds, or null when it is not a schedule.</summary>
+    internal static DarkModeSchedule? TryParseSchedule(string json)
+    {
         try
         {
             return JsonSerializer.Deserialize<DarkModeSchedule>(json) ?? new DarkModeSchedule();
@@ -117,8 +125,7 @@ public sealed partial class WindowsThemeService : IWindowsThemeService
         catch (JsonException ex)
         {
             Log.Debug("Dark-mode schedule parse failed: {Error}", ex.Message);
-            _unparsableAtLoad = true;
-            return new DarkModeSchedule();
+            return null;
         }
     }
 

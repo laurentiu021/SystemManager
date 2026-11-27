@@ -96,24 +96,38 @@ public sealed class ProfileService
     /// <item><c>privacy-ledger.json</c> — what THIS PC's privacy values held before SysManager first wrote them
     ///   (#2778). Carried over, turning a switch off on another PC would put back this one's settings.</item>
     /// </list>
+    /// <para><c>Reads</c> is the owning service's own reader: an import writes only a section it would load, so a
+    /// section edited by hand, copied from a damaged file or written by a newer format never replaces the file this
+    /// PC has (#3450). The gaming section's service checks its own.</para>
     /// </summary>
-    private static readonly (string Key, string DisplayName, string FileName, Base Base)[] Catalog =
+    private static readonly (string Key, string DisplayName, string FileName, Base Base, Func<string, bool> Reads)[]
+        Catalog =
     [
-        ("theme", "Theme & appearance", ThemeService.FileName, Base.Roaming),
-        ("speedtest", "Speed-test history", SpeedTestHistoryService.FileName, Base.Local),
-        ("updatecheck", "Update-check preference", UpdateCheckPreferenceService.FileName, Base.Roaming),
-        ("darkmode", "Dark-mode schedule", WindowsThemeService.FileName, Base.Roaming),
-        (GamingSectionKey, "Gaming profiles", GamingProfileService.FileName, Base.Local),
-        ("volume", "Volume presets", VolumePresetService.FileName, Base.Local),
-        ("closebehaviour", "Close-button behaviour", ClosePreferenceService.FileName, Base.Local),
-        ("standby", "Standby-memory preference", StandbyPreferenceService.FileName, Base.Local),
+        ("theme", "Theme & appearance", ThemeService.FileName, Base.Roaming, ThemeService.Reads),
+        ("speedtest", "Speed-test history", SpeedTestHistoryService.FileName, Base.Local,
+            SpeedTestHistoryService.Reads),
+        ("updatecheck", "Update-check preference", UpdateCheckPreferenceService.FileName, Base.Roaming,
+            json => UpdateCheckPreferenceService.TryParse(json) is not null),
+        ("darkmode", "Dark-mode schedule", WindowsThemeService.FileName, Base.Roaming,
+            json => WindowsThemeService.TryParseSchedule(json) is not null),
+        (GamingSectionKey, "Gaming profiles", GamingProfileService.FileName, Base.Local, _ => true),
+        ("volume", "Volume presets", VolumePresetService.FileName, Base.Local,
+            json => VolumePresetService.TryParse(json) is not null),
+        ("closebehaviour", "Close-button behaviour", ClosePreferenceService.FileName, Base.Local,
+            json => ClosePreferenceService.TryParse(json) is not null),
+        ("standby", "Standby-memory preference", StandbyPreferenceService.FileName, Base.Local,
+            json => StandbyPreferenceService.TryParse(json) is not null),
         // AppIconService → Local. This is a consent bit, not a cache: it records whether the Bulk
         // Installer may fetch icons from the web, and it defaults to off. It was the only user
         // preference the app persists that a profile did not carry, so exporting on one PC and
         // importing on another silently reset the choice — the same shape as "updatecheck", which is
         // also a network-consent preference and has always been carried.
-        ("appicons", "App-icon fetching", AppIconService.FileName, Base.Local),
+        ("appicons", "App-icon fetching", AppIconService.FileName, Base.Local,
+            json => AppIconService.TryParse(json) is not null),
     ];
+
+    /// <summary>What a file an import replaces is kept as, beside it, so that import can be undone.</summary>
+    internal const string BeforeImportSuffix = ".before-import";
 
     /// <summary>
     /// Creates the service. When <paramref name="configDir"/> is given (tests), BOTH bases
@@ -151,7 +165,7 @@ public sealed class ProfileService
     {
         List<ConfigSection> sections = [];
         // A section is exported as the owning service wrote it.
-        foreach (var (key, display, fileName, baseDir) in Catalog)
+        foreach (var (key, display, fileName, baseDir, _) in Catalog)
         {
             var path = Path.Combine(DirFor(baseDir), fileName);
             if (!File.Exists(path)) continue;
@@ -323,6 +337,11 @@ public sealed class ProfileService
     /// can't drop arbitrary files), and each file lands inside the config directory.
     /// Returns the number of sections applied.
     /// </summary>
+    /// <remarks>
+    /// A section is written only when its owning service's own reader takes it, and the file it replaces is copied to
+    /// <see cref="BeforeImportSuffix"/> beside it first. A section was written unread and unkept, so one that did not
+    /// read left this PC's own file replaced by one its service could not use, past getting back (#3450).
+    /// </remarks>
     public int ApplySections(IEnumerable<ConfigSection> sections)
     {
         var applied = 0;
@@ -344,6 +363,11 @@ public sealed class ProfileService
             }
 
             var content = section.Json;
+            if (string.IsNullOrWhiteSpace(content) || !known.Reads(content))
+            {
+                Log.Warning("Profile: skipping section '{Key}', which its own tab could not read", section.Key);
+                continue;
+            }
 
             // Always use the catalog's own file name + base — never a path from the
             // (untrusted) profile — and write to the SAME folder the owning service reads.
@@ -352,6 +376,7 @@ public sealed class ProfileService
             var path = Path.Combine(dir, known.FileName);
             try
             {
+                if (File.Exists(path)) File.Copy(path, path + BeforeImportSuffix, overwrite: true);
                 AtomicFile.WriteAllText(path, content, new UTF8Encoding(encoderShouldEmitUTF8Identifier: false));
                 applied++;
             }

@@ -607,4 +607,42 @@ public class AppAlertsViewModelTests
             Directory.Delete(theirs, recursive: true);
         }
     }
+
+    // ---------- Stop pressed during the F5 check (#3418) ----------
+
+    /// <summary>
+    /// A check that ends after Stop was pressed leaves the status line saying monitoring stopped.
+    /// </summary>
+    /// <remarks>
+    /// Stop stays clickable while the F5 check reads every uninstall entry. The check then wrote "Checked just now — no
+    /// new installations. Monitoring active." over Stop's line without looking again, so the tab said it was watching
+    /// for installs while nothing ran.
+    /// </remarks>
+    [Fact]
+    public async Task ACheckThatEndsAfterStop_LeavesTheLineSayingMonitoringStopped()
+    {
+        var reads = 0;
+        using var checking = new ManualResetEventSlim();
+        using var release = new ManualResetEventSlim();
+        using var vm = new AppAlertsViewModel(new AppAlertService(() =>
+        {
+            // The first read is the baseline. The second is the check, held until the test has pressed Stop.
+            if (Interlocked.Increment(ref reads) > 1)
+            {
+                checking.Set();
+                Assert.True(release.Wait(TimeSpan.FromSeconds(30)), "the test never released the check");
+            }
+            return new([], Complete: true);
+        }), NoHistory());
+        await vm.StartMonitoringCommand.ExecuteAsync(null);
+
+        var check = vm.ScanForNewAppsCommand.ExecuteAsync(null);
+        Assert.True(checking.Wait(TimeSpan.FromSeconds(30)), "the check never read the uninstall entries");
+        vm.StopMonitoringCommand.Execute(null);
+        release.Set();
+        await check;
+
+        Assert.False(vm.IsMonitoring);
+        Assert.Equal("Monitoring stopped. 0 alerts recorded.", vm.MonitorStatus);
+    }
 }

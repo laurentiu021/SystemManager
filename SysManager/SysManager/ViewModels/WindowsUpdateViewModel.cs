@@ -573,10 +573,7 @@ public sealed partial class WindowsUpdateViewModel : ViewModelBase
             Updates.ReplaceWith(fresh);
 
             UpdateCount = Updates.Count;
-            // The header checkbox follows the rows, which keep what the user unticked, without re-applying to them.
-            _suppressAllSelected = true;
-            AllSelected = UpdateCount > 0 && Updates.All(u => u.IsSelected);
-            _suppressAllSelected = false;
+            HeaderFollowsTheRows();
             TableSummary = UpdateCount > 0
                 ? $"{UpdateCount} updates found."
                 : "No updates available.";
@@ -792,7 +789,39 @@ public sealed partial class WindowsUpdateViewModel : ViewModelBase
             MarkUnfinished(selected, "Not applied");
             Log.Warning(ex, "WUA install failed");
         }
-        finally { IsBusy = false; IsProgressIndeterminate = false; }
+        finally
+        {
+            UntickInstalled(selected);
+            IsBusy = false;
+            IsProgressIndeterminate = false;
+        }
+    }
+
+    /// <summary>
+    /// Unticks each row of <paramref name="selected"/> the install put in, which keeps saying so, and has the header
+    /// checkbox follow.
+    /// </summary>
+    /// <remarks>
+    /// Left ticked, Install selected again, the retry after an update failed, counted them in its question and sent
+    /// them back to the agent, whose search for updates not yet installed no longer had them: each was marked "Not
+    /// applied", and one that needed a restart lost the note (#3415).
+    /// </remarks>
+    private void UntickInstalled(IEnumerable<UpdateEntry> selected)
+    {
+        foreach (var u in selected.Where(s => s.Status.StartsWith("Installed", StringComparison.Ordinal)))
+            u.IsSelected = false;
+        HeaderFollowsTheRows();
+    }
+
+    /// <summary>
+    /// Sets the header checkbox to whether every row is ticked, without applying it to them: the rows keep what the
+    /// user unticked.
+    /// </summary>
+    private void HeaderFollowsTheRows()
+    {
+        _suppressAllSelected = true;
+        AllSelected = Updates.Count > 0 && Updates.All(u => u.IsSelected);
+        _suppressAllSelected = false;
     }
 
     /// <summary>

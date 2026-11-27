@@ -17,9 +17,9 @@ public class HealthDiagnosticTests
         Assert.Equal("Waiting for data…", d.Headline);
         Assert.Equal("", d.Detail);
         Assert.Equal(StatusColors.Neutral, d.ColorHex);
-        Assert.Equal(0, d.WorstLossPercent);
-        Assert.Equal(0, d.WorstJitterMs);
-        Assert.Equal(0, d.AveragePingMs);
+        Assert.Null(d.WorstLossPercent);
+        Assert.Null(d.WorstJitterMs);
+        Assert.Null(d.AveragePingMs);
     }
 
     [Fact]

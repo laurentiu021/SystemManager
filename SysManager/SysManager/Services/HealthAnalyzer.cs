@@ -2,7 +2,6 @@
 // Author: laurentiu021 · https://github.com/laurentiu021/SystemManager
 // License: MIT
 
-using System.Globalization;
 using SysManager.Helpers;
 using SysManager.Models;
 
@@ -57,10 +56,12 @@ public static class HealthAnalyzer
         }
 
         // Overall numbers for the pills.
+        // A target with no reply has no average, and one with fewer than two no jitter. Those are left out, and a pill
+        // none of them fed stays unmeasured: it read 0 ms, a perfect ping, while every ping timed out (#3385).
         diag.WorstLossPercent = list.Max(m => m.LossPercent);
-        diag.WorstJitterMs = list.Max(m => m.JitterMs ?? 0);
+        diag.WorstJitterMs = list.Max(m => m.JitterMs);
         var pings = list.Where(m => m.AverageMs.HasValue).Select(m => m.AverageMs!.Value).ToList();
-        diag.AveragePingMs = pings.Count > 0 ? pings.Average() : 0;
+        diag.AveragePingMs = pings.Count > 0 ? pings.Average() : null;
 
         // What tripped in each layer, or null when nothing in it did. A layer with no targets in it was not measured,
         // which is not clean: the game presets had no DNS reference, and the verdict called DNS and the gateway clean.
@@ -80,7 +81,8 @@ public static class HealthAnalyzer
         {
             diag.Verdict = HealthVerdict.Good;
             diag.Headline = "Connection is healthy";
-            diag.Detail = string.Create(CultureInfo.InvariantCulture, $"Avg {diag.AveragePingMs:F0} ms · {diag.WorstLossPercent:F1}% worst loss · {diag.WorstJitterMs:F0} ms jitter.");
+            diag.Detail = $"Avg {diag.AveragePingDisplay} · {diag.WorstLossDisplay} worst loss · "
+                          + $"{diag.WorstJitterDisplay} jitter.";
             diag.ColorHex = StatusColors.Good;
             return diag;
         }

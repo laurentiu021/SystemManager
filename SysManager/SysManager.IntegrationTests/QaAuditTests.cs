@@ -302,7 +302,7 @@ public class QaAuditTests
             new HealthAnalyzer.TargetMetric("a", TargetRole.Gateway, null, null, 0, 10),
             new HealthAnalyzer.TargetMetric("b", TargetRole.PublicDns, null, null, 0, 10),
         });
-        Assert.Equal(0, diag.AveragePingMs);
+        Assert.Null(diag.AveragePingMs);
     }
 
     // ==================================================================

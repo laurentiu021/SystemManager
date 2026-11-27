@@ -429,9 +429,9 @@ public class HealthAnalyzerTests
         Assert.Equal(HealthVerdict.Unknown, d.Verdict);
         Assert.False(string.IsNullOrWhiteSpace(d.Headline));
         Assert.Equal(StatusColors.Neutral, d.ColorHex);
-        Assert.Equal(0, d.WorstLossPercent);
-        Assert.Equal(0, d.WorstJitterMs);
-        Assert.Equal(0, d.AveragePingMs);
+        Assert.Null(d.WorstLossPercent);
+        Assert.Null(d.WorstJitterMs);
+        Assert.Null(d.AveragePingMs);
     }
 
     [Fact]

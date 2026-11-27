@@ -41,6 +41,7 @@
             <RowDefinition Height="Auto"/>
             <RowDefinition Height="Auto"/>
             <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
             <RowDefinition Height="*"/>
             <RowDefinition Height="Auto"/>
         </Grid.RowDefinitions>
@@ -52,8 +53,13 @@
                        Style="{StaticResource Subtle}" Margin="0,4,0,0"/>
         </StackPanel>
 
+        <!-- Elevation banner, as on Boot Analyzer: health, wear and the capacities need administrator rights (#3423). -->
+        <v:AdminBanner Grid.Row="1" Margin="0,0,0,12"
+                       NotElevatedMessage="Battery health, wear and capacities are read from a part of Windows that answers only an administrator."
+                       ElevatedMessage="Running as administrator — battery health, wear and capacities can be read."/>
+
         <!-- Toolbar -->
-        <Border Grid.Row="1" Style="{StaticResource Card}" Margin="0,0,0,12" Padding="12">
+        <Border Grid.Row="2" Style="{StaticResource Card}" Margin="0,0,0,12" Padding="12">
             <WrapPanel>
                 <Button Content="Refresh" Command="{Binding RefreshCommand}"
                         Style="{StaticResource SecondaryButton}" Margin="0,0,8,0"/>
@@ -61,12 +67,12 @@
         </Border>
 
         <!-- Summary -->
-        <Border Grid.Row="2" Style="{StaticResource Card}" Margin="0,0,0,12" Padding="12">
+        <Border Grid.Row="3" Style="{StaticResource Card}" Margin="0,0,0,12" Padding="12">
             <TextBlock Text="{Binding Summary}" FontWeight="SemiBold" Style="{StaticResource Body}"/>
         </Border>
 
         <!-- Battery details -->
-        <Border Grid.Row="3" Style="{StaticResource Card}" Padding="20">
+        <Border Grid.Row="4" Style="{StaticResource Card}" Padding="20">
             <ScrollViewer VerticalScrollBarVisibility="Auto">
                 <StackPanel>
                     <!-- No battery message, or that the battery could not be read (#2503) -->
@@ -138,12 +144,12 @@
 
                         <!-- Why the figures are missing. Capacity comes from root\WMI, which needs
                              elevation; without it the app previously showed "-1%" as if it were a
-                             measurement. Explains the gap and what unlocks it, consistent with how
-                             other tabs describe their admin requirement. -->
+                             measurement. Explains the gap and what unlocks it, and as administrator that
+                             Windows did not report them, which elevation cannot change (#3423). -->
                         <Border Style="{StaticResource Card}" Padding="12" Margin="0,0,0,12"
                                 Visibility="{Binding Battery.HasCapacityData, Converter={StaticResource FlexVis}, ConverterParameter=Inverse, Mode=OneWay}">
                             <TextBlock TextWrapping="Wrap" Style="{StaticResource Subtle}"
-                                       Text="Battery health and wear could not be read. SysManager reads them, and the design capacity, full charge capacity and cycle count below, from a part of Windows that only answers an elevated process, so they need it to be running as administrator. The rest of the page, including the capacity history, works without it."/>
+                                       Text="{Binding MissingCapacityText}"/>
                         </Border>
 
                         <!-- Capacity over time (#1513). "Health 87%" alone cannot be read as fine or failing; how much
@@ -248,6 +254,6 @@
         </Border>
 
         <!-- Status bar -->
-        <v:StatusFooter Grid.Row="4" Margin="0,8,0,0" ProgressName="Refresh progress"/>
+        <v:StatusFooter Grid.Row="5" Margin="0,8,0,0" ProgressName="Refresh progress"/>
     </helpers:PageGrid>
 </UserControl>

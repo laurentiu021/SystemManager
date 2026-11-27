@@ -2,6 +2,7 @@
 // Author: laurentiu021 · https://github.com/laurentiu021/SystemManager
 // License: MIT
 
+using System.Globalization;
 using CommunityToolkit.Mvvm.ComponentModel;
 using SysManager.Helpers;
 
@@ -34,7 +35,24 @@ public sealed partial class HealthDiagnostic : ObservableObject
     [ObservableProperty] private string _colorHex = StatusColors.Neutral;
 
     // Rolled-up metrics for the status pills.
-    [ObservableProperty] private double _worstLossPercent;
-    [ObservableProperty] private double _worstJitterMs;
-    [ObservableProperty] private double _averagePingMs;
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(WorstLossDisplay))]
+    private double _worstLossPercent;
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(WorstJitterDisplay))]
+    private double _worstJitterMs;
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(AveragePingDisplay))]
+    private double _averagePingMs;
+
+    /// <summary>The average ping as the AVG PING pill shows it.</summary>
+    public string AveragePingDisplay => string.Create(CultureInfo.InvariantCulture, $"{AveragePingMs:F0} ms");
+
+    /// <summary>The worst loss as the WORST LOSS pill shows it.</summary>
+    public string WorstLossDisplay => string.Create(CultureInfo.InvariantCulture, $"{WorstLossPercent:F1}%");
+
+    /// <summary>The worst jitter as the WORST JITTER pill shows it.</summary>
+    public string WorstJitterDisplay => string.Create(CultureInfo.InvariantCulture, $"{WorstJitterMs:F0} ms");
 }

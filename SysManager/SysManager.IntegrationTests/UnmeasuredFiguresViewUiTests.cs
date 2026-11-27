@@ -12,7 +12,8 @@ using SysManager.Views;
 namespace SysManager.IntegrationTests;
 
 /// <summary>
-/// System Health's disk card and Ping's target rows really show "—" for a figure that was not measured (#2600).
+/// System Health's disk card, Ping's target rows and Ping's verdict card really show "—" for a figure that was not
+/// measured (#2600, #3385).
 /// </summary>
 /// <remarks>
 /// The unit tests prove the models format it; this proves the views show it, the way <see cref="SpeedTestViewUiTests"/>
@@ -36,6 +37,16 @@ public sealed class UnmeasuredFiguresViewUiTests
     private sealed class TargetList
     {
         public ObservableCollection<PingTarget> Targets { get; } = [];
+    }
+
+    private sealed class PingVerdict(HealthDiagnostic health)
+    {
+        public VerdictState Shared { get; } = new(health);
+    }
+
+    private sealed class VerdictState(HealthDiagnostic health)
+    {
+        public HealthDiagnostic Health { get; } = health;
     }
 
     [Fact]
@@ -96,6 +107,46 @@ public sealed class UnmeasuredFiguresViewUiTests
             Assert.Equal("—", Before(texts, "LATENCY"));
             Assert.Equal("—", Before(texts, "AVG"));
             Assert.Equal("—", Before(texts, "JITTER"));
+        });
+    }
+
+    /// <summary>
+    /// Ping's verdict card shows "—" for its three figures before any sample, and for the average and the jitter when
+    /// no target got a reply, rather than 0 ms, the best reading there is (#3385).
+    /// </summary>
+    [Fact]
+    public void TheVerdictCard_ShowsADash_ForWhatWasNotMeasured()
+    {
+        var waiting = new PingVerdict(new HealthDiagnostic());
+        var noReply = new PingVerdict(Services.HealthAnalyzer.Analyze(
+            [new Services.HealthAnalyzer.TargetMetric("Router", TargetRole.Gateway, null, null, 100, 5)]));
+
+        StaHelper.Run(() =>
+        {
+            var before = TextsOf(Laid<PingView>(waiting));
+            Assert.Equal("—", After(before, "AVG PING"));
+            Assert.Equal("—", After(before, "WORST LOSS"));
+            Assert.Equal("—", After(before, "WORST JITTER"));
+
+            var timedOut = TextsOf(Laid<PingView>(noReply));
+            Assert.Equal("—", After(timedOut, "AVG PING"));
+            Assert.Equal("100.0%", After(timedOut, "WORST LOSS"));
+            Assert.Equal("—", After(timedOut, "WORST JITTER"));
+        });
+    }
+
+    [Fact]
+    public void TheVerdictCard_ShowsWhatWasMeasured()
+    {
+        var measured = new PingVerdict(Services.HealthAnalyzer.Analyze(
+            [new Services.HealthAnalyzer.TargetMetric("Router", TargetRole.Gateway, 4.4, 1.2, 0, 30)]));
+
+        StaHelper.Run(() =>
+        {
+            var texts = TextsOf(Laid<PingView>(measured));
+            Assert.Equal("4 ms", After(texts, "AVG PING"));
+            Assert.Equal("0.0%", After(texts, "WORST LOSS"));
+            Assert.Equal("1 ms", After(texts, "WORST JITTER"));
         });
     }
 

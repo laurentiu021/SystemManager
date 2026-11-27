@@ -10,6 +10,18 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.136.213] - 2026-11-27
+
+**Ping's summary card shows "—" for a figure it could not measure, instead of a perfect 0 ms.**
+
+### Fixed
+- When every ping timed out, for example with Wi-Fi off, Ping's summary card said "Problem on your local network"
+  next to AVG PING 0 ms and WORST JITTER 0 ms, the best readings there are (#3385). Before Start, and after Clear,
+  it showed 0 ms, 0.0% and 0 ms under "Waiting for data…". The target rows below already showed "—" for what was not
+  measured (1.127.7); the three figures at the top of the card did not. Now the average reads "—" when no reply came
+  back, the worst jitter reads "—" until a target has the two replies a jitter needs, and the worst loss reads "—"
+  before the first ping.
+
 ## [1.136.212] - 2026-11-27
 
 **In App Updates, pressing Upgrade selected again after some apps failed no longer reports the apps that just

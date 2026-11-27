@@ -624,6 +624,71 @@ public sealed class WindowsUpdateViewModelTests : IDisposable
         }
     }
 
+    // ---------- Install selected again leaves the updates that went in alone (#3415) ----------
+
+    /// <summary>
+    /// The second press of Install selected, the retry after one update failed, installs only what is still to go in,
+    /// and the updates the first one installed keep saying so.
+    /// </summary>
+    /// <remarks>
+    /// The installed rows stayed ticked, so the retry counted them in its question and passed them to the agent, whose
+    /// search for updates not yet installed no longer had them: each was marked "Not applied", and the one that needed
+    /// a restart lost the note. The stand-in agent answers as the real one does.
+    /// </remarks>
+    [Fact]
+    public async Task InstallingAgain_LeavesTheUpdatesThatWentInAlone()
+    {
+        var installed = new HashSet<string>();
+        var sent = new List<string[]>();
+        var wu = Substitute.For<IWindowsUpdateService>();
+        wu.InstallAsync(
+                Arg.Any<IReadOnlyList<UpdateEntry>>(), Arg.Any<IProgress<string>?>(),
+                Arg.Any<IProgress<(UpdateEntry Entry, string Status)>?>(), Arg.Any<CancellationToken>())
+            .Returns(ci =>
+            {
+                var rows = ci.ArgAt<IReadOnlyList<UpdateEntry>>(0);
+                var statuses = ci.ArgAt<IProgress<(UpdateEntry Entry, string Status)>?>(2);
+                sent.Add([.. rows.Select(r => r.UpdateId)]);
+                var first = sent.Count == 1;
+                int went = 0, failedNow = 0;
+                foreach (var row in rows)
+                {
+                    if (installed.Contains(row.UpdateId))
+                    {
+                        statuses?.Report((row, "Not applied"));
+                    }
+                    else if (first && row.UpdateId == "b")
+                    {
+                        statuses?.Report((row, "Install failed"));
+                        failedNow++;
+                    }
+                    else
+                    {
+                        statuses?.Report((row, first ? "Installed (reboot required)" : "Installed"));
+                        installed.Add(row.UpdateId);
+                        went++;
+                    }
+                }
+                return Task.FromResult(new InstallReport(went, failedNow, first));
+            });
+        var vm = new WindowsUpdateViewModel(Substitute.For<IPowerShellRunner>(), wu, Policy(), () => true);
+        var a = new UpdateEntry { Title = "Update a", UpdateId = "a", IsSelected = true };
+        var b = new UpdateEntry { Title = "Update b", UpdateId = "b", IsSelected = true };
+        vm.Updates.Add(a);
+        vm.Updates.Add(b);
+        using var dialog = new DialogAnswer(confirm: true);
+
+        await vm.InstallUpdatesCommand.ExecuteAsync(null);
+        await vm.InstallUpdatesCommand.ExecuteAsync(null);
+
+        Assert.Equal(["b"], sent[1]);
+        Assert.StartsWith(
+            "Confirm Windows Update\nInstall 1 selected", dialog.Messages.Last(), StringComparison.Ordinal);
+        Assert.Equal("Installed 1/1.", vm.StatusMessage);
+        Assert.Equal(["Installed (reboot required)", "Installed"], vm.Updates.Select(u => u.Status));
+        Assert.False(a.IsSelected);
+    }
+
     [Theory]
     [InlineData(2, 0, false, 0, "Installed 2/2.")]
     [InlineData(1, 1, false, 0, "Installed 1/2. Failed: 1. Not applied: 0.")]

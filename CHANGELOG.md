@@ -10,6 +10,19 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.136.207] - 2026-11-27
+
+**Battery Health has the Run as administrator banner the other pages that need it have, and stops blaming missing
+figures on elevation when SysManager already runs as administrator.**
+
+### Fixed
+- Battery Health said that health, wear, the capacities and the cycle count need SysManager to run as administrator,
+  in the middle of the page and in its summary, but it was the one page saying so without the admin banner, so there
+  was no way to elevate from it (#3423). The banner is now under its header, as on Boot Analyzer.
+- Run as administrator, it still said "Health: requires elevation" when the battery's driver reports no capacities,
+  as on some laptops, UPS units and virtual machines, so relaunching changed nothing. As administrator it now says
+  Windows did not report this battery's capacities, and the summary reads "Health: not reported".
+
 ## [1.136.206] - 2026-11-27
 
 **Four buttons that delete for good now say so to a screen reader, and three of them are red like the app's other

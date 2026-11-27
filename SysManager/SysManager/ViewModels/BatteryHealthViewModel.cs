@@ -28,6 +28,21 @@ public sealed partial class BatteryHealthViewModel : ViewModelBase
     /// <summary>Shown on the capacity card when the battery report could not be produced or read.</summary>
     internal const string HistoryUnreadable = "The capacity history could not be read. Press Refresh to try again.";
 
+    /// <summary>Why health and wear are missing, without administrator rights.</summary>
+    internal const string CapacityNeedsAdministrator =
+        "Battery health and wear could not be read. SysManager reads them, and the design capacity, full charge "
+        + "capacity and cycle count below, from a part of Windows that only answers an elevated process, so they "
+        + "need it to be running as administrator. The rest of the page, including the capacity history, works "
+        + "without it.";
+
+    /// <summary>Why health and wear are missing when SysManager already runs as administrator (#3423).</summary>
+    internal const string CapacityNotReported =
+        "Windows did not report this battery's capacities, so health and wear cannot be worked out here. The rest of "
+        + "the page, including the capacity history, still works.";
+
+    /// <summary>What the card says in place of health and wear when Windows gave no capacities.</summary>
+    public string MissingCapacityText => CapacityNeedsAdministrator;
+
     private readonly Func<Task<BatteryInfo?>> _read;
     private readonly Func<CancellationToken, Task<BatteryReportRead>> _readHistory;
 

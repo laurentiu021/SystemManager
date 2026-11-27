@@ -2,6 +2,7 @@
 // Author: laurentiu021 · https://github.com/laurentiu021/SystemManager
 // License: MIT
 
+using System.IO;
 using System.Runtime.CompilerServices;
 using NSubstitute;
 using SysManager.Services;
@@ -13,6 +14,8 @@ namespace SysManager.Tests;
 /// Tests for <see cref="BatteryHealthViewModel"/>. Verifies initial state, command availability, a failed battery
 /// read, and the capacity history card.
 /// </summary>
+// Serialized: the elevation tests set the process-wide elevation probe.
+[Collection("ProcessWideStatics")]
 public class BatteryHealthViewModelTests
 {
     /// <summary>A report service that never has a history to give, so no test here runs <c>powercfg</c>.</summary>
@@ -336,5 +339,53 @@ public class BatteryHealthViewModelTests
         Assert.True(given.IsCancellationRequested);
         Assert.Null(vm.InitializationFault);
         Assert.False(vm.CapacityChart.HasChart);
+    }
+
+    // ---------- the banner, and what a missing figure is blamed on (#3423) ----------
+    // The page said health and wear need administrator rights with no banner and no way to get them, and said so
+    // even to an administrator, when the real cause was a battery whose driver reports no capacities.
+
+    /// <summary>A battery read with no capacities, as Windows answers for a driver that does not report them.</summary>
+    private static async Task<BatteryHealthViewModel> WithoutCapacities()
+    {
+        var vm = new BatteryHealthViewModel(
+            () => Task.FromResult<Models.BatteryInfo?>(new Models.BatteryInfo
+            {
+                HasBattery = true, Name = "Main battery", ChargePercent = 80, Status = "Discharging",
+            }),
+            _ => Task.FromResult(BatteryReportRead.Failed));
+        await vm.InitializationComplete;
+        return vm;
+    }
+
+    [Fact]
+    public void TheTab_HostsTheAdminBanner()
+    {
+        var vm = new BatteryHealthViewModel(new Services.BatteryService(), NoReport());
+
+        Assert.IsAssignableFrom<ElevatedViewModelBase>(vm);
+        var view = File.ReadAllText(TestPaths.AppFile("Views", "BatteryHealthView.xaml"));
+        Assert.Contains("<v:AdminBanner", view, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task WithoutAdministratorRights_MissingFiguresAreBlamedOnElevation()
+    {
+        using var elevation = Helpers.AdminHelper.ForceElevation(false);
+        var vm = await WithoutCapacities();
+
+        Assert.Contains("Health: requires elevation", vm.Summary, StringComparison.Ordinal);
+        Assert.Equal(BatteryHealthViewModel.CapacityNeedsAdministrator, vm.MissingCapacityText);
+    }
+
+    [Fact]
+    public async Task AsAdministrator_MissingFiguresAreSaidNotToBeReported_NotToNeedElevation()
+    {
+        using var elevation = Helpers.AdminHelper.ForceElevation(true);
+        var vm = await WithoutCapacities();
+
+        Assert.Contains("Health: not reported", vm.Summary, StringComparison.Ordinal);
+        Assert.DoesNotContain("elevation", vm.Summary, StringComparison.Ordinal);
+        Assert.Equal(BatteryHealthViewModel.CapacityNotReported, vm.MissingCapacityText);
     }
 }

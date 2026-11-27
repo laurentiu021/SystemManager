@@ -10,6 +10,19 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.136.206] - 2026-11-27
+
+**Four buttons that delete for good now say so to a screen reader, and three of them are red like the app's other
+deleting buttons.**
+
+### Fixed
+- Quick Cleanup's **Clean up component store**, after which installed updates can no longer be uninstalled, and
+  Speed Test's two **Clear** buttons, which delete a saved history from disk, looked like ordinary buttons and
+  said nothing more than their names to a screen reader (#3424). They now use the red style the app keeps for an
+  action that cannot be taken back, and each says what it removes for good, and that SysManager asks first.
+- The Dashboard's **Quick Tune-Up** deletes temp files and permanently empties the Recycle Bin on every drive, and
+  a screen reader heard only "Quick Tune-Up". It now says that too. It stays the Dashboard's purple main action.
+
 ## [1.136.205] - 2026-11-27
 
 **When SysManager already runs as administrator, Disk Analyzer, Duplicate Finder and App Blocker no longer tell you

@@ -36,6 +36,13 @@ public sealed partial class AppAlertsViewModel : ViewModelBase
     private readonly INotificationArea? _notificationArea;
     private readonly IToastService _toasts;
 
+    /// <summary>
+    /// What the status line adds while monitoring when the signed-in account's own folders could not be found (#3394).
+    /// </summary>
+    internal const string SignedInAccountGap =
+        "SysManager is running as administrator and could not find the signed-in account's own folders, so a program "
+        + "installed only for that account is not noticed. Open SysManager normally to watch those too.";
+
     public BulkObservableCollection<AppInstallEntry> Alerts { get; } = new();
 
     [ObservableProperty]

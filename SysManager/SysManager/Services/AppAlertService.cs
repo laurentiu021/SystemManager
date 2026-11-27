@@ -31,6 +31,8 @@ public sealed partial class AppAlertService : IDisposable
     private readonly SynchronizationContext? _syncContext;
     private readonly Func<IReadOnlyList<AppInstallEntry>> _readRegistryApps;
     private readonly TimeProvider _clock;
+    // The signed-in account's %LocalAppData%, or null when it cannot be found.
+    private readonly Func<string?> _userLocalAppData;
 
     // The folders announced lately, each until an uninstall entry claims it. An installer creates its folder first and
     // writes its uninstall entry minutes later, and the two were announced as two installs (#2878).
@@ -59,14 +61,23 @@ public sealed partial class AppAlertService : IDisposable
 
     /// <summary>
     /// Reads the installed-programs list from <paramref name="readRegistryApps"/> instead of the registry, so a
-    /// test decides what is installed before and after the baseline, and the time from <paramref name="clock"/>.
+    /// test decides what is installed before and after the baseline, the time from <paramref name="clock"/>, and the
+    /// signed-in account's <c>%LocalAppData%</c> from <paramref name="userLocalAppData"/>.
     /// </summary>
-    internal AppAlertService(Func<IReadOnlyList<AppInstallEntry>> readRegistryApps, TimeProvider? clock = null)
+    internal AppAlertService(Func<IReadOnlyList<AppInstallEntry>> readRegistryApps, TimeProvider? clock = null,
+                             Func<string?>? userLocalAppData = null)
     {
         _syncContext = SynchronizationContext.Current;
         _readRegistryApps = readRegistryApps;
         _clock = clock ?? TimeProvider.System;
+        _userLocalAppData = userLocalAppData ?? SignedInAccount.LocalAppData;
     }
+
+    /// <summary>
+    /// Whether the last baseline could not find the signed-in account's own folders, so a program installed only for
+    /// that account is not noticed.
+    /// </summary>
+    public bool MissesTheSignedInAccount { get; private set; }
 
     /// <summary>
     /// Takes a snapshot of currently installed apps (baseline).
@@ -165,6 +176,13 @@ public sealed partial class AppAlertService : IDisposable
     /// and updates, were announced as programs, and a program installed for the current user only was not seen (#2769).
     /// </remarks>
     internal static IReadOnlyList<AppInstallEntry> ReadListedApps() => Listed(UninstallEntries.ReadAll());
+
+    /// <summary>
+    /// The uninstall lists to read: the machine's, then <paramref name="user"/>, the signed-in account's, when it is
+    /// known.
+    /// </summary>
+    internal static IReadOnlyList<(Microsoft.Win32.RegistryKey Hive, string Path)> ListsToRead(
+        (Microsoft.Win32.RegistryKey Hive, string Path)? user) => UninstallEntries.Keys;
 
     /// <summary>The entries of <paramref name="installed"/> that Windows lists, as an alert names them.</summary>
     internal static IReadOnlyList<AppInstallEntry> Listed(UninstallList installed) =>
@@ -357,7 +375,8 @@ public sealed partial class AppAlertService : IDisposable
             raise();
     }
 
-    private static List<string> GetMonitoredDirectories()
+    /// <summary>The folders a new program's folder is looked for in.</summary>
+    internal List<string> GetMonitoredDirectories()
     {
         List<string> dirs = [];
 

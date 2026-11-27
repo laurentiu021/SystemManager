@@ -2,6 +2,8 @@
 // Author: laurentiu021 · https://github.com/laurentiu021/SystemManager
 // License: MIT
 
+using System.IO;
+using Microsoft.Win32;
 using SysManager.Models;
 using SysManager.Services;
 using Xunit;
@@ -357,5 +359,76 @@ public class AppAlertServiceTests
     public void FoldersOf_NamesNoFolder_ForACommandOrIconWithNoPathOfItsOwn(string? command, string? icon)
     {
         Assert.Empty(AppAlertService.FoldersOf(command, icon));
+    }
+
+    // ---------- the signed-in account's own installs, when SysManager runs as another account (#3394) ----------
+    // Elevated with another account's password, the service watched that administrator's LocalAppData\Programs and
+    // read its uninstall list, so a program the signed-in person installed for their own account was never announced.
+
+    [Fact]
+    public void TheWatchedFolders_AreTheSignedInAccountsPrograms_NotSysManagersOwn()
+    {
+        var theirs = Directory.CreateTempSubdirectory("smtest_alerts_localappdata_").FullName;
+        var programs = Directory.CreateDirectory(Path.Combine(theirs, "Programs")).FullName;
+        try
+        {
+            using var service = new AppAlertService(() => [], userLocalAppData: () => theirs);
+
+            var watched = service.GetMonitoredDirectories();
+
+            Assert.Contains(programs, watched, StringComparer.OrdinalIgnoreCase);
+            var own = Path.Combine(
+                Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Programs");
+            Assert.DoesNotContain(own, watched, StringComparer.OrdinalIgnoreCase);
+        }
+        finally
+        {
+            Directory.Delete(theirs, recursive: true);
+        }
+    }
+
+    [Fact]
+    public void ABaseline_ThatCannotFindTheSignedInAccount_SaysSo()
+    {
+        using var service = new AppAlertService(() => [], userLocalAppData: () => null);
+
+        service.TakeBaseline();
+
+        Assert.True(service.MissesTheSignedInAccount);
+    }
+
+    [Fact]
+    public void ABaseline_ThatFindsTheSignedInAccount_MissesNothing()
+    {
+        var theirs = Directory.CreateTempSubdirectory("smtest_alerts_localappdata_").FullName;
+        try
+        {
+            using var service = new AppAlertService(() => [], userLocalAppData: () => theirs);
+
+            service.TakeBaseline();
+
+            Assert.False(service.MissesTheSignedInAccount);
+        }
+        finally
+        {
+            Directory.Delete(theirs, recursive: true);
+        }
+    }
+
+    [Fact]
+    public void TheListsRead_AreTheMachinesAndTheSignedInAccounts()
+    {
+        var theirs = (Registry.Users, @"S-1-5-21-1000-2000-3000-1001\" + UninstallerService.UninstallKey);
+
+        var lists = AppAlertService.ListsToRead(theirs);
+
+        Assert.Equal([.. UninstallEntries.MachineKeys, theirs], lists);
+        Assert.DoesNotContain(lists, list => list.Hive == Registry.CurrentUser);
+    }
+
+    [Fact]
+    public void TheListsRead_WhenTheSignedInAccountCannotBeTold_AreTheMachinesOnly()
+    {
+        Assert.Equal(UninstallEntries.MachineKeys, AppAlertService.ListsToRead(null));
     }
 }

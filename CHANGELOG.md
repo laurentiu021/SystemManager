@@ -10,6 +10,19 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.136.202] - 2026-11-27
+
+**Started as administrator with another account's password, New App Alerts now notices what the signed-in person
+installs for their own account.**
+
+### Fixed
+- New App Alerts watched the per-user install places of the account SysManager runs as. Started as administrator
+  with another account's password, those are the administrator's, so a program the signed-in person installed for
+  their own account, the kind that needs no administrator prompt, was never announced while the tab said it was
+  monitoring (#3394). It now watches that person's own `LocalAppData\Programs` and reads their own list of installed
+  programs. When SysManager cannot find that account's folders, the status line says that programs installed only
+  for it are not noticed, and that opening SysManager normally watches them too.
+
 ## [1.136.201] - 2026-11-26
 
 **On Defender Tweaks, Add folder is red now, like the app's other actions that weaken a protection.**

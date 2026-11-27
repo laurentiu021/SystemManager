@@ -5707,6 +5707,16 @@ public partial class ArchitectureTests
         ("ClearHistoryCommand", "AppAlertsView.xaml", ["DangerButton"]),
         ("RemoveSelectedCommand", "DebloaterView.xaml", ["DangerButton"]),
         ("RestoreCommand", "RestorePointsView.xaml", ["DangerButton"]),
+        // Four that deleted for good while looking ordinary (#3424). Cleaning the component store cannot be taken
+        // back: installed updates can no longer be uninstalled. The two Clear buttons delete a speed-test history
+        // from disk.
+        ("CleanComponentStoreCommand", "CleanupView.xaml", ["DangerButton"]),
+        ("ClearOoklaHistoryCommand", "SpeedTestView.xaml", ["DangerButton"]),
+        ("ClearHttpHistoryCommand", "SpeedTestView.xaml", ["DangerButton"]),
+        // The deliberate exception: Quick Tune-Up empties the Recycle Bin on every drive, and stays the Dashboard's
+        // purple main action, the one most people press first. It explains itself to a screen reader, and asks before
+        // it runs, as the other rows do; red on the screen everyone opens to was judged the worse warning.
+        ("RunTuneUpCommand", "DashboardView.xaml", ["PrimaryButton"]),
     ];
 
     /// <summary>
@@ -5796,7 +5806,7 @@ public partial class ArchitectureTests
     /// (<c>ProcessManagerView</c>'s "Kill process", <c>DiskAnalyzerView</c>'s "Show in Explorer"), and a
     /// tooltip is mouse-hover-only — it is not reliably surfaced to a screen reader, and a keyboard user
     /// tabbing onto the button never triggers it at all.</para>
-    /// <para><b>Deliberately narrow.</b> HelpText makes navigation more verbose, so this covers the twelve
+    /// <para><b>Deliberately narrow.</b> HelpText makes navigation more verbose, so this covers the sixteen
     /// controls that do something the user cannot take back, not the ~461 buttons in the app. The list is
     /// the same one <see cref="EveryImmediatelyDestructiveButton_WearsADestructiveStyle"/> uses, so a
     /// control added there is required to explain itself here without anyone remembering to.</para>
@@ -5842,8 +5852,8 @@ public partial class ArchitectureTests
         // row would satisfy it while quietly dropping a control from both guards. The absolute count is what
         // catches that. It is a measured population: raise it when a destructive control is added, and only
         // lower it with a reason, never to make a red go away.
-        Assert.True(DestructiveControls.Length >= 12,
-            $"the shared destructive-control list is down to {DestructiveControls.Length} rows, from 12 "
+        Assert.True(DestructiveControls.Length >= 16,
+            $"the shared destructive-control list is down to {DestructiveControls.Length} rows, from 16 "
             + "measured. A control was removed from it rather than from the app, which silently narrows both "
             + "guards over this list.");
 
@@ -11431,7 +11441,8 @@ public partial class ArchitectureTests
             ["AppAlertsView.xaml"] = ["Clear History on New App Alerts"],
             ["AudioMixerView.xaml"] = ["Delete preset"],
             ["BrowserCleanerView.xaml"] = ["Clean selected on Deep Cleanup and on Browser Cleaner"],
-            ["CleanupView.xaml"] = ["Empty Recycle Bin"],
+            ["CleanupView.xaml"] = ["Empty Recycle Bin", "Clean up component store"],
+            ["DashboardView.xaml"] = ["Quick Tune-Up"],
             ["DebloaterView.xaml"] = ["Remove selected on Preinstalled Apps"],
             ["DefenderView.xaml"] = ["Add folder on Defender Tweaks"],
             ["DeepCleanupView.xaml"] = ["Clean selected on Deep Cleanup"],
@@ -11441,6 +11452,7 @@ public partial class ArchitectureTests
             ["ProcessManagerView.xaml"] = ["Kill process"],
             ["RestorePointsView.xaml"] = ["Restore selected on Restore Points"],
             ["ShortcutCleanerView.xaml"] = ["Delete selected shortcuts"],
+            ["SpeedTestView.xaml"] = ["Clear on both Speed Test histories"],
             ["UndoChangesView.xaml"] = ["Undo Changes row"],
             ["UninstallerView.xaml"] = ["Uninstall selected", "Remove ticked"],
         };

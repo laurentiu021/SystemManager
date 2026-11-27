@@ -174,8 +174,11 @@
                     <StackPanel>
                         <DockPanel>
                             <TextBlock Text="Ookla History" Style="{StaticResource SectionTitle}"/>
-                            <Button Content="Clear" Command="{Binding ClearOoklaHistoryCommand}" Style="{StaticResource GhostButton}"
+                            <!-- Red: the saved results are deleted from disk for good (#3424). -->
+                            <Button Content="Clear" Command="{Binding ClearOoklaHistoryCommand}"
+                                    Style="{StaticResource DangerButton}"
                                     AutomationProperties.Name="Clear Ookla history"
+                                    AutomationProperties.HelpText="Deletes the saved Ookla results from disk for good. SysManager asks first."
                                     HorizontalAlignment="Right" DockPanel.Dock="Right" Padding="12,4" FontSize="12"/>
                         </DockPanel>
                         <!-- The table below drawn as a line (#1499): "is it worse than it used to be, or just today?"
@@ -233,8 +236,10 @@
                     <StackPanel>
                         <DockPanel>
                             <TextBlock Text="HTTP History" Style="{StaticResource SectionTitle}"/>
-                            <Button Content="Clear" Command="{Binding ClearHttpHistoryCommand}" Style="{StaticResource GhostButton}"
+                            <Button Content="Clear" Command="{Binding ClearHttpHistoryCommand}"
+                                    Style="{StaticResource DangerButton}"
                                     AutomationProperties.Name="Clear HTTP history"
+                                    AutomationProperties.HelpText="Deletes the saved HTTP results from disk for good. SysManager asks first."
                                     HorizontalAlignment="Right" DockPanel.Dock="Right" Padding="12,4" FontSize="12"/>
                         </DockPanel>
                         <!-- Same trend as the Ookla card, from this engine's own history: the two are never drawn

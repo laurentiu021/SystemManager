@@ -78,9 +78,12 @@
                     <Button Content="Check component store" Command="{Binding AnalyzeComponentStoreCommand}" Style="{StaticResource SecondaryButton}" Margin="0,0,8,8"
                             AutomationProperties.AutomationId="btn-cleanup-analyze-store"
                             AutomationProperties.Name="Check component store — report what Windows considers reclaimable"/>
-                    <Button Content="Clean up component store" Command="{Binding CleanComponentStoreCommand}" Style="{StaticResource SecondaryButton}" Margin="0,0,8,8"
+                    <!-- Red: installed updates can no longer be uninstalled afterwards (#3424). -->
+                    <Button Content="Clean up component store" Command="{Binding CleanComponentStoreCommand}"
+                            Style="{StaticResource DangerButton}" Margin="0,0,8,8"
                             AutomationProperties.AutomationId="btn-cleanup-clean-store"
-                            AutomationProperties.Name="Clean up component store — remove the superseded components Windows keeps"/>
+                            AutomationProperties.Name="Clean up component store — remove the superseded components Windows keeps"
+                            AutomationProperties.HelpText="Removes the old copies Windows keeps of updated system files. Updates already installed can no longer be uninstalled afterwards. SysManager asks first."/>
                     <Button Content="Cancel" Command="{Binding CancelCommand}" Style="{StaticResource GhostButton}" Margin="0,0,8,8"
                             AutomationProperties.AutomationId="btn-cleanup-cancel"
                             AutomationProperties.Name="Cancel the running operation"/>

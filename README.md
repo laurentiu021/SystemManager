@@ -324,7 +324,8 @@ deletes it. This cannot be undone, not even from the Recycle Bin. SysManager ask
 same goes for Uninstall selected and Remove ticked on the Uninstaller, Kill process, End process on File Lock
 Detector, Delete preset, Delete selected shortcuts, Empty Recycle Bin, Clean selected on Deep Cleanup and on Browser
 Cleaner, Clear History on New App Alerts, Remove selected on Preinstalled Apps, Restore selected on Restore Points, Add
-folder on Defender Tweaks, and the Run as administrator button that appears on the 32 pages needing elevation.
+folder on Defender Tweaks, Quick Tune-Up on the Dashboard, Clean up component store on Quick Cleanup, Clear on both
+Speed Test histories, and the Run as administrator button that appears on the 32 pages needing elevation.
 
 Before that, the red colour and the confirmation dialog were the only warnings, and neither reaches someone
 who cannot see the screen — the dialog arrives after the button has already been pressed. The explanation is

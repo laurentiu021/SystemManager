@@ -123,8 +123,14 @@ public sealed partial class DiskAnalyzerViewModel : ViewModelBase
 
     /// <summary><see cref="DescribeFailure(DiskAnalyzerService.AnalysisFailure)"/>, as SysManager running
     /// <paramref name="elevated"/> or not would say it.</summary>
+    /// <remarks>
+    /// Elevated, a folder Windows would not list is one whose permissions leave administrators out, so "Try Run as
+    /// administrator" sent the user round a relaunch to the same refusal (#3423).
+    /// </remarks>
     internal static string DescribeFailure(DiskAnalyzerService.AnalysisFailure failure, bool elevated) =>
-        DescribeFailure(failure);
+        elevated && failure == DiskAnalyzerService.AnalysisFailure.Unreadable
+            ? FolderUnreadableElevatedReason
+            : DescribeFailure(failure);
 
     /// <summary>What to tell the user when the chosen folder could not be measured. Pure, so each case is testable.</summary>
     internal static string DescribeFailure(DiskAnalyzerService.AnalysisFailure failure) => failure switch
@@ -140,9 +146,11 @@ public sealed partial class DiskAnalyzerViewModel : ViewModelBase
     /// <summary>
     /// Whether the empty state's advice names a button with nothing behind it. <c>FolderUnreadableReason</c>
     /// says "Try Run as administrator", and only this failure is the kind that button can actually fix — a
-    /// missing folder or a link needs a different folder picked, not elevation (#2859).
+    /// missing folder or a link needs a different folder picked, not elevation (#2859). Not while SysManager already
+    /// runs as administrator: the relaunch would reopen it to the same refusal (#3423).
     /// </summary>
-    public bool CanRelaunchAsAdminForFailure => LastFailure == DiskAnalyzerService.AnalysisFailure.Unreadable;
+    public bool CanRelaunchAsAdminForFailure =>
+        !_elevated && LastFailure == DiskAnalyzerService.AnalysisFailure.Unreadable;
 
     // Drive-level info
     [ObservableProperty] private long _driveTotal;

@@ -260,9 +260,11 @@ public sealed partial class AppBlockerViewModel : ElevatedViewModelBase
             AppBlockerService.BlockResult.InvalidName => DescribeUnusableName(exeName),
             AppBlockerService.BlockResult.EmptyName =>
                 "Enter an executable name (e.g., notepad.exe).",
+            // Reached only while elevated: BlockApp refuses first without administrator rights. So the refusal is
+            // the key's own permissions, and a relaunch as administrator changes nothing (#3423).
             AppBlockerService.BlockResult.AccessDenied =>
-                $"Windows denied the change needed to block {exeName}. This step needs administrator "
-                + "rights — restart SysManager as administrator and try again.",
+                $"Windows refused the change needed to block {exeName}, even with administrator rights. Another "
+                + "program, often security software, may be protecting the settings for that name.",
             _ =>
                 $"Could not block {exeName}: the registry change failed. The app log has the details."
         };

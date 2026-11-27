@@ -104,8 +104,14 @@ public sealed partial class DuplicateFileViewModel : ViewModelBase
 
     /// <summary><see cref="DescribeFailure(DuplicateFileService.ScanFailure)"/>, as SysManager running
     /// <paramref name="elevated"/> or not would say it.</summary>
+    /// <remarks>
+    /// Elevated, a folder Windows would not list is one whose permissions leave administrators out, so "Try Run as
+    /// administrator" sent the user round a relaunch to the same refusal (#3423).
+    /// </remarks>
     internal static string DescribeFailure(DuplicateFileService.ScanFailure failure, bool elevated) =>
-        DescribeFailure(failure);
+        elevated && failure == DuplicateFileService.ScanFailure.Unreadable
+            ? FolderUnreadableElevatedReason
+            : DescribeFailure(failure);
 
     /// <summary>
     /// What to tell the user when the chosen folder could not be scanned. Pure, so each case is testable.

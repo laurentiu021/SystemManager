@@ -753,7 +753,23 @@ public sealed partial class WindowsUpdateViewModel : ViewModelBase
         try
         {
             var progress = new SettlingProgress<string>(OnWuLog);
-            var report = await progress.SettleAfterAsync(reporter => _wu.InstallAsync(selected, reporter, ct: _cts.Token));
+            var shown = new SettlingProgress<(UpdateEntry Entry, string Status)>(s => s.Entry.Status = s.Status);
+            var statuses = new LastStatusPerRow();
+            InstallReport report;
+            try
+            {
+                report = await progress.SettleAfterAsync(
+                    reporter => shown.SettleAfterAsync(
+                        rows => _wu.InstallAsync(selected, reporter, statuses.ShownThrough(rows), _cts.Token)));
+            }
+            finally
+            {
+                // The agent reports from its worker and changes no row, so they change only here, on the window's
+                // thread (#3399). A report still queued when the install returned is dropped by the settled reporter,
+                // so each row gets the last status reported for it before anything below reads them.
+                statuses.Apply();
+            }
+
             // A run that stopped early leaves the rows it did not finish as it, or this tab, last set them. They say
             // what happened instead, and the count and the restart notice come all the same (#2791).
             if (report.Cancelled) MarkUnfinished(selected, "Cancelled");
@@ -777,6 +793,41 @@ public sealed partial class WindowsUpdateViewModel : ViewModelBase
             Log.Warning(ex, "WUA install failed");
         }
         finally { IsBusy = false; IsProgressIndeterminate = false; }
+    }
+
+    /// <summary>
+    /// Keeps the last status an install reported for each row, and passes every report on to the reporter that shows
+    /// it. The agent set the rows itself, on its worker, which #3127 had stopped Process Manager and Right-click Menu
+    /// doing (#3399).
+    /// </summary>
+    private sealed class LastStatusPerRow : IProgress<(UpdateEntry Entry, string Status)>
+    {
+        private readonly Lock _gate = new();
+        private readonly Dictionary<UpdateEntry, string> _last = [];
+        private IProgress<(UpdateEntry Entry, string Status)>? _shown;
+
+        /// <summary>Passes each report on to <paramref name="shown"/> as well, and returns this reporter.</summary>
+        internal LastStatusPerRow ShownThrough(IProgress<(UpdateEntry Entry, string Status)> shown)
+        {
+            _shown = shown;
+            return this;
+        }
+
+        public void Report((UpdateEntry Entry, string Status) value)
+        {
+            lock (_gate) _last[value.Entry] = value.Status;
+            _shown?.Report(value);
+        }
+
+        /// <summary>Gives each row the last status reported for it: on the window's thread, once the install is over.
+        /// </summary>
+        internal void Apply()
+        {
+            lock (_gate)
+            {
+                foreach (var (entry, status) in _last) entry.Status = status;
+            }
+        }
     }
 
     /// <summary>Gives each row of <paramref name="selected"/> left unfinished <paramref name="status"/>.</summary>

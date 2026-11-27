@@ -114,15 +114,17 @@ public sealed class WindowsUpdateService : IWindowsUpdateService
 
     /// <summary>
     /// Download + install the given updates. Per-update progress is reported
-    /// to <paramref name="progress"/>; per-update result is set on the entry's
-    /// <see cref="UpdateEntry.Status"/> property.
+    /// to <paramref name="progress"/>, and each entry's new status to <paramref name="statuses"/>.
     /// Returns aggregate counts (installed, failed, rebootRequired), and why it stopped early if it did.
     /// </summary>
     /// <remarks>
-    /// A report on every exit once it has started. A stop on <paramref name="ct"/>, before an update or between its
-    /// download and its install, and a Windows Update Agent error, in the search the install starts with or between
+    /// <para>No entry is changed here. They are the rows the Windows Update grid shows and this runs on a worker
+    /// thread, so the view model sets each status on the window's thread. Setting them here was the write #3127 had
+    /// moved off the worker for Process Manager and Right-click Menu (#3399).</para>
+    /// <para>A report on every exit once it has started. A stop on <paramref name="ct"/>, before an update or between
+    /// its download and its install, and a Windows Update Agent error, in the search the install starts with or between
     /// updates, used to end the run as an exception: the updates already installed went uncounted, the restart they
-    /// needed was never mentioned, and every row it had not finished kept saying "Pending…" (#2791).
+    /// needed was never mentioned, and every row it had not finished kept saying "Pending…" (#2791).</para>
     /// </remarks>
     public Task<InstallReport> InstallAsync(
         IReadOnlyList<UpdateEntry> entries,
@@ -200,12 +202,12 @@ public sealed class WindowsUpdateService : IWindowsUpdateService
                     if (string.IsNullOrWhiteSpace(entry.UpdateId) || !byId.TryGetValue(entry.UpdateId, out var u))
                     {
                         progress?.Report($"[{idx}/{entries.Count}] SKIP (not in live feed): {entry.Title}");
-                        entry.Status = "Not applied";
+                        statuses?.Report((entry, "Not applied"));
                         continue;
                     }
 
                     progress?.Report($"[{idx}/{entries.Count}] {entry.Title}");
-                    entry.Status = "Downloading…";
+                    statuses?.Report((entry, "Downloading…"));
 
                     dynamic coll = _createUpdateCollection();
                     coll.Add(u);
@@ -260,8 +262,9 @@ public sealed class WindowsUpdateService : IWindowsUpdateService
 
                             if (dlCode != Succeeded)
                             {
-                                entry.Status = FailureStatus("download", dlCode, dlHr);
-                                progress?.Report($"  Download failed: {entry.Status}.");
+                                var downloadFailure = FailureStatus("download", dlCode, dlHr);
+                                statuses?.Report((entry, downloadFailure));
+                                progress?.Report($"  Download failed: {downloadFailure}.");
                                 Serilog.Log.Warning("Windows Update download failed for {Title}: result code {Code}, 0x{HResult:X8}",
                                     entry.Title, dlCode, dlHr);
                                 failed++;
@@ -291,7 +294,7 @@ public sealed class WindowsUpdateService : IWindowsUpdateService
                         }
 
                         progress?.Report("  Installing…");
-                        entry.Status = "Installing…";
+                        statuses?.Report((entry, "Installing…"));
 
                         int iCode;
                         int iHr;
@@ -329,23 +332,24 @@ public sealed class WindowsUpdateService : IWindowsUpdateService
 
                         if (iCode == Succeeded)
                         {
-                            entry.Status = needsReboot ? "Installed (reboot required)" : "Installed";
+                            statuses?.Report((entry, needsReboot ? "Installed (reboot required)" : "Installed"));
                             installed++;
                             if (needsReboot) reboot = true;
                             progress?.Report("  ✓ Installed");
                         }
                         else
                         {
-                            entry.Status = FailureStatus("install", iCode, iHr);
+                            var installFailure = FailureStatus("install", iCode, iHr);
+                            statuses?.Report((entry, installFailure));
                             failed++;
-                            progress?.Report($"  ✗ Install failed: {entry.Status}.");
+                            progress?.Report($"  ✗ Install failed: {installFailure}.");
                             Serilog.Log.Warning("Windows Update install failed for {Title}: result code {Code}, 0x{HResult:X8}",
                                 entry.Title, iCode, iHr);
                         }
                     }
                     catch (COMException ex)
                     {
-                        entry.Status = $"Error 0x{ex.HResult:X8}";
+                        statuses?.Report((entry, $"Error 0x{ex.HResult:X8}"));
                         failed++;
                         progress?.Report($"  ✗ COM error: 0x{ex.HResult:X8} {ex.Message}");
                         Serilog.Log.Warning(ex, "Install failed for {Title}", entry.Title);

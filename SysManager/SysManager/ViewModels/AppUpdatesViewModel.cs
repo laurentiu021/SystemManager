@@ -29,6 +29,10 @@ public sealed partial class AppUpdatesViewModel : ViewModelBase
     // before its next app, because ending winget part-way ends the installer it started (#2942).
     private CancellationTokenSource? _upgraderCts;
     private AppPackage? _upgrading;
+
+    // The ids this session's batches updated. winget finds nothing newer for them afterwards, and its
+    // UPDATE_NOT_APPLICABLE then means up to date, not a failed update (#3354).
+    private readonly HashSet<string> _updatedThisSession = new(StringComparer.OrdinalIgnoreCase);
     private readonly Action<PowerShellLine> _lineHandler;
 
     /// <summary>
@@ -227,7 +231,7 @@ public sealed partial class AppUpdatesViewModel : ViewModelBase
         _cts = new CancellationTokenSource();
         _upgraderCts?.Dispose();
         _upgraderCts = new CancellationTokenSource();
-        int attempted = 0, succeeded = 0, failed = 0, restartRequired = 0;
+        int attempted = 0, succeeded = 0, upToDate = 0, failed = 0, restartRequired = 0;
         var wingetUnavailable = false;
         var stopped = false;
         UpgradeEtaText = string.Empty;
@@ -253,7 +257,25 @@ public sealed partial class AppUpdatesViewModel : ViewModelBase
                     // so the per-app status is human-readable (never a raw "exit 0x8A15…").
                     var result = await _winget.UpgradeAsync(pkg.Id, _upgraderCts.Token);
                     pkg.Status = result.FriendlyMessage;
-                    if (result.Succeeded) succeeded++; else failed++;
+                    if (result.Succeeded)
+                    {
+                        succeeded++;
+                        // Unticked, so Upgrade selected again, the retry after an app failed, runs only the apps
+                        // that did not update. Left ticked, each of these was run again and counted as failed (#3354).
+                        pkg.IsSelected = false;
+                        _updatedThisSession.Add(pkg.Id);
+                    }
+                    else if (result.ExitCode == WingetExitCodes.UpdateNotApplicable
+                             && _updatedThisSession.Contains(pkg.Id))
+                    {
+                        pkg.Status = UpToDateStatus;
+                        pkg.IsSelected = false;
+                        upToDate++;
+                    }
+                    else
+                    {
+                        failed++;
+                    }
                     if (result.RestartRequired) restartRequired++;
                 }
                 // Only closing SysManager ends a running update.
@@ -286,13 +308,15 @@ public sealed partial class AppUpdatesViewModel : ViewModelBase
             // Honest summary: separate succeeded from failed, and only mention failures
             // when there are any. If winget itself is missing, keep the friendly
             // "install App Installer" message instead of a misleading "Updated 0 of N".
+            var current = upToDate == 0 ? "" : $" · {upToDate} already up to date";
             var failures = failed == 0 ? "" : $" · {failed} failed";
             var restart = WingetFailure.DescribeRestartRequired(restartRequired);
+            var outcome = $"{current}{failures}.{restart}";
             StatusMessage = wingetUnavailable
                 ? WingetUnavailableMessage
                 : stopped
-                    ? $"Stopped after {attempted} of {toUpgrade.Count}. Updated {succeeded}{failures}.{restart}"
-                    : $"Updated {succeeded} of {toUpgrade.Count}{failures}.{restart}";
+                    ? $"Stopped after {attempted} of {toUpgrade.Count}. Updated {succeeded}{outcome}"
+                    : $"Updated {succeeded} of {toUpgrade.Count}{outcome}";
             Log.Information("App upgrade batch: {Succeeded} ok, {Failed} failed of {Total}",
                 succeeded, failed, toUpgrade.Count);
         }

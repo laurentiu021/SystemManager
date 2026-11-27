@@ -197,17 +197,50 @@ public class WindowsUpdateServiceTests
     private static List<UpdateEntry> Rows(params string[] ids) =>
         [.. ids.Select(id => new UpdateEntry { Title = "Update " + id, UpdateId = id, Status = "Pending…" })];
 
+    /// <summary>
+    /// Asserts the last status the install reported for each of <paramref name="rows"/>, null where it reported none,
+    /// and that the install changed no row: they are the rows the grid shows, and it runs on a worker thread (#3399).
+    /// </summary>
+    private static void AssertReported(
+        string?[] expected, SyncProgress<(UpdateEntry Entry, string Status)> statuses, List<UpdateEntry> rows)
+    {
+        Assert.Equal(
+            expected, rows.Select(r => statuses.Reports.LastOrDefault(s => ReferenceEquals(s.Entry, r)).Status));
+        Assert.All(rows, r => Assert.Equal("Pending…", r.Status));
+    }
+
+    /// <summary>
+    /// The install reports every status a row goes through and sets none itself. It set them on its worker thread, on
+    /// the rows the grid shows, which #3127 had stopped Process Manager and Right-Click Menu doing (#3399).
+    /// </summary>
+    [Fact]
+    public async Task AnInstall_ReportsEachRowsStatus_AndChangesNoRow()
+    {
+        var session = SessionWith("a");
+        session.Pending[0].IsDownloaded = false;
+        var rows = Rows("a", "gone");
+        var statuses = new SyncProgress<(UpdateEntry Entry, string Status)>();
+
+        await AgentOver(session).InstallAsync(rows, statuses: statuses);
+
+        Assert.Equal(
+            [("a", "Downloading…"), ("a", "Installing…"), ("a", "Installed"), ("gone", "Not applied")],
+            statuses.Reports.Select(s => (s.Entry.UpdateId, s.Status)));
+        Assert.All(rows, r => Assert.Equal("Pending…", r.Status));
+    }
+
     [Fact]
     public async Task AnInstallThatRunsThrough_ReportsEachUpdate_AndTheRestart()
     {
         var session = SessionWith("a");
         session.Pending.Add(new FakeUpdate(Product) { Title = "Update b", Id = "b", NeedsRestart = true });
         var rows = Rows("a", "b");
+        var statuses = new SyncProgress<(UpdateEntry Entry, string Status)>();
 
-        var report = await AgentOver(session).InstallAsync(rows);
+        var report = await AgentOver(session).InstallAsync(rows, statuses: statuses);
 
         Assert.Equal(new InstallReport(2, 0, true), report);
-        Assert.Equal(["Installed", "Installed (reboot required)"], rows.Select(r => r.Status));
+        AssertReported(["Installed", "Installed (reboot required)"], statuses, rows);
     }
 
     [Fact]
@@ -220,12 +253,13 @@ public class WindowsUpdateServiceTests
             if (update.Id == "a") cts.Cancel();
         };
         var rows = Rows("a", "b");
+        var statuses = new SyncProgress<(UpdateEntry Entry, string Status)>();
 
-        var report = await AgentOver(session).InstallAsync(rows, ct: cts.Token);
+        var report = await AgentOver(session).InstallAsync(rows, statuses: statuses, ct: cts.Token);
 
         Assert.Equal(new InstallReport(1, 0, false, Cancelled: true), report);
         Assert.Equal(["a"], session.Installed);
-        Assert.Equal(["Installed", "Pending…"], rows.Select(r => r.Status));
+        AssertReported(["Installed", null], statuses, rows);
     }
 
     [Fact]
@@ -236,12 +270,13 @@ public class WindowsUpdateServiceTests
         session.Pending[0].IsDownloaded = false;
         session.Downloading = _ => cts.Cancel();
         var rows = Rows("a");
+        var statuses = new SyncProgress<(UpdateEntry Entry, string Status)>();
 
-        var report = await AgentOver(session).InstallAsync(rows, ct: cts.Token);
+        var report = await AgentOver(session).InstallAsync(rows, statuses: statuses, ct: cts.Token);
 
         Assert.Equal(new InstallReport(0, 0, false, Cancelled: true), report);
         Assert.Empty(session.Installed);
-        Assert.Equal(["Downloading…"], rows.Select(r => r.Status));
+        AssertReported(["Downloading…"], statuses, rows);
     }
 
     [Fact]
@@ -250,11 +285,12 @@ public class WindowsUpdateServiceTests
         var session = SessionWith("a");
         session.SearchFails = new COMException("offline", unchecked((int)0x8024402C));
         var rows = Rows("a");
+        var statuses = new SyncProgress<(UpdateEntry Entry, string Status)>();
 
-        var report = await AgentOver(session).InstallAsync(rows);
+        var report = await AgentOver(session).InstallAsync(rows, statuses: statuses);
 
         Assert.Equal(new InstallReport(0, 0, false, AgentError: unchecked((int)0x8024402C)), report);
-        Assert.Equal(["Pending…"], rows.Select(r => r.Status));
+        AssertReported([null], statuses, rows);
     }
 
     [Fact]
@@ -266,12 +302,13 @@ public class WindowsUpdateServiceTests
             if (update.Id == "b") throw new UnauthorizedAccessException("refused");
         };
         var rows = Rows("a", "b");
+        var statuses = new SyncProgress<(UpdateEntry Entry, string Status)>();
 
-        var report = await AgentOver(session).InstallAsync(rows);
+        var report = await AgentOver(session).InstallAsync(rows, statuses: statuses);
 
         Assert.Equal(1, report.Installed);
         Assert.NotEqual(0, report.AgentError);
-        Assert.Equal(["Installed", "Installing…"], rows.Select(r => r.Status));
+        AssertReported(["Installed", "Installing…"], statuses, rows);
     }
 
     // ---------- Cancel stops a running search and a running download (#2791) ----------
@@ -303,15 +340,16 @@ public class WindowsUpdateServiceTests
         var session = SessionWith("a");
         session.SearchRunsUntilStopped = true;
         var rows = Rows("a");
+        var statuses = new SyncProgress<(UpdateEntry Entry, string Status)>();
 
-        var install = AgentOver(session).InstallAsync(rows, ct: cts.Token);
+        var install = AgentOver(session).InstallAsync(rows, statuses: statuses, ct: cts.Token);
         await session.SearchStarted.Task;
         cts.Cancel();
 
         Assert.Equal(new InstallReport(0, 0, false, Cancelled: true), await install);
         Assert.True(Assert.Single(session.Jobs).StopRequested);
         Assert.Empty(session.Installed);
-        Assert.Equal(["Pending…"], rows.Select(r => r.Status));
+        AssertReported([null], statuses, rows);
     }
 
     [Fact]
@@ -322,8 +360,9 @@ public class WindowsUpdateServiceTests
         session.Pending[0].IsDownloaded = false;
         session.DownloadRunsUntilStopped = true;
         var rows = Rows("a");
+        var statuses = new SyncProgress<(UpdateEntry Entry, string Status)>();
 
-        var install = AgentOver(session).InstallAsync(rows, ct: cts.Token);
+        var install = AgentOver(session).InstallAsync(rows, statuses: statuses, ct: cts.Token);
         await session.DownloadStarted.Task;
         cts.Cancel();
 
@@ -332,7 +371,7 @@ public class WindowsUpdateServiceTests
         Assert.True(download.StopRequested);
         Assert.True(download.CleanedUp);
         Assert.Empty(session.Installed);
-        Assert.Equal(["Downloading…"], rows.Select(r => r.Status));
+        AssertReported(["Downloading…"], statuses, rows);
     }
 
     [Fact]
@@ -346,7 +385,7 @@ public class WindowsUpdateServiceTests
         };
         var progress = new SyncProgress<string>();
 
-        var report = await AgentOver(session).InstallAsync(Rows("a", "b"), progress, cts.Token);
+        var report = await AgentOver(session).InstallAsync(Rows("a", "b"), progress, ct: cts.Token);
 
         Assert.Equal(new InstallReport(1, 0, false, Cancelled: true), report);
         Assert.Equal(["a"], session.Installed);

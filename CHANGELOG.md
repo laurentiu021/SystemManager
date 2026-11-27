@@ -10,6 +10,19 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.136.208] - 2026-11-27
+
+**Windows Update now changes each row's status on the window's thread while it installs, as the rest of the app
+does.**
+
+### Fixed
+- While installing, Windows Update set each update's status ("Downloading…", "Installing…", "Installed" and the
+  failure messages) from the background thread doing the install, on the very rows the grid shows (#3399). Nothing
+  visibly broke, but it was the pattern 1.136.82 removed from Process Manager and Right-click Menu, and sorting or
+  filtering the grid on Status during an install could have failed. The install now reports each status and the
+  tab sets it on the window's thread, and once the install returns every row ends on the last status reported for
+  it, so a report still on its way can no longer leave a row out of date.
+
 ## [1.136.207] - 2026-11-27
 
 **Battery Health has the Run as administrator banner the other pages that need it have, and stops blaming missing

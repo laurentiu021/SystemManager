@@ -474,27 +474,6 @@ public class StartupViewModelTests
     // ── what a scan raises comes back to the UI thread (#2703) ──
 
     /// <summary>
-    /// Runs what is posted to it on the thread that pumps it, as WPF's dispatcher runs it on the UI thread.
-    /// </summary>
-    private sealed class UiThreadContext : SynchronizationContext
-    {
-        private readonly BlockingCollection<(SendOrPostCallback Work, object? State)?> _work = new();
-
-        public override void Post(SendOrPostCallback d, object? state) => _work.Add((d, state));
-
-        public override void Send(SendOrPostCallback d, object? state) => d(state);
-
-        /// <summary>Runs posted work on this thread until <paramref name="task"/> is done, then surfaces its fault.</summary>
-        public void RunUntil(Task task)
-        {
-            task.ContinueWith(_ => _work.Add(null), TaskScheduler.Default);
-            while (_work.Take() is { } item)
-                item.Work(item.State);
-            task.GetAwaiter().GetResult();
-        }
-    }
-
-    /// <summary>
     /// Everything a scan raises once its background work is done reaches the thread that started it.
     /// </summary>
     /// <remarks>

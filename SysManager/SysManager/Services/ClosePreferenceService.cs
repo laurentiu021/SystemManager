@@ -160,19 +160,22 @@ public sealed class ClosePreferenceService
     /// malformed, or unrecognized input. An unknown value is treated as "not chosen" rather
     /// than trusted, so a hand-edited or future-version file cannot force an unexpected action.
     /// </summary>
-    public static CloseBehavior Parse(string? json)
+    public static CloseBehavior Parse(string? json) =>
+        string.IsNullOrWhiteSpace(json) ? CloseBehavior.Ask : TryParse(json) ?? CloseBehavior.Ask;
+
+    /// <summary>The behavior <paramref name="json"/> names, or null when it names none.</summary>
+    internal static CloseBehavior? TryParse(string json)
     {
-        if (string.IsNullOrWhiteSpace(json)) return CloseBehavior.Ask;
         try
         {
             var stored = JsonSerializer.Deserialize<Stored>(json);
-            if (stored?.Behavior is null) return CloseBehavior.Ask;
+            if (stored?.Behavior is null) return null;
             // A name only, as Save writes it. Enum.TryParse also took a number and a comma-separated list, which gave
             // a value CloseBehavior does not have: the close was neither asked about nor done, so X did nothing (#2772).
             var name = Array.Find(Enum.GetNames<CloseBehavior>(),
                 n => string.Equals(n, stored.Behavior.Trim(), StringComparison.OrdinalIgnoreCase));
-            return name is null ? CloseBehavior.Ask : Enum.Parse<CloseBehavior>(name);
+            return name is null ? null : Enum.Parse<CloseBehavior>(name);
         }
-        catch (JsonException ex) { Log.Debug("Close preference parse failed: {Error}", ex.Message); return CloseBehavior.Ask; }
+        catch (JsonException ex) { Log.Debug("Close preference parse failed: {Error}", ex.Message); return null; }
     }
 }

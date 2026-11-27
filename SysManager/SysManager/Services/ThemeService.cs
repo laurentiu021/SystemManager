@@ -955,23 +955,8 @@ public sealed class ThemeService
             var data = JsonSerializer.Deserialize<ThemeSettings>(json);
             if (data is null) return;
 
-            // Nothing is taken from the file until it is known to name a preset and one of the four modes. The mode
-            // used to be taken first, so a file with no preset id left CurrentPresetId null: every Auto lookup then
-            // threw, and an "auto" file did so at start-up, before the main window existed.
-            if (string.IsNullOrWhiteSpace(data.PresetId) || !IsKnownMode(data.Mode))
+            if (!TryUse(data, out var custom))
             {
-                Log.Debug("Theme load failed: the file names no preset, or a mode that is not one of the four");
-                _unparsableAtLoad = true;
-                return;
-            }
-
-            // A custom theme's colours are read as hex digits only, and before anything else is taken: they were read
-            // with WPF's converter, which also opens the colour-profile address a ContextColor value names, and the
-            // mode, shade and preset were taken first, so a file refused for its colours left them behind.
-            var custom = data.PresetId == "custom" ? CustomColours(data) : null;
-            if (data.PresetId == "custom" && custom is null)
-            {
-                Log.Debug("Theme load failed: a custom colour is not written #RRGGBB or #AARRGGBB");
                 _unparsableAtLoad = true;
                 return;
             }
@@ -999,6 +984,45 @@ public sealed class ThemeService
             Log.Debug("Theme load failed: {Error}", ex.Message);
             _unparsableAtLoad = true;
         }
+    }
+
+    /// <summary>
+    /// Whether <paramref name="data"/> is a theme the service can take, and a custom theme's colours, which are null
+    /// for a preset.
+    /// </summary>
+    /// <remarks>
+    /// Nothing is taken from the file until it is known to name a preset and one of the four modes. The mode used to be
+    /// taken first, so a file with no preset id left CurrentPresetId null: every Auto lookup then threw, and an "auto"
+    /// file did so at start-up, before the main window existed. A custom theme's colours are read as hex digits only,
+    /// and before anything else is taken: they were read with WPF's converter, which also opens the colour-profile
+    /// address a ContextColor value names, and the mode, shade and preset were taken first, so a file refused for its
+    /// colours left them behind.
+    /// </remarks>
+    private static bool TryUse(
+        ThemeSettings data, out (Color Accent, Color Background, Color Surface, Color Text)? custom)
+    {
+        custom = null;
+        if (string.IsNullOrWhiteSpace(data.PresetId) || !IsKnownMode(data.Mode))
+        {
+            Log.Debug("Theme load failed: the file names no preset, or a mode that is not one of the four");
+            return false;
+        }
+
+        if (data.PresetId != "custom") return true;
+        custom = CustomColours(data);
+        if (custom is not null) return true;
+        Log.Debug("Theme load failed: a custom colour is not written #RRGGBB or #AARRGGBB");
+        return false;
+    }
+
+    /// <summary>Whether <paramref name="json"/> is a theme file the service would take, as a profile import asks.</summary>
+    internal static bool Reads(string json)
+    {
+        try
+        {
+            return JsonSerializer.Deserialize<ThemeSettings>(json) is { } data && TryUse(data, out _);
+        }
+        catch (JsonException) { return false; }
     }
 
     /// <summary>The modes the service writes: a preset's own dark or light, following Windows, or a custom theme.</summary>

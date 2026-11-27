@@ -10,6 +10,20 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.136.204] - 2026-11-27
+
+**Importing a profile no longer replaces your speed-test history, presets or settings with a section SysManager
+cannot read, and keeps a copy of each file it replaces.**
+
+### Fixed
+- Profile Export / Import wrote every section except the gaming one straight over its file, without checking that
+  the text read as that file and without keeping the file it replaced (#3450). A profile edited by hand, exported
+  from a PC whose file was already damaged, or written by a newer SysManager left this PC with an empty speed-test
+  history, no volume presets or the default theme, and the import still counted the section. Each section is now
+  read with its own tab's reader first, and one that does not read, or has no content, is skipped and not counted.
+  The file a section replaces is kept beside it as `<file>.before-import`, the copy of the last import, so it can be
+  put back by hand.
+
 ## [1.136.203] - 2026-11-27
 
 **On a standard account, the Uninstaller now offers the leftovers it promised once SysManager is opened as

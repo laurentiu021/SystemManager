@@ -90,12 +90,20 @@ public sealed class AppIconService
         try
         {
             if (!File.Exists(_settingsPath)) return false; // default: no network
-            var pref = JsonSerializer.Deserialize<IconFetchPreference>(File.ReadAllText(_settingsPath));
-            return pref?.NetworkFetchEnabled ?? false;
+            return TryParse(File.ReadAllText(_settingsPath)) ?? false;
         }
         catch (IOException ex) { Log.Debug(ex, "Icon-fetch preference read failed"); return false; }
         catch (UnauthorizedAccessException ex) { Log.Debug(ex, "Icon-fetch preference read denied"); return false; }
-        catch (JsonException ex) { Log.Debug(ex, "Icon-fetch preference malformed"); return false; }
+    }
+
+    /// <summary>Whether <paramref name="json"/> lets the icons be fetched, or null when it is not the preference.</summary>
+    internal static bool? TryParse(string json)
+    {
+        try
+        {
+            return JsonSerializer.Deserialize<IconFetchPreference>(json)?.NetworkFetchEnabled;
+        }
+        catch (JsonException ex) { Log.Debug(ex, "Icon-fetch preference malformed"); return null; }
     }
 
     private bool SavePreference(bool enabled)

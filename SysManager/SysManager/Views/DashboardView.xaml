@@ -46,8 +46,11 @@
                             AutomationProperties.AutomationId="btn-dashboard-why-slow"
                             AutomationProperties.Name="Why is it slow? — look for what is slowing this PC down right now"
                             Style="{StaticResource SecondaryButton}" Padding="14,8" Margin="0,0,8,0"/>
+                    <!-- Purple, as the Dashboard's main action, by decision (#3424): ArchitectureTests lists it among
+                         the controls that delete for good, with this one exception, so it still has to say so. -->
                     <Button Command="{Binding RunTuneUpCommand}"
                             AutomationProperties.Name="Quick Tune-Up"
+                            AutomationProperties.HelpText="Deletes temporary files and permanently empties the Recycle Bin on every drive, then checks the PC. SysManager asks first."
                             Style="{StaticResource PrimaryButton}" Padding="16,8">
                         <StackPanel Orientation="Horizontal">
                             <TextBlock Text="&#xE945;" FontFamily="Segoe Fluent Icons,Segoe MDL2 Assets" FontSize="14"

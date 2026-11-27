@@ -10,6 +10,21 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.136.215] - 2026-11-27
+
+**Windows Update's History no longer depends on the PC's calendar for the year it shows.**
+
+### Fixed
+- Windows Update's History got its dates from a PowerShell script that wrote each one as year-month-day in the
+  PowerShell session's regional format, calendar included, and SysManager read the text back as a Gregorian date
+  (#3368). A format that uses another calendar, such as the Japanese, Taiwan or Korean one, writes that calendar's
+  year, so the date shown, and the order the list sorts in, would be wrong. The script now sends each date in the
+  round-trip form, which has one shape in every culture, and SysManager reads it back as that, as Restore Points
+  already did. The date stamp System Fixes' Reset Windows Update puts in the names of the folders it sets aside now
+  names its culture too.
+- The check that every date written in a fixed shape names its culture did not look inside PowerShell scripts,
+  which is how both were missed. It does now.
+
 ## [1.136.214] - 2026-11-27
 
 **Windows Update puts "KB" in front of every article number of an update that has more than one.**

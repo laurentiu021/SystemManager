@@ -34,6 +34,11 @@ public sealed partial class AppAlertService : IDisposable
     // The signed-in account's %LocalAppData%, or null when it cannot be found.
     private readonly Func<string?> _userLocalAppData;
 
+    // Whether the programs known so far came from a read that could not open one of the lists. Until a read gets every
+    // list, the programs a check finds are learned and not announced: the list missing from the baseline would
+    // otherwise be announced whole, as installed just now (#3393).
+    private volatile bool _knownIsIncomplete;
+
     // The folders announced lately, each until an uninstall entry claims it. An installer creates its folder first and
     // writes its uninstall entry minutes later, and the two were announced as two installs (#2878).
     private readonly List<AppInstallEntry> _recentFolders = [];
@@ -97,11 +102,17 @@ public sealed partial class AppAlertService : IDisposable
             catch (UnauthorizedAccessException) { /* best-effort */ }
         }
 
-        foreach (var app in _readRegistryApps().Apps)
+        var installed = _readRegistryApps();
+        foreach (var app in installed.Apps)
         {
             _knownKeys[KeyOf(app)] = true;
             _knownPrograms[ProgramOf(app)] = true;
         }
+
+        _knownIsIncomplete = !installed.Complete;
+        if (_knownIsIncomplete)
+            Log.Information("New app alerts: an installed-programs list could not be read; what it lists is learned "
+                            + "without an alert once it can be");
     }
 
     /// <summary>
@@ -306,7 +317,8 @@ public sealed partial class AppAlertService : IDisposable
     /// Does nothing until <see cref="Start"/> has run. The check reports what is missing from the list
     /// <see cref="TakeBaseline"/> recorded when monitoring began; with no such list, every program on the
     /// PC would be announced as newly installed. A run that overlaps the timer's own pass is harmless:
-    /// each new name is claimed once, so it is announced once.
+    /// each new name is claimed once, so it is announced once. While that list came from a read that could not open
+    /// one of the lists, a check learns what it finds and announces nothing, until a read gets every list (#3393).
     /// </remarks>
     /// <returns>How many new installations were found and announced.</returns>
     public int CheckNow()
@@ -325,7 +337,14 @@ public sealed partial class AppAlertService : IDisposable
         var found = 0;
         try
         {
-            var current = _readRegistryApps().Apps;
+            var installed = _readRegistryApps();
+            if (_knownIsIncomplete)
+            {
+                Learn(installed);
+                return 0;
+            }
+
+            var current = installed.Apps;
             // Each new key is claimed once, so a pass that overlaps the timer's announces it once. A new key of a program
             // already known is an update that wrote a new entry: it is learned, and not announced.
             foreach (var app in current
@@ -351,6 +370,25 @@ public sealed partial class AppAlertService : IDisposable
         catch (UnauthorizedAccessException) { /* registry read failed — retry next cycle */ }
         catch (System.Security.SecurityException) { /* registry read failed — retry next cycle */ }
         return found;
+    }
+
+    /// <summary>
+    /// Remembers every program <paramref name="installed"/> lists without announcing any, and stops learning once a
+    /// read is complete.
+    /// </summary>
+    private void Learn(ListedApps installed)
+    {
+        var learned = 0;
+        foreach (var app in installed.Apps)
+        {
+            if (_knownKeys.TryAdd(KeyOf(app), true)) learned++;
+            _knownPrograms.TryAdd(ProgramOf(app), true);
+        }
+
+        if (!installed.Complete) return;
+        _knownIsIncomplete = false;
+        Log.Information("New app alerts: every installed-programs list read; {Count} entries learned without an alert",
+                        learned);
     }
 
     /// <summary>

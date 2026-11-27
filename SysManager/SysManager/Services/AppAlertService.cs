@@ -29,7 +29,7 @@ public sealed partial class AppAlertService : IDisposable
     private readonly ConcurrentDictionary<string, bool> _knownKeys = new(StringComparer.OrdinalIgnoreCase);
     private readonly ConcurrentDictionary<string, bool> _knownPrograms = new(StringComparer.OrdinalIgnoreCase);
     private readonly SynchronizationContext? _syncContext;
-    private readonly Func<IReadOnlyList<AppInstallEntry>> _readRegistryApps;
+    private readonly Func<ListedApps> _readRegistryApps;
     private readonly TimeProvider _clock;
     // The signed-in account's %LocalAppData%, or null when it cannot be found.
     private readonly Func<string?> _userLocalAppData;
@@ -64,7 +64,7 @@ public sealed partial class AppAlertService : IDisposable
     /// test decides what is installed before and after the baseline, the time from <paramref name="clock"/>, and the
     /// signed-in account's <c>%LocalAppData%</c> from <paramref name="userLocalAppData"/>.
     /// </summary>
-    internal AppAlertService(Func<IReadOnlyList<AppInstallEntry>> readRegistryApps, TimeProvider? clock = null,
+    internal AppAlertService(Func<ListedApps> readRegistryApps, TimeProvider? clock = null,
                              Func<string?>? userLocalAppData = null)
     {
         _syncContext = SynchronizationContext.Current;
@@ -97,7 +97,7 @@ public sealed partial class AppAlertService : IDisposable
             catch (UnauthorizedAccessException) { /* best-effort */ }
         }
 
-        foreach (var app in _readRegistryApps())
+        foreach (var app in _readRegistryApps().Apps)
         {
             _knownKeys[KeyOf(app)] = true;
             _knownPrograms[ProgramOf(app)] = true;
@@ -178,8 +178,11 @@ public sealed partial class AppAlertService : IDisposable
     /// The user's list is the signed-in account's: elevated with another account's password, the current user is that
     /// administrator, whose list was read instead (#3394).
     /// </remarks>
-    internal static IReadOnlyList<AppInstallEntry> ReadListedApps() =>
-        Listed(UninstallEntries.ReadAll(ListsToRead(SignedInAccount.UserKey(UninstallerService.UninstallKey))));
+    internal static ListedApps ReadListedApps()
+    {
+        var installed = UninstallEntries.ReadAll(ListsToRead(SignedInAccount.UserKey(UninstallerService.UninstallKey)));
+        return new ListedApps(Listed(installed), installed.Complete);
+    }
 
     /// <summary>
     /// The uninstall lists to read: the machine's, then <paramref name="user"/>, the signed-in account's, when it is
@@ -322,7 +325,7 @@ public sealed partial class AppAlertService : IDisposable
         var found = 0;
         try
         {
-            var current = _readRegistryApps();
+            var current = _readRegistryApps().Apps;
             // Each new key is claimed once, so a pass that overlaps the timer's announces it once. A new key of a program
             // already known is an update that wrote a new entry: it is learned, and not announced.
             foreach (var app in current
@@ -438,3 +441,13 @@ public sealed partial class AppAlertService : IDisposable
         return sb.ToString();
     }
 }
+
+/// <summary>
+/// The programs one read of Windows' Installed apps list found, as <see cref="AppAlertService"/> names them.
+/// </summary>
+/// <param name="Apps">The programs listed.</param>
+/// <param name="Complete">
+/// False when one of the uninstall lists could not be read at all, so installed programs are missing from
+/// <paramref name="Apps"/>, as <see cref="UninstallList.Complete"/> says.
+/// </param>
+internal readonly record struct ListedApps(IReadOnlyList<AppInstallEntry> Apps, bool Complete);

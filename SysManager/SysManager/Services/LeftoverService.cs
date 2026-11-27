@@ -67,7 +67,8 @@ public interface ILeftoverService
 /// <para><b>What needs administrator rights is remembered.</b> Uninstalling runs without them, so a leftover under
 /// Program Files or ProgramData usually cannot be removed in the same session. Those items are kept in
 /// <c>%LocalAppData%\SysManager\uninstaller-leftovers.json</c> and offered again when the Uninstaller is opened in a
-/// session that runs as administrator.</para>
+/// session that runs as administrator. The <c>%LocalAppData%</c> is the signed-in account's: on a standard account,
+/// that session runs as whoever's password was typed, and it read that administrator's record instead (#3335).</para>
 /// </remarks>
 public sealed class LeftoverService : ILeftoverService
 {
@@ -98,6 +99,12 @@ public sealed class LeftoverService : ILeftoverService
     private readonly Func<string, bool> _deleteKey;
 
     /// <summary>
+    /// Whether the record is in another account's profile than the one SysManager runs as: the signed-in person's,
+    /// while SysManager runs elevated as an administrator.
+    /// </summary>
+    private readonly bool _recordIsAnotherAccounts;
+
+    /// <summary>
     /// Held across each read and write of the record: an uninstall run remembering items while the card forgets the
     /// ones just removed would otherwise each write back a copy taken before the other landed.
     /// </summary>
@@ -123,7 +130,11 @@ public sealed class LeftoverService : ILeftoverService
         _ps = ps ?? throw new ArgumentNullException(nameof(ps));
         _env = env ?? throw new ArgumentNullException(nameof(env));
         var home = Path.Combine(env.LocalAppData, "SysManager");
-        _pendingPath = Path.Combine(home, "uninstaller-leftovers.json");
+        // The backups are of this session's own keys, so they stay in its own profile; the record is the signed-in
+        // person's, whose uninstall wrote it.
+        var recordHome = env.SignedInLocalAppData ?? env.LocalAppData;
+        _pendingPath = Path.Combine(recordHome, "SysManager", "uninstaller-leftovers.json");
+        _recordIsAnotherAccounts = !SameFolder(recordHome, env.LocalAppData);
         _backupDir = Path.Combine(home, "Backups", "Uninstaller");
         _recycle = recycle ?? (_ => false);
         _deleteKey = deleteKey ?? (_ => false);
@@ -468,6 +479,7 @@ public sealed class LeftoverService : ILeftoverService
     /// </summary>
     private (IReadOnlyList<StoredGroup>? Groups, bool Unparsable) ReadStored()
     {
+        if (!RecordFolderIsSafe()) return (null, false);
         var json = StoreFile.ReadText(_pendingPath);
         if (json is null) return (null, false);
         return ParseOrNull(json) is { } groups ? (groups, false) : ([], true);
@@ -475,6 +487,7 @@ public sealed class LeftoverService : ILeftoverService
 
     private void WriteStored(IReadOnlyList<StoredGroup> stored)
     {
+        if (!RecordFolderIsSafe()) return;
         try
         {
             if (stored.Count == 0)
@@ -497,6 +510,31 @@ public sealed class LeftoverService : ILeftoverService
 
     /// <summary>The stored groups, or none for a record that is empty, malformed or from a future shape.</summary>
     internal static IReadOnlyList<StoredGroup> Parse(string? json) => ParseOrNull(json) ?? [];
+
+    /// <summary>
+    /// Whether the record may be read and written where it is: always in SysManager's own profile, and in another
+    /// account's only when no link stands on the way to its folder.
+    /// </summary>
+    /// <remarks>
+    /// The signed-in person's profile is theirs to change, and this session runs as administrator. A junction where the
+    /// record's folder should be would have that session write the record, and delete it, wherever the junction led.
+    /// </remarks>
+    private bool RecordFolderIsSafe()
+    {
+        if (!_recordIsAnotherAccounts) return true;
+        var folder = Path.GetDirectoryName(_pendingPath)!;
+        if (!SafeFileWalk.IsReachedThroughLink(Path.GetDirectoryName(folder)!)
+            && (!Directory.Exists(folder) || !SafeFileWalk.IsReachedThroughLink(folder)))
+            return true;
+
+        Log.Warning("Uninstaller leftovers: the signed-in account's record is reached through a link; left alone");
+        return false;
+    }
+
+    /// <summary>Whether <paramref name="a"/> and <paramref name="b"/> name the same folder.</summary>
+    private static bool SameFolder(string a, string b) =>
+        string.Equals(Path.TrimEndingDirectorySeparator(Path.GetFullPath(a)),
+                      Path.TrimEndingDirectorySeparator(Path.GetFullPath(b)), StringComparison.OrdinalIgnoreCase);
 
     /// <summary>The record's text for <paramref name="stored"/>, as it is written.</summary>
     internal static string Serialize(IReadOnlyList<StoredGroup> stored) => JsonSerializer.Serialize(stored, JsonOptions);

@@ -1234,7 +1234,10 @@ Key services:
   by `ContextMenuService.PruneBackups`). Every folder is re-checked by the finder's rules just before it goes.
   Folders under Program Files or ProgramData found without administrator rights are kept in
   `uninstaller-leftovers.json` and offered again, re-checked and unticked, in an elevated session: the record
-  is user-writable, so an administrator session removes only what is ticked in it. A cancelled
+  is user-writable, so an administrator session removes only what is ticked in it. The record is the signed-in
+  account's (`ILeftoverEnvironment.SignedInLocalAppData`), so a session elevated with another account's password
+  reads the person's own (#3335), and leaves alone one whose folder in that profile is reached through a link. A
+  cancelled
   `RemoveAsync` stops before its next item and returns what it removed, marked `Stopped` (#2783).
 - `LeftoverFinder` — the pure rules behind it: what an uninstalled app left, ranked Certain (the install
   folder its entry named, read before uninstalling), Probably (a folder named after the app directly under

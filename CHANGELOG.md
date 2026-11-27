@@ -10,6 +10,18 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.136.210] - 2026-11-27
+
+**In Windows Update, pressing Install selected again after a failed update no longer marks the updates that did
+install as not applied.**
+
+### Fixed
+- After an install, the updates that went in stayed ticked (#3415). Pressing **Install selected** again, the natural
+  retry after one update fails, counted them in its question, set them back to "Pending…" and asked Windows to
+  install them again. Windows no longer offered them, so each was marked "Not applied", the summary said so, and an
+  update that needed a restart lost that note. Once an install ends, the updates it installed are unticked and keep
+  saying "Installed", so the retry installs only what is still to go in.
+
 ## [1.136.209] - 2026-11-27
 
 **New App Alerts no longer announces a whole list of programs as just installed when Windows could not read part of

@@ -429,9 +429,9 @@ public class HealthAnalyzerTests
         Assert.Equal(HealthVerdict.Unknown, d.Verdict);
         Assert.False(string.IsNullOrWhiteSpace(d.Headline));
         Assert.Equal(StatusColors.Neutral, d.ColorHex);
-        Assert.Equal(0, d.WorstLossPercent);
-        Assert.Equal(0, d.WorstJitterMs);
-        Assert.Equal(0, d.AveragePingMs);
+        Assert.Null(d.WorstLossPercent);
+        Assert.Null(d.WorstJitterMs);
+        Assert.Null(d.AveragePingMs);
     }
 
     [Fact]
@@ -442,6 +442,67 @@ public class HealthAnalyzerTests
         d.PropertyChanged += (_, e) => { if (e.PropertyName == nameof(d.Verdict)) fired = true; };
         d.Verdict = HealthVerdict.Good;
         Assert.True(fired);
+    }
+
+    // ---------- a figure nothing measured is not a perfect one (#3385) ----------
+    // The pills read 0 ms for the average and the jitter when no reply came back, the best readings there are, next to
+    // "Problem on your local network"; before any sample they read 0 ms, 0.0% and 0 ms under "Waiting for data…".
+
+    [Fact]
+    public void WhenNoTargetGotAReply_TheAverageAndTheJitterAreUnmeasured()
+    {
+        var d = Analyze([M("gw", TargetRole.Gateway, avg: null, jitter: null, loss: 100, count: 5)]);
+
+        Assert.Equal("—", d.AveragePingDisplay);
+        Assert.Equal("—", d.WorstJitterDisplay);
+        Assert.Equal("100.0%", d.WorstLossDisplay);
+    }
+
+    [Fact]
+    public void WithOneReplyEach_TheJitterIsUnmeasured_AndTheAverageIsShown()
+    {
+        // A jitter needs two replies; the target rows already say "—" for it until then.
+        var d = Analyze([M("gw", TargetRole.Gateway, avg: 4, jitter: null, count: 1)]);
+
+        Assert.Equal("4 ms", d.AveragePingDisplay);
+        Assert.Equal("—", d.WorstJitterDisplay);
+    }
+
+    [Fact]
+    public void TheWorstJitter_IsTheWorstOfThoseMeasured()
+    {
+        var d = Analyze(
+        [
+            M("gw", TargetRole.Gateway, avg: 4, jitter: 3),
+            M("dns", TargetRole.PublicDns, avg: 20, jitter: null),
+        ]);
+
+        Assert.Equal("3 ms", d.WorstJitterDisplay);
+    }
+
+    [Fact]
+    public void BeforeAnySample_EveryFigureIsUnmeasured()
+    {
+        foreach (var d in new[] { new HealthDiagnostic(), Analyze([]) })
+        {
+            Assert.Equal("—", d.AveragePingDisplay);
+            Assert.Equal("—", d.WorstLossDisplay);
+            Assert.Equal("—", d.WorstJitterDisplay);
+        }
+    }
+
+    [Fact]
+    public void TheMeasuredFigures_AreShownWithTheirUnits()
+    {
+        var d = Analyze(
+        [
+            M("a", TargetRole.Generic, avg: 10, jitter: 2, loss: 1),
+            M("b", TargetRole.Generic, avg: 30, jitter: 8, loss: 4),
+        ]);
+
+        Assert.Equal("20 ms", d.AveragePingDisplay);
+        Assert.Equal("4.0%", d.WorstLossDisplay);
+        Assert.Equal("8 ms", d.WorstJitterDisplay);
     }
 
     // ---------- constants are sane ----------

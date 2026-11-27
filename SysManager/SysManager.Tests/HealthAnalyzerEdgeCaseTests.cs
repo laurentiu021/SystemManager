@@ -174,7 +174,7 @@ public class HealthAnalyzerEdgeCaseTests
         };
         var result = HealthAnalyzer.Analyze(metrics);
         Assert.Equal(HealthVerdict.Good, result.Verdict);
-        Assert.Equal(0, result.AveragePingMs);
+        Assert.Null(result.AveragePingMs);
     }
 
     [Fact]

@@ -2,6 +2,7 @@
 // Author: laurentiu021 · https://github.com/laurentiu021/SystemManager
 // License: MIT
 
+using System.Globalization;
 using CommunityToolkit.Mvvm.ComponentModel;
 using SysManager.Helpers;
 
@@ -33,8 +34,38 @@ public sealed partial class HealthDiagnostic : ObservableObject
     // must be as theme-aware as every value the analyzer later assigns.
     [ObservableProperty] private string _colorHex = StatusColors.Neutral;
 
-    // Rolled-up metrics for the status pills.
-    [ObservableProperty] private double _worstLossPercent;
-    [ObservableProperty] private double _worstJitterMs;
-    [ObservableProperty] private double _averagePingMs;
+    // Rolled-up metrics for the status pills, each null until something measured it. They were 0 then, which the
+    // pills showed as 0 ms and 0.0%, the best readings there are, while every ping timed out (#3385).
+
+    /// <summary>The worst loss of the targets that were pinged, or null before the first ping.</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(WorstLossDisplay))]
+    private double? _worstLossPercent;
+
+    /// <summary>
+    /// The worst jitter of the targets that have one, or null while none has the two replies it needs.
+    /// </summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(WorstJitterDisplay))]
+    private double? _worstJitterMs;
+
+    /// <summary>The average of the targets' average pings, or null while no target got a reply.</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(AveragePingDisplay))]
+    private double? _averagePingMs;
+
+    /// <summary>The average ping as the AVG PING pill shows it, or "—" while no target got a reply.</summary>
+    public string AveragePingDisplay => Shown(AveragePingMs, "F0", " ms");
+
+    /// <summary>The worst loss as the WORST LOSS pill shows it, or "—" before the first ping.</summary>
+    public string WorstLossDisplay => Shown(WorstLossPercent, "F1", "%");
+
+    /// <summary>The worst jitter as the WORST JITTER pill shows it, or "—" while no target has one.</summary>
+    public string WorstJitterDisplay => Shown(WorstJitterMs, "F0", " ms");
+
+    /// <summary>
+    /// <paramref name="value"/> in <paramref name="format"/> followed by <paramref name="unit"/>, or "—" for none.
+    /// </summary>
+    private static string Shown(double? value, string format, string unit) =>
+        value is { } v ? v.ToString(format, CultureInfo.InvariantCulture) + unit : "—";
 }

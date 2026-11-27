@@ -569,7 +569,8 @@ public class AppAlertsViewModelTests
     [Fact]
     public async Task Monitoring_ThatMissesTheSignedInAccount_SaysSoOnTheStatusLine()
     {
-        using var vm = new AppAlertsViewModel(new AppAlertService(() => [], userLocalAppData: () => null), NoHistory());
+        using var vm = new AppAlertsViewModel(
+            new AppAlertService(() => new([], Complete: true), userLocalAppData: () => null), NoHistory());
 
         await vm.StartMonitoringCommand.ExecuteAsync(null);
         try
@@ -593,7 +594,7 @@ public class AppAlertsViewModelTests
         try
         {
             using var vm = new AppAlertsViewModel(
-                new AppAlertService(() => [], userLocalAppData: () => theirs), NoHistory());
+                new AppAlertService(() => new([], Complete: true), userLocalAppData: () => theirs), NoHistory());
 
             await vm.StartMonitoringCommand.ExecuteAsync(null);
             var status = vm.MonitorStatus;

@@ -18,12 +18,15 @@ public class AppAlertServiceTests
 {
     private static AppInstallEntry App(string name) => new() { Name = name, Source = "Registry" };
 
+    /// <summary>A read of the installed-programs list that found <paramref name="apps"/> and read every list.</summary>
+    private static ListedApps All(IEnumerable<AppInstallEntry> apps) => new([.. apps], Complete: true);
+
     [Fact]
     public void CheckNow_BeforeMonitoringStarts_AnnouncesNothing()
     {
         // With no baseline, every installed program is missing from the known list, so a check here would
         // announce all of them as new.
-        using var service = new AppAlertService(() => [App("Already installed"), App("Also installed")]);
+        using var service = new AppAlertService(() => All([App("Already installed"), App("Also installed")]));
 
         Assert.Equal(0, service.CheckNow());
     }
@@ -32,7 +35,7 @@ public class AppAlertServiceTests
     public void CheckNow_WhileMonitoring_CountsOnlyWhatIsNewSinceTheBaseline()
     {
         List<AppInstallEntry> installed = [App("Already installed")];
-        using var service = new AppAlertService(() => [.. installed]);
+        using var service = new AppAlertService(() => All(installed));
         service.TakeBaseline();
         service.Start();
 
@@ -49,7 +52,7 @@ public class AppAlertServiceTests
     public void CheckNow_AfterMonitoringStops_AnnouncesNothing()
     {
         List<AppInstallEntry> installed = [App("Already installed")];
-        using var service = new AppAlertService(() => [.. installed]);
+        using var service = new AppAlertService(() => All(installed));
         service.TakeBaseline();
         service.Start();
         service.Stop();
@@ -57,6 +60,71 @@ public class AppAlertServiceTests
         installed.Add(App("Installed afterwards"));
 
         Assert.Equal(0, service.CheckNow());
+    }
+
+    // ---------- a baseline taken from an incomplete read (#3393) ----------
+    // The read's Complete flag was dropped. A list that could not be read while the baseline was taken was read in full
+    // at the next check, and every program in it was announced as just installed.
+
+    /// <summary>
+    /// A read of two lists, the machine's and the user's, that could not read the one <paramref name="failing"/> names,
+    /// if any.
+    /// </summary>
+    private static ListedApps Read(List<AppInstallEntry> machine, List<AppInstallEntry> user, string failing) => new(
+        [.. failing == "machine" ? [] : machine, .. failing == "user" ? [] : user], Complete: failing.Length == 0);
+
+    [Fact]
+    public void CheckNow_AfterAnIncompleteBaseline_LearnsTheMissingProgramsWithoutAnnouncingThem()
+    {
+        List<AppInstallEntry> machine = [App("Already installed")];
+        List<AppInstallEntry> user = [App("Installed for the user"), App("Also installed for the user")];
+        var failing = "user";
+        using var service = new AppAlertService(() => Read(machine, user, failing));
+        service.TakeBaseline();
+        service.Start();
+
+        failing = "";
+        Assert.Equal(0, service.CheckNow());
+
+        // Learned, not lost: a program installed after that is announced as usual.
+        machine.Add(App("Installed afterwards"));
+        Assert.Equal(1, service.CheckNow());
+    }
+
+    [Fact]
+    public void CheckNow_AfterAnIncompleteBaseline_AnnouncesNothingUntilAReadIsComplete()
+    {
+        // Another list fails at the next read than at the baseline, so the list missing at the baseline is read whole
+        // while the read as a whole is still incomplete.
+        List<AppInstallEntry> machine = [App("Already installed")];
+        List<AppInstallEntry> user = [App("Installed for the user")];
+        var failing = "user";
+        using var service = new AppAlertService(() => Read(machine, user, failing));
+        service.TakeBaseline();
+        service.Start();
+
+        failing = "machine";
+        Assert.Equal(0, service.CheckNow());
+
+        failing = "";
+        Assert.Equal(0, service.CheckNow());
+    }
+
+    [Fact]
+    public void CheckNow_AnIncompleteReadAfterACompleteBaseline_StillAnnouncesWhatIsNew()
+    {
+        // A complete baseline knows every list, so a read that misses one can only miss programs, never invent them.
+        List<AppInstallEntry> machine = [App("Already installed")];
+        List<AppInstallEntry> user = [App("Installed for the user")];
+        var failing = "";
+        using var service = new AppAlertService(() => Read(machine, user, failing));
+        service.TakeBaseline();
+        service.Start();
+
+        failing = "user";
+        machine.Add(App("Installed afterwards"));
+
+        Assert.Equal(1, service.CheckNow());
     }
 
     // ---------- what Windows lists, and what an update is (#2769) ----------
@@ -104,7 +172,7 @@ public class AppAlertServiceTests
     public void AnUpdateThatRenamesItsEntry_IsNotAnnounced()
     {
         List<AppInstallEntry> installed = [Installed(MachineList + "Contoso", "Contoso Player 4.2", "Contoso")];
-        using var service = new AppAlertService(() => [.. installed]);
+        using var service = new AppAlertService(() => All(installed));
         service.TakeBaseline();
         service.Start();
 
@@ -120,7 +188,7 @@ public class AppAlertServiceTests
     public void AnUpdateThatChangesTheVersionInItsName_IsNotAnnounced()
     {
         List<AppInstallEntry> installed = [Installed(MachineList + "7-Zip", "7-Zip 24.08 (x64)", "Igor Pavlov")];
-        using var service = new AppAlertService(() => [.. installed]);
+        using var service = new AppAlertService(() => All(installed));
         service.TakeBaseline();
         service.Start();
 
@@ -138,7 +206,7 @@ public class AppAlertServiceTests
     {
         List<AppInstallEntry> installed =
             [Installed(MachineList + "{Python-3.12.4}", "Python 3.12.4 (64-bit)", "Python Software Foundation")];
-        using var service = new AppAlertService(() => [.. installed]);
+        using var service = new AppAlertService(() => All(installed));
         service.TakeBaseline();
         service.Start();
 
@@ -155,7 +223,7 @@ public class AppAlertServiceTests
     public void ANewProgram_IsAnnouncedOnce_FromEitherList()
     {
         List<AppInstallEntry> installed = [Installed(MachineList + "Notes", "Notes", "Contoso")];
-        using var service = new AppAlertService(() => [.. installed]);
+        using var service = new AppAlertService(() => All(installed));
         service.TakeBaseline();
         service.Start();
 
@@ -202,7 +270,7 @@ public class AppAlertServiceTests
     private static (AppAlertService Service, List<AppInstallEntry> Detected, List<(AppInstallEntry Alert, AppInstallEntry App)> Identified)
         Watching(List<AppInstallEntry> installed, ManualClock clock)
     {
-        var service = new AppAlertService(() => [.. installed], clock);
+        var service = new AppAlertService(() => All(installed), clock);
         var detected = new List<AppInstallEntry>();
         var identified = new List<(AppInstallEntry, AppInstallEntry)>();
         service.NewAppDetected += detected.Add;
@@ -372,7 +440,7 @@ public class AppAlertServiceTests
         var programs = Directory.CreateDirectory(Path.Combine(theirs, "Programs")).FullName;
         try
         {
-            using var service = new AppAlertService(() => [], userLocalAppData: () => theirs);
+            using var service = new AppAlertService(() => All([]), userLocalAppData: () => theirs);
 
             var watched = service.GetMonitoredDirectories();
 
@@ -390,7 +458,7 @@ public class AppAlertServiceTests
     [Fact]
     public void ABaseline_ThatCannotFindTheSignedInAccount_SaysSo()
     {
-        using var service = new AppAlertService(() => [], userLocalAppData: () => null);
+        using var service = new AppAlertService(() => All([]), userLocalAppData: () => null);
 
         service.TakeBaseline();
 
@@ -403,7 +471,7 @@ public class AppAlertServiceTests
         var theirs = Directory.CreateTempSubdirectory("smtest_alerts_localappdata_").FullName;
         try
         {
-            using var service = new AppAlertService(() => [], userLocalAppData: () => theirs);
+            using var service = new AppAlertService(() => All([]), userLocalAppData: () => theirs);
 
             service.TakeBaseline();
 

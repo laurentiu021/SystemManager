@@ -10,6 +10,20 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.136.209] - 2026-11-27
+
+**New App Alerts no longer announces a whole list of programs as just installed when Windows could not read part of
+that list when monitoring started.**
+
+### Fixed
+- When monitoring started, New App Alerts remembered every installed program it could read, and ignored that one of
+  the three lists of installed programs (the machine's 64-bit and 32-bit lists, and the signed-in account's) might
+  not have been readable at all (#3393). At the next check that list read normally, and every program in it was
+  announced as a new install, with a notification each, saved to the alert history Recent Changes also reads. Now,
+  after an incomplete first read, the programs a later read finds are learned without being announced until one read
+  gets every list, the way the installed-programs history in Recent Changes already refuses to compare an incomplete
+  read. A program installed after that is announced as before.
+
 ## [1.136.208] - 2026-11-27
 
 **Windows Update now changes each row's status on the window's thread while it installs, as the rest of the app

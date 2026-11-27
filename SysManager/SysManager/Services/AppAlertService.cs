@@ -29,10 +29,15 @@ public sealed partial class AppAlertService : IDisposable
     private readonly ConcurrentDictionary<string, bool> _knownKeys = new(StringComparer.OrdinalIgnoreCase);
     private readonly ConcurrentDictionary<string, bool> _knownPrograms = new(StringComparer.OrdinalIgnoreCase);
     private readonly SynchronizationContext? _syncContext;
-    private readonly Func<IReadOnlyList<AppInstallEntry>> _readRegistryApps;
+    private readonly Func<ListedApps> _readRegistryApps;
     private readonly TimeProvider _clock;
     // The signed-in account's %LocalAppData%, or null when it cannot be found.
     private readonly Func<string?> _userLocalAppData;
+
+    // Whether the programs known so far came from a read that could not open one of the lists. Until a read gets every
+    // list, the programs a check finds are learned and not announced: the list missing from the baseline would
+    // otherwise be announced whole, as installed just now (#3393).
+    private volatile bool _knownIsIncomplete;
 
     // The folders announced lately, each until an uninstall entry claims it. An installer creates its folder first and
     // writes its uninstall entry minutes later, and the two were announced as two installs (#2878).
@@ -64,7 +69,7 @@ public sealed partial class AppAlertService : IDisposable
     /// test decides what is installed before and after the baseline, the time from <paramref name="clock"/>, and the
     /// signed-in account's <c>%LocalAppData%</c> from <paramref name="userLocalAppData"/>.
     /// </summary>
-    internal AppAlertService(Func<IReadOnlyList<AppInstallEntry>> readRegistryApps, TimeProvider? clock = null,
+    internal AppAlertService(Func<ListedApps> readRegistryApps, TimeProvider? clock = null,
                              Func<string?>? userLocalAppData = null)
     {
         _syncContext = SynchronizationContext.Current;
@@ -97,11 +102,17 @@ public sealed partial class AppAlertService : IDisposable
             catch (UnauthorizedAccessException) { /* best-effort */ }
         }
 
-        foreach (var app in _readRegistryApps())
+        var installed = _readRegistryApps();
+        foreach (var app in installed.Apps)
         {
             _knownKeys[KeyOf(app)] = true;
             _knownPrograms[ProgramOf(app)] = true;
         }
+
+        _knownIsIncomplete = !installed.Complete;
+        if (_knownIsIncomplete)
+            Log.Information("New app alerts: an installed-programs list could not be read; what it lists is learned "
+                            + "without an alert once it can be");
     }
 
     /// <summary>
@@ -178,8 +189,11 @@ public sealed partial class AppAlertService : IDisposable
     /// The user's list is the signed-in account's: elevated with another account's password, the current user is that
     /// administrator, whose list was read instead (#3394).
     /// </remarks>
-    internal static IReadOnlyList<AppInstallEntry> ReadListedApps() =>
-        Listed(UninstallEntries.ReadAll(ListsToRead(SignedInAccount.UserKey(UninstallerService.UninstallKey))));
+    internal static ListedApps ReadListedApps()
+    {
+        var installed = UninstallEntries.ReadAll(ListsToRead(SignedInAccount.UserKey(UninstallerService.UninstallKey)));
+        return new ListedApps(Listed(installed), installed.Complete);
+    }
 
     /// <summary>
     /// The uninstall lists to read: the machine's, then <paramref name="user"/>, the signed-in account's, when it is
@@ -303,7 +317,8 @@ public sealed partial class AppAlertService : IDisposable
     /// Does nothing until <see cref="Start"/> has run. The check reports what is missing from the list
     /// <see cref="TakeBaseline"/> recorded when monitoring began; with no such list, every program on the
     /// PC would be announced as newly installed. A run that overlaps the timer's own pass is harmless:
-    /// each new name is claimed once, so it is announced once.
+    /// each new name is claimed once, so it is announced once. While that list came from a read that could not open
+    /// one of the lists, a check learns what it finds and announces nothing, until a read gets every list (#3393).
     /// </remarks>
     /// <returns>How many new installations were found and announced.</returns>
     public int CheckNow()
@@ -322,7 +337,14 @@ public sealed partial class AppAlertService : IDisposable
         var found = 0;
         try
         {
-            var current = _readRegistryApps();
+            var installed = _readRegistryApps();
+            if (_knownIsIncomplete)
+            {
+                Learn(installed);
+                return 0;
+            }
+
+            var current = installed.Apps;
             // Each new key is claimed once, so a pass that overlaps the timer's announces it once. A new key of a program
             // already known is an update that wrote a new entry: it is learned, and not announced.
             foreach (var app in current
@@ -348,6 +370,25 @@ public sealed partial class AppAlertService : IDisposable
         catch (UnauthorizedAccessException) { /* registry read failed — retry next cycle */ }
         catch (System.Security.SecurityException) { /* registry read failed — retry next cycle */ }
         return found;
+    }
+
+    /// <summary>
+    /// Remembers every program <paramref name="installed"/> lists without announcing any, and stops learning once a
+    /// read is complete.
+    /// </summary>
+    private void Learn(ListedApps installed)
+    {
+        var learned = 0;
+        foreach (var app in installed.Apps)
+        {
+            if (_knownKeys.TryAdd(KeyOf(app), true)) learned++;
+            _knownPrograms.TryAdd(ProgramOf(app), true);
+        }
+
+        if (!installed.Complete) return;
+        _knownIsIncomplete = false;
+        Log.Information("New app alerts: every installed-programs list read; {Count} entries learned without an alert",
+                        learned);
     }
 
     /// <summary>
@@ -438,3 +479,13 @@ public sealed partial class AppAlertService : IDisposable
         return sb.ToString();
     }
 }
+
+/// <summary>
+/// The programs one read of Windows' Installed apps list found, as <see cref="AppAlertService"/> names them.
+/// </summary>
+/// <param name="Apps">The programs listed.</param>
+/// <param name="Complete">
+/// False when one of the uninstall lists could not be read at all, so installed programs are missing from
+/// <paramref name="Apps"/>, as <see cref="UninstallList.Complete"/> says.
+/// </param>
+internal readonly record struct ListedApps(IReadOnlyList<AppInstallEntry> Apps, bool Complete);

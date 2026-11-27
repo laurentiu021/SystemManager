@@ -324,4 +324,38 @@ public class WindowsUpdateViewModelTests
             ["KB5007651", "KB2267602", ""],
             json.RootElement.EnumerateArray().Select(entry => entry.GetProperty("KB").GetString()));
     }
+
+    /// <summary>
+    /// The history's dates come out of real Windows PowerShell as round-trip timestamps, one shape in every culture
+    /// (#3368).
+    /// </summary>
+    /// <remarks>
+    /// They were formatted as yyyy-MM-dd in the session's culture, calendar included, and read back as Gregorian, so a
+    /// Japanese, Taiwan or Korean calendar showed the wrong year.
+    /// </remarks>
+    [Fact]
+    public async Task TheHistoryColumns_SendEachDateAsARoundTripTimestamp()
+    {
+        const string Entries = """
+            $hist = @(
+                [pscustomobject]@{ Title = 'a'; KB = 'KB1'; Result = 'Succeeded'; Date = [datetime]'2026-10-14' },
+                [pscustomobject]@{ Title = 'b'; KB = 'KB2'; Result = 'Failed'; Date = $null }
+            )
+            """;
+        using var runner = new PowerShellRunner();
+        var output = new ConcurrentQueue<string>();
+        runner.LineReceived += line =>
+        {
+            if (line.Kind == OutputKind.Output) output.Enqueue(line.Text);
+        };
+
+        var exitCode = await runner.RunScriptViaPwshAsync(
+            Entries + "\n" + WindowsUpdateViewModel.PsWindowsUpdateHistoryColumns);
+
+        Assert.Equal(0, exitCode);
+        using var json = JsonDocument.Parse(string.Concat(output));
+        Assert.Equal(
+            ["2026-10-14T00:00:00.0000000", ""],
+            json.RootElement.EnumerateArray().Select(entry => entry.GetProperty("Date").GetString()));
+    }
 }

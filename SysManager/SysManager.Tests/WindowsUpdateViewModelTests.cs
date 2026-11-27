@@ -768,6 +768,30 @@ public sealed class WindowsUpdateViewModelTests : IDisposable
         Assert.Equal("Defender Update", vm.Updates[0].Title);
     }
 
+    /// <summary>
+    /// A history date comes as a round-trip timestamp and is read back as one, so neither the PC's calendar nor its
+    /// time zone changes the day shown (#3368).
+    /// </summary>
+    /// <remarks>
+    /// The script formatted each date as yyyy-MM-dd in its session's culture, calendar included, and the text was read
+    /// back as Gregorian: a Japanese, Taiwan or Korean calendar gave the wrong year. The round-trip form has one shape
+    /// in every culture, and a UTC date stays UTC, rather than moving to the local day.
+    /// </remarks>
+    [Fact]
+    public void ParseUpdateJson_ReadsARoundTripDate_AsTheDayItNames()
+    {
+        var vm = NewVm();
+        var method = typeof(WindowsUpdateViewModel)
+            .GetMethod("ParseUpdateJson", BindingFlags.NonPublic | BindingFlags.Instance)!;
+
+        const string json = """{"Title":"Update","KB":"","Status":"Installed","Date":"2026-08-04T23:30:00.0000000Z"}""";
+        method.Invoke(vm, [json]);
+
+        var date = Assert.Single(vm.Updates).Date!.Value;
+        Assert.Equal(DateTimeKind.Utc, date.Kind);
+        Assert.Equal("2026-08-04", vm.Updates[0].DateDisplay);
+    }
+
     [Fact]
     public void ParseUpdateJson_EmptyArray_NoUpdates()
     {

@@ -130,13 +130,15 @@ public sealed partial class WindowsUpdateViewModel : ViewModelBase
     /// "KB" and digits when that is empty. It was read from <c>KBArticleIDs</c>, which only an update the scan lists
     /// has, so the column was blank on every row (#2791). A constant of its own, so a test can run it on entries shaped
     /// like the module's without the module.
+    /// <para>The date is sent in the round-trip form, which has one shape in every culture. As yyyy-MM-dd it was
+    /// written in the session's culture, calendar included, and read back as Gregorian (#3368).</para>
     /// </remarks>
     internal const string PsWindowsUpdateHistoryColumns = """
         $hist | Select-Object @{N='Title';E={$_.Title}},
             @{N='KB';E={if($_.KB){[string]$_.KB}elseif($_.Title -match 'KB\d+'){$Matches[0]}else{''}}},
             @{N='Size';E={''}},
             @{N='Status';E={$_.Result}},
-            @{N='Date';E={if($_.Date){$_.Date.ToString('yyyy-MM-dd')}else{''}}},
+            @{N='Date';E={if($_.Date){$_.Date.ToString('o')}else{''}}},
             @{N='IsHidden';E={$false}},
             @{N='Category';E={'History'}} |
         ConvertTo-Json -Compress
@@ -972,7 +974,9 @@ public sealed partial class WindowsUpdateViewModel : ViewModelBase
         var text = el.GetString();
         if (string.IsNullOrWhiteSpace(text)) return null;
 
-        if (DateTime.TryParse(text, CultureInfo.InvariantCulture, DateTimeStyles.None, out var dt))
+        // The round-trip form the history script sends, read as it was written: a UTC date stays UTC rather than
+        // moving to the local day, as Restore Points reads its dates (#3368).
+        if (DateTime.TryParse(text, CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind, out var dt))
             return dt;
 
         return null;

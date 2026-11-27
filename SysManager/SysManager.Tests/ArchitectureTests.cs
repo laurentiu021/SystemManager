@@ -12050,9 +12050,12 @@ public partial class ArchitectureTests
     /// <item><c>yyyyMMdd_HHmmss</c> → <c>25690804_134530</c> on th-TH — and this one lands in a
     /// registry-backup FILENAME, so the file is stamped with a date that is not the date</item>
     /// </list>
-    /// <para>Both shapes carry the defect and both are checked: <c>x.ToString("pattern")</c> and the
-    /// interpolation hole <c>$"{x:pattern}"</c>. An interpolation hole cannot take a provider, so the
-    /// fix there is to format inside the hole.</para>
+    /// <para>Three shapes carry the defect and all are checked: <c>x.ToString("pattern")</c>, the
+    /// interpolation hole <c>$"{x:pattern}"</c>, and a PowerShell script's <c>.ToString('pattern')</c>
+    /// inside a C# string. An interpolation hole cannot take a provider, so the fix there is to format
+    /// inside the hole. A script formats in its session's culture, calendar included, and Windows Update's
+    /// history dates came back with a Japanese, Taiwan or Korean year that way (#3368); the script names
+    /// <c>[cultureinfo]::InvariantCulture</c>, or sends <c>.ToString('o')</c>, which has one shape.</para>
     /// <para>Standard format specifiers (<c>"g"</c>, <c>"f"</c>, <c>"D"</c>) are deliberately NOT
     /// flagged: localizing those IS correct, and they have no fixed shape to preserve.</para>
     /// </summary>
@@ -12062,6 +12065,26 @@ public partial class ArchitectureTests
         var appDir = TestPaths.AppProject();
         var offenders = new List<string>();
         var scanned = 0;
+
+        // The reader sees each shape, and passes what names its culture or has no fixed shape. The script cases are
+        // the two #3368 found, a history date and a backup stamp.
+        foreach (var culpable in new[]
+                 {
+                     "d.ToString(\"yyyy-MM-dd\")", "$\"{d:HH:mm}\"",
+                     "$_.Date.ToString('yyyy-MM-dd')", "(Get-Date).ToString('yyyyMMddHHmmss')",
+                 })
+        {
+            Assert.True(CultureBlindDateFormat().IsMatch(culpable), $"the guard no longer sees {culpable}");
+        }
+
+        foreach (var fine in new[]
+                 {
+                     "d.ToString(\"yyyy-MM-dd\", CultureInfo.InvariantCulture)", "$_.Date.ToString('o')",
+                     "(Get-Date).ToString('yyyyMMddHHmmss', [cultureinfo]::InvariantCulture)",
+                 })
+        {
+            Assert.False(CultureBlindDateFormat().IsMatch(fine), $"the guard flags {fine}, which names its culture");
+        }
 
         foreach (var file in Directory.EnumerateFiles(appDir, "*.cs", SearchOption.AllDirectories))
         {
@@ -12102,7 +12125,8 @@ public partial class ArchitectureTests
             "These dates are formatted with a fixed shape but no culture, so CurrentCulture decides the "
             + "output: on a Thai or Saudi regional setting the year and month change, and on Finnish the "
             + "time separator does. Pass CultureInfo.InvariantCulture (and for an interpolation hole, "
-            + "format inside the hole — a hole takes no provider):\n  "
+            + "format inside the hole — a hole takes no provider). In a PowerShell script, pass "
+            + "[cultureinfo]::InvariantCulture, or send .ToString('o'):\n  "
             + string.Join("\n  ", offenders)
             + $"\n({scanned} culture-blind, {compliant} culture-explicit)");
     }
@@ -12112,10 +12136,13 @@ public partial class ArchitectureTests
     // Alternative 2 — an interpolation hole $"{value:pattern}", which cannot take a provider at all.
     // Numeric specifiers (F1, N0, X8) are out of scope here: the decimal-separator class is a
     // separate concern, and hex formatting consults no culture data.
-    // Both alternatives reuse the name "pattern" — .NET merges same-named groups, so whichever
+    // Alternative 3 — a PowerShell .ToString('pattern') inside a script string, which formats in the
+    // session's culture just the same (#3368).
+    // All alternatives reuse the name "pattern" — .NET merges same-named groups, so whichever
     // alternative matched reports through Groups["pattern"] and the caller needs no branch.
     [GeneratedRegex(@"\.ToString\(""(?<pattern>[^""]*(?:yyyy|HH|mm:ss|MM-dd|dd MMM)[^""]*)""\s*\)"
-                    + @"|\{[^{}""]{1,60}:(?<pattern>[^{}]*(?:yyyy|HH:mm|mm:ss)[^{}]*)\}",
+                    + @"|\{[^{}""]{1,60}:(?<pattern>[^{}]*(?:yyyy|HH:mm|mm:ss)[^{}]*)\}"
+                    + @"|\.ToString\('(?<pattern>[^']*(?:yyyy|HH|mm:ss|MM-dd|dd MMM)[^']*)'\s*\)",
                     RegexOptions.CultureInvariant)]
     private static partial Regex CultureBlindDateFormat();
 

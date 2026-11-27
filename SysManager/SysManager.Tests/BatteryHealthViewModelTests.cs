@@ -351,7 +351,10 @@ public class BatteryHealthViewModelTests
         var vm = new BatteryHealthViewModel(
             () => Task.FromResult<Models.BatteryInfo?>(new Models.BatteryInfo
             {
-                HasBattery = true, Name = "Main battery", ChargePercent = 80, Status = "Discharging",
+                HasBattery = true,
+                Name = "Main battery",
+                ChargePercent = 80,
+                Status = "Discharging",
             }),
             _ => Task.FromResult(BatteryReportRead.Failed));
         await vm.InitializationComplete;

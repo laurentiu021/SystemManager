@@ -14,7 +14,11 @@ namespace SysManager.ViewModels;
 /// <summary>
 /// Battery Health tab — shows charge, health %, wear, cycles, runtime, and how the capacity has changed over time.
 /// </summary>
-public sealed partial class BatteryHealthViewModel : ViewModelBase
+/// <remarks>
+/// Hosts the admin banner: health, wear, the capacities and the cycle count come from <c>root\WMI</c>, which answers
+/// only an elevated process, and the page said so with no way to elevate from it (#3423).
+/// </remarks>
+public sealed partial class BatteryHealthViewModel : ElevatedViewModelBase
 {
     /// <inheritdoc/>
     protected internal override IRelayCommand? RefreshOnF5 => RefreshCommand;
@@ -27,6 +31,25 @@ public sealed partial class BatteryHealthViewModel : ViewModelBase
 
     /// <summary>Shown on the capacity card when the battery report could not be produced or read.</summary>
     internal const string HistoryUnreadable = "The capacity history could not be read. Press Refresh to try again.";
+
+    /// <summary>Why health and wear are missing, without administrator rights.</summary>
+    internal const string CapacityNeedsAdministrator =
+        "Battery health and wear could not be read. SysManager reads them, and the design capacity, full charge "
+        + "capacity and cycle count below, from a part of Windows that only answers an elevated process, so they "
+        + "need it to be running as administrator. The rest of the page, including the capacity history, works "
+        + "without it.";
+
+    /// <summary>Why health and wear are missing when SysManager already runs as administrator (#3423).</summary>
+    internal const string CapacityNotReported =
+        "Windows did not report this battery's capacities, so health and wear cannot be worked out here. The rest of "
+        + "the page, including the capacity history, still works.";
+
+    /// <summary>What the card says in place of health and wear when Windows gave no capacities.</summary>
+    /// <remarks>
+    /// As administrator the figures are missing because the battery's driver does not report them, which a relaunch
+    /// cannot change: the page told an administrator to elevate (#3423).
+    /// </remarks>
+    public string MissingCapacityText => IsElevated ? CapacityNotReported : CapacityNeedsAdministrator;
 
     private readonly Func<Task<BatteryInfo?>> _read;
     private readonly Func<CancellationToken, Task<BatteryReportRead>> _readHistory;
@@ -118,6 +141,9 @@ public sealed partial class BatteryHealthViewModel : ViewModelBase
         }
     }
 
+    /// <summary>What the summary says in place of a health figure Windows did not give.</summary>
+    private string MissingHealth => IsElevated ? "not reported" : "requires elevation";
+
     private async Task ReadBatteryAsync()
     {
         try
@@ -135,7 +161,7 @@ public sealed partial class BatteryHealthViewModel : ViewModelBase
             Summary = Battery.HasBattery
                 ? Battery.HealthPercent >= 0
                     ? $"{Battery.Name} · {Battery.ChargePercent}% · Health {Battery.HealthPercent}% · {Battery.Status}"
-                    : $"{Battery.Name} · {Battery.ChargePercent}% · Health: requires elevation · {Battery.Status}"
+                    : $"{Battery.Name} · {Battery.ChargePercent}% · Health: {MissingHealth} · {Battery.Status}"
                 : "No battery detected — this device runs on AC power only.";
 
             StatusMessage = Battery.HasBattery

@@ -491,8 +491,10 @@ public sealed class WindowsUpdateService : IWindowsUpdateService
     internal static UpdateEntry MapToEntry(dynamic u)
     {
         var title = (string)(u.Title ?? string.Empty);
-        var kbList = ExtractKbIds(u);
-        var kb = kbList.Count > 0 ? "KB" + string.Join(",", kbList) : string.Empty;
+        List<string> kbList = ExtractKbIds(u);
+        // Each number with its own prefix. "KB" went once in front of the joined list, so an update with two articles
+        // read "KB5034441,5034442" and the second number found nothing when searched for (#3389).
+        var kb = string.Join(", ", kbList.Select(id => "KB" + id));
         long size = 0;
         try { size = (long)(decimal)u.MaxDownloadSize; }
         catch (Microsoft.CSharp.RuntimeBinder.RuntimeBinderException ex) { Serilog.Log.Debug(ex, "Windows Update: MaxDownloadSize not exposed for {Title}", title); }

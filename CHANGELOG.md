@@ -10,6 +10,16 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.136.214] - 2026-11-27
+
+**Windows Update puts "KB" in front of every article number of an update that has more than one.**
+
+### Fixed
+- An update listing two Microsoft Knowledge Base articles showed "KB5034441,5034442" in the KB column: "KB" went
+  once in front of the joined numbers, so the second one had no prefix and searching for it, as the tab suggests,
+  found nothing (#3389). Each number now has its own, as in "KB5034441, KB5034442". Updates with one article, the
+  usual case, were not affected.
+
 ## [1.136.213] - 2026-11-27
 
 **Ping's summary card shows "—" for a figure it could not measure, instead of a perfect 0 ms.**

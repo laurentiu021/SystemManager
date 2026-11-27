@@ -166,6 +166,26 @@ public class WindowsUpdateServiceTests
             found.Select(e => (e.UpdateId, e.KB, e.SizeDisplay, e.Category)));
     }
 
+    /// <summary>
+    /// An update with two Knowledge Base articles lists both with their prefix: "KB" went once in front of the joined
+    /// numbers, so the second read "5034442", which finds nothing when searched for (#3389).
+    /// </summary>
+    [Fact]
+    public async Task AnUpdateWithTwoArticles_ListsEachWithItsKbPrefix()
+    {
+        var session = new FakeUpdateSession();
+        session.Pending.Add(new FakeUpdate(Product)
+        {
+            Title = "2026-10 Security Update",
+            Id = "two",
+            KbNumbers = ["5034441", "5034442"],
+        });
+
+        var found = await AgentOver(session).ScanAsync();
+
+        Assert.Equal("KB5034441, KB5034442", Assert.Single(found).KB);
+    }
+
     [Fact]
     public async Task AScanWhoseSearchFails_ThrowsTheAgentsError()
     {

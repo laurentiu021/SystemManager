@@ -968,6 +968,10 @@ Key services:
   loads read through it and stop at the first sample before their range, so the last hour of a 30-day Resource
   History file reads about 600 lines where it read all 260,000 (#2853). The file is cut only at an LF and each line
   is decoded whole, and `TailLinesTests` holds it to `File.ReadAllLines` for every read size from one byte.
+- `Helpers/SignedInAccount` — where the account signed in to SysManager's session keeps its own things when SysManager
+  runs elevated as another account (#2826): its `%LocalAppData%`, read from its own hive's `User Shell Folders` with
+  `%USERPROFILE%` taken from the machine's `ProfileList`, and its keys under `HKEY_USERS`. It tells the account by
+  `AdminHelper.RunsAsTheSignedInAccount`, and answers null rather than the administrator's when it cannot (#3394).
 - `Helpers/SafeFileWalk` — the one directory walk every service that deletes or overwrites what it
   finds goes through. Four rules live here rather than at eight copies of a stack loop: never enter a
   reparse point (the root, a directory, **or a file**), skip the excluded subtrees, honour the
@@ -1321,14 +1325,17 @@ Key services:
   needs a handful rather than the whole list, and `IsDisabled` is the one test for
   the state Enable undoes.
 - `AppAlertService` — monitors for new application installations via
-  FileSystemWatcher and registry polling. The poll reads `UninstallEntries`, the machine's lists and the user's,
-  and keeps the `IsListed` entries, so hidden components and updates are not announced (`Listed`). It remembers
+  FileSystemWatcher and registry polling. The poll reads `UninstallEntries`, the machine's lists and the signed-in
+  account's (`ListsToRead`), and keeps the `IsListed` entries, so hidden components and updates are not announced (`Listed`). It remembers
   each entry by its key, and each program by its publisher and its name without the version (`WithoutVersion`),
   so an update that renames its entry or writes a new one is learned, not announced (#2769). A new uninstall entry
   that points into a folder announced within
   `RecentChangesService.SameInstall` claims that folder's alert, once, and raises `AppIdentified` instead of
   `NewAppDetected`. `FoldersOf` reads the folders of the entry's uninstaller and icon, the uninstaller by
   `UninstallerService.ParseUninstallCommand`, and `BelongsTo` decides through `SystemPaths.IsInsideSubtree` (#2878).
+  The per-user folder it watches and the per-user list it reads are the signed-in account's, from
+  `SignedInAccount`; when that account's folders cannot be found, `MissesTheSignedInAccount` is set and the status
+  line says what is not watched (#3394).
 - `AppAlertHistory` (`IAppAlertHistory`) — New App Alerts' detections, newest first, the last 200, in
   `app-alerts.json` (#1507). Reads before it writes under one lock, sets a file that does not parse aside, and
   writes nothing over one it could not read. `Remove` forgets the detections Clear History asked about and keeps

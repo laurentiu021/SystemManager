@@ -1865,7 +1865,9 @@ Answers "what is actually using my space?" by listing the biggest files in one p
 ### New App Alerts
 - Monitors Program Files, Program Files (x86), AppData\Local\Programs and the list of
   installed programs Windows keeps, for the whole PC and for your own account, from the
-  moment you press **Start Monitoring**
+  moment you press **Start Monitoring**. Started as administrator with another account's
+  password, it still watches the folder and the list of the account signed in to Windows, not the
+  administrator's; when it cannot find that account's folders, the status line says what it cannot see
 - **Only what Windows' own Installed apps list shows is announced.** The hidden parts of other
   programs, such as the dozens that come with .NET, and updates are not new programs, and an
   update that renames a program, or comes with a new entry of its own, is not announced again

@@ -43,11 +43,17 @@ public sealed record UninstallList(IReadOnlyList<UninstallEntry> Entries, bool C
 /// </remarks>
 public static class UninstallEntries
 {
-    /// <summary>The lists production reads, in order: the machine's 64-bit and 32-bit lists, then the user's.</summary>
-    internal static readonly (RegistryKey Hive, string Path)[] Keys =
+    /// <summary>The machine's lists, 64-bit and then 32-bit.</summary>
+    internal static readonly (RegistryKey Hive, string Path)[] MachineKeys =
     [
         (Registry.LocalMachine, UninstallerService.UninstallKey),
         (Registry.LocalMachine, UninstallerService.UninstallKeyWow64),
+    ];
+
+    /// <summary>The lists production reads, in order: the machine's 64-bit and 32-bit lists, then the user's.</summary>
+    internal static readonly (RegistryKey Hive, string Path)[] Keys =
+    [
+        .. MachineKeys,
         (Registry.CurrentUser, UninstallerService.UninstallKey),
     ];
 

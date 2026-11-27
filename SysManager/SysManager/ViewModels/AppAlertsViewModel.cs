@@ -36,6 +36,13 @@ public sealed partial class AppAlertsViewModel : ViewModelBase
     private readonly INotificationArea? _notificationArea;
     private readonly IToastService _toasts;
 
+    /// <summary>
+    /// What the status line adds while monitoring when the signed-in account's own folders could not be found (#3394).
+    /// </summary>
+    internal const string SignedInAccountGap =
+        "SysManager is running as administrator and could not find the signed-in account's own folders, so a program "
+        + "installed only for that account is not noticed. Open SysManager normally to watch those too.";
+
     public BulkObservableCollection<AppInstallEntry> Alerts { get; } = new();
 
     [ObservableProperty]
@@ -119,7 +126,7 @@ public sealed partial class AppAlertsViewModel : ViewModelBase
         }
 
         IsMonitoring = true;
-        MonitorStatus = "Monitoring active — watching for new installations...";
+        MonitorStatus = WithGap("Monitoring active — watching for new installations...");
         Log.Information("App alert monitoring started by user");
     }
 
@@ -195,7 +202,7 @@ public sealed partial class AppAlertsViewModel : ViewModelBase
         MonitorStatus = Alerts.Count > 0
             ? $"History cleared. {meanwhile} still listed."
             : IsMonitoring
-                ? "Monitoring active — history cleared."
+                ? WithGap("Monitoring active — history cleared.")
                 : "History cleared.";
     }
 
@@ -217,8 +224,15 @@ public sealed partial class AppAlertsViewModel : ViewModelBase
         // The uninstall-tree enumeration walks hundreds of HKLM subkeys — off the UI thread, like the baseline.
         var found = await Task.Run(_service.CheckNow).ConfigureAwait(true);
         if (found == 0)
-            MonitorStatus = "Checked just now — no new installations. Monitoring active.";
+            MonitorStatus = WithGap("Checked just now — no new installations. Monitoring active.");
     }
+
+    /// <summary>
+    /// <paramref name="status"/>, followed by <see cref="SignedInAccountGap"/> when the service could not find the
+    /// signed-in account's own folders.
+    /// </summary>
+    private string WithGap(string status) =>
+        _service.MissesTheSignedInAccount ? $"{status} {SignedInAccountGap}" : status;
 
     private void OnNewAppDetected(AppInstallEntry entry) => _dispatcher.BeginInvoke(() => Record(entry));
 

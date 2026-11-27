@@ -563,4 +563,47 @@ public class AppAlertsViewModelTests
         }
         finally { File.Delete(path); }
     }
+
+    // ---------- the gap is said when the signed-in account's folders cannot be found (#3394) ----------
+
+    [Fact]
+    public async Task Monitoring_ThatMissesTheSignedInAccount_SaysSoOnTheStatusLine()
+    {
+        using var vm = new AppAlertsViewModel(new AppAlertService(() => [], userLocalAppData: () => null), NoHistory());
+
+        await vm.StartMonitoringCommand.ExecuteAsync(null);
+        try
+        {
+            Assert.True(vm.IsMonitoring);
+            Assert.Contains(AppAlertsViewModel.SignedInAccountGap, vm.MonitorStatus, StringComparison.Ordinal);
+
+            await vm.ScanForNewAppsCommand.ExecuteAsync(null);
+            Assert.Contains(AppAlertsViewModel.SignedInAccountGap, vm.MonitorStatus, StringComparison.Ordinal);
+        }
+        finally
+        {
+            vm.StopMonitoringCommand.Execute(null);
+        }
+    }
+
+    [Fact]
+    public async Task Monitoring_ThatFindsTheSignedInAccount_SaysNothingMore()
+    {
+        var theirs = Directory.CreateTempSubdirectory("smtest_alerts_vm_").FullName;
+        try
+        {
+            using var vm = new AppAlertsViewModel(
+                new AppAlertService(() => [], userLocalAppData: () => theirs), NoHistory());
+
+            await vm.StartMonitoringCommand.ExecuteAsync(null);
+            var status = vm.MonitorStatus;
+            vm.StopMonitoringCommand.Execute(null);
+
+            Assert.Equal("Monitoring active — watching for new installations...", status);
+        }
+        finally
+        {
+            Directory.Delete(theirs, recursive: true);
+        }
+    }
 }

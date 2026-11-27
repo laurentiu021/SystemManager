@@ -2762,9 +2762,13 @@ offers, "rate us" prompts:
   it was never on, or report differences that are only "a different computer". Importing
   gaming profiles takes only their settings: a game mode session still on here, or left
   on by an earlier run, keeps the record SysManager undoes it from
-- An import writes only SysManager's own config files. It keeps no copy of the settings it
-  overwrites, so export your own profile first if you may want them back. A privacy change goes
-  through the Privacy & Telemetry tab's own Apply, with its confirmation and restore point
+- **An import writes only what SysManager can read** — each section is checked with its own tab's
+  reader first, and one that does not read (edited by hand, copied from a damaged file, or written by
+  a newer format) is skipped and not counted, so it never replaces your history, presets or settings
+- An import writes only SysManager's own config files, and keeps the file each section replaces beside
+  it as `<file>.before-import`, the copy from the last import. To put one back, close SysManager and
+  rename it to the file's own name in `%LocalAppData%\SysManager` or `%AppData%\SysManager`. A privacy
+  change goes through the Privacy & Telemetry tab's own Apply, with its confirmation and restore point
 
 ### CLI Interface 🔬
 - **Automate the safe actions from scripts, Task Scheduler, or deployment tools** —

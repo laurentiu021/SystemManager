@@ -150,14 +150,15 @@ public class ProfileServiceTests : IDisposable
     [Fact]
     public void ApplySections_WritesKnownFiles()
     {
+        var theme = ThemeJson();
         var sections = new[]
         {
-            new ConfigSection("theme", "Theme & appearance", "theme.json", "{\"preset\":\"warm-ember\"}"),
+            new ConfigSection("theme", "Theme & appearance", "theme.json", theme),
         };
         var applied = _svc.ApplySections(sections);
 
         Assert.Equal(1, applied);
-        Assert.Equal("{\"preset\":\"warm-ember\"}", File.ReadAllText(Path.Combine(_dir, "theme.json")));
+        Assert.Equal(theme, File.ReadAllText(Path.Combine(_dir, "theme.json")));
     }
 
     [Fact]
@@ -167,7 +168,7 @@ public class ProfileServiceTests : IDisposable
         var sections = new[]
         {
             new ConfigSection("rogue", "Rogue", "..\\..\\evil.json", "should-not-write"),
-            new ConfigSection("theme", "Theme", "theme.json", "{\"ok\":true}"),
+            new ConfigSection("theme", "Theme", "theme.json", ThemeJson()),
         };
         var applied = _svc.ApplySections(sections);
 
@@ -204,7 +205,7 @@ public class ProfileServiceTests : IDisposable
     [InlineData("")]
     public void DisplayNameOf_NamesAKey_ExactlyWhenAnImportWritesIt(string key)
     {
-        var applied = _svc.ApplySections([new ConfigSection(key, "Theme & appearance", "theme.json", "{}")]);
+        var applied = _svc.ApplySections([new ConfigSection(key, "Theme & appearance", "theme.json", ThemeJson())]);
 
         Assert.Equal(applied == 1, ProfileService.DisplayNameOf(key) is not null);
     }
@@ -224,8 +225,8 @@ public class ProfileServiceTests : IDisposable
         // Apply both sections.
         svc.ApplySections(
         [
-            new ConfigSection("theme", "Theme", "theme.json", "{\"preset\":\"midnight\"}"),
-            new ConfigSection("speedtest", "Speed-test history", "speedtest-history.json", "[1,2]"),
+            new ConfigSection("theme", "Theme", "theme.json", ThemeJson()),
+            new ConfigSection("speedtest", "Speed-test history", "speedtest-history.json", "[]"),
         ]);
 
         // theme.json must land in Roaming; speedtest-history.json in Local.
@@ -236,7 +237,7 @@ public class ProfileServiceTests : IDisposable
 
         // And export reads them back from the correct bases.
         var sections = svc.AvailableSections();
-        Assert.Contains(sections, s => s.Key == "theme" && s.Json.Contains("midnight"));
+        Assert.Contains(sections, s => s.Key == "theme" && s.Json.Contains("dark-forest"));
         Assert.Contains(sections, s => s.Key == "speedtest");
     }
 
@@ -657,7 +658,7 @@ public class ProfileServiceTests : IDisposable
     // file their own service could not read, and the import still counted it.
 
     /// <summary>A theme file as <see cref="ThemeService"/> writes one.</summary>
-    private static string ThemeJson()
+    internal static string ThemeJson()
     {
         var dir = Directory.CreateTempSubdirectory("smtest_profile_theme_").FullName;
         try

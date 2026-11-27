@@ -337,6 +337,11 @@ public sealed class ProfileService
     /// can't drop arbitrary files), and each file lands inside the config directory.
     /// Returns the number of sections applied.
     /// </summary>
+    /// <remarks>
+    /// A section is written only when its owning service's own reader takes it, and the file it replaces is copied to
+    /// <see cref="BeforeImportSuffix"/> beside it first. A section was written unread and unkept, so one that did not
+    /// read left this PC's own file replaced by one its service could not use, past getting back (#3450).
+    /// </remarks>
     public int ApplySections(IEnumerable<ConfigSection> sections)
     {
         var applied = 0;
@@ -358,6 +363,11 @@ public sealed class ProfileService
             }
 
             var content = section.Json;
+            if (string.IsNullOrWhiteSpace(content) || !known.Reads(content))
+            {
+                Log.Warning("Profile: skipping section '{Key}', which its own tab could not read", section.Key);
+                continue;
+            }
 
             // Always use the catalog's own file name + base — never a path from the
             // (untrusted) profile — and write to the SAME folder the owning service reads.
@@ -366,6 +376,7 @@ public sealed class ProfileService
             var path = Path.Combine(dir, known.FileName);
             try
             {
+                if (File.Exists(path)) File.Copy(path, path + BeforeImportSuffix, overwrite: true);
                 AtomicFile.WriteAllText(path, content, new UTF8Encoding(encoderShouldEmitUTF8Identifier: false));
                 applied++;
             }

@@ -155,7 +155,7 @@ public class ProfileViewModelTests : IDisposable
     [Fact]
     public async Task ImportAsync_WhenAFileIsPicked_ImportsFromIt()
     {
-        WriteConfig("theme.json", "{\"preset\":\"midnight\"}");
+        WriteConfig("theme.json", ProfileServiceTests.ThemeJson());
         var exporter = await NewVmAsync();
         var exported = await exporter.BuildExportAsync(exporter.SelectedKeys());
         var path = Path.Combine(_dir, "to-import-" + Guid.NewGuid().ToString("N") + ".json");
@@ -253,7 +253,8 @@ public class ProfileViewModelTests : IDisposable
     {
         List<ConfigSection> sections = [];
         if (withTheme)
-            sections.Add(new ConfigSection("theme", "Theme & appearance", "theme.json", "{\"preset\":\"imported\"}"));
+            sections.Add(
+                new ConfigSection("theme", "Theme & appearance", "theme.json", ProfileServiceTests.ThemeJson()));
         sections.Add(new ConfigSection(ProfileService.PrivacySectionKey, "Privacy & Telemetry choices",
             "privacy-profile.json", "{\"Protections\":{\"tips\":true,\"widgets\":false}}"));
         return new ConfigProfile(ProfileService.CurrentSchemaVersion, "1.115.0", new DateTime(2026, 10, 5, 9, 0, 0, DateTimeKind.Local))

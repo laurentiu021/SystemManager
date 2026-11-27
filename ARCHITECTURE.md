@@ -2161,7 +2161,10 @@ Key services:
   mode session record beside the configuration (#2801). Each entry's file name now reads its owning
   service's own `FileName` constant (`ThemeService.FileName`, `GamingProfileService.FileName`, …)
   instead of restating the literal, so a service that renames its own file cannot silently drift from
-  what the catalog expects to find (#2860).
+  what the catalog expects to find (#2860). Each entry also carries its owning service's own reader
+  (`ThemeService.Reads`, `SpeedTestHistoryService.Reads`, the preferences' `TryParse`, …), the one that
+  service's loader uses, and `ApplySections` writes a section only when it reads, after copying the file it
+  replaces to `<file>.before-import` (#3450).
 - `AppIconService` — downloads and caches application favicons for the Bulk Installer, only once the user
   turns it on: the switch is off by default, kept in `icon-fetch.json` and carried by a profile export.
   `SetNetworkFetchEnabled` returns whether the choice was saved, and the tab says when it was not (#2833).

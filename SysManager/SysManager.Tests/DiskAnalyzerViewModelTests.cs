@@ -22,12 +22,12 @@ public class DiskAnalyzerViewModelTests
     // The VM resolves its preset paths asynchronously off the UI thread (DriveInfo probing
     // can stall, so it's moved off startup); wait for that init so the preset assertions
     // observe the populated collection instead of racing the background load.
-    private static DiskAnalyzerViewModel NewVm(IDialogService? dialog = null)
+    private static DiskAnalyzerViewModel NewVm(IDialogService? dialog = null, bool elevated = false)
     {
         var vm = new DiskAnalyzerViewModel(new DiskAnalyzerService(),
             new DiskScanHistoryService(Path.Combine(Path.GetTempPath(),
                 "SysManagerDiskHistVm_" + Guid.NewGuid().ToString("N"))),
-            TempPreferences(), dialog);
+            TempPreferences(), dialog, isElevated: () => elevated);
         vm.InitializationComplete.GetAwaiter().GetResult();
         return vm;
     }
@@ -1022,5 +1022,45 @@ public class DiskAnalyzerViewModelTests
             Assert.Contains(Path.GetFileName(path), vm.StatusMessage, StringComparison.Ordinal);
         }
         finally { File.Delete(path); }
+    }
+
+    // ---------- a folder Windows would not list, as an administrator is told (#3423) ----------
+    // Elevated, a folder whose permissions leave administrators out is just as unreadable, and the page still offered
+    // Run as administrator: pressing it closed SysManager, asked again and reopened it with the folder unreadable.
+
+    [Fact]
+    public void AnUnreadableFolder_AsAdministrator_OffersNoRelaunch_AndSaysElevationWillNotHelp()
+    {
+        var vm = NewVm(elevated: true);
+
+        vm.LastFailure = DiskAnalyzerService.AnalysisFailure.Unreadable;
+
+        Assert.False(vm.CanRelaunchAsAdminForFailure);
+        Assert.Equal(ViewModelBase.FolderUnreadableElevatedReason, vm.EmptyMessage);
+        Assert.DoesNotContain("Run as administrator", vm.EmptyMessage, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void AnUnreadableFolder_WithoutAdministratorRights_StillOffersTheRelaunch()
+    {
+        var vm = NewVm(elevated: false);
+
+        vm.LastFailure = DiskAnalyzerService.AnalysisFailure.Unreadable;
+
+        Assert.True(vm.CanRelaunchAsAdminForFailure);
+        Assert.Equal(ViewModelBase.FolderUnreadableReason, vm.EmptyMessage);
+    }
+
+    [Theory]
+    [InlineData(DiskAnalyzerService.AnalysisFailure.NotFound)]
+    [InlineData(DiskAnalyzerService.AnalysisFailure.IsLink)]
+    [InlineData(DiskAnalyzerService.AnalysisFailure.None)]
+    public void DescribeFailure_AsAdministrator_ChangesOnlyTheUnreadableReason(
+        DiskAnalyzerService.AnalysisFailure failure)
+    {
+        Assert.Equal(DiskAnalyzerViewModel.DescribeFailure(failure),
+            DiskAnalyzerViewModel.DescribeFailure(failure, elevated: true));
+        Assert.Equal(ViewModelBase.FolderUnreadableElevatedReason,
+            DiskAnalyzerViewModel.DescribeFailure(DiskAnalyzerService.AnalysisFailure.Unreadable, elevated: true));
     }
 }

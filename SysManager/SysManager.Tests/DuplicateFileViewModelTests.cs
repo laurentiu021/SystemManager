@@ -22,9 +22,9 @@ public class DuplicateFileViewModelTests
     // The VM resolves its preset folders asynchronously off the UI thread (known-folder +
     // DriveInfo probing can stall, so it's moved off startup); wait for that init so the
     // preset assertions observe the populated collection instead of racing the load.
-    private static DuplicateFileViewModel NewVm(IDialogService? dialog = null)
+    private static DuplicateFileViewModel NewVm(IDialogService? dialog = null, bool elevated = false)
     {
-        var vm = new DuplicateFileViewModel(new Services.DuplicateFileService(), dialog);
+        var vm = new DuplicateFileViewModel(new Services.DuplicateFileService(), dialog, isElevated: () => elevated);
         vm.InitializationComplete.GetAwaiter().GetResult();
         return vm;
     }
@@ -703,5 +703,30 @@ public class DuplicateFileViewModelTests
 
         Assert.Equal(@"D:\Picked\Folder", vm.SelectedFolder);
         Assert.Contains(@"D:\Picked\Folder", vm.PresetFolders);
+    }
+
+    // ---------- a folder Windows would not list, as an administrator is told (#3423) ----------
+
+    [Fact]
+    public void AnUnreadableFolder_AsAdministrator_IsNotToldToRunAsAdministrator()
+    {
+        var vm = NewVm(elevated: true);
+
+        vm.LastFailure = Services.DuplicateFileService.ScanFailure.Unreadable;
+
+        Assert.Equal(ViewModelBase.FolderUnreadableElevatedReason, vm.EmptyMessage);
+        Assert.Equal(ViewModelBase.FolderUnreadableElevatedReason,
+            DuplicateFileViewModel.DescribeFailure(
+                Services.DuplicateFileService.ScanFailure.Unreadable, elevated: true));
+    }
+
+    [Fact]
+    public void AnUnreadableFolder_WithoutAdministratorRights_IsStillToldToTryIt()
+    {
+        var vm = NewVm(elevated: false);
+
+        vm.LastFailure = Services.DuplicateFileService.ScanFailure.Unreadable;
+
+        Assert.Equal(ViewModelBase.FolderUnreadableReason, vm.EmptyMessage);
     }
 }

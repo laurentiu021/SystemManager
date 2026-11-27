@@ -10,6 +10,21 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.136.205] - 2026-11-27
+
+**When SysManager already runs as administrator, Disk Analyzer, Duplicate Finder and App Blocker no longer tell you
+to run it as administrator.**
+
+### Fixed
+- Disk Analyzer and Duplicate Finder said "Try Run as administrator" for a folder Windows would not list, and Disk
+  Analyzer offered the button, even when SysManager already ran as administrator. A folder whose permissions leave
+  administrators out, such as the app packages under `Program Files\WindowsApps`, stays unreadable after the
+  relaunch, so the button closed SysManager, asked again and reopened it for nothing (#3423). As administrator they
+  now say Windows refused the folder even with administrator rights, and Disk Analyzer offers no relaunch.
+- App Blocker's "access denied" message, which can only appear while SysManager runs as administrator, said to
+  restart it as administrator and try again. It now says Windows refused the change even with administrator
+  rights, and that another program, often security software, may be protecting the settings for that name.
+
 ## [1.136.204] - 2026-11-27
 
 **Importing a profile no longer replaces your speed-test history, presets or settings with a section SysManager

@@ -243,6 +243,10 @@ public class AppBlockerViewModelTests
 
             blocker.Received(1).TryBlockApp("something.exe");
             Assert.Contains("administrator", vm.BlockStatus, StringComparison.OrdinalIgnoreCase);
+            // Reached only while elevated, so a relaunch as administrator changes nothing: the key's own permissions
+            // refused the change (#3423).
+            Assert.Contains("even with administrator rights", vm.BlockStatus, StringComparison.Ordinal);
+            Assert.DoesNotContain("restart SysManager as administrator", vm.BlockStatus, StringComparison.Ordinal);
         }
         finally
         {

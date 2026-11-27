@@ -89,6 +89,13 @@ public abstract partial class ViewModelBase : ObservableObject, IDisposable
         "Windows did not let SysManager list what is in it. Try Run as administrator, or pick another folder.";
 
     /// <summary>
+    /// <see cref="FolderUnreadableReason"/> as an administrator reads it: the folder's own permissions leave
+    /// administrators out, so running as one again changes nothing (#3423).
+    /// </summary>
+    internal const string FolderUnreadableElevatedReason =
+        "Windows did not let SysManager list what is in it, even with administrator rights. Pick another folder.";
+
+    /// <summary>
     /// The command Escape should run on this tab, or <c>null</c> when there is nothing to stop.
     /// </summary>
     /// <remarks>
